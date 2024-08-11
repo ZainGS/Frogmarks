@@ -1,0 +1,57 @@
+<header *ngIf="_navbarService.visible" class="sticky-navbar">
+  <nav
+    class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white"
+  >
+    <div class="container ms-2 me-2 ps-3 pe-3" style="min-width: -webkit-fill-available;">
+      <img class="navbar-brand" style="max-width: 180px;" src="../../../../assets/images/logo.png" />
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-toggle="collapse"
+        data-target=".navbar-collapse"
+        aria-label="Toggle navigation"
+        [attr.aria-expanded]="isExpanded"
+        (click)="toggle()"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div
+        class="navbar-collapse collapse d-sm-inline-flex"
+        [ngClass]="{ show: isExpanded }"
+      >
+        <ul class="navbar-nav flex-grow">
+          <li
+            class="nav-item"
+            [routerLinkActive]="['link-active']"
+            [routerLinkActiveOptions]="{ exact: true }"
+          >
+            <a class="nav-link text-dark" [routerLink]="['/']">
+              Products
+            </a>
+          </li>
+          <li class="nav-item" [routerLinkActive]="['link-active']">
+            <a class="nav-link text-dark" [routerLink]="['/']">
+              Solutions
+            </a>
+          </li>
+          <li class="nav-item" [routerLinkActive]="['link-active']">
+            <a class="nav-link text-dark" [routerLink]="['/']">
+              Community
+            </a>
+          </li>
+          <li class="nav-item" [routerLinkActive]="['link-active']">
+            <a class="nav-link text-dark" [routerLink]="['/']">
+              Resources
+            </a>
+          </li>
+          <li class="nav-item" [routerLinkActive]="['link-active']">
+            <a class="nav-link text-dark" [routerLink]="['/']">
+              Pricing
+            </a>
+          </li>
+        </ul>
+        <app-login-menu class="ms-auto"></app-login-menu>
+      </div>
+    </div>
+  </nav>
+</header>

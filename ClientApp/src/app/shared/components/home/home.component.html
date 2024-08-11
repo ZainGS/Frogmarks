@@ -1,0 +1,139 @@
+<div class="home-container" style="margin-top: 150px !important;">
+  <div class="row">
+    <div class="col-12 col-md-1">
+      <div class="bubble" style="transform: scale(.6); margin-left: 6vw; margin-top: -2vw;">
+        <div class="bubble-content">
+          <img style="transform: scale(.4);" src="../../../../assets/images/undraw/undraw_designer.svg">
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-10 text-center fw-bold header-text">
+      <!--
+      <label>
+        <label class="ps-3 pe-3" style="outline: 2px dashed black;">Design</label> better.<br/>
+        Jump-start <mark>perfection</mark>.
+      </label>
+
+      <label>
+        Design better.<br/>
+        Jump-start <span>perfection</span>.
+      </label>
+
+      <label>
+        <label class="ps-3 pe-3 pt-1 pb-2" style="outline: 2px dashed rgba(0,0,0,.15); border-radius: 12px;">Design</label> better.<br/>
+        Jump-start <mark>perfection</mark>.
+      </label>
+      -->
+      <label>
+        Design better.<br/>
+        Jump-start <span>perfection</span>.
+      </label>
+    </div>
+    <div class="col-12 col-md-1">
+      <div class="bubble" style="transform: scale(.5); margin-left: -10.5vw; margin-top: 2vw;">
+        <div class="bubble-content">
+          <img style="transform: scale(.5); padding-top: 30px;" src="../../../../assets/images/undraw/undraw_designer_girl.svg">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-12 col-md-2">
+
+      <span class="bubble" style="transform: scale(.8);">
+        <span class="bubble-content">
+          <img style="transform: scale(.3); padding-top: 80px; padding-left: 45px;" src="../../../../assets/images/undraw/undraw_creative_woman.svg">
+        </span>
+      </span>
+
+      <span class="bubble" style="transform: scale(.6); margin-left: 15vw; margin-top: 16vh;">
+        <span class="bubble-content">
+          <img style="transform: scale(.4); padding-top: 55px;" src="../../../../assets/images/undraw/undraw_color_palette.svg">
+        </span>
+      </span>
+
+    </div>
+    <div class="col-12 col-md-8 text-center fs-6 fw-semibold mt-5">
+
+      <div class="row text-center justify-content-center">
+        <label class="rounded sub-header-text">
+          <img hidden style="position: absolute; width: 100px; margin-top: -60px; margin-left: -80px; opacity: 1;" src="../../../../assets/images/fishing_frog.png">
+          Frogmarks brings teams together to quickly reach goals with a workspace that assists at every stage.
+        </label>
+      </div>
+      <div class="row mt-5 text-center mx-auto email-row">
+        <form [formGroup]="emailForm" (ngSubmit)="onSubmit()">
+          <div>
+            
+          </div>
+          <input
+            matInput
+            class="text-center p-2"
+            type="email"
+            id="email"
+            formControlName="email"
+            placeholder="Your email address"
+          >
+          <mat-error *ngIf="emailForm.get('email')?.invalid && emailForm?.get('email')?.touched">
+            <div *ngIf="emailForm.get('email')?.errors?.required">Email is required</div>
+            <div *ngIf="emailForm.get('email')?.errors?.email">Email must be a valid email address</div>
+          </mat-error>
+          <input
+            class="mt-3 p-2 fw-semibold submission-btn"
+            type="submit"
+            value="Get started for free"
+            [disabled]="emailForm.invalid"
+          >
+          <label
+            class="mt-3 fw-semibold"
+            style="color: dimgray; font-size: 14px;"
+          >
+            Keep work and life separate by using your work email
+          </label>
+        </form>
+      </div>
+      
+    </div>
+    <div class="col-12 col-md-2">
+      <div class="bubble" style="transform: scale(.45); margin-left: 1.5vw; margin-top: 2vw;">
+        <div class="bubble-content">
+          <img style="transform: scale(.5); padding-top: 80px;" src="../../../../assets/images/undraw/undraw_proud_coder.svg">
+        </div>
+      </div>
+      <div class="bubble" style="transform: scale(.6); margin-left: -12vw; margin-top: 15vh;">
+        <div class="bubble-content">
+          <img style="transform: scale(.5);" src="../../../../assets/images/undraw/undraw_to_the_moon.svg">
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mb-5 text-center demo-row">
+    <div class="mx-auto flat-card placeholder-item shadow-lg">
+      Placeholder for demo lottie element
+    </div>
+  </div>
+  <div class="row mt-5 mb-5">
+    <div class="col-12 col-md-12 text-center fw-semibold">
+      We strive to create the best collaborative design tools on the web.
+    </div>
+  </div>
+  <div class="row mt-5 mb-5">
+    <div class="col-12 col-md-12 fs-1 text-center fw-semibold">
+      Don't start from scratch — hop right into one of our templates
+    </div>
+  </div>
+  <!-- TODO: Make carousel row with templates -->
+  <div class="row mt-5 mb-5">
+    <div class="col-12 col-md-12 text-center fw-semibold">
+      Placeholder for carousel row
+    </div>
+  </div>
+</div>
+
+<!--
+<div style="position: fixed; bottom: 15vh; right: 41vw; padding: 10px; background-color: transparent; color: white; font-weight: bold; -webkit-text-stroke-width: 1px;
+  -webkit-text-stroke-color: black; font-size: 50px;">
+  <span style="color:red;">L</span><span style="color:orange;">E</span><span style="color:yellow;">A</span><span style="color:green;">R</span><span style="color:blue;">N</span>&nbsp;<span style="color:violet;">M</span><span style="color:red;">O</span><span style="color:orange;">R</span><span style="color:yellow;">E</span>
+</div>
+-->

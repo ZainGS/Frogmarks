@@ -1,0 +1,448 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,200" />
+<!-- Frogmarks Dashboard Template -->
+<div class="dashboard-container">
+
+    <!-- Base Row -->
+    <div class="row flex-nowrap">
+        
+        <!-- Base Sidenav Column -->
+        <div class="col-12 col-md-2 base-sidenav-column" style="background-color: #F5F5F5;">
+            
+            <!-- Frogmarks Logo -->
+            <img class="frogmarks-logo" src="../../../../assets/images/logo.png">
+            
+            <!-- Primary Sidenav Contents -->
+            <div class="ps-2">
+
+              <!-- Frog-E-Vision -->
+              <!--
+  <div class="mt-3 ms-1 me-1 align-content-center text-center shadow-sm"
+  style="border: 1px solid white; height: 90px; border-radius: 8px; background-color: #f3f3f3; font-size: small;">
+      <label class="fs-5 fw-semibold" style="color: #626262;">{{currentTime | date: 'h:mm a'}}</label>
+  </div>
+  -->
+              <!-- Board Type Selection -->
+              <div>
+                <ul class="sidenav-list pt-3">
+                  <li class="list-item"
+                      (click)="recentsClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'design-center-active': isDesignCenterActive }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">storefront</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Design Center</label>
+                  </li>
+                  <li class="list-item"
+                      (click)="favoriteClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'favorite-filter-active': isFavoritesFilterActive }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon out">favorite</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Favorites</label>
+                  </li>
+                </ul>
+              </div>
+              <hr class="ms-2 horizontal-line">
+
+              <!-- Team Selection -->
+              <div class="row d-flex ms-0 text-nowrap">
+                <div class="d-flex col-12 col-md-7 dropdown-button" [ngClass]="{ 'loading-container': isLoading }">
+                  <div *ngIf="!isLoading" class="d-flex col-12 col-md-3">
+                    <mat-icon class="list-item-icon">people_outline</mat-icon>
+                  </div>
+                  <div *ngIf="!isLoading" class="d-flex col-12 col-md-12 fw-semibold">
+                    <label style="margin-left: 0px;">{{currentTeam.name}}</label>
+                    <span class="team-dropdown-arrow material-symbols-outlined">
+                      keyboard_arrow_down
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Team Payment Tier -->
+                <div class="col-12 col-md-4 ms-1" [ngClass]="{ 'loading-container': isLoading }">
+                  <label *ngIf="!isLoading" class="payment-tier">Free</label>
+                </div>
+              </div>
+
+              <!-- Team Content Options -->
+              <div style="margin-left: 2px;">
+                <ul class="sidenav-list" [ngClass]="{ 'loading-container': isLoading }">
+                  <li class="list-item" (click)="draftsClicked()">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon ">insert_drive_file</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Drafts</label>
+                  </li>
+                  <li class="list-item" (click)="allProjectsClicked()" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">grid_view</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">All Projects</label>
+                  </li>
+                </ul>
+              </div>
+              <hr class="ms-2 horizontal-line">
+
+              <div style="text-align: center;">
+                <ul class="sidenav-list">
+                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">view_quilt</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Templates</label>
+                  </li>
+                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">public</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Frogmarks Galaxy</label>
+                  </li>
+                  <!--
+      <li class="list-item disabled">
+          <mat-icon class="list-item-icon">file_upload</mat-icon>
+          <label class="ms-1">Import Board</label>
+      </li>
+      -->
+                </ul>
+                <!--
+                <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
+                -->
+              </div>
+
+              <hr class="ms-2 horizontal-line">
+
+              <div style="text-align: center;">
+                <ul class="sidenav-list">
+                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon material-symbols-outlined">keep</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Pinned</label>
+                  </li>
+                </ul>
+                
+              </div>
+
+            </div>
+
+        </div>
+
+        <!-- Base Work-Pane -->
+        <div class="col-12 col-md-10">
+          <div class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="col-12 col-md-6" >
+              <div *ngIf="!isLoading" class="search-wrapper ms-1 me-1">
+                <mat-icon class="search-icon">search</mat-icon>
+                <input class="search-bar" matInput placeholder="Search for anything" type="text">
+              </div>
+            </div>
+            <div class="col-12 col-md-6 text-end text-nowrap pe-3">
+              <button *ngIf="!isLoading" class="ms-3 align-top" mat-stroked-button>
+                <mat-icon>add</mat-icon>
+                Invite members
+              </button>
+              <button *ngIf="!isLoading" class="ms-3 align-top" mat-raised-button>
+                Upgrade
+              </button>
+              <!--
+      <button class="align-top" style="margin-top: -5px" mat-icon-button><mat-icon class="align-top">help_outline</mat-icon></button>
+      -->
+              <button *ngIf="!isLoading" class="ms-2 align-top" style="margin-top: -5px" mat-icon-button><mat-icon>notifications_none</mat-icon></button>
+              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon>settings</mat-icon></button>
+              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon>person</mat-icon></button>
+            </div>
+
+          </div>
+
+          <!-- Row: Add new file -->
+          <div class="row pt-3 fw-normal me-5 new-file-row" *ngIf="!isFavoritesFilterActive">
+
+            <!-- New Design File -->
+            <div class="col-12 col-md-3 new-design-item-container disabled" [ngClass]="{ 'loading-container': isLoading }">
+              <div class="row">
+                <div class="col-12 col-md-2 align-content-center">
+                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                </div>
+                <div class="col-12 col-md-9 text-start">
+                  <label *ngIf="!isLoading" class="new-design-item-title">New design file</label>
+                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
+                  <br>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Design and prototype</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- New Board File -->
+            <div class="ms-4 col-12 col-md-3 new-design-item-container" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
+              <div class="row">
+                <div class="col-12 col-md-2 align-content-center">
+                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                </div>
+                <div class="col-12 col-md-9 text-start">
+                  <label *ngIf="!isLoading" class="new-design-item-title">New board</label>
+                  <br>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Whiteboard and diagram</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- New Slide Deck File -->
+            <div class="ms-4 col-12 col-md-3 new-design-item-container disabled" [ngClass]="{ 'loading-container': isLoading }">
+              <div class="row">
+                <div class="col-12 col-md-2 align-content-center">
+                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                </div>
+                <div class="col-12 col-md-9 text-start">
+                  <label *ngIf="!isLoading" class="new-design-item-title">New slide deck</label>
+                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
+                  <br>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Present and share</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Import File -->
+            <div class="ms-4 col-12 col-md-3 new-design-item-container disabled" [ngClass]="{ 'loading-container': isLoading }">
+              <div class="row">
+                <div class="col-12 col-md-2 align-content-center">
+                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                </div>
+                <div class="col-12 col-md-9 text-start">
+                  <label *ngIf="!isLoading" class="new-design-item-title">Import</label>
+                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
+                  <br>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Bring in external files</label>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <!--
+  <div class="row pt-3 fw-normal display-6" style="padding-left: 37px;">
+      Select a design template
+    </div>
+    -->
+          <div *ngIf="!isFavoritesFilterActive" class="row ps-5 pt-3 fw-normal" style="margin-right:-35px;">
+            <div class="row flow-container ps-0 pe-0">
+              <label class="fw-semibold pb-2 ms-1" style="min-height: 20px;">
+              <span *ngIf="!isLoading">Saved Templates</span>
+              </label>
+              <div cdkDropList
+                   class="d-flex flex-row"
+                   (cdkDropListDropped)="onDrop($event)"
+                   cdkDropListOrientation="horizontal">
+                <!--
+        (mousedown)="onDragFirstClick($event)"
+        (mouseup) ="onDragFirstClickRelease()"
+        -->
+                <div class="p-2 col-12 col-md-2 draggable-template"
+                     *ngFor="let template of templates"
+                     cdkDrag
+                     [cdkDragData]="template"
+                     (cdkDragStarted)="onDragStart($event)"
+                     (cdkDragMoved)="onDragging($event)"
+                     (cdkDragReleased)="onDragReleased($event)"
+                     (cdkDragEnded)="onDragEnd($event)"
+                     [attr.data-id]="template.id"
+                     [ngClass]="{ 'shaking': isDragging && draggedTemplateId !== template.id.toString() }">
+                  <div class="template-container shadow-sm" [ngClass]="{ 'loading-container': isLoading }">
+
+                    <mat-icon [hidden]="isLoading" class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                    <mat-icon *ngIf="!isLoading" class="draggable-indicator">drag_indicator</mat-icon>
+                    <!--
+            <mat-icon *ngIf="mouseDownTemplateId == template.id.toString()" style="position: absolute; top: 2px; right: 1px; color: #9c9c9c; opacity: .3; ">drag_indicator</mat-icon>
+            -->
+                  </div>
+                  <div *cdkDragPlaceholder class="template-container">
+                    <mat-icon class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                  </div>
+                  <div *cdkDragPreview class="template-container shadow">
+                    <mat-icon class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- File Explorer -->
+          <div class="row pt-3 fw-normal display-6" style="padding-left: 26px;">
+            <span *ngIf="!isLoading && isDesignCenterActive">Design Center</span>
+            <span *ngIf="!isLoading && isFavoritesFilterActive">Favorites</span>
+          </div>
+          <div class="row fw-normal display-6" style="padding-left: 37px; margin-right: -20px; place-items: self-end;">
+            <div class="col-12 col-md-6" [ngClass]="{ 'loading-container': isLoading }">
+              <mat-chip-set style="min-height: 30px;">
+                <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 1 ? 'selected-chip' : 'unselected-chip'"
+                          (click)="setRecentCreationsTab(1)">Recently viewed</mat-chip>
+                <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 2 ? 'selected-chip' : 'unselected-chip'"
+                          (click)="setRecentCreationsTab(2)">Shared files</mat-chip>
+                <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 3 ? 'selected-chip' : 'unselected-chip'"
+                          (click)="setRecentCreationsTab(3)">Shared projects</mat-chip>
+              </mat-chip-set>
+            </div>
+            <div class="col-12 col-md-6" style="padding-right: unset;">
+              <mat-chip-set *ngIf="!isLoading" style="float: inline-end; margin-right: -9px;">
+
+                <!-- Should only appear if user has multiple teams -->
+                <span *ngIf="teams.length > 1" class="align-content-center">
+                  <mat-chip *ngIf="!isLoading" class="teamname-dropdown-chip file-filter-chip">
+                    All teams
+                  </mat-chip>
+                  <span class="sortorder-dropdown-arrow material-symbols-outlined">
+                    keyboard_arrow_down
+                  </span>
+                </span>
+
+
+                <span class="align-content-center" (click)="toggleFileTypeDropdown()">
+                  <mat-chip *ngIf="!isLoading" class="filetype-dropdown-chip file-filter-chip">
+                    All files
+                  </mat-chip>
+                  <span class="filetype-dropdown-arrow material-symbols-outlined">
+                    keyboard_arrow_down
+                  </span>
+                  <div [hidden]="!showFileTypeDropdown" (click)="$event.stopPropagation()" class="menu-container">
+                    <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
+
+                      <div class="row pb-2 menu-header">File type</div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': fileType == 0 }"
+                           [@slideInOut]="fileType == 0 ? 'flash-in' : 'out'"
+                           (click)="changeFileType(0)">
+                        All files
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': fileType == 1 }"
+                           [@slideInOut]="fileType == 1 ? 'flash-in' : 'out'"
+                           (click)="changeFileType(1)">
+                        Design files
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': fileType == 2 }"
+                           [@slideInOut]="fileType == 2 ? 'flash-in' : 'out'"
+                           (click)="changeFileType(2)">
+                        Boards
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': fileType == 3 }"
+                           [@slideInOut]="fileType == 3 ? 'flash-in' : 'out'"
+                           (click)="changeFileType(3)">
+                        Slide decks
+                      </div>
+
+                    </div>
+                  </div>
+                </span>
+
+                <span class="align-content-center" (click)="toggleSortOrderDropdown()">
+                  <mat-chip *ngIf="!isLoading" class="sortorder-dropdown-chip file-filter-chip">
+                    {{sortOrderDropdownText[sortBy]}}
+                  </mat-chip>
+                  <span class="sortorder-dropdown-arrow material-symbols-outlined">
+                    keyboard_arrow_down
+                  </span>
+                  <div [hidden]="!showSortOrderDropdown" (click)="$event.stopPropagation()" class="menu-container">
+                    <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
+
+                      <div class="row pb-2 menu-header">Sort by</div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': sortBy == 0 }"
+                           [@slideInOut]="sortBy == 0 ? 'flash-in' : 'out'"
+                           (click)="sort(0)">
+                        Alphabetical
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': sortBy == 1 }"
+                           [@slideInOut]="sortBy == 1 ? 'flash-in' : 'out'"
+                           (click)="sort(1)">
+                        Date created
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': sortBy == 2 }"
+                           [@slideInOut]="sortBy == 2 ? 'flash-in' : 'out'"
+                           (click)="sort(2)">
+                        Last viewed
+                      </div>
+
+                      <hr class="menu-divider">
+
+                      <div class="row pb-2 menu-header">Order</div>
+
+                      <div *ngIf="sortBy!=0" class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': orderBy == 0 }"
+                           [@slideInOut]="orderBy == 0 ? 'flash-in' : 'out'"
+                           (click)="order(0)">
+                        Oldest first
+                      </div>
+
+                      <div *ngIf="sortBy==0" class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': orderBy == 0 }"
+                           [@slideInOut]="orderBy == 0 ? 'flash-in' : 'out'"
+                           (click)="order(0)">
+                        A-Z
+                      </div>
+
+                      <div *ngIf="sortBy!=0" class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': orderBy == 1 }"
+                           [@slideInOut]="orderBy == 1 ? 'flash-in' : 'out'"
+                           (click)="order(1)">
+                        Newest first
+                      </div>
+
+                      <div *ngIf="sortBy==0" class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': orderBy == 1 }"
+                           [@slideInOut]="orderBy == 1 ? 'flash-in' : 'out'"
+                           (click)="order(1)">
+                        Z-A
+                      </div>
+
+                    </div>
+                  </div>
+                </span>
+
+                <button (click)="gridViewClicked()"
+                        class="ms-1 align-bottom file-filter-grid"
+                        [ngClass]="{ 'grid-view-selected': viewType == 'grid' }"
+                        mat-icon-button>
+                  <mat-icon>grid_view</mat-icon>
+                </button>
+                <button (click)="listViewClicked()"
+                        class="align-bottom file-filter-list"
+                        [ngClass]="{ 'list-view-selected': viewType == 'list' }"
+                        mat-icon-button>
+                  <mat-icon>menu</mat-icon>
+                </button>
+              </mat-chip-set>
+            </div>
+          </div>
+
+          <!-- List Items View -->
+          <div class="row ps-4 pe-1 pt-3 fw-normal" style="margin-right:-35px;">
+
+            <div *ngIf="listItems.length == 0 && !isLoadingItems"
+                 [ngClass]="{ 'loading-container': isLoading }"
+                 class="row ms-1 files-container justify-content-center align-content-center"
+                 style="height: 400px; width: 100%; font-size: small; color:rgb(133, 133, 133)">
+              <label class="text-center" *ngIf="!isLoading">Couldn't find any matches. Try adjusting your filters.</label>
+            </div>
+
+            <div *ngIf="!isLoading && listItems.length > 0" class="grid-container">
+              <div class="grid-item" *ngFor="let listItem of listItems; let i = index"
+                   (click)="listItemSelected($event, listItem.uuid)"
+                   (dblclick)="listItemDoubleClicked($event, listItem.uuid)"
+                   [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
+                <div class="image-wrapper shadow-sm" style="border-radius: 10px;" [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
+                  <img src="https://placehold.jp/ffffff/ffffff/150x150.png" style="opacity: .9925; padding: 10px; filter: brightness(1);">
+                  <mat-icon class="type-icon material-symbols-outlined">draw</mat-icon> <!-- Change 'favorite' to your desired icon -->
+                  <div class="favorite-icon-wrapper">
+                    <mat-icon class="favorite-icon HeartAnimation"
+                              [ngClass]="{ 'material-symbols-outlined': !isFavorite(listItem.uuid), 'favorited-icon': isFavorite(listItem.uuid), 'heart-animate': isFavorite(listItem.uuid) }"
+                              (click)="toggleFavorite(listItem.uuid, listItem)">
+                    </mat-icon> <!-- Change 'favorite' to your desired icon -->
+                  </div>
+                </div>
+                <div class="content">
+                  <div class="title"></div>
+                  <div class="description">{{ listItem.name }}</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+    </div>
+</div>
