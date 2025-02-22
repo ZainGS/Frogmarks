@@ -447,6 +447,122 @@ mat-error {
   text-align: center; /* Center the text */
 }
 
+/*html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}*/
+
+.cdk-global-overlay-wrapper {
+  place-self: center;
+  height: 80%;
+  margin-top: 6%;
+}
+
+// .cdk-overlay-container {
+//   // position: fixed;
+//   z-index: 1000;
+//   //pointer-events: none;
+// }
+
+.cdk-overlay-container:has(.mat-mdc-option) {
+  position: fixed;
+  z-index: 1000;
+  top: 48;
+  left: 284;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+
+  .cdk-overlay-pane {
+    pointer-events: auto;
+    z-index: 1000;
+  }
+}
+
+.cdk-overlay-container:has(.custom-dialog-container) {
+  position: fixed;
+  top: 0;
+  left: 0vw;
+  width: 100%;
+  height: 100%;
+  z-index: 999; /* Ensure it is on top of other elements */
+}
+
+// For mat options
+.cdk-overlay-pane {
+  z-index: 1001; /* Ensure it appears above the dialog */
+  // position: absolute;
+  // pointer-events: all;
+}
+
+.cdk-overlay-backdrop {
+  background-color: rgba(0, 0, 0, 0.5); /* Dim background */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; /* Below dialog content but above other elements */
+}
+
+// For Custom Dropdown: 
+.sortorder-dropdown-arrow {
+  vertical-align: middle; 
+  margin-top: -2px; 
+  margin-left: -14px;
+  transform: scale(.65); 
+  cursor: default;
+}
+
+.filetype-dropdown-arrow {
+  vertical-align: middle;
+  margin-top: -2px;
+  margin-left: -14px;
+  transform: scale(.65);
+  cursor: default;
+}
+
+.dropdown-option {
+  margin-left: -28px;
+}
+
+.dropdown-option:hover:not(.selected-dropdown-option) {
+  background-color: #262626 !important;
+}
+
+.selected-dropdown-option {
+  background-color: #6C63FF;
+}
+
+.menu-container {
+  position: relative;
+}
+.menu-content {
+  position: absolute;
+  top: calc(100% + 10px); /* Adjust as needed */
+  left: 0px; /* Adjust as needed */
+  border-radius: 2px;
+  font-weight: 500;
+  background-color: black !important;
+  color: white;
+  z-index: 1000;
+  min-width: 120px;
+  
+  padding-left: 28px !important;
+}
+.menu-header {
+  color: #a6a6a6;
+  font-weight: 600;
+}
+.menu-divider {
+  margin-left: -100%;
+  min-width: 100%;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 /* Media query to hide bubbles on small screens */
 @media (max-width: 1300px) {
   .bubble {
@@ -468,4 +584,8 @@ mat-error {
   .header-text {
       font-size: 48px;
   }
+}
+
+.mat-mdc-dialog-container:has(.upgrade-modal) .mdc-dialog__surface:has(.upgrade-modal) {
+  background-color: black !important;
 }

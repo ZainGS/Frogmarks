@@ -1,16 +1,18 @@
 {
   "name": "frogmarks",
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "ng": "ng",
-    "prestart": "node aspnetcore-https",
+    "prestart": "node aspnetcore-https.cjs",
     "start": "run-script-os",
     "start:windows": "ng serve --port 44452 --ssl --ssl-cert \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.pem\" --ssl-key \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.key\"",
     "start:default": "ng serve --port 44452 --ssl --ssl-cert \"$HOME/.aspnet/https/${npm_package_name}.pem\" --ssl-key \"$HOME/.aspnet/https/${npm_package_name}.key\"",
     "build": "ng build",
     "build:ssr": "ng run Frogmarks:server:dev",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "postinstall": "ngcc --properties es2015 browser module main"
   },
   "private": true,
   "dependencies": {
@@ -26,6 +28,7 @@
     "@angular/router": "^17.3.12",
     "@azure/msal-angular": "^3.0.23",
     "@azure/msal-browser": "^3.20.0",
+    "@zaings/salsa": "file:../../../salsa",
     "bootstrap": "^5.3.3",
     "jquery": "^3.6.0",
     "node": "18.19",
@@ -43,6 +46,7 @@
     "@types/jasmine": "~4.3.0",
     "@types/jasminewd2": "~2.0.10",
     "@types/node": "^20.14.12",
+    "@webgpu/types": "^0.1.54",
     "jasmine-core": "~4.3.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.1.1",

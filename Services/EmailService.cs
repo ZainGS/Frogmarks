@@ -84,7 +84,7 @@ namespace Frogmarks.Services
 
                 // Send the Email
                 //string signInLink = $"https://frogmarks.com/signin?token={token}";
-                string signInLink = $"https://localhost:4200/signin?token={newTokenString}";
+                string signInLink = $"https://localhost:44452/signin?token={newTokenString}";
 
                 // Setup SMTP Client (ex: Azure Communication Service)
                 var emailClient = new EmailClient(_acsSettings.ConnectionString);

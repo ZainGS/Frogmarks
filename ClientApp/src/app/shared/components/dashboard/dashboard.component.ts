@@ -1,6 +1,6 @@
-import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit, ViewChild } from '@angular/core';
 import { NavbarService } from '../../services/navbar/navbar.service';
-import { Board } from 'src/app/boards/models/board.model';
+import { Board } from '../../../boards/models/board.model';
 import { CdkDragDrop, CdkDragRelease, CdkDragStart, CdkDragMove, CdkDragEnd, moveItemInArray } from '@angular/cdk/drag-drop';
 import { BoardService } from '../../services/boards/board.service';
 import { ResultType } from '../../models/error-result.model';
@@ -11,6 +11,11 @@ import { AuthService } from '../../services/auth/auth.service';
 import { animate, group, state, style, transition, trigger } from '@angular/animations';
 import { NamingHelperService } from '../../utilities/naming-helper.service';
 import { Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { InviteModalComponent } from '../invite-modal/invite-modal.component';
+import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component';
+import { FormControl } from '@angular/forms';
+import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 
 @Component({
   selector: 'app-dashboard',
@@ -75,6 +80,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
+  @ViewChild(MatAutocompleteTrigger) autocompleteTrigger!: MatAutocompleteTrigger;
+  scrollListener!: () => void;
+
   // Application State
   isLoading: boolean = true;
   isLoadingItems: boolean = false;
@@ -92,6 +100,8 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   slides: SlideDeck[] = [];
   totalCreations = 0;
   listItems: any = [];
+  filteredListItems: any = [];
+  filteredSearchItems: any = [];
   selectedItems: Set<string> = new Set<string>();
   favorites: Set<string> = new Set();
 
@@ -104,9 +114,13 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   fileType: number = FileTypeOptions.All;
   showSortOrderDropdown: boolean = false;
   showFileTypeDropdown: boolean = false;
+  showNotificationPanel: boolean = false;
+  showProfilePanel: boolean = false;
   sortOrderDropdownText: any = ["Alphabetical", "Date created", "Last viewed"]
   fileTypeDropdownText: any = ["All files", "Design files", "Boards", "Slide decks"]
   viewType: string = "grid";
+  teamInviteLink: string = 'https://www.frogmarks.com/team_invite/redeem/...';
+  searchControl = new FormControl('');
 
   // misc.
   currentTime = new Date();
@@ -153,12 +167,37 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     private authService: AuthService,    
     private notifyService: NotifyService,
     private namingHelper: NamingHelperService,
-    private router: Router) {
+    private router: Router,
+    private dialog: MatDialog) {
       this._boardService = boardService;
       this._teamService = teamService;
       this._authService = authService;
       this._notifyService = notifyService;
 
+  }
+
+  onSearch() {
+    if(this.searchControl.value!.length > 0)
+    {
+      this.filterItems(this.searchControl.value!);
+    }else {
+      this.filteredSearchItems = [];
+    }
+  }
+
+  filterItems(query: string) {
+    if (!query) {
+      this.filteredSearchItems = this.listItems; // Reset to full list
+    } else {
+      this.filteredSearchItems = this.listItems.filter((item: any) =>
+        item.name.toLowerCase().includes(query.toLowerCase())
+      );
+    }
+  }
+
+  onOptionSelected(item: any) {
+    console.log('Selected Item:', item);
+    // Perform action with selected item
   }
 
   // Templating Containers, MouseEvent setup
@@ -215,7 +254,60 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     });
   }
 
+  openInviteDialog() {
+    const dialogRef = this.dialog.open(InviteModalComponent, {
+      autoFocus: false,
+      data: {
+        inviteLink: this.teamInviteLink,
+      },
+      width: '650px', // Adjust to your desired size
+      height: 'fit-content',
+      disableClose: true, // Prevent closing by clicking outside
+      panelClass: 'custom-dialog-container', // Optional custom class for styling
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        console.log('Dialog result:', result);
+      }
+    });
+  }
+
+  closeNotificationPanel() {
+    this.showNotificationPanel = false;
+  }
+
+  openUpgradeDialog() {
+    const dialogRef = this.dialog.open(UpgradeModalComponent, {
+      data: {
+      },
+      width: '80vw', // Adjust to your desired size
+      height: 'fit-content',
+      disableClose: true, // Prevent closing by clicking outside
+      panelClass: 'custom-dialog-container', // Optional custom class for styling
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        console.log('Dialog result:', result);
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('scroll', this.scrollListener, true);
+  }
+
+  private onScroll() {
+    if (this.autocompleteTrigger.panelOpen) {
+      this.autocompleteTrigger.closePanel();
+    }
+  }
+
   ngOnInit(): void {
+
+    this.scrollListener = this.onScroll.bind(this);
+    window.addEventListener('scroll', this.scrollListener, true); // 'true' for capturing phase
 
     // Grab teams for user by uid
     this._authService.getUserId().subscribe(uid => {
@@ -238,6 +330,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
               }
             });
           }
+          this.changeFileType(0);
           this.isLoading = false;
         });
 
@@ -248,8 +341,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     });
     
     // Sum design item count
-    this.totalCreations = 
-      this.boards.length + this.designs.length + this.slides.length;
+    this.totalCreations = this.boards.length + this.designs.length + this.slides.length;
   }
 
   // Replace default Templating Containers' icons OnDrag with numbered icons
@@ -312,12 +404,13 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         var sortByValue = this.sortByEnumToString(this.sortBy);
         var orderByValue = this.orderByEnumToString(this.orderBy);
 
-        this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false, sortByValue, orderByValue).subscribe((res: any) => {
+        this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
           if (res && res.resultObject && Array.isArray(res.resultObject)) {
             (res.resultObject as Board[]).forEach(board => {
               // push board objects to lists
               this.boards.push(board);
               this.listItems.push(board);
+              this.filteredListItems = this.listItems;
               if (board.isFavorite && board.uuid != undefined) {
                 this.favorites.add(board.uuid);
               }
@@ -329,7 +422,26 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         return;
       case 2:
         // Shared files
-
+        this.clearData();
+        var sortByValue = this.sortByEnumToString(this.sortBy);
+        var orderByValue = this.orderByEnumToString(this.orderBy);
+        
+        this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
+          if (res && res.resultObject && Array.isArray(res.resultObject)) {
+            (res.resultObject as Board[]).forEach(board => {
+              if(board.collaborators && board.collaborators.length > 0) {
+                // push board objects to lists
+                this.boards.push(board);
+                this.listItems.push(board);
+                this.filteredListItems = this.listItems;
+                if (board.isFavorite && board.uuid != undefined) {
+                  this.favorites.add(board.uuid);
+                }
+              }
+            });
+          }
+          this.isLoadingItems = false;
+        });
         return;
       case 3:
         // Shares projects
@@ -370,10 +482,15 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     this.isLoadingItems = true;
     this.boards = [];
     this.listItems = [];
+    this.filteredListItems = [];
     this.favorites.clear();
   }
 
   recentsClicked(): void {
+
+  }
+
+  designCenterClicked(): void {
     if (!this.isDesignCenterActive) {
 
       this.clearData();
@@ -388,10 +505,10 @@ export class DashboardComponent implements OnInit, AfterViewInit {
             // Push board objects to lists
             this.boards.push(board);
             this.listItems.push(board);
+            this.filteredListItems = this.listItems;
             if (board.isFavorite && board.uuid != undefined) {
               this.favorites.add(board.uuid);
             }
-
           });
         }
         this.isLoadingItems = false;
@@ -407,13 +524,14 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this.isDesignCenterActive = false;
 
       this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', true).subscribe((res: any) => {
-
         if (res && res.resultObject && Array.isArray(res.resultObject)) {
           (res.resultObject as Board[]).forEach(board => {
 
             // push board objects to lists
             this.boards.push(board);
             this.listItems.push(board);
+            this.filteredListItems = this.listItems;
+
             if (board.isFavorite && board.uuid != undefined) {
               this.favorites.add(board.uuid);
             }
@@ -427,7 +545,25 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   }
 
   changeFileType(option: number) {
+    this.filteredListItems = this.listItems;
     this.fileType = option;
+    switch(option) {
+      case 0:
+        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes(''));
+        break;
+      case 1:
+        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Design'));
+        break;
+      case 2:
+        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Board'));
+        break;
+      case 3:
+        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Slide'));
+        break;
+      default:
+        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes(''));
+        break;
+    }
   }
 
   sort(option: number) {
@@ -437,12 +573,13 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     var sortByValue = this.sortByEnumToString(this.sortBy);
     var orderByValue = this.orderByEnumToString(this.orderBy);
 
-    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false, sortByValue, orderByValue).subscribe((res: any) => {
+    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
       if (res && res.resultObject && Array.isArray(res.resultObject)) {
         (res.resultObject as Board[]).forEach(board => {
           // Push board objects to lists
           this.boards.push(board);
           this.listItems.push(board);
+          this.filteredListItems = this.listItems;
           if (board.isFavorite && board.uuid != undefined) {
             this.favorites.add(board.uuid);
           }
@@ -460,12 +597,13 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     var sortByValue = this.sortByEnumToString(this.sortBy);
     var orderByValue = this.orderByEnumToString(this.orderBy);
 
-    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false, sortByValue, orderByValue).subscribe((res: any) => {
+    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
       if (res && res.resultObject && Array.isArray(res.resultObject)) {
         (res.resultObject as Board[]).forEach(board => {
           // Push board objects to lists
           this.boards.push(board);
           this.listItems.push(board);
+          this.filteredListItems = this.listItems;
           if (board.isFavorite && board.uuid != undefined) {
             this.favorites.add(board.uuid);
           }

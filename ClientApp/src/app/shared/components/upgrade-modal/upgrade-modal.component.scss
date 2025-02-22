@@ -1,0 +1,28 @@
+.checkmark-list {
+    list-style: none; /* Remove default bullets */
+    padding-left: 0; /* Optional: Align list items with the parent */
+}
+
+.checkmark-list li {
+    position: relative; /* Needed for positioning the bullet */
+    padding-left: 25px; /* Space for the custom bullet */
+    margin-bottom: 8px;
+}
+
+.checkmark-list li::before {
+    content: "✔"; /* Unicode for checkmark */
+    font-size: 11px;
+    color: black; /* Checkmark color */
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    background-color: #24CB71; /* Green circle */
+    border-radius: 50%; /* Makes it a circle */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+

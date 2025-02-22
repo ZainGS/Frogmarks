@@ -100,14 +100,14 @@ namespace Frogmarks.Controllers
                 Secure = true, // Set to true in production to use HTTPS
                 SameSite = SameSiteMode.None,
                 Expires = DateTime.UtcNow.AddMinutes(15)
-            };
+            };  
 
             var refreshTokenCookieOptions = new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true, // Set to true in production to use HTTPS
                 SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddDays(7)
+                Expires = DateTime.UtcNow.AddDays(7)    
             };
 
             Response.Cookies.Append("accessToken", newAccessToken, accessTokenCookieOptions);

@@ -216,9 +216,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngularApp",
         builder => builder
-            .WithOrigins("http://localhost:4200", "https://localhost:4200")
+            .WithOrigins("http://localhost:44452", "https://localhost:44452")
             .AllowAnyHeader()
             .AllowAnyMethod()
+            //.AllowAnyOrigin());
             .AllowCredentials());
 });
 
@@ -247,7 +248,7 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    // The default HSTS value is 30 days. You may want to chang e this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
     // Apply the CORS policy
     app.UseCors("AllowAngularApp");

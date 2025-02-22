@@ -27,7 +27,12 @@
             "polyfills": "src/polyfills.ts",
             "tsConfig": "tsconfig.app.json",
             "allowedCommonJsDependencies": [
-              "oidc-client"
+              "oidc-client",
+              "fs",
+              "path",
+              "crypto",
+              "stream",
+              "util"
             ],
             "assets": [
               "src/assets"
@@ -43,13 +48,13 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kb",
-                  "maximumError": "1mb"
+                  "maximumWarning": "4mb",
+                  "maximumError": "5mb"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "2kb",
-                  "maximumError": "4kb"
+                  "maximumWarning": "8kb",
+                  "maximumError": "12kb"
                 }
               ],
               "fileReplacements": [
@@ -78,14 +83,16 @@
               "buildTarget": "Frogmarks:build:production"
             },
             "development": {
-              "proxyConfig": "proxy.conf.js",
+              "proxyConfig": "proxy.conf.cjs",
               "buildTarget": "Frogmarks:build:development"
             }
           },
           "defaultConfiguration": "development",
           "options": {
             "browserTarget": "Frogmarks:build",
-            "ssl": true
+            "ssl": true,
+            "sslKey": "%APPDATA%\\ASP.NET\\https\\localhost.key",
+            "sslCert": "%APPDATA%\\ASP.NET\\https\\localhost.crt"
           }
         },
         "extract-i18n": {
@@ -100,7 +107,7 @@
             "main": "src/test.ts",
             "polyfills": "src/polyfills.ts",
             "tsConfig": "tsconfig.spec.json",
-            "karmaConfig": "karma.conf.js",
+            "karmaConfig": "karma.conf.cjs",
             "assets": [
               "src/assets"
             ],

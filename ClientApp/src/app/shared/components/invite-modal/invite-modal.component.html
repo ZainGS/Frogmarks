@@ -1,0 +1,110 @@
+<h3 mat-dialog-title class="border" style="margin-top: -24px;">
+  <div class="row">
+    <div class="col-6">
+      Share this team
+    </div>
+    <div class="col-6 text-end">
+      
+    </div>
+  </div>
+</h3>
+<form [formGroup]="inviteForm" (ngSubmit)="onSubmit()">
+  <div mat-dialog-content>
+    <!-- Invite Link Section -->
+    <div class="invite-link">
+      <label style="font-size: 14px; color: black;" class="fw-bold mb-1" for="invite-link">Invite link</label>
+      <div class="link-container row">
+        <div class="col-6">
+          <mat-form-field style="width: -webkit-fill-available; color: black;">
+            <input
+              matInput 
+              id="invite-link"
+              formControlName="inviteLink"
+              readonly
+            />
+          </mat-form-field>
+        </div>
+        <div class="col-3" style="margin-left: 0px;">
+          <span class="align-content-center" (click)="togglePermission()">
+            <mat-chip class="filetype-dropdown-chip file-filter-chip">
+              {{dropdownOptions.get(permissionType)}}
+            </mat-chip>
+            <span class="filetype-dropdown-arrow material-symbols-outlined">
+              keyboard_arrow_down
+            </span>
+            <div [hidden]="!showPermissionTypeDropdown" (click)="$event.stopPropagation()" class="menu-container">
+              <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
+  
+                <div class="row pb-2 menu-header">Permission</div>
+  
+                <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                     [ngClass]="{ 'selected-dropdown-option': permissionType == 0 }"
+                     [@slideInOut]="permissionType == 0 ? 'flash-in' : 'out'"
+                     (click)="changePermissionType(0)">
+                  can edit
+                </div>
+  
+                <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                     [ngClass]="{ 'selected-dropdown-option': permissionType == 1 }"
+                     [@slideInOut]="permissionType == 1 ? 'flash-in' : 'out'"
+                     (click)="changePermissionType(1)">
+                  can view
+                </div>
+  
+              </div>
+            </div>
+          </span>
+        </div>
+        <div class="col-3">
+          <button
+            style="width: -webkit-fill-available;"
+            mat-raised-button
+            type="button"
+            (click)="copyLink()"
+          >
+            Copy link
+          </button>
+        </div>
+        
+      </div>
+    </div>
+
+    <!-- Invite Email Section -->
+    <div class="invite-email mt-4">
+      <label style="font-size: 14px; color: black;" class="fw-bold mb-1" for="invite-email">Invite by email</label>
+      <div class="row">
+        <div class="col-9">
+          <mat-form-field style="width: -webkit-fill-available">
+            <input
+            id="invite-email"
+            matInput
+            type="email"
+            formControlName="email"
+            placeholder="Invite others by name or email"
+          />
+          </mat-form-field>
+        </div>
+        <div class="col-3">
+            <button
+            style="width: -webkit-fill-available;"
+            mat-raised-button
+            color="primary"
+            [disabled]="!inviteForm.valid"
+            type="submit"
+          >
+              Email invite
+            </button>
+        </div>
+        
+        
+      </div>
+      
+    </div>
+    
+  </div>
+
+  <!-- Dialog Actions -->
+  <div mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Close</button>
+  </div>
+</form>

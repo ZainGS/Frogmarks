@@ -10,14 +10,18 @@ import { Router } from '@angular/router';
 })
 export class HomeComponent implements OnInit {
   
-  emailForm: FormGroup =  this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
-  });
+  emailForm!: FormGroup;  // <-- Ensure emailForm is defined
 
-  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {}
+  constructor(
+    private fb: FormBuilder,
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
-
+    this.emailForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email]],
+    });
   }
 
   onSubmit(): void {
