@@ -1,15 +1,16 @@
-﻿using Frogmarks.Models.Logging;
+﻿using Frogmarks.Models.Board;
+using Frogmarks.Models.Logging;
 using Frogmarks.Models.Team;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Frogmarks.Models.Board
+namespace Frogmarks.Models.Dtos
 {
     /// <summary>
     /// A Board is the primary object that BoardCollaborators will modify; multiple BoardCollaborators will add BoardItems to the Board 
-    /// for planning, flowcharting, digital workshopping, UI/UX design, etc. Multiple organizationIt  is possible that an organization is structured such that multiple Teams 
-    /// must be able to collaborate. While
+    /// for planning, flowcharting, digital workshopping, UI/UX design, etc. It is possible that an organization is structured such that multiple Teams 
+    /// must be able to collaborate. 
     /// </summary>
-    public class BoardDto: AuditLog
+    public class BoardDto : AuditLog
     {
         public Guid UUID { get; set; }
         public string Name { get; set; } = "Untitled";
@@ -21,10 +22,10 @@ namespace Frogmarks.Models.Board
         public int StartViewRightBottom { get; set; } = 0;
         public string BackgroundColor { get; set; } = "fff";
 
-        public List<BoardCollaborator>? Collaborators { get; set; } = new List<BoardCollaborator>();
+        public List<BoardCollaboratorDto>? Collaborators { get; set; } = new();
         public List<BoardItem>? BoardItems { get; set; } = new List<BoardItem>();
         public long? TeamId { get; set; }
-        public Models.Team.Team? Team { get; set; }
+        public TeamDto? Team { get; set; }
         // public List<Team.Team>? Teams { get; set; } = new List<Team.Team>();
         public bool IsDraft { get; set; } = true;
         public bool IsFavorite { get; set; } = false;
@@ -39,5 +40,8 @@ namespace Frogmarks.Models.Board
         public BoardPermissions? Permissions { get; set; }
 
         public DateTime? LastViewed { get; set; }
+        public List<string>? CachedThumbnailBoardIds { get; set; }
+        public string? SceneGraphData { get; set; } // Stored as JSON string
+
     }
 }

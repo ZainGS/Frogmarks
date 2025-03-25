@@ -16,6 +16,7 @@ import { InviteModalComponent } from '../invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component';
 import { FormControl } from '@angular/forms';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { SplineViewer } from '@splinetool/viewer';
 
 @Component({
   selector: 'app-dashboard',
@@ -106,6 +107,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   favorites: Set<string> = new Set();
 
   // Filtering
+  isFrogmarksGalaxyActive: boolean = false;
   isDesignCenterActive: boolean = true;
   isFavoritesFilterActive: boolean = false;
   currentRecentCreationsTab = 1;
@@ -175,6 +177,16 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this._notifyService = notifyService;
 
   }
+
+  // Optimize window resizing
+  onResize = () => {
+    document.body.classList.add('disable-animations');
+
+    clearTimeout(this.resizeTimeout);
+    this.resizeTimeout = setTimeout(() => {
+      document.body.classList.remove('disable-animations');
+    }, 300);
+  };
 
   onSearch() {
     if(this.searchControl.value!.length > 0)
@@ -294,8 +306,13 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     });
   }
 
+  trackByUuid(index: number, item: { uuid: string }) {
+    return item.uuid;
+  }
+
   ngOnDestroy() {
     window.removeEventListener('scroll', this.scrollListener, true);
+    window.removeEventListener('resize', this.onResize);
   }
 
   private onScroll() {
@@ -304,10 +321,12 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
+  private resizeTimeout: any;
   ngOnInit(): void {
 
     this.scrollListener = this.onScroll.bind(this);
     window.addEventListener('scroll', this.scrollListener, true); // 'true' for capturing phase
+    window.addEventListener('resize', this.onResize);
 
     // Grab teams for user by uid
     this._authService.getUserId().subscribe(uid => {
@@ -320,8 +339,8 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         this._boardService.getBoardsByTeamId(this.currentTeam.id!).subscribe((res: any) => {
 
           if (res && res.resultObject && Array.isArray(res.resultObject)) {
+            this.clearData();
             (res.resultObject as Board[]).forEach(board => {
-
               // Push board objects to lists
               this.boards.push(board);
               this.listItems.push(board);
@@ -393,19 +412,17 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   onDragEnd(event: CdkDragEnd) {}
 
-
   setRecentCreationsTab(selection: number) {
     this.currentRecentCreationsTab = selection;
     switch (selection) {
       case 1:
-
         // Recently viewed
-        this.clearData();
         var sortByValue = this.sortByEnumToString(this.sortBy);
         var orderByValue = this.orderByEnumToString(this.orderBy);
 
         this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
           if (res && res.resultObject && Array.isArray(res.resultObject)) {
+            this.clearData();
             (res.resultObject as Board[]).forEach(board => {
               // push board objects to lists
               this.boards.push(board);
@@ -422,7 +439,6 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         return;
       case 2:
         // Shared files
-        this.clearData();
         var sortByValue = this.sortByEnumToString(this.sortBy);
         var orderByValue = this.orderByEnumToString(this.orderBy);
         
@@ -478,6 +494,11 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
+  isSidenavOpen = false;
+  toggleSidenav() {
+    this.isSidenavOpen = !this.isSidenavOpen;
+  }
+
   clearData() {
     this.isLoadingItems = true;
     this.boards = [];
@@ -490,18 +511,27 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   }
 
+  frogmarksGalaxyClicked(): void {
+    if (!this.isFrogmarksGalaxyActive) {
+      this.clearData();
+      this.isFrogmarksGalaxyActive = true;
+      this.isDesignCenterActive = false;
+      this.isFavoritesFilterActive = false;
+    }
+  }
+
   designCenterClicked(): void {
     if (!this.isDesignCenterActive) {
-
       this.clearData();
       this.isDesignCenterActive = true;
       this.isFavoritesFilterActive = false;
+      this.isFrogmarksGalaxyActive = false;
 
       this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false).subscribe((res: any) => {
 
         if (res && res.resultObject && Array.isArray(res.resultObject)) {
+          //this.clearData();
           (res.resultObject as Board[]).forEach(board => {
-
             // Push board objects to lists
             this.boards.push(board);
             this.listItems.push(board);
@@ -522,11 +552,12 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this.clearData();
       this.isFavoritesFilterActive = true;
       this.isDesignCenterActive = false;
+      this.isFrogmarksGalaxyActive = false;
 
       this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', true).subscribe((res: any) => {
         if (res && res.resultObject && Array.isArray(res.resultObject)) {
+          // this.clearData();
           (res.resultObject as Board[]).forEach(board => {
-
             // push board objects to lists
             this.boards.push(board);
             this.listItems.push(board);
@@ -568,13 +599,12 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   sort(option: number) {
     this.sortBy = option;
-
-    this.clearData();
     var sortByValue = this.sortByEnumToString(this.sortBy);
     var orderByValue = this.orderByEnumToString(this.orderBy);
 
     this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
       if (res && res.resultObject && Array.isArray(res.resultObject)) {
+        this.clearData();
         (res.resultObject as Board[]).forEach(board => {
           // Push board objects to lists
           this.boards.push(board);
@@ -592,13 +622,12 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   order(option: number) {
     this.orderBy = option;
-
-    this.clearData();
     var sortByValue = this.sortByEnumToString(this.sortBy);
     var orderByValue = this.orderByEnumToString(this.orderBy);
 
     this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
       if (res && res.resultObject && Array.isArray(res.resultObject)) {
+        this.clearData();
         (res.resultObject as Board[]).forEach(board => {
           // Push board objects to lists
           this.boards.push(board);
@@ -678,7 +707,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
-  listItemDoubleClicked(event: MouseEvent, uuid: string) { }
+  listItemDoubleClicked(event: MouseEvent, uuid: string) { 
+    this.router.navigate(['/board', uuid]);
+  }
 
   toggleFavorite(uuid: string, board: any) {
     board.teamId = this.currentTeam.id;
@@ -693,9 +724,10 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
     else {
       board.isFavorite = true;
+      this.favorites.add(uuid);
       this.boardService.favoritedBoard(board).subscribe((res: any) => {
         if (res.resultType == 0) {
-          this.favorites.add(uuid);
+          // this.favorites.add(uuid);
         }
       });
     }

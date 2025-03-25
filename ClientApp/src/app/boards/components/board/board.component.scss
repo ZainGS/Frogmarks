@@ -403,8 +403,8 @@ canvas {
     width: 2vw;
     height: 2vw;
     flex-wrap: nowrap !important;
-    outline: .2vw solid #ffffff;
-    outline-offset: .2vw;
+    outline: .15vw solid #ececec;
+    outline-offset: .15vw;
 }
 
 svg {
@@ -532,3 +532,16 @@ svg {
     margin-left: 90% !important; 
     margin-top: -20px !important;
 }
+
+.custom-color-picker {
+    position: relative;
+    background: radial-gradient(circle, white 0%, rgba(255, 255, 255, 0) 50%), 
+                conic-gradient(red, orange, yellow, lime, cyan, blue, violet, red);
+    display: inline-block;
+    width: 32px; /* Adjust size */
+    height: 32px; /* Adjust size */
+    border-radius: 50%;
+    border: 1px solid #424242;
+    cursor: pointer;
+}
+

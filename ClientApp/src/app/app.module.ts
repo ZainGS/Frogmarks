@@ -33,6 +33,7 @@ import { CheckYourEmailComponent } from './shared/components/check-your-email/ch
 import { BoardComponent } from './boards/components/board/board.component';
 import { InviteModalComponent } from './shared/components/invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from './shared/components/upgrade-modal/upgrade-modal.component';
+import { ColorPickerComponent } from './shared/components/color-picker/color-picker.component';
 
 // Define MSAL configuration
 /*
@@ -58,11 +59,12 @@ export function MSALInstanceFactory(): PublicClientApplication {
     HomeComponent,
     DashboardComponent,
     InviteModalComponent,
-    UpgradeModalComponent
+    UpgradeModalComponent,
+    ColorPickerComponent,
+    BoardComponent
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
-    BoardComponent,
     BrowserModule,
     MsalModule,
     HttpClientModule,

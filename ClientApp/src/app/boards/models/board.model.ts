@@ -23,4 +23,5 @@ export class Board {
   team?: Team;
   preferences?: BoardUserPreferences;
   permissions?: BoardPermissions;
+  sceneGraphData?: string;
 }

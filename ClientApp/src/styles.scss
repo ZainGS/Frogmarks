@@ -5,6 +5,13 @@ a {
   color: #0366d6;
 }
 
+.disable-animations * {
+  box-shadow: none !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+}
+
 body, .navbar {
   // background-color: #FFDE95 !important;
   //background-color: #7BD3EA !important;
@@ -405,6 +412,7 @@ mat-error {
   transform: scale(.75) !important;
   margin-top: 1px !important;
   margin-right: 20px !important;
+  vertical-align: middle;
 }
 
 .sortorder-dropdown-chip .mdc-evolution-chip__text-label.mat-mdc-chip-action-label {

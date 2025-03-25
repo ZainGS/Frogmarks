@@ -38,5 +38,7 @@ namespace Frogmarks.Models.Board
         public long? PermissionsId { get; set; }
         [ForeignKey("PermissionsId")]
         public virtual BoardPermissions? Permissions { get; set; }
+
+        public string? SceneGraphData { get; set; } // Stored as JSON string
     }
 }

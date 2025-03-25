@@ -1,7 +1,11 @@
 ﻿using AutoMapper;
+using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs;
 using Duende.IdentityServer.Extensions;
 using Frogmarks.Data;
+using Frogmarks.Models;
 using Frogmarks.Models.Board;
+using Frogmarks.Models.DTOs;
 using Frogmarks.Models.Team;
 using Frogmarks.SignalR.Hubs;
 using Frogmarks.SignalR.Optimizers;
@@ -14,6 +18,8 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using Azure.Storage.Sas;
+using Frogmarks.Models.Dtos;
 
 namespace Frogmarks.Services
 {
@@ -23,13 +29,16 @@ namespace Frogmarks.Services
         private readonly IMapper _mapper;
         private readonly BatchService _batchService;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly BlobServiceClient _blobServiceClient;
+        private readonly string _containerName = "board-thumbnails-dev"; // Blob Storage container, TODO: Use environment variable to determine.
 
-        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor)
+        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, BlobServiceClient blobServiceClient)
         {
             _context = context;
             _mapper = mapper;
             _batchService = batchService;
             _httpContextAccessor = httpContextAccessor;
+            _blobServiceClient = blobServiceClient;
         }
 
         public async Task<ResultModel<IEnumerable<Board>>> GetAllBoards()
@@ -46,51 +55,125 @@ namespace Frogmarks.Services
             }
         }
 
-        public async Task<ResultModel<Board>> GetBoardById(long id)
+        public async Task<ResultModel<BoardDto>> GetBoardById(long id)
         {
             try
             {
-                var board = await _context.Boards.FindAsync(id);
+                var board = await _context.Boards
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == id);
+
                 if (board == null)
                 {
-                    return new ResultModel<Board>(ResultType.NotFound, "Board not found");
+                    return new ResultModel<BoardDto>(ResultType.NotFound, "Board not found");
+                }
+
+                var userId = GetCurrentUserId();
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    // Fetch TeamUserIds in one query (add AsNoTracking for speed)
+                    var teamUserIds = await _context.TeamUsers
+                        .AsNoTracking()
+                        .Where(tu => tu.ApplicationUserId == userId)
+                        .Select(tu => tu.Id)
+                        .ToListAsync();
+
+                    if (teamUserIds.Count > 0)
+                    {
+                        // Fetch all existing logs in 1 query
+                        var existingLogs = await _context.BoardViewLogs
+                            .Where(bvl => bvl.BoardId == board.Id && teamUserIds.Contains(bvl.TeamUserId))
+                            .ToDictionaryAsync(bvl => bvl.TeamUserId);
+
+                        var now = DateTime.UtcNow;
+
+                        foreach (var teamUserId in teamUserIds)
+                        {
+                            if (existingLogs.TryGetValue(teamUserId, out var log))
+                            {
+                                log.LastViewed = now;
+                                _context.BoardViewLogs.Update(log);
+                            }
+                            else
+                            {
+                                _context.BoardViewLogs.Add(new BoardViewLog
+                                {
+                                    BoardId = board.Id,
+                                    TeamUserId = teamUserId,
+                                    LastViewed = now
+                                });
+                            }
+                        }
+
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                return new ResultModel<BoardDto>(ResultType.Success, resultObject: _mapper.Map<BoardDto>(board));
+            }
+            catch (Exception ex)
+            {
+                // Optional: log the error here
+                throw;
+            }
+        }
+
+        public async Task<ResultModel<BoardDto>> GetBoardByUid(Guid uid)
+        {
+            try
+            {
+                //var board = await _context.Boards.AsNoTracking().FirstOrDefaultAsync(b => b.UUID == uid);
+
+                var board = await _context.Boards.AsNoTracking()
+                    .Include(b => b.Collaborators)
+                        .ThenInclude(c => c.TeamUser)
+                    .Include(b => b.Collaborators)
+                        .ThenInclude(c => c.BoardRoles)
+                    .FirstOrDefaultAsync(b => b.UUID == uid);
+
+                if (board == null)
+                {
+                    return new ResultModel<BoardDto>(ResultType.NotFound, "Board not found");
                 }
 
                 var userId = GetCurrentUserId();
                 if (!userId.IsNullOrEmpty())
                 {
                     // Fetch the TeamUser entries corresponding to the ApplicationUserId
-                    var teamUserIds = await _context.TeamUsers
+                    var teamUserIds = await _context.TeamUsers.AsNoTracking()
                         .Where(tu => tu.ApplicationUserId == userId)
                         .Select(tu => tu.Id)
                         .ToListAsync();
 
+                    var existingLogs = await _context.BoardViewLogs
+                        .Where(bvl => bvl.BoardId == board.Id && teamUserIds.Contains(bvl.TeamUserId))
+                        .ToDictionaryAsync(bvl => bvl.TeamUserId);
+
+                    var now = DateTime.UtcNow;
+
                     foreach (var teamUserId in teamUserIds)
                     {
-                        var boardViewLog = await _context.BoardViewLogs
-                            .FirstOrDefaultAsync(bvl => bvl.BoardId == board.Id && bvl.TeamUserId == teamUserId);
-
-                        if (boardViewLog == null)
+                        if (existingLogs.TryGetValue(teamUserId, out var log))
                         {
-                            boardViewLog = new BoardViewLog
-                            {
-                                BoardId = board.Id,
-                                TeamUserId = teamUserId,
-                                LastViewed = DateTime.UtcNow
-                            };
-                            _context.BoardViewLogs.Add(boardViewLog);
+                            log.LastViewed = now;
+                            _context.BoardViewLogs.Update(log);
                         }
                         else
                         {
-                            boardViewLog.LastViewed = DateTime.UtcNow;
-                            _context.BoardViewLogs.Update(boardViewLog);
+                            _context.BoardViewLogs.Add(new BoardViewLog
+                            {
+                                ApplicationUserId = userId,
+                                BoardId = board.Id,
+                                TeamUserId = teamUserId,
+                                LastViewed = now
+                            });
                         }
                     }
 
                     await _context.SaveChangesAsync();
                 }
 
-                return new ResultModel<Board>(ResultType.Success, resultObject: board);
+                return new ResultModel<BoardDto>(ResultType.Success, resultObject: _mapper.Map<BoardDto>(board));
             }
             catch (Exception ex)
             {
@@ -153,6 +236,30 @@ namespace Frogmarks.Services
             }
         }
 
+        public async Task<ResultModel<string>> SaveBoardSceneGraph(long boardId, string sceneGraphData)
+        {
+            var board = await _context.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+            if (board == null) return new ResultModel<string>(ResultType.NotFound, "Board not found.");
+
+            board.SceneGraphData = sceneGraphData;
+            board.DateModified = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return new ResultModel<string>(ResultType.Success, "Board saved.");
+        }
+
+        public async Task<ResultModel<string>> LoadBoardSceneGraph(long boardId)
+        {
+            var board = await _context.Boards
+                .Where(b => b.Id == boardId)
+                .Select(b => b.SceneGraphData)
+                .FirstOrDefaultAsync();
+
+            if (board == null) return new ResultModel<string>(ResultType.NotFound, "Board not found.");
+
+            return new ResultModel<string>(ResultType.Success, board);
+        }
+
         public async Task<ResultModel<Board>> FavoritedBoard(BoardDto boardDto)
         {
             try
@@ -167,6 +274,8 @@ namespace Frogmarks.Services
                 _mapper.Map(boardDto, existingBoard);
 
                 var userId = GetCurrentUserId();
+
+                //
                 var teamUser = await _context.TeamUsers.SingleOrDefaultAsync(tu => tu.ApplicationUserId == userId);
 
                 if (boardDto.IsFavorite)
@@ -180,6 +289,13 @@ namespace Frogmarks.Services
                 {
                     teamUser?.FavoriteBoards.Remove(existingBoard);
                 }
+                //
+
+                // TODO: Replace the above with: (Query both in one join statement?)
+                /* var teamUser = await _context.TeamUsers
+                    .Include(t => t.FavoriteBoards)
+                    .SingleOrDefaultAsync(tu => tu.ApplicationUserId == userId);
+                 */
 
                 await _context.SaveChangesAsync();
 
@@ -213,94 +329,104 @@ namespace Frogmarks.Services
             }
         }
 
-        public async Task<ResultModel<IEnumerable<BoardDto>>> SearchBoards(string name, long teamId, bool favorites, string sortBy, string sortDirection, int pageIndex, int pageSize)
+        public async Task<ResultModel<IEnumerable<BoardDto>>> SearchBoards(
+            string name, long teamId, bool favorites, string sortBy, string sortDirection,
+            int pageIndex, int pageSize, HashSet<long> cachedThumbnailBoardIds)
         {
             try
             {
                 var userId = GetCurrentUserId();
-
-                if (userId.IsNullOrEmpty())
+                if (string.IsNullOrEmpty(userId))
                 {
                     return new ResultModel<IEnumerable<BoardDto>>(ResultType.Unauthorized, "User not found");
                 }
 
-                // Base query for boards
-                var query = _context.Boards.AsQueryable();
-
-                if(teamId > 0)
-                {
-                    query.Where(board => board.TeamId == teamId);
-                }
+                var query = _context.Boards
+                    .AsNoTracking()
+                    .Where(b => teamId <= 0 || b.TeamId == teamId);
 
                 if (favorites)
                 {
-                    query = query.Where(board => _context.TeamUsers
-                        .Where(tu => tu.ApplicationUserId == userId)
-                        .SelectMany(tu => tu.FavoriteBoards)
-                        .Select(fb => fb.Id)
-                        .Contains(board.Id));
+                    query = query.Where(b =>
+                        _context.TeamUsers
+                            .Where(tu => tu.ApplicationUserId == userId)
+                            .SelectMany(tu => tu.FavoriteBoards)
+                            .Select(fb => fb.Id)
+                            .Contains(b.Id));
                 }
 
-                // Filtering
                 if (!string.IsNullOrEmpty(name))
                 {
-                    query = query.Where(b => b.Name.Contains(name));
+                    query = query.Where(b => b.Name.StartsWith(name));
                 }
 
-                // Sorting by sortBy and sortDirection
-                switch (sortBy.ToLower())
+                query = sortBy.ToLower() switch
                 {
-                    case "alphabetical":
-                        query = sortDirection.ToLower() == "desc" ? query.OrderByDescending(b => b.Name) : query.OrderBy(b => b.Name);
-                        break;
-                    case "datecreated":
-                        query = sortDirection.ToLower() == "desc" ? query.OrderByDescending(b => b.Created) : query.OrderBy(b => b.Created);
-                        break;
-                    case "lastviewed":
-                        query = sortDirection.ToLower() == "desc" ? query.OrderByDescending(b => b.Created) : query.OrderBy(b => b.Created);
-                        break;
-                    default:
-                        query = sortDirection.ToLower() == "desc" ? query.OrderByDescending(b => b.Created) : query.OrderBy(b => b.Created);
-                        break;
-                }
+                    "alphabetical" => sortDirection.ToLower() == "desc"
+                        ? query.OrderByDescending(b => b.Name)
+                        : query.OrderBy(b => b.Name),
+                    _ => sortDirection.ToLower() == "desc"
+                        ? query.OrderByDescending(b => b.Created)
+                        : query.OrderBy(b => b.Created)
+                };
 
-                // Pagination
-                //var result = await query.Skip(pageIndex * pageSize).Take(pageSize)
-                var result = await query
+                // Step 1: Fetch minimal board data
+                var boardDtos = await query
+                    .Skip(pageIndex * pageSize)
+                    .Take(pageSize)
                     .Select(b => new BoardDto
                     {
                         Id = b.Id,
                         UUID = b.UUID,
                         Name = b.Name,
-                        Description = b.Description,
-                        ThumbnailUrl = b.ThumbnailUrl,
-                        StartViewLeftTop = b.StartViewLeftTop,
-                        StartViewLeftBottom = b.StartViewLeftBottom,
-                        StartViewRightTop = b.StartViewRightTop,
-                        StartViewRightBottom = b.StartViewRightBottom,
-                        BackgroundColor = b.BackgroundColor,
-                        Collaborators = b.Collaborators,
-                        BoardItems = b.BoardItems,
-                        TeamId = b.TeamId,
-                        PreferencesId = b.PreferencesId,
-                        Preferences = b.Preferences,
-                        ProjectId = b.ProjectId,
-                        Project = b.Project,
-                        PermissionsId = b.PermissionsId,
-                        Permissions = b.Permissions,
-                        IsFavorite = _context.TeamUsers.Any(tu => tu.FavoriteBoards.Any(favboard => favboard.Id == b.Id)),
                         Created = b.Created,
-                        DateModified= b.DateModified,
-                    }).ToListAsync();
+                        DateModified = b.DateModified
+                    })
+                    .ToListAsync();
 
-                return new ResultModel<IEnumerable<BoardDto>>(ResultType.Success, resultObject: result);
+                // Step 2: Append thumbnails only for non-cached boards
+                var uncachedBoards = boardDtos
+                    .Where(dto => !cachedThumbnailBoardIds.Contains(dto.Id))
+                    .ToList();
+
+                var thumbnailTasks = uncachedBoards.ToDictionary(
+                    dto => dto.Id,
+                    dto => GetThumbnailSasUrl(new Board { Id = dto.Id, UUID = dto.UUID }) // or refactor to take ID if needed
+                );
+
+                var thumbnailResults = await Task.WhenAll(thumbnailTasks.Values);
+                var thumbnailLookup = thumbnailTasks.Keys.Zip(thumbnailResults, (id, url) => new { id, url })
+                                                         .ToDictionary(x => x.id, x => x.url);
+
+                foreach (var dto in boardDtos)
+                {
+                    dto.ThumbnailUrl = thumbnailLookup.TryGetValue(dto.Id, out var url) ? url : string.Empty;
+                }
+
+                // Step 3: Append favorites if applicable
+                if (favorites)
+                {
+                    var favoriteIds = await _context.TeamUsers
+                        .Where(tu => tu.ApplicationUserId == userId)
+                        .SelectMany(tu => tu.FavoriteBoards)
+                        .Select(fb => fb.Id)
+                        .ToListAsync();
+
+                    var favoriteSet = new HashSet<long>(favoriteIds);
+                    foreach (var dto in boardDtos)
+                    {
+                        dto.IsFavorite = favoriteSet.Contains(dto.Id);
+                    }
+                }
+
+                return new ResultModel<IEnumerable<BoardDto>>(ResultType.Success, "Success", boardDtos);
             }
             catch (Exception ex)
             {
-                // Log the exception if needed
-                throw;
+                return new ResultModel<IEnumerable<BoardDto>>(ResultType.Failure, ex.Message);
             }
         }
+
 
         public async Task<ResultModel<IEnumerable<BoardDto>>> GetBoardsSortedByLastViewed(long teamId, string sortDirection, int pageIndex, int pageSize)
         {
@@ -365,9 +491,28 @@ namespace Frogmarks.Services
                         StartViewRightTop = b.StartViewRightTop,
                         StartViewRightBottom = b.StartViewRightBottom,
                         BackgroundColor = b.BackgroundColor,
-                        Collaborators = b.Collaborators,
+                        Collaborators = b.Collaborators.Select(c => new BoardCollaboratorDto
+                        {
+                            Id = c.Id,
+                            TeamUserId = c.TeamUserId,
+                            TeamUser = new TeamUserDto
+                            {
+                                Id = c.TeamUser.Id,
+                                TeamId = c.TeamUser.TeamId,
+                                ApplicationUserId = c.TeamUser.ApplicationUserId
+                            },
+                            BoardRoles = c.BoardRoles.Select(r => new BoardRole
+                            {
+                                Id = r.Id,
+                                RoleName = r.RoleName
+                            }).ToList()
+                        }).ToList(),
                         BoardItems = b.BoardItems,
-                        Team = b.Team, // Adjusted to single Team object
+                        Team = b.Team == null ? null : new TeamDto
+                        {
+                            Name = b.Team.Name,
+                            Description = b.Team.Description
+                        },
                         PreferencesId = b.PreferencesId,
                         Preferences = b.Preferences,
                         ProjectId = b.ProjectId,
@@ -384,6 +529,78 @@ namespace Frogmarks.Services
                 // Log the exception if needed
                 return new ResultModel<IEnumerable<BoardDto>>(ResultType.Failure, ex.Message);
             }
+        }
+
+        public async Task<ResultModel<string>> UploadThumbnail(string boardUid, IFormFile thumbnail)
+        {
+            try
+            {
+                if (thumbnail == null || thumbnail.Length == 0)
+                    return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
+
+                var containerClient = _blobServiceClient.GetBlobContainerClient(this._containerName);
+
+                await containerClient.CreateIfNotExistsAsync();
+
+                var blobClient = containerClient.GetBlobClient($"{boardUid}.png");
+
+                using (var stream = thumbnail.OpenReadStream())
+                {
+                    await blobClient.UploadAsync(stream, overwrite: true);
+                }
+
+                return new ResultModel<string>(ResultType.Success, blobClient.Uri.ToString());
+            }
+            catch (Exception ex)
+            {
+                return new ResultModel<string>(ResultType.Failure, ex.Message);
+            }
+        }
+
+        // This method won't work since the storage account is private.
+        // If you want the frontend to access the image, generate a SAS (Shared Access Signature) URL.
+        // See public string GetThumbnailSasUrl(string boardUid) below this method...
+        //public async Task<ResultModel<Stream>> GetThumbnail(string boardUid)
+        //{
+        //    try
+        //    {
+        //        var containerClient = _blobServiceClient.GetBlobContainerClient(this._containerName);
+        //        var blobClient = containerClient.GetBlobClient($"{boardUid}.png");
+
+        //        if (!(await blobClient.ExistsAsync()))
+        //        {
+        //            return new ResultModel<Stream>(ResultType.NotFound, "Thumbnail not found.");
+        //        }
+
+        //        var downloadInfo = await blobClient.DownloadAsync();
+        //        return new ResultModel<Stream>(ResultType.Success, "Success", downloadInfo.Value.Content);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new ResultModel<Stream>(ResultType.Failure, ex.Message);
+        //    }
+        //}
+
+        public async Task<string> GetThumbnailSasUrl(Board board)
+        {
+            var containerClient = _blobServiceClient.GetBlobContainerClient(this._containerName);
+            var blobClient = containerClient.GetBlobClient($"{board.UUID}.png");
+
+            if (!(await blobClient.ExistsAsync()))
+                //// TODO: Return default/blank image URL instead.
+                // throw new Exception("Thumbnail not found");
+                return "";
+
+            var sasBuilder = new BlobSasBuilder
+            {
+                BlobContainerName = containerClient.Name,
+                BlobName = blobClient.Name,
+                ExpiresOn = DateTime.UtcNow.AddHours(1),
+                Resource = "b"
+            };
+            sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+            return blobClient.GenerateSasUri(sasBuilder).ToString();
         }
     }
 

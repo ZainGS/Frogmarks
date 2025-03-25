@@ -18,6 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json.Serialization;
+using Azure.Storage.Blobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -171,10 +172,10 @@ builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<BatchService>();
 builder.Services.AddScoped<TokenGenerator>();
+builder.Services.AddSingleton(x => new BlobServiceClient(builder.Configuration["AzureBlobStorage:ConnectionString"]));
 
 // Register Hubs
-builder.Services.AddSingleton<BoardHub>(); // Register BoardHub, if it doesn't depend on scoped services, otherwise use AddScoped
-
+builder.Services.AddSingleton<BoardHub>(); // Register BoardHub, if it doesn't depend on scoped services, otherwise use 
 builder.Services.Configure<AzureCommunicationServicesSettings>(builder.Configuration.GetSection("AzureCommunicationServices"));
 
 // Read the Azure SignalR connection string from configuration

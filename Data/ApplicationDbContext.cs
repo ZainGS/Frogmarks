@@ -47,7 +47,7 @@ namespace Frogmarks.Data
         public DbSet<Key> Keys { get; set; }
 
         // IApplicationDbContext implementation
-        
+
         public DbCommand CreateCommand()
         {
             return Database.GetDbConnection().CreateCommand();
