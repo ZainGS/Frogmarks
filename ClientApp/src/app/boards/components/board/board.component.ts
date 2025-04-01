@@ -206,6 +206,9 @@ export class BoardComponent implements OnInit {
         case "_":
             this.zoomOut();
             break;
+        case "Delete":
+            this.shapeManager.deleteSelectedShapes();
+            break;
         default:
             return; // Ignore keys that are not mapped
     }

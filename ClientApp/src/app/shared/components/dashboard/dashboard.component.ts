@@ -16,7 +16,6 @@ import { InviteModalComponent } from '../invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component';
 import { FormControl } from '@angular/forms';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
-import { SplineViewer } from '@splinetool/viewer';
 
 @Component({
   selector: 'app-dashboard',
