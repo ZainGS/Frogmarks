@@ -1,6 +1,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,200" />
 <!-- Frogmarks Dashboard Template -->
 <div class="dashboard-container" [ngStyle]="isFrogmarksGalaxyActive ? { overflow: 'hidden' } : {}">
+    <!-- Notification Panel -->
     <div *ngIf="showNotificationPanel" class="notification-panel ps-4 pt-3 pe-4">
       <div class="row">
         <div class="col-8"><b>Notifications</b></div>
@@ -23,12 +24,39 @@
         </div>
       </div>
     </div>
+    <!-- Settings Panel -->
+    <div *ngIf="showSettingsPanel" class="notification-panel ps-4 pt-3 pe-4">
+      <div class="row">
+        <div class="col-8"><b>Settings</b></div>
+        <div class="col-4 text-end pe-4 ">
+          <mat-icon 
+          class="close-icon type-icon material-symbols-outlined"
+          (click)="closeSettingsPanel()">
+            close
+          </mat-icon>
+        </div>
+        
+      </div>
+      <div>
+        <button class="mt-5" style="min-width: -webkit-fill-available;" mat-raised-button (click)="toggleDarkMode()">Toggle Dark Mode</button>
+      </div>
+      <!-- <div class="text-center notification-panel-content-empty">
+        <div>
+          <mat-icon *ngIf="!isLoading" class="notification-panel-content-empty-icon mb-5">settings</mat-icon>
+          <h5><b>No notifications yet</b></h5>
+        </div>
+        <div>
+          &#64;mention someone from your team on a board and check for updates here.
+        </div>
+      </div> -->
+    </div>
     <!-- Base Row -->
     <div class="row flex-nowrap">
         <!-- Base Sidenav Column -->
         <div class="col-2 base-sidenav-column" [class.open]="isSidenavOpen">
             <!-- Frogmarks Logo -->
-            <img class="frogmarks-logo" src="../../../../assets/images/logo.png">
+            <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png">
+            <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png">
             
             <!-- Primary Sidenav Contents -->
             <div class="ps-2">
@@ -47,8 +75,8 @@
                   <li class="list-item" 
                       (click)="frogmarksGalaxyClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'frogmarks-galaxy-active': isFrogmarksGalaxyActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">public</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Frogmarks Galaxy</label>
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">home</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Home</label>
                   </li>
                   <li class="list-item"
                       (click)="designCenterClicked()"
@@ -179,15 +207,15 @@
             </div>
             <!-- Actions & Settings Column -->
             <div class="col-6 text-end text-nowrap row-padding-right-negation">
-              <button *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button>
+              <button [hidden]="!isTeamSelected" *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button>
                 <mat-icon>add</mat-icon>
                 Invite members
               </button>
-              <button *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
-                Upgrade
+              <button [hidden]="!isTeamSelected" style="color: rgb(192, 192, 192) !important; background-color: black !important;" *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
+                <span>Upgrade</span>
               </button>
               <button *ngIf="!isLoading" class="ms-2 align-top header-action-button-first" mat-icon-button (click)="showNotificationPanel=true"><mat-icon>notifications_none</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button><mat-icon>settings</mat-icon></button>
+              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon>settings</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button><mat-icon>person</mat-icon></button>
             </div>
 
@@ -196,52 +224,70 @@
           <!-- Row: Add new file in Design Center -->
           <div class="d-flex pe-1 container-fluid gap-2 pt-3 fw-normal new-file-row" *ngIf="!isFavoritesFilterActive && !isFrogmarksGalaxyActive">
 
-            <!-- New Design File -->
-            <div class="new-design-item-container disabled flex-grow-1" [ngClass]="{ 'loading-container': isLoading }">
-              <div class="row ms-0 me-0">
-                <div class="col-3 align-content-center">
-                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
-                </div>
-                <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New design file</label>
-                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
-                  <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Design and prototype</label>
-                </div>
-              </div>
-            </div>
-
             <!-- New Board File -->
-            <div class="new-design-item-container flex-grow-1" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New board</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title">New whiteboard</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Whiteboard and diagram</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Plan with friends!</label>
                 </div>
+              </div>
+              <!-- Button Design -->
+              <div style="position:absolute; right: 10; bottom: 7">
+                <span class="material-symbols-outlined new-design-item-button-chevron">
+                    interests
+                </span>
               </div>
             </div>
 
             <!-- New Slide Deck File -->
-            <div class="new-design-item-container disabled flex-grow-1 d-none d-md-block" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-md-block" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New slide deck</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title">New illustration</label>
                   <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Present and share</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Draw a masterpiece together :)</label>
                 </div>
+              </div>
+              <!-- Button Design -->
+              <div style="position:absolute; right: 10; bottom: 7">
+                <span class="material-symbols-outlined new-design-item-button-chevron">
+                    draw
+                </span>
+              </div>
+            </div>
+
+            <!-- New Design File -->
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" [ngClass]="{ 'loading-container': isLoading }">
+              <div class="row ms-0 me-0">
+                <div class="col-3 col-md-2 align-content-center">
+                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                </div>
+                <div class="col-9 col-md-9 text-start">
+                  <label *ngIf="!isLoading" class="new-design-item-title">New animation</label>
+                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
+                  <br>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Collaborative animation!?</label>
+                </div>
+              </div>
+              <!-- Button Design -->
+              <div style="position:absolute; right: 10; bottom: 7">
+                <span class="material-symbols-outlined new-design-item-button-chevron">
+                    animated_images
+                </span>
               </div>
             </div>
 
             <!-- Import File -->
-            <div class="new-design-item-container disabled flex-grow-1 d-none d-xl-block" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-xl-block" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
@@ -250,18 +296,24 @@
                   <label *ngIf="!isLoading" class="new-design-item-title">Import</label>
                   <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle">Bring in external files</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Bring in external files</label>
                 </div>
+              </div>
+              <!-- Button Design -->
+              <div style="position:absolute; right: 10; bottom: 7">
+                <span class="material-symbols-outlined new-design-item-button-chevron">
+                    upload
+                </span>
               </div>
             </div>
 
           </div>
 
           <!-- Saved Templates for Quick Access in Design Center -->
-          <div *ngIf="!isFavoritesFilterActive && !isFrogmarksGalaxyActive" class="row pe-1 ps-5 pt-3 fw-normal saved-templates-section-container">
+          <div hidden *ngIf="!isFavoritesFilterActive && !isFrogmarksGalaxyActive" class="row pe-1 ps-5 pt-3 fw-normal saved-templates-section-container">
             <div class="row flow-container ps-0 pe-0">
               <label class="fw-semibold ms-1">
-              <span class="ms-2" *ngIf="!isLoading">Saved Templates</span>
+              <span class="ms-2" *ngIf="!isLoading">Pinned Art</span>
               </label>
               <div cdkDropList
                    class="d-flex flex-row"
@@ -286,17 +338,17 @@
                       }">
                   <div class="template-container shadow-sm" [ngClass]="{ 'loading-container': isLoading }">
 
-                    <mat-icon [hidden]="isLoading" class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                    <mat-icon [hidden]="isLoading" class="template-default-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
                     <mat-icon *ngIf="!isLoading" class="draggable-indicator">drag_indicator</mat-icon>
                     <!--
                     <mat-icon *ngIf="mouseDownTemplateId == template.id.toString()" style="position: absolute; top: 2px; right: 1px; color: #9c9c9c; opacity: .3; ">drag_indicator</mat-icon>
                     -->
                   </div>
                   <div *cdkDragPlaceholder class="template-container">
-                    <mat-icon class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                    <mat-icon class="template-default-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
                   </div>
                   <div *cdkDragPreview class="template-container shadow">
-                    <mat-icon class="light-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
+                    <mat-icon class="template-default-icon material-symbols-outlined">{{ template.icon }}</mat-icon>
                   </div>
                 </div>
               </div>
@@ -305,7 +357,7 @@
 
           <!-- File Explorer for Design Center -->
           <div *ngIf="!isFrogmarksGalaxyActive" class="row pt-3 fw-normal display-6 ps-4" >
-            <span *ngIf="!isLoading && isDesignCenterActive">Design Center</span>
+            <!-- <span *ngIf="!isLoading && isDesignCenterActive">Design Center</span> -->
             <span *ngIf="!isLoading && isFavoritesFilterActive">Favorites</span>
           </div>
           <div *ngIf="!isFrogmarksGalaxyActive" class="mobile-chips-row row pe-4 fw-normal display-6">
@@ -575,20 +627,21 @@
               <button *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
                 Upgrade
               </button>
+              
               <!--
               <button class="align-top" style="margin-top: -5px" mat-icon-button><mat-icon class="align-top">help_outline</mat-icon></button>
               -->
               <button *ngIf="!isLoading" class="ms-2 align-top" style="margin-top: -5px" mat-icon-button (click)="showNotificationPanel=true"><mat-icon style="color:white">notifications_none</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon style="color:white">settings</mat-icon></button>
+              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon style="color:white">settings</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon style="color:white">person</mat-icon></button>
             </div>
 
           </div>
-          <div *ngIf="isFrogmarksGalaxyActive" style="margin-left: -10px !important; margin-right: -50px !important;">
+          <!-- <div *ngIf="isFrogmarksGalaxyActive" style="margin-left: -10px !important; margin-right: -50px !important;">
             <span style="color: white; position: absolute; font-weight: bold; font-size: 36px; left: 18%; top: 8%; font-family:monospace; color: #00ffdd; text-shadow: #00ffdd 0px 0px 24px;">Frogmarks Galaxy is coming soon.</span>
             <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.73/build/spline-viewer.js" async></script>
             <iframe src='https://my.spline.design/turantable-068dbd20c082e6d1372cc7327a71e1fe?v=3' frameborder='0' width='100%' height='100%'></iframe>
-          </div>
+          </div> -->
 
         </div>
         

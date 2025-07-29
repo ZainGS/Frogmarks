@@ -1,8 +1,9 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=visibility" />
 <body>
     <canvas id="webgpuCanvas"></canvas>
     <!-- Vite will automatically replace the script with the correct entry point -->
     <script type="module" src="/src/main.ts"></script>
-    <div class="control-panel row">
+    <div class="control-panel-dark row">
         <span class="construction-svg">
             <svg width="20px" height="20px" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--twemoji" preserveAspectRatio="xMidYMid meet"><path fill="#FFCC4D" d="M36 15a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v8z"></path><path d="M6 3H4a4 4 0 0 0-4 4v2l6-6zm6 0L0 15c0 1.36.682 2.558 1.72 3.28L17 3h-5zM7 19h5L28 3h-5zm16 0L35.892 6.108A3.995 3.995 0 0 0 33.64 3.36L18 19h5zm13-4v-3l-7 7h3a4 4 0 0 0 4-4z" fill="#292F33"></path><path fill="#99AAB5" d="M4 19h5v14H4zm23 0h5v14h-5z"></path></svg>
         </span>
@@ -16,37 +17,17 @@
             <div *ngIf="cursorSelected" class="top-cursor-item-selected">
                 <svg width="1.5vw" height="1.5vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                        <g fill-rule="nonzero" fill="#dedede">
-                            <path d="M7.54803468,6.91364664 L8.99046046,16.7527427 C9.06935868,17.2909245 9.49966427,17.4843253 9.94933842,17.16946 L11.8314423,15.8515967 C12.2831845,15.5352834 12.9037064,15.6500264 13.2220359,16.1046481 L14.8510425,18.4311105 C15.170712,18.8876459 15.7927496,18.9984755 16.2433954,18.68293 L16.3667216,18.596576 C16.8104427,18.2858791 16.924631,17.6566865 16.6063015,17.2020649 L14.9772949,14.8756025 C14.6576254,14.419067 14.7654413,13.7971885 15.2151155,13.4823233 L17.0972194,12.1644599 C17.5489616,11.8481466 17.5184051,11.3823697 17.0335888,11.1208836 L8.28120146,6.40027773 C7.80246084,6.14206866 7.46813515,6.36863479 7.54803468,6.91364664 Z M18.2446056,16.054912 C19.1940571,17.4108693 18.8658772,19.2881976 17.5138745,20.2348801 L17.3905482,20.321234 C16.0317934,21.2726444 14.1636646,20.9363267 13.2127384,19.5782634 L12.1544982,18.0669397 L11.0964913,18.8077641 C9.42376177,19.979022 7.30568511,19.0487799 7.01161211,17.0428448 L5.56918632,7.20374869 C5.25020351,5.02789838 7.30678754,3.60237208 9.23061421,4.63998928 L17.9830015,9.36059519 C19.7744385,10.3268079 19.9182086,12.6307312 18.2443723,13.802764 L17.1863654,14.5435884 L18.2446056,16.054912 Z" id="Rectangle-190">
-                
-                </path>
+                        <g fill-rule="nonzero" fill="#e8e8e8">
+                            <path d="M7.54803468,6.91364664 L8.99046046,16.7527427 C9.06935868,17.2909245 9.49966427,17.4843253 9.94933842,17.16946 L11.8314423,15.8515967 C12.2831845,15.5352834 12.9037064,15.6500264 13.2220359,16.1046481 L14.8510425,18.4311105 C15.170712,18.8876459 15.7927496,18.9984755 16.2433954,18.68293 L16.3667216,18.596576 C16.8104427,18.2858791 16.924631,17.6566865 16.6063015,17.2020649 L14.9772949,14.8756025 C14.6576254,14.419067 14.7654413,13.7971885 15.2151155,13.4823233 L17.0972194,12.1644599 C17.5489616,11.8481466 17.5184051,11.3823697 17.0335888,11.1208836 L8.28120146,6.40027773 C7.80246084,6.14206866 7.46813515,6.36863479 7.54803468,6.91364664 Z M18.2446056,16.054912 C19.1940571,17.4108693 18.8658772,19.2881976 17.5138745,20.2348801 L17.3905482,20.321234 C16.0317934,21.2726444 14.1636646,20.9363267 13.2127384,19.5782634 L12.1544982,18.0669397 L11.0964913,18.8077641 C9.42376177,19.979022 7.30568511,19.0487799 7.01161211,17.0428448 L5.56918632,7.20374869 C5.25020351,5.02789838 7.30678754,3.60237208 9.23061421,4.63998928 L17.9830015,9.36059519 C19.7744385,10.3268079 19.9182086,12.6307312 18.2443723,13.802764 L17.1863654,14.5435884 L18.2446056,16.054912 Z" id="Rectangle-190"></path>
                         </g>
                     </g>
                 </svg>
-
-                <!-- <svg width="1.15vw" height="1.15vw" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                    <title>cursor_fill</title>
-                    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                        <g id="Development" transform="translate(-336.000000, -48.000000)">
-                            <g id="cursor_fill" transform="translate(336.000000, 48.000000)">
-                                <path d="M24,0 L24,24 L0,24 L0,0 L24,0 Z M12.5934901,23.257841 L12.5819402,23.2595131 L12.5108777,23.2950439 L12.4918791,23.2987469 L12.4918791,23.2987469 L12.4767152,23.2950439 L12.4056548,23.2595131 C12.3958229,23.2563662 12.3870493,23.2590235 12.3821421,23.2649074 L12.3780323,23.275831 L12.360941,23.7031097 L12.3658947,23.7234994 L12.3769048,23.7357139 L12.4804777,23.8096931 L12.4953491,23.8136134 L12.4953491,23.8136134 L12.5071152,23.8096931 L12.6106902,23.7357139 L12.6232938,23.7196733 L12.6232938,23.7196733 L12.6266527,23.7031097 L12.609561,23.275831 C12.6075724,23.2657013 12.6010112,23.2592993 12.5934901,23.257841 L12.5934901,23.257841 Z M12.8583906,23.1452862 L12.8445485,23.1473072 L12.6598443,23.2396597 L12.6498822,23.2499052 L12.6498822,23.2499052 L12.6471943,23.2611114 L12.6650943,23.6906389 L12.6699349,23.7034178 L12.6699349,23.7034178 L12.678386,23.7104931 L12.8793402,23.8032389 C12.8914285,23.8068999 12.9022333,23.8029875 12.9078286,23.7952264 L12.9118235,23.7811639 L12.8776777,23.1665331 C12.8752882,23.1545897 12.8674102,23.1470016 12.8583906,23.1452862 L12.8583906,23.1452862 Z M12.1430473,23.1473072 C12.1332178,23.1423925 12.1221763,23.1452606 12.1156365,23.1525954 L12.1099173,23.1665331 L12.0757714,23.7811639 C12.0751323,23.7926639 12.0828099,23.8018602 12.0926481,23.8045676 L12.108256,23.8032389 L12.3092106,23.7104931 L12.3186497,23.7024347 L12.3186497,23.7024347 L12.3225043,23.6906389 L12.340401,23.2611114 L12.337245,23.2485176 L12.337245,23.2485176 L12.3277531,23.2396597 L12.1430473,23.1473072 Z" id="MingCute" fill-rule="nonzero">
-                
-                </path>
-                                <path d="M6.6815,3.39615 C6.73899,2.49228 7.81132,2.05039 8.48891,2.6514 L18.4401,11.4777 C19.1644,12.1202 18.7516,13.3177 17.7852,13.3772 L14.6681,13.5695 L16.7595,18.5676 C17.184,19.5819 16.71,20.7486 15.6984,21.1796 L14.8301,21.5495 C13.8121,21.9832 12.6353,21.5079 12.2042,20.4887 L9.97835,15.2268 L7.65486,17.2342 C6.92522,17.8646 5.7969,17.3043 5.8581,16.342 L6.6815,3.39615 Z" fill="#fff">
-                
-                </path>
-                            </g>
-                        </g>
-                    </g>
-                </svg> -->
             </div>
             <div (click)="selectCursor('cursor')" *ngIf="!cursorSelected" class="cursor-item">
                 <svg width="1.5vw" height="1.5vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                        <g fill-rule="nonzero" fill="#000">
-                            <path d="M7.54803468,6.91364664 L8.99046046,16.7527427 C9.06935868,17.2909245 9.49966427,17.4843253 9.94933842,17.16946 L11.8314423,15.8515967 C12.2831845,15.5352834 12.9037064,15.6500264 13.2220359,16.1046481 L14.8510425,18.4311105 C15.170712,18.8876459 15.7927496,18.9984755 16.2433954,18.68293 L16.3667216,18.596576 C16.8104427,18.2858791 16.924631,17.6566865 16.6063015,17.2020649 L14.9772949,14.8756025 C14.6576254,14.419067 14.7654413,13.7971885 15.2151155,13.4823233 L17.0972194,12.1644599 C17.5489616,11.8481466 17.5184051,11.3823697 17.0335888,11.1208836 L8.28120146,6.40027773 C7.80246084,6.14206866 7.46813515,6.36863479 7.54803468,6.91364664 Z M18.2446056,16.054912 C19.1940571,17.4108693 18.8658772,19.2881976 17.5138745,20.2348801 L17.3905482,20.321234 C16.0317934,21.2726444 14.1636646,20.9363267 13.2127384,19.5782634 L12.1544982,18.0669397 L11.0964913,18.8077641 C9.42376177,19.979022 7.30568511,19.0487799 7.01161211,17.0428448 L5.56918632,7.20374869 C5.25020351,5.02789838 7.30678754,3.60237208 9.23061421,4.63998928 L17.9830015,9.36059519 C19.7744385,10.3268079 19.9182086,12.6307312 18.2443723,13.802764 L17.1863654,14.5435884 L18.2446056,16.054912 Z" id="Rectangle-190">
-                
-                </path>
+                        <g fill-rule="nonzero" fill="#e8e8e8">
+                            <path d="M7.54803468,6.91364664 L8.99046046,16.7527427 C9.06935868,17.2909245 9.49966427,17.4843253 9.94933842,17.16946 L11.8314423,15.8515967 C12.2831845,15.5352834 12.9037064,15.6500264 13.2220359,16.1046481 L14.8510425,18.4311105 C15.170712,18.8876459 15.7927496,18.9984755 16.2433954,18.68293 L16.3667216,18.596576 C16.8104427,18.2858791 16.924631,17.6566865 16.6063015,17.2020649 L14.9772949,14.8756025 C14.6576254,14.419067 14.7654413,13.7971885 15.2151155,13.4823233 L17.0972194,12.1644599 C17.5489616,11.8481466 17.5184051,11.3823697 17.0335888,11.1208836 L8.28120146,6.40027773 C7.80246084,6.14206866 7.46813515,6.36863479 7.54803468,6.91364664 Z M18.2446056,16.054912 C19.1940571,17.4108693 18.8658772,19.2881976 17.5138745,20.2348801 L17.3905482,20.321234 C16.0317934,21.2726444 14.1636646,20.9363267 13.2127384,19.5782634 L12.1544982,18.0669397 L11.0964913,18.8077641 C9.42376177,19.979022 7.30568511,19.0487799 7.01161211,17.0428448 L5.56918632,7.20374869 C5.25020351,5.02789838 7.30678754,3.60237208 9.23061421,4.63998928 L17.9830015,9.36059519 C19.7744385,10.3268079 19.9182086,12.6307312 18.2443723,13.802764 L17.1863654,14.5435884 L18.2446056,16.054912 Z" id="Rectangle-190"></path>
                         </g>
                     </g>
                 </svg>
@@ -58,7 +39,7 @@
                 height="1.2vw"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#fff"
+                stroke="#e8e8e8"
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -76,7 +57,7 @@
                 height="1.2vw"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#000000"
+                stroke="#e8e8e8"
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -88,21 +69,21 @@
               </svg>
             </div>
         </div>
-        <div class="row base-row col-11">
+        <div class="row base-row-dark col-11">
             <div class="control-panel-item col-1 text-center align-content-center bottom-color-border"
                  (click)="setActiveTool('drawing:pen')"
                  [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'drawing:pen'}"
                  [ngStyle]="{'border-bottom-color': this.selectedPenColor != null ? this.selectedPenColor : ''}">
                 <!-- Drawing Tools -->
                 <svg *ngIf="controlPanelActiveTool === 'drawing:pen'" width="2vw" height="2vw" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--emojione-monotone" preserveAspectRatio="xMidYMid meet"><path d="M60.609 3.389c-1.757-1.758-4.528-1.839-6.409-.292l-.829-.829l-2.269 2.281l.192.194l-.806.754l-.183-.176c-1.729-1.731-3.722-3.526-6.375-2.454c-3.609 1.463-5.333 9.273-7.329 12.228c-1.742 2.57-6.112 5.292-10.019 7.343c.195.193.58.771.836.836c1.086-.479 2.192-.906 3.267-1.406c2.244-1.043 4.428-2.258 6.358-3.819c3.95-3.197 5.542-12.783 8.361-12.971c1.179-.085 2.33 1.01 3.306 2.082L28.294 26.25l.806.806L9.407 46.783l-6.188 10.92l.818.818l-1.758 2.333c-.299.352-.369.814-.156 1.027c.209.207.672.137 1.021-.164l2.336-1.752l.817.816l10.92-6.187l19.695-19.727l.016.016l.822.822L59.243 12.69l.219.219l2.267-2.281l-.827-.828c1.548-1.881 1.465-4.652-.293-6.411M6.467 59.537l-2.003-2.003l5.165-9.114l5.952 5.953l-9.114 5.164m31.284-25.245l-8.038-8.039l1.498-1.48l8.029 8.028l-1.489 1.491M59.46 11.493l-6.945-6.945l.858-.863l6.943 6.945l-.856.863" fill="#dedede"></path></svg>
-                <svg *ngIf="controlPanelActiveTool != 'drawing:pen'" width="2vw" height="2vw" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--emojione-monotone" preserveAspectRatio="xMidYMid meet"><path d="M60.609 3.389c-1.757-1.758-4.528-1.839-6.409-.292l-.829-.829l-2.269 2.281l.192.194l-.806.754l-.183-.176c-1.729-1.731-3.722-3.526-6.375-2.454c-3.609 1.463-5.333 9.273-7.329 12.228c-1.742 2.57-6.112 5.292-10.019 7.343c.195.193.58.771.836.836c1.086-.479 2.192-.906 3.267-1.406c2.244-1.043 4.428-2.258 6.358-3.819c3.95-3.197 5.542-12.783 8.361-12.971c1.179-.085 2.33 1.01 3.306 2.082L28.294 26.25l.806.806L9.407 46.783l-6.188 10.92l.818.818l-1.758 2.333c-.299.352-.369.814-.156 1.027c.209.207.672.137 1.021-.164l2.336-1.752l.817.816l10.92-6.187l19.695-19.727l.016.016l.822.822L59.243 12.69l.219.219l2.267-2.281l-.827-.828c1.548-1.881 1.465-4.652-.293-6.411M6.467 59.537l-2.003-2.003l5.165-9.114l5.952 5.953l-9.114 5.164m31.284-25.245l-8.038-8.039l1.498-1.48l8.029 8.028l-1.489 1.491M59.46 11.493l-6.945-6.945l.858-.863l6.943 6.945l-.856.863" fill="#000000"></path></svg>
+                <svg *ngIf="controlPanelActiveTool != 'drawing:pen'" width="2vw" height="2vw" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--emojione-monotone" preserveAspectRatio="xMidYMid meet"><path d="M60.609 3.389c-1.757-1.758-4.528-1.839-6.409-.292l-.829-.829l-2.269 2.281l.192.194l-.806.754l-.183-.176c-1.729-1.731-3.722-3.526-6.375-2.454c-3.609 1.463-5.333 9.273-7.329 12.228c-1.742 2.57-6.112 5.292-10.019 7.343c.195.193.58.771.836.836c1.086-.479 2.192-.906 3.267-1.406c2.244-1.043 4.428-2.258 6.358-3.819c3.95-3.197 5.542-12.783 8.361-12.971c1.179-.085 2.33 1.01 3.306 2.082L28.294 26.25l.806.806L9.407 46.783l-6.188 10.92l.818.818l-1.758 2.333c-.299.352-.369.814-.156 1.027c.209.207.672.137 1.021-.164l2.336-1.752l.817.816l10.92-6.187l19.695-19.727l.016.016l.822.822L59.243 12.69l.219.219l2.267-2.281l-.827-.828c1.548-1.881 1.465-4.652-.293-6.411M6.467 59.537l-2.003-2.003l5.165-9.114l5.952 5.953l-9.114 5.164m31.284-25.245l-8.038-8.039l1.498-1.48l8.029 8.028l-1.489 1.491M59.46 11.493l-6.945-6.945l.858-.863l6.943 6.945l-.856.863" fill="#fff"></path></svg>
             </div>
             <div class="control-panel-item col-1 text-center align-content-center"
                  (click)="setActiveTool('postit')"
                  [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'postit'}">
                 <!-- Post-it Note -->
-                <svg *ngIf="controlPanelActiveTool === 'postit'" fill="#dedede" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17,18h4l-4,4ZM21,3V16H15v6H4a1,1,0,0,1-1-1V3A1,1,0,0,1,4,2H20A1,1,0,0,1,21,3ZM13,14a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h4A1,1,0,0,0,13,14Zm4-5a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h8A1,1,0,0,0,17,9Z"/></svg>
-                <svg *ngIf="controlPanelActiveTool != 'postit'" fill="#000000" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17,18h4l-4,4ZM21,3V16H15v6H4a1,1,0,0,1-1-1V3A1,1,0,0,1,4,2H20A1,1,0,0,1,21,3ZM13,14a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h4A1,1,0,0,0,13,14Zm4-5a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h8A1,1,0,0,0,17,9Z"/></svg>
+                <svg *ngIf="controlPanelActiveTool === 'postit'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17,18h4l-4,4ZM21,3V16H15v6H4a1,1,0,0,1-1-1V3A1,1,0,0,1,4,2H20A1,1,0,0,1,21,3ZM13,14a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h4A1,1,0,0,0,13,14Zm4-5a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h8A1,1,0,0,0,17,9Z"/></svg>
+                <svg *ngIf="controlPanelActiveTool != 'postit'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17,18h4l-4,4ZM21,3V16H15v6H4a1,1,0,0,1-1-1V3A1,1,0,0,1,4,2H20A1,1,0,0,1,21,3ZM13,14a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h4A1,1,0,0,0,13,14Zm4-5a1,1,0,0,0-1-1H8a1,1,0,0,0,0,2h8A1,1,0,0,0,17,9Z"/></svg>
             </div>
             <div class="col-2 text-center align-content-center shapes-col" style="border-right: .15vw solid #898989;">
                 <!-- Shapes -->
@@ -111,12 +92,23 @@
                          (click)="setActiveTool('shape:circle', $event)"
                          (dblclick)="spawnShape('circle')"
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'shape:circle'}">
-                        <!-- Circle -->
-                        <svg *ngIf="controlPanelActiveTool === 'shape:circle'" fill="#000000" width="2vw" height="2vw" viewBox="0 0 15 15" version="1.1" id="circle" xmlns="http://www.w3.org/2000/svg">
-                            <path [attr.fill]="this.selectedShapeColor" d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z"/>
+                        
+                         <!-- Outlined circle when shape:circle is selected -->
+                        <svg *ngIf="controlPanelActiveTool === 'shape:circle'" width="1.5vw" height="1.5vw" viewBox="0 0 15 15" version="1.1" id="circle" xmlns="http://www.w3.org/2000/svg">
+                        <path 
+                            d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z" 
+                            [attr.fill]="this.selectedShapeColor" 
+                            [attr.stroke]="selectedShapeColor" 
+                            stroke-width="1.2" />
                         </svg>
-                        <svg *ngIf="controlPanelActiveTool != 'shape:circle'" fill="#000000" width="2vw" height="2vw" viewBox="0 0 15 15" version="1.1" id="circle" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z"/>
+
+                        <!-- Outlined circle when shape:circle is NOT selected -->
+                        <svg *ngIf="controlPanelActiveTool != 'shape:circle'" width="1.5vw" height="1.5vw" viewBox="0 0 15 15" version="1.1" id="circle" xmlns="http://www.w3.org/2000/svg">
+                        <path 
+                            d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z" 
+                            fill="none" 
+                            stroke="#e8e8e8" 
+                            stroke-width="1.2" />
                         </svg>
                     </div>
                     <div class="col-6 control-panel-item"
@@ -124,8 +116,23 @@
                          (dblclick)="spawnShape('rectangle')"
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'shape:square'}">
                         <!-- Square -->
-                        <svg *ngIf="controlPanelActiveTool === 'shape:square'" width="2vw" height="2vw" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--gis" preserveAspectRatio="xMidYMid meet"><path [attr.fill]="this.selectedShapeColor" d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z" fill="#000000"></path></svg>
-                        <svg *ngIf="controlPanelActiveTool != 'shape:square'" width="2vw" height="2vw" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--gis" preserveAspectRatio="xMidYMid meet"><path d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z" fill="#000000"></path></svg>
+                        <!-- Outlined rectangle when shape:square is selected -->
+                        <svg *ngIf="controlPanelActiveTool === 'shape:square'" width="1.5vw" height="1.5vw" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" class="iconify iconify--gis" preserveAspectRatio="xMidYMid meet">
+                        <path 
+                            d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z"
+                            [attr.fill]="this.selectedShapeColor"
+                            [attr.stroke]="selectedShapeColor"
+                            stroke-width="3" />
+                        </svg>
+
+                        <!-- Outlined rectangle when shape:square is NOT selected -->
+                        <svg *ngIf="controlPanelActiveTool != 'shape:square'" width="1.5vw" height="1.5vw" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" class="iconify iconify--gis" preserveAspectRatio="xMidYMid meet">
+                        <path 
+                            d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z" 
+                            fill="none" 
+                            stroke="#e8e8e8" 
+                            stroke-width="8" />
+                        </svg>
                     </div>
                 </div>
                 <div class="row shape-row">
@@ -134,19 +141,42 @@
                          (dblclick)="spawnShape('triangle')"
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'shape:triangle'}">
                         <!-- Triangle -->
-                        <svg *ngIf="controlPanelActiveTool === 'shape:triangle'" width="2vw" height="2vw" viewBox="0 0 15 15" version="1.1" id="triangle" xmlns="http://www.w3.org/2000/svg">
-                            <path id="path21090-9" [attr.fill]="this.selectedShapeColor" d="M7.5385,2&#xA;&#x9;C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077C1,12.8462,1.3846,13,1.6923,13h11.6154&#xA;&#x9;C13.6923,13,14,12.8462,14,12.3077c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846C8.028,2.1765,7.7882,2,7.5385,2z"/>
+                        <!-- Outlined triangle when shape:triangle is selected -->
+                        <svg *ngIf="controlPanelActiveTool === 'shape:triangle'" width="1.5vw" height="1.5vw" viewBox="0 0 15 15" version="1.1" id="triangle" xmlns="http://www.w3.org/2000/svg">
+                        <path 
+                            id="path21090-9"
+                            d="M7.5385,2
+                            C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077
+                            C1,12.8462,1.3846,13,1.6923,13h11.6154
+                            C13.6923,13,14,12.8462,14,12.3077
+                            c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846
+                            C8.028,2.1765,7.7882,2,7.5385,2z"
+                            [attr.fill]="this.selectedShapeColor"
+                            [attr.stroke]="selectedShapeColor"
+                            stroke-width="1.35" />
                         </svg>
-                        <svg *ngIf="controlPanelActiveTool != 'shape:triangle'" width="2vw" height="2vw" viewBox="0 0 15 15" version="1.1" id="triangle" xmlns="http://www.w3.org/2000/svg">
-                            <path id="path21090-9" d="M7.5385,2&#xA;&#x9;C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077C1,12.8462,1.3846,13,1.6923,13h11.6154&#xA;&#x9;C13.6923,13,14,12.8462,14,12.3077c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846C8.028,2.1765,7.7882,2,7.5385,2z"/>
+
+                        <!-- Outlined triangle when shape:triangle is NOT selected -->
+                        <svg *ngIf="controlPanelActiveTool != 'shape:triangle'" width="1.5vw" height="1.5vw" viewBox="0 0 15 15" version="1.1" id="triangle" xmlns="http://www.w3.org/2000/svg">
+                        <path 
+                            id="path21090-9"
+                            d="M7.5385,2
+                            C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077
+                            C1,12.8462,1.3846,13,1.6923,13h11.6154
+                            C13.6923,13,14,12.8462,14,12.3077
+                            c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846
+                            C8.028,2.1765,7.7882,2,7.5385,2z"
+                            fill="none"
+                            stroke="#e8e8e8"
+                            stroke-width="1.35" />
                         </svg>
                     </div>
                     <div class="col-6 control-panel-item"
                          (click)="setActiveTool('connector')"
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'connector'}">
                         <!-- Connector -->
-                        <svg *ngIf="controlPanelActiveTool === 'connector'" fill="#fff" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
-                        <svg *ngIf="controlPanelActiveTool != 'connector'" fill="#000000" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
+                        <svg *ngIf="controlPanelActiveTool === 'connector'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
+                        <svg *ngIf="controlPanelActiveTool != 'connector'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
                     </div>
                 </div>
             </div>
@@ -158,8 +188,8 @@
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'text'}"
                          [ngStyle]="{'border-bottom-color': this.selectedTextColor != null ? this.selectedTextColor : ''}">
                         <!-- Text -->
-                        <svg *ngIf="controlPanelActiveTool === 'text'" fill="#dedede" width="2vw" height="2vw" viewBox="0 0 24 24" id="text" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color"><path id="primary" d="M12,3V21m-2,0h4" style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path><path id="primary-2" data-name="primary" d="M5,5V4A1,1,0,0,1,6,3H18a1,1,0,0,1,1,1V5" style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>
-                        <svg *ngIf="controlPanelActiveTool != 'text'" fill="#000000" width="2vw" height="2vw" viewBox="0 0 24 24" id="text" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color"><path id="primary" d="M12,3V21m-2,0h4" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path><path id="primary-2" data-name="primary" d="M5,5V4A1,1,0,0,1,6,3H18a1,1,0,0,1,1,1V5" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>
+                        <svg *ngIf="controlPanelActiveTool === 'text'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" id="text" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color"><path id="primary" d="M12,3V21m-2,0h4" style="fill: none; stroke: #e8e8e8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path><path id="primary-2" data-name="primary" d="M5,5V4A1,1,0,0,1,6,3H18a1,1,0,0,1,1,1V5" style="fill: none; stroke: #e8e8e8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>
+                        <svg *ngIf="controlPanelActiveTool != 'text'" fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" id="text" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color"><path id="primary" d="M12,3V21m-2,0h4" style="fill: none; stroke: #e8e8e8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path><path id="primary-2" data-name="primary" d="M5,5V4A1,1,0,0,1,6,3H18a1,1,0,0,1,1,1V5" style="fill: none; stroke: #e8e8e8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>
                     </div>
                     <div class="col-3 control-panel-item"
                          (click)="setActiveTool('section')"
@@ -170,8 +200,8 @@
                             <path fill="#dedede" d="M8 12h-7v-9h12v5.4l1 0.2v-6.6h-14v11h8.2z"></path>
                         </svg>
                         <svg *ngIf="controlPanelActiveTool != 'section'" width="2vw" height="2vw" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                            <path fill="#000" d="M7.9 7.9l2.1 7.5 1.7-2.6 3.2 3.2 1.1-1.1-3.3-3.2 2.7-1.6z"></path>
-                            <path fill="#000" d="M8 12h-7v-9h12v5.4l1 0.2v-6.6h-14v11h8.2z"></path>
+                            <path fill="#e8e8e8" d="M7.9 7.9l2.1 7.5 1.7-2.6 3.2 3.2 1.1-1.1-3.3-3.2 2.7-1.6z"></path>
+                            <path fill="#e8e8e8" d="M8 12h-7v-9h12v5.4l1 0.2v-6.6h-14v11h8.2z"></path>
                         </svg>
                     </div>
                     <div class="col-3 control-panel-item"
@@ -183,7 +213,7 @@
                             fill-rule="evenodd"
                             clip-rule="evenodd"
                             d="M8 2H12.5C12.7761 2 13 2.22386 13 2.5V5H8V2ZM7 5V2H2.5C2.22386 2 2 2.22386 2 2.5V5H7ZM2 6V9H7V6H2ZM8 6H13V9H8V6ZM8 10H13V12.5C13 12.7761 12.7761 13 12.5 13H8V10ZM2 12.5V10H7V13H2.5C2.22386 13 2 12.7761 2 12.5ZM1 2.5C1 1.67157 1.67157 1 2.5 1H12.5C13.3284 1 14 1.67157 14 2.5V12.5C14 13.3284 13.3284 14 12.5 14H2.5C1.67157 14 1 13.3284 1 12.5V2.5Z"
-                            fill="#dedede"
+                            fill="#e8e8e8"
                             />
                         </svg>
                         <svg *ngIf="controlPanelActiveTool != 'table'" width="2vw" height="2vw" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -191,7 +221,7 @@
                             fill-rule="evenodd"
                             clip-rule="evenodd"
                             d="M8 2H12.5C12.7761 2 13 2.22386 13 2.5V5H8V2ZM7 5V2H2.5C2.22386 2 2 2.22386 2 2.5V5H7ZM2 6V9H7V6H2ZM8 6H13V9H8V6ZM8 10H13V12.5C13 12.7761 12.7761 13 12.5 13H8V10ZM2 12.5V10H7V13H2.5C2.22386 13 2 12.7761 2 12.5ZM1 2.5C1 1.67157 1.67157 1 2.5 1H12.5C13.3284 1 14 1.67157 14 2.5V12.5C14 13.3284 13.3284 14 12.5 14H2.5C1.67157 14 1 13.3284 1 12.5V2.5Z"
-                            fill="#000000"
+                            fill="#e8e8e8"
                             />
                         </svg>
                     </div>
@@ -199,36 +229,36 @@
                          (click)="setActiveTool('stamps')"
                          [ngClass]="{'control-panel-item-selected': controlPanelActiveTool === 'stamps'}">
                         <!-- Stamps -->
-                        <svg *ngIf="controlPanelActiveTool === 'stamps'" width="2vw" height="2vw" viewBox="0 0 1024 1024" class="icon" xmlns="http://www.w3.org/2000/svg"><path fill="#dedede" d="M624 475.968V640h144a128 128 0 01128 128H128a128 128 0 01128-128h144V475.968a192 192 0 11224 0zM128 896v-64h768v64H128z"/></svg>    
-                        <svg *ngIf="controlPanelActiveTool != 'stamps'" width="2vw" height="2vw" viewBox="0 0 1024 1024" class="icon" xmlns="http://www.w3.org/2000/svg"><path fill="#000000" d="M624 475.968V640h144a128 128 0 01128 128H128a128 128 0 01128-128h144V475.968a192 192 0 11224 0zM128 896v-64h768v64H128z"/></svg>              
+                        <svg *ngIf="controlPanelActiveTool === 'stamps'" width="2vw" height="2vw" viewBox="0 0 1024 1024" class="icon" xmlns="http://www.w3.org/2000/svg"><path fill="#e8e8e8" d="M624 475.968V640h144a128 128 0 01128 128H128a128 128 0 01128-128h144V475.968a192 192 0 11224 0zM128 896v-64h768v64H128z"/></svg>    
+                        <svg *ngIf="controlPanelActiveTool != 'stamps'" width="2vw" height="2vw" viewBox="0 0 1024 1024" class="icon" xmlns="http://www.w3.org/2000/svg"><path fill="#e8e8e8" d="M624 475.968V640h144a128 128 0 01128 128H128a128 128 0 01128-128h144V475.968a192 192 0 11224 0zM128 896v-64h768v64H128z"/></svg>              
                     </div>
                 </div>
             </div>
             <div class="col-3 text-center align-content-center ps-0 pe-0">
                 <div class="control-panel-item-last"
                          (click)="setActiveTool('misc')"
-                         [ngStyle]="{'background-color': controlPanelActiveTool === 'misc' ? '#f4f4f4' : ''}">
-                    <svg fill="#000000" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                         [ngStyle]="{'background-color': controlPanelActiveTool === 'misc' ? '#993FF4' : ''}">
+                    <svg fill="#e8e8e8" width="2vw" height="2vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path fill-rule="evenodd" d="M16,16 L16,13 L18,13 L18,16 L21,16 L21,18 L18,18 L18,21 L16,21 L16,18 L13,18 L13,16 L16,16 Z M4,13 L9,13 C10.1045695,13 11,13.8954305 11,15 L11,20 C11,21.1045695 10.1045695,22 9,22 L4,22 C2.8954305,22 2,21.1045695 2,20 L2,15 C2,13.8954305 2.8954305,13 4,13 Z M4,15 L4,20 L9,20 L9,15 L4,15 Z M4,2 L9,2 C10.1045695,2 11,2.8954305 11,4 L11,9 C11,10.1045695 10.1045695,11 9,11 L4,11 C2.8954305,11 2,10.1045695 2,9 L2,4 C2,2.8954305 2.8954305,2 4,2 Z M4,4 L4,9 L9,9 L9,4 L4,4 Z M15,2 L20,2 C21.1045695,2 22,2.8954305 22,4 L22,9 C22,10.1045695 21.1045695,11 20,11 L15,11 C13.8954305,11 13,10.1045695 13,9 L13,4 C13,2.8954305 13.8954305,2 15,2 Z M15,4 L15,9 L20,9 L20,4 L15,4 Z"/>
                     </svg>
                 </div>
             </div>
         </div>
     </div>
-    <div *ngIf="controlPanelActiveTool.startsWith('drawing')" class="pen-subcontrol-panel">
+    <div *ngIf="controlPanelActiveTool.startsWith('drawing')" class="pen-subcontrol-panel-dark">
         <div class="row">
             <div class="col-md-5 align-items-center text-end align-self-center">
                 <div>
                     <!-- Pen Tool -->
                     <span hidden style="margin-right: .5vw; margin-left: .5vw;">
-                        <svg width="2vw" height="2vw" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--emojione-monotone" preserveAspectRatio="xMidYMid meet"><path d="M60.609 3.389c-1.757-1.758-4.528-1.839-6.409-.292l-.829-.829l-2.269 2.281l.192.194l-.806.754l-.183-.176c-1.729-1.731-3.722-3.526-6.375-2.454c-3.609 1.463-5.333 9.273-7.329 12.228c-1.742 2.57-6.112 5.292-10.019 7.343c.195.193.58.771.836.836c1.086-.479 2.192-.906 3.267-1.406c2.244-1.043 4.428-2.258 6.358-3.819c3.95-3.197 5.542-12.783 8.361-12.971c1.179-.085 2.33 1.01 3.306 2.082L28.294 26.25l.806.806L9.407 46.783l-6.188 10.92l.818.818l-1.758 2.333c-.299.352-.369.814-.156 1.027c.209.207.672.137 1.021-.164l2.336-1.752l.817.816l10.92-6.187l19.695-19.727l.016.016l.822.822L59.243 12.69l.219.219l2.267-2.281l-.827-.828c1.548-1.881 1.465-4.652-.293-6.411M6.467 59.537l-2.003-2.003l5.165-9.114l5.952 5.953l-9.114 5.164m31.284-25.245l-8.038-8.039l1.498-1.48l8.029 8.028l-1.489 1.491M59.46 11.493l-6.945-6.945l.858-.863l6.943 6.945l-.856.863" fill="#000000"></path></svg>
+                        <svg width="2vw" height="2vw" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--emojione-monotone" preserveAspectRatio="xMidYMid meet"><path d="M60.609 3.389c-1.757-1.758-4.528-1.839-6.409-.292l-.829-.829l-2.269 2.281l.192.194l-.806.754l-.183-.176c-1.729-1.731-3.722-3.526-6.375-2.454c-3.609 1.463-5.333 9.273-7.329 12.228c-1.742 2.57-6.112 5.292-10.019 7.343c.195.193.58.771.836.836c1.086-.479 2.192-.906 3.267-1.406c2.244-1.043 4.428-2.258 6.358-3.819c3.95-3.197 5.542-12.783 8.361-12.971c1.179-.085 2.33 1.01 3.306 2.082L28.294 26.25l.806.806L9.407 46.783l-6.188 10.92l.818.818l-1.758 2.333c-.299.352-.369.814-.156 1.027c.209.207.672.137 1.021-.164l2.336-1.752l.817.816l10.92-6.187l19.695-19.727l.016.016l.822.822L59.243 12.69l.219.219l2.267-2.281l-.827-.828c1.548-1.881 1.465-4.652-.293-6.411M6.467 59.537l-2.003-2.003l5.165-9.114l5.952 5.953l-9.114 5.164m31.284-25.245l-8.038-8.039l1.498-1.48l8.029 8.028l-1.489 1.491M59.46 11.493l-6.945-6.945l.858-.863l6.943 6.945l-.856.863" fill="#e8e8e8"></path></svg>
                     </span>
                     <!-- Highlighter Tool -->
                     <span (click)="setActiveTool('drawing:highlighter')" style="margin-right: .5vw; margin-left: .5vw;">
-                        <svg *ngIf="controlPanelActiveTool === 'drawing:highlighter'" fill="#fff" width="1.5vw" height="1.5vw" viewBox="0 0 1920 1920" xmlns="http://www.w3.org/2000/svg">
+                        <svg *ngIf="controlPanelActiveTool === 'drawing:highlighter'" [attr.fill]="this.selectedHighlightColor"  width="1.5vw" height="1.5vw" viewBox="0 0 1920 1920" xmlns="http://www.w3.org/2000/svg">
                             <path d="M110 1920h1699.932v-113.329H110V1920Zm367.548-528.792 143.474 95.65-60.29 93.156H326.82l150.727-188.806Zm-164.893 302.134h309.84l123.189-190.732 59.724-89.416c16.433-24.593 45.105-37.626 72.644-32.186 76.61 14.28 154.24-22.099 192.66-88.396l575.256-903.571c40.345-69.697 20.626-158.66-44.991-202.632l-242.75-161.834c-65.731-43.518-155.375-27.765-203.54 35.586L488.542 901.627c-47.712 62.784-51.338 148.688-8.953 213.512 15.3 23.685 14.62 54.964-1.7 79.67l-58.251 87.263-190.166 238.444c-25.839 32.299-30.712 75.477-12.806 112.649 17.906 37.058 54.738 60.177 95.99 60.177Z" fill-rule="evenodd"/>
                         </svg>
-                        <svg *ngIf="controlPanelActiveTool != 'drawing:highlighter'" fill="#000000" width="1.5vw" height="1.5vw" viewBox="0 0 1920 1920" xmlns="http://www.w3.org/2000/svg">
+                        <svg *ngIf="controlPanelActiveTool != 'drawing:highlighter'" fill="#fff" width="1.5vw" height="1.5vw" viewBox="0 0 1920 1920" xmlns="http://www.w3.org/2000/svg">
                             <path d="M110 1920h1699.932v-113.329H110V1920Zm367.548-528.792 143.474 95.65-60.29 93.156H326.82l150.727-188.806Zm-164.893 302.134h309.84l123.189-190.732 59.724-89.416c16.433-24.593 45.105-37.626 72.644-32.186 76.61 14.28 154.24-22.099 192.66-88.396l575.256-903.571c40.345-69.697 20.626-158.66-44.991-202.632l-242.75-161.834c-65.731-43.518-155.375-27.765-203.54 35.586L488.542 901.627c-47.712 62.784-51.338 148.688-8.953 213.512 15.3 23.685 14.62 54.964-1.7 79.67l-58.251 87.263-190.166 238.444c-25.839 32.299-30.712 75.477-12.806 112.649 17.906 37.058 54.738 60.177 95.99 60.177Z" fill-rule="evenodd"/>
                         </svg>
                     </span>
@@ -238,7 +268,7 @@
                             viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
                         <g>
                             <g>
-                                <path fill="#fff" d="M492.308,0h-78.769h-78.769H256H19.692C8.817,0,0,8.817,0,19.692v78.769v78.769V256v236.308
+                                <path fill="#9365E3" d="M492.308,0h-78.769h-78.769H256H19.692C8.817,0,0,8.817,0,19.692v78.769v78.769V256v236.308
                                     C0,503.183,8.817,512,19.692,512h78.769h78.769H256h236.308c10.875,0,19.692-8.817,19.692-19.692v-78.769v-78.769V256V19.692
                                     C512,8.817,503.183,0,492.308,0z M78.769,472.615H39.385V275.692h39.385V472.615z M157.538,472.615h-39.385V275.692h39.385
                                     V472.615z M236.308,334.769v78.769v59.077h-39.385V275.692h39.385V334.769z M236.308,236.308h-59.077H98.462H39.385v-39.385
@@ -253,7 +283,7 @@
                             viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
                         <g>
                             <g>
-                                <path d="M492.308,0h-78.769h-78.769H256H19.692C8.817,0,0,8.817,0,19.692v78.769v78.769V256v236.308
+                                <path fill="#fff" d="M492.308,0h-78.769h-78.769H256H19.692C8.817,0,0,8.817,0,19.692v78.769v78.769V256v236.308
                                     C0,503.183,8.817,512,19.692,512h78.769h78.769H256h236.308c10.875,0,19.692-8.817,19.692-19.692v-78.769v-78.769V256V19.692
                                     C512,8.817,503.183,0,492.308,0z M78.769,472.615H39.385V275.692h39.385V472.615z M157.538,472.615h-39.385V275.692h39.385
                                     V472.615z M236.308,334.769v78.769v59.077h-39.385V275.692h39.385V334.769z M236.308,236.308h-59.077H98.462H39.385v-39.385
@@ -269,14 +299,14 @@
                     <span (click)="setActiveTool('drawing:eraser')" style="margin-right: .5vw; margin-left: .5vw;">
                         <svg *ngIf="controlPanelActiveTool === 'drawing:eraser'" width="1.5vw" height="1.5vw" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
                             <g id="eraser-4" transform="translate(-1.881 -2.881)">
-                              <path id="secondary" fill="#fff" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
-                              <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                              <path id="secondary" fill="#ba75ff" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
+                              <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#ba75ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
                             </g>
                         </svg>
                         <svg *ngIf="controlPanelActiveTool != 'drawing:eraser'" width="1.5vw" height="1.5vw" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
                             <g id="eraser-4" transform="translate(-1.881 -2.881)">
-                              <path id="secondary" fill="#000" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
-                              <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                              <path id="secondary" fill="#fff" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
+                              <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
                             </g>
                         </svg>
                     </span>
@@ -405,19 +435,23 @@
     </div>    
     <div class="left-panel">
         <div class="row left-panel-row">
-            <div class="col-3" (click)="returnToDashboard()">
+            <div class="col-2" (click)="returnToDashboard()">
                 <!-- License: Apache. Made by googlefonts: https://github.com/googlefonts/noto-emoji -->
                 <svg width="24px" height="24px" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--noto" preserveAspectRatio="xMidYMid meet"><path d="M14.16 48.37c-.43 4.5-10 10.84-9.57 26.89s13.09 44.06 57.72 44.77c44.63.7 60.96-27.31 61.1-46.6c.13-17.88-8.58-21.43-9.57-26.04c-.84-3.94 6.76-21.96-10.28-28.44c-20.11-7.65-27.6 11.68-28.16 12.1c-.56.42-6.05.7-10.84.7s-10 0-10.56-.56c-.56-.56-12.81-19.99-30.55-11.83c-16.64 7.67-9.01 26.05-9.29 29.01z" fill="#b7d019"></path><path d="M103.08 42.36c0 5.29-3 9.76-8.02 9.57c-4.33-.16-7.84-4.29-7.84-9.57s3.51-9.49 7.84-9.57c5.11-.1 8.02 4.28 8.02 9.57z" fill="#2f2f2f"></path><path d="M41.89 41.61c.28 6.76-3 10.14-8.02 10.04c-4.22-.08-7.56-3.19-7.65-9.67c-.08-5.34 1.97-9.48 7.65-9.67c4.22-.13 7.8 3.97 8.02 9.3z" fill="#2f2f2f"></path><path d="M53.29 63.5c-.81 1.79-3.06 2.35-4.57 1.48c-1.5-.87-1.91-3.23-.93-4.93c.98-1.7 2.65-1.96 3.87-1.48c1.63.64 2.83 2.28 1.63 4.93z" fill="#2f2f2f"></path><path d="M80.33 60.55c.77 1.86-.16 4.04-1.94 4.57c-1.78.53-3.69-.61-4.26-2.54c-.57-1.93.14-3.61 1.87-4.3c1.13-.44 3.19-.48 4.33 2.27z" fill="#2f2f2f"></path><path d="M27.44 78.31l.38 2.72s10.51 10.98 35.85 11.36c26 .39 37.26-12.29 37.26-12.29l-11.64-5.63s-11.07 4.69-25.34 4.41c-14.27-.28-28.34-4.41-28.34-4.41l-8.17 3.84z" fill="#ff6011"></path><path d="M104.59 71.92c-3.28-4.79-7.23-.43-13.42 1.88c-3.43 1.28-5.7 2.02-5.7 2.02s5.09.99 7.34 2.21s6.17 3.89 6.17 3.89s8.37-5.96 5.61-10z" fill="#865b51"></path><path d="M24.81 71.36c-3.94 2.63 3.02 9.68 3.02 9.68s2.15-1.98 5.06-3.2s7.78-2.1 7.78-2.1s-5.63-1.27-8.9-3.16c-1.69-.96-4.71-2.72-6.96-1.22z" fill="#865b51"></path></svg>
             </div>
             <div class="col-4 left-panel-board-title pe-1">
-                Untitled
+                <input type="text" class="board-title-input" [(ngModel)]="boardTitle" (keyup.enter)="updateBoardTitle()" placeholder="Untitled" />
             </div>
-            <div class="col-3 left-panel-plan-col pe-2">
+            <!-- <div class="col-3 left-panel-plan-col pe-2">
                 <span class="left-panel-plan ps-1 pe-1">Free</span>
-            </div>
+            </div> -->
+            <!-- <div class="col-2 ps-1 new-sheet-icon">
+                <svg fill="#D7D7D7" width="18px" height="18px" viewBox="0 0 35 35" data-name="Layer 2" id="a5b357d0-b6bb-4b51-acaf-aaa20a4d1704" xmlns="http://www.w3.org/2000/svg"><path d="M20.717,34.748H3.616A3.37,3.37,0,0,1,.25,31.381v-17.1a3.369,3.369,0,0,1,3.366-3.365h17.1a3.368,3.368,0,0,1,3.365,3.365v17.1A3.369,3.369,0,0,1,20.717,34.748ZM3.616,13.416a.866.866,0,0,0-.866.865v17.1a.867.867,0,0,0,.866.867h17.1a.867.867,0,0,0,.865-.867v-17.1a.865.865,0,0,0-.865-.865Z"/><path d="M31.384,24.079H22.837a1.25,1.25,0,1,1,0-2.5h8.547a.867.867,0,0,0,.866-.866V3.618a.866.866,0,0,0-.866-.865h-17.1a.866.866,0,0,0-.866.865v8.548a1.25,1.25,0,0,1-2.5,0V3.618A3.369,3.369,0,0,1,14.279.253H31.384A3.369,3.369,0,0,1,34.75,3.618v17.1A3.37,3.37,0,0,1,31.384,24.079Z"/></svg>
+            </div> -->
             <div class="col-2 ps-1">
-                <svg fill="#000000" width="18px" height="18px" viewBox="0 0 35 35" data-name="Layer 2" id="a5b357d0-b6bb-4b51-acaf-aaa20a4d1704" xmlns="http://www.w3.org/2000/svg"><path d="M20.717,34.748H3.616A3.37,3.37,0,0,1,.25,31.381v-17.1a3.369,3.369,0,0,1,3.366-3.365h17.1a3.368,3.368,0,0,1,3.365,3.365v17.1A3.369,3.369,0,0,1,20.717,34.748ZM3.616,13.416a.866.866,0,0,0-.866.865v17.1a.867.867,0,0,0,.866.867h17.1a.867.867,0,0,0,.865-.867v-17.1a.865.865,0,0,0-.865-.865Z"/><path d="M31.384,24.079H22.837a1.25,1.25,0,1,1,0-2.5h8.547a.867.867,0,0,0,.866-.866V3.618a.866.866,0,0,0-.866-.865h-17.1a.866.866,0,0,0-.866.865v8.548a1.25,1.25,0,0,1-2.5,0V3.618A3.369,3.369,0,0,1,14.279.253H31.384A3.369,3.369,0,0,1,34.75,3.618v17.1A3.37,3.37,0,0,1,31.384,24.079Z"/></svg>
+                <mat-icon class="header-menu-icon">menu</mat-icon>
             </div>
+            
         </div>
     </div>
     <div class="right-panel">
@@ -427,27 +461,223 @@
             </div>
             <div class="col-3 right-panel-icon">
                 <svg width="1.25vw" height="1.25vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path fill="none" stroke="#000" stroke-width="2" d="M1,3 L23,3 L23,21 L1,21 L1,3 Z M1,8 L23,8 M7,8 L7,21"/>
+                    <path fill="none" stroke="#D7D7D7" stroke-width="2" d="M1,3 L23,3 L23,21 L1,21 L1,3 Z M1,8 L23,8 M7,8 L7,21"/>
                 </svg>
             </div>
             <div style="transform: scale(1.2);" class="col-3 right-panel-icon" (click)="this.isCommentPanelActive = !this.isCommentPanelActive">
-                <svg class="comment-button" *ngIf="!this.isCommentPanelActive" fill="#000000" width="1.25vw" height="1.25vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12,2A10,10,0,0,0,2,12a9.89,9.89,0,0,0,2.26,6.33l-2,2a1,1,0,0,0-.21,1.09A1,1,0,0,0,3,22h9A10,10,0,0,0,12,2Zm0,18H5.41l.93-.93a1,1,0,0,0,0-1.41A8,8,0,1,1,12,20Z"/></svg>
+                <svg class="comment-button" *ngIf="!this.isCommentPanelActive" fill="#D7D7D7" width="1.25vw" height="1.25vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12,2A10,10,0,0,0,2,12a9.89,9.89,0,0,0,2.26,6.33l-2,2a1,1,0,0,0-.21,1.09A1,1,0,0,0,3,22h9A10,10,0,0,0,12,2Zm0,18H5.41l.93-.93a1,1,0,0,0,0-1.41A8,8,0,1,1,12,20Z"/></svg>
                 <svg class="comment-button-active" *ngIf="this.isCommentPanelActive" fill="#8F0FFF" width="1.25vw" height="1.25vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12,2A10,10,0,0,0,2,12a9.89,9.89,0,0,0,2.26,6.33l-2,2a1,1,0,0,0-.21,1.09A1,1,0,0,0,3,22h9A10,10,0,0,0,12,2Zm0,18H5.41l.93-.93a1,1,0,0,0,0-1.41A8,8,0,1,1,12,20Z"/></svg>
             </div>
             <div class="col-3 right-panel-icon">
                 <div (click)="downloadCanvasViewAsPng()" class="share-button">Share</div>
             </div>
         </div>
+
+        <!-- Right Panel Explorer -->
+        <div class="text-start mt-2 properties-panel-border">
+            <div *ngIf="this.selectedLayerIds.size == 0">
+                <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Scene</label>
+                <div>
+                    <div class="row" style="flex-flow: nowrap;">
+                        <label style="width: 100px; color:#cecece; font-size: 13px;">BG Color</label>
+                        <!-- Add this square for background color picker -->
+                        <div [ngStyle]="{ 'background-color': bgColor }" class="bg-square" (click)="openBgColorPicker()"></div>
+                        <input
+                            type="text"
+                            class="form-control d-inline-block panel-input-field"
+                            [ngModel]="bgHexInputDraft"
+                            (ngModelChange)="onBgHexInputChange($event)"
+                            (blur)="onBgHexInputBlur()"
+                            (keydown.enter)="onHexInputEnter($event)"
+                        />
+                        <app-color-picker #bgColorPicker
+                            [hideInput]="true"
+                            (close)="showBgColorPicker = false"
+                            [color]="bgColor"
+                            *ngIf="showBgColorPicker"
+                            (colorSelected)="onBgColorSelected($event)" 
+                            style="position: absolute; left: -8px; top: 115px; z-index: 100; transform: scale(1.05);">
+                        </app-color-picker>
+                    </div>
+                    <div class="row mt-1" style="flex-flow: nowrap;">
+                        <label style="width: 100px; color:#cecece; font-size: 13px;">Dot Color</label>
+                        <!-- Add this square for background color picker -->
+                        <div [ngStyle]="{ 'background-color': dotColor }" class="bg-square" (click)="openDotColorPicker()"></div>
+                        <input
+                            type="text"
+                            class="form-control d-inline-block panel-input-field"
+                            [ngModel]="dotHexInputDraft"
+                            (ngModelChange)="onDotHexInputChange($event)"
+                            (blur)="onDotHexInputBlur()"
+                            (keydown.enter)="onHexInputEnter($event)"
+                        />
+                        <app-color-picker #dotColorPicker
+                            [hideInput]="true"
+                            (close)="showDotColorPicker = false"
+                            [color]="dotColor"
+                            *ngIf="showDotColorPicker"
+                            (colorSelected)="onDotColorSelected($event)" 
+                            style="position: absolute; left: -8px; top: 142px; z-index: 100; transform: scale(1.05);">
+                        </app-color-picker>
+                    </div>
+                </div>
+            </div>
+            
+            <div *ngIf="this.selectedLayerIds.size == 1">
+                <div class="mt-2">
+                    <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Transform</label>
+                    <div class="mb-3" *ngIf="selectedNode">
+                        <span class="me-3" style="font-size: 14px;">Position</span>
+                        <input
+                            [(ngModel)]="selectedNode.x"
+                            step="0.1"
+                            type="number"
+                            class="form-control d-inline-block panel-input-field hide-number-arrows"
+                        />
+                        <input
+                            [(ngModel)]="selectedNode.y"
+                            step="0.1"
+                            type="number"
+                            class="form-control d-inline-block panel-input-field hide-number-arrows"
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <span class="me-3" style="font-size: 14px;">Rotation</span>
+                        <input
+                            [(ngModel)]="selectedNode.rotationDegrees"
+                            step="1"
+                            type="number"
+                            class="form-control d-inline-block panel-input-field hide-number-arrows"
+                        />
+                    </div>
+                </div>
+                <div class="mt-2 properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">States</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Events</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                    <div></div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Shape</label>
+                    <div class="mb-3">
+                        <span class="me-3" style="font-size: 14px;">Size</span>
+                        <input
+                            [(ngModel)]="selectedNode.scaleX"
+                            step="0.1"
+                            type="number"
+                            class="form-control d-inline-block panel-input-field hide-number-arrows"
+                        />
+                        <input
+                            [(ngModel)]="selectedNode.scaleY"
+                            step="0.1"
+                            type="number"
+                            class="form-control d-inline-block panel-input-field hide-number-arrows"
+                        />
+                    </div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Fill</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                    <div></div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Stroke</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                    <div></div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Effects</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                    <div></div>
+                </div>
+                <div class="mt-2" class="properties-panel-border">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Modifiers</label>
+                        <mat-icon class="align-self-center" style="vertical-align: text-top;">add</mat-icon>
+                    </div>
+                    <div></div>
+                </div>
+            </div>
+            
+        </div>
     </div>
     <div class="zoom-control">
         <div class="row zoom-control-row">
             <div class="col-6 zoom-button-left" (click)="zoomOut()">
-                <span class="zoom-symbol">➖</span>
+                <span class="zoom-symbol" style="filter: brightness(10);">➖</span>
             </div>
             <div class="col-6 zoom-button-right" (click)="zoomIn()">
-                <span class="zoom-symbol">➕</span>    
+                <span class="zoom-symbol" style="filter: brightness(10);">➕</span>    
             </div>
         </div>
+    </div>
+
+    <div class="layer-panel">
+        <div class="layer-panel-search p-3">
+            <input matInput class="form-control layer-panel-search-input"
+                type="text"
+                placeholder="Search layers">
+        </div>
+        <div class="layer-panel-header text-start ms-3">
+            <span class="layer-panel-title fw-semibold">Layers</span>
+        </div>
+        <ng-template #recursiveList let-nodes>
+  <ul class="list-unstyled ms-3 mt-2 layer-item-list">
+    <li
+  class="layer-item"
+  *ngFor="let layer of nodes; trackBy: trackById"
+  [ngClass]="{ 'layer-item-selected': selectedLayerIds.has(layer.id) }"
+  (click)="selectLayer(layer, $event); $event.stopPropagation()"
+  (mouseover)="hoverLayer($event, layer); $event.stopPropagation()"
+  (mouseout)="unhoverLayer($event, layer); $event.stopPropagation()"
+>
+      <div
+        style="
+          position: absolute;
+          top: 50%;
+          left: 0;
+          width: 16px;
+          height: 1px;
+          background: white;
+          transform: translateY(-50%);
+        "
+      ></div>
+
+      <span>{{ layer.name }}</span>
+
+      <mat-icon class="layer-lock-icon" (click)="toggleLock(layer); $event.stopPropagation()">
+        {{ layer.locked ? 'lock' : 'lock_open' }}
+      </mat-icon>
+
+      <mat-icon class="layer-visibility-icon" (click)="toggleVisibility(layer); $event.stopPropagation()">
+        {{ layer.visible ? 'visibility' : 'visibility_off' }}
+      </mat-icon>
+
+      <!-- Recursive call if children exist -->
+      <ng-container *ngIf="layer.children?.length > 0">
+        <ng-container *ngTemplateOutlet="recursiveList; context: { $implicit: layer.children }"></ng-container>
+      </ng-container>
+    </li>
+  </ul>
+</ng-template>
+
+<!-- Initial call -->
+<ng-container *ngIf="layerTree?.children?.length > 0">
+  <ng-container *ngTemplateOutlet="recursiveList; context: { $implicit: layerTree.children }"></ng-container>
+</ng-container>
     </div>
 
     <div *ngIf="isCommentPanelActive" class="comment-panel">

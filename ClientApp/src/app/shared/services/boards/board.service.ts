@@ -40,7 +40,7 @@ export class BoardService extends ApiService {
     return this.http.get<Board[]>(`${this.apiUrl}/api/board`, { withCredentials: true });
   }
 
-  searchBoards(filterQuery: string = '', sortBy: string = 'name', sortDirection: string = 'desc', pageIndex: number = 0, pageSize: number = 10): Observable<any> {
+  searchBoards(filterQuery: string = '', sortBy: string = 'name', sortDirection: string = 'desc', pageIndex: number = 0, pageSize: number = 24): Observable<any> {
 
     let params = new HttpParams()
       .set('filterQuery', filterQuery)
@@ -59,7 +59,7 @@ export class BoardService extends ApiService {
   sortBy: string = "name",
   sortDirection: string = "desc",
   pageIndex: number = 0,
-  pageSize: number = 10
+  pageSize: number = 24
 ): Observable<Board[]> {
   let params = new HttpParams()
     .set('teamId', id.toString())

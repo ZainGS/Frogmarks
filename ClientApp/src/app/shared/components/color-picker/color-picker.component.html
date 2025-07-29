@@ -1,14 +1,14 @@
 <div class="custom-color-picker">
     <!-- Input Field & Eyedropper -->
-    <div class="color-input-container">
-        <button (click)="openEyedropper()" class="eyedropper-btn">🔍</button>
+    <div *ngIf="!hideInput" class="color-input-container">
+        <!-- <button (click)="openEyedropper()" class="eyedropper-btn">🔍</button> -->
         <input type="text" [(ngModel)]="hexColor" (input)="updateFromHex()" class="color-input" />
     </div>
 
     <!-- Hue Slider -->
     <input type="range" class="hue-slider" min="0" max="360" [(ngModel)]="hue" (input)="updateGradient()" />
 
-    <!-- Saturation/Brightness Square -->
+    <!-- Saturation/Brightness Square -->   
     <div class="color-gradient" (mousedown)="startColorSelection($event)">
         <div class="color-indicator" [ngStyle]="{'top': sbY + '%', 'left': sbX + '%'}"></div>
     </div>

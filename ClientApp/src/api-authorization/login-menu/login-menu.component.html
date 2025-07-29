@@ -7,14 +7,14 @@
     </li>
 </ul>
 <ul class="navbar-nav" *ngIf="(isAuthenticated | async) !== true">
-    <li class="nav-item flat-accent-button">
+    <!-- <li class="nav-item flat-accent-button">
         <a class="nav-link" [routerLink]='["/"]'>Contact Sales</a>
-    </li>
+    </li> -->
     <li class="nav-item flat-button">
         <a class="nav-link" [routerLink]='["/authentication/login"]'>Login</a>
     </li>
-    <li class="nav-item flat-button">
+    <!-- <li class="nav-item flat-button">
         <a class="nav-link" [routerLink]='["/authentication/register"]'>Get started for free</a>
-    </li>
+    </li> -->
     
 </ul>

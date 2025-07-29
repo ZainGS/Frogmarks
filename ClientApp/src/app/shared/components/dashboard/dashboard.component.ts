@@ -1,5 +1,4 @@
 import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit, ViewChild } from '@angular/core';
-import { NavbarService } from '../../services/navbar/navbar.service';
 import { Board } from '../../../boards/models/board.model';
 import { CdkDragDrop, CdkDragRelease, CdkDragStart, CdkDragMove, CdkDragEnd, moveItemInArray } from '@angular/cdk/drag-drop';
 import { BoardService } from '../../services/boards/board.service';
@@ -16,6 +15,7 @@ import { InviteModalComponent } from '../invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component';
 import { FormControl } from '@angular/forms';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { ThemeService } from 'app/shared/services/theme/theme.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -90,6 +90,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   draggedTemplateId: string | null = null;
   mouseDownTemplateId: string | null = null;
   hoveringNewBoardButton: boolean = false;
+  isTeamSelected: boolean = false;
 
   // Dashboard Data
   uid: string = "";
@@ -116,12 +117,14 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   showSortOrderDropdown: boolean = false;
   showFileTypeDropdown: boolean = false;
   showNotificationPanel: boolean = false;
+  showSettingsPanel: boolean = false;
   showProfilePanel: boolean = false;
   sortOrderDropdownText: any = ["Alphabetical", "Date created", "Last viewed"]
   fileTypeDropdownText: any = ["All files", "Design files", "Boards", "Slide decks"]
   viewType: string = "grid";
   teamInviteLink: string = 'https://www.frogmarks.com/team_invite/redeem/...';
   searchControl = new FormControl('');
+  isDarkMode: boolean = false;
 
   // misc.
   currentTime = new Date();
@@ -169,12 +172,12 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     private notifyService: NotifyService,
     private namingHelper: NamingHelperService,
     private router: Router,
-    private dialog: MatDialog) {
+    private dialog: MatDialog,
+    public themeService: ThemeService) {
       this._boardService = boardService;
       this._teamService = teamService;
       this._authService = authService;
       this._notifyService = notifyService;
-
   }
 
   // Optimize window resizing
@@ -288,6 +291,14 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     this.showNotificationPanel = false;
   }
 
+  closeSettingsPanel() {
+    this.showSettingsPanel = false;
+  }
+
+  toggleDarkMode() {
+    this.themeService.toggleDarkMode(!this.themeService.getDarkMode());
+  }
+
   openUpgradeDialog() {
     const dialogRef = this.dialog.open(UpgradeModalComponent, {
       data: {
@@ -336,7 +347,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
         // Fetch items for the user by current team
         this._boardService.getBoardsByTeamId(this.currentTeam.id!).subscribe((res: any) => {
-
+          
           if (res && res.resultObject && Array.isArray(res.resultObject)) {
             this.clearData();
             (res.resultObject as Board[]).forEach(board => {
@@ -360,6 +371,8 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     
     // Sum design item count
     this.totalCreations = this.boards.length + this.designs.length + this.slides.length;
+
+    this.themeService.toggleDarkMode(true);
   }
 
   // Replace default Templating Containers' icons OnDrag with numbered icons

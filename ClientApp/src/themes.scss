@@ -1,0 +1,75 @@
+// Define default (light) theme
+:root {
+    --background-color: #ffffff;
+    --text-color: #000000;
+    --primary-color: #007bff;
+    --template-container-color: white;
+    --flow-container-color: #F5F5F5;
+    --new-design-item-container-color: #F5F5F5;
+    --new-design-item-container-hover-color: #e8e8e8;
+    --grid-item-color: white;
+    --grid-item-description-color: black;
+    --grid-item-img-border-color: #e3e3e3;
+    --base-sidenav-column-color: #F5F5F5;
+    --list-item-hover-color: rgb(248, 248, 248);
+    --list-item-active-color: #E5E5E5;
+    --horizontal-line-color: white;
+    --search-bar-color: #F5F5F5;
+    --search-bar-border-color: #F5F5F5;
+    --payment-tier-color: antiquewhite;
+    --selected-chip-color: #f0f0f0;
+    --outlined-button-color: white;
+    --outlined-button-border-color: black;
+    --raised-button-color: white;
+    --raised-button-border-color: black;
+    --template-container-hover-color: #fcfcfc;
+    --cdk-drag-preview-border-color: white;
+    --light-icon-color: #ababab;
+    --dark-icon-color: black;
+    --notification-panel-color: white;
+    --notification-panel-border-color: rgb(219, 219, 219);
+    --raised-button-hover-color: #fcfcfc;
+    --template-default-icon-color: #ababab;
+  }
+  
+  // Define dark theme
+  .dark-mode {
+    --background-color: #121212;
+    // --background-color: #121316;
+    --text-color: rgb(192, 192, 192);
+    --primary-color: #90caf9;
+    --template-container-color: #575757;
+    --flow-container-color: #222222;
+    --new-design-item-container-color: #222222;
+    --new-design-item-container-hover-color: #575757;
+    --grid-item-color: transparent;
+    --grid-item-description-color: rgb(192, 192, 192);
+    // --grid-item-img-border-color: #3B3B3B;
+    --grid-item-img-border-color: #000000;
+
+    // --base-sidenav-column-color: #222222;
+    // --base-sidenav-column-color: #121212;
+    --base-sidenav-column-color: #121212;
+    // --base-sidenav-column-color: #121316
+    --list-item-hover-color: #2E2E2E;
+    --list-item-active-color: #2E2E2E;
+    --horizontal-line-color: #393939;
+    --search-bar-color: #222222;
+    --search-bar-border-color: #4D4D4D;
+    --payment-tier-color: #565656;
+    --selected-chip-color: #262626;
+    --outlined-button-color: #121212;
+    --outlined-button-border-color: #4D4D4D; 
+    --raised-button-color: #121212;
+    --raised-button-border-color: #4D4D4D;
+    --template-container-hover-color: #363636;
+    --cdk-drag-preview-border-color: rgb(169, 169, 169);
+    // --cdk-drag-preview-border-color: rgb(0, 255, 136);
+    --light-icon-color: black;
+    --dark-icon-color: #ababab;
+    --notification-panel-color: #272727;
+    --notification-panel-border-color: rgb(66 66 66);
+    --raised-button-hover-color: #292929;
+    --template-default-icon-color: #ababab;
+  }
+

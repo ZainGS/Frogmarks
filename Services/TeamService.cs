@@ -1,6 +1,8 @@
-﻿using Duende.IdentityServer.Extensions;
+﻿using AutoMapper;
+using Duende.IdentityServer.Extensions;
 using Frogmarks.Data;
 using Frogmarks.Models;
+using Frogmarks.Models.Dtos;
 using Frogmarks.Models.Team;
 using Frogmarks.Utilities;
 using Microsoft.EntityFrameworkCore;
@@ -14,71 +16,73 @@ namespace Frogmarks.Services
     public class TeamService : ITeamService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
 
-        public TeamService(ApplicationDbContext context)
+        public TeamService(ApplicationDbContext context, IMapper mapper)
         {
             _context = context;
+            _mapper = mapper;
         }
 
         // Get all teams
-        public async Task<ResultModel<IEnumerable<Team>>> GetAllTeams()
+        public async Task<ResultModel<IEnumerable<TeamDto>>> GetAllTeams()
         {
             try
             {
                 var teams = await _context.Teams.ToListAsync();
-                return new ResultModel<IEnumerable<Team>>(ResultType.Success, resultObject: teams);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Success, resultObject: _mapper.Map<List<TeamDto>>(teams));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<IEnumerable<Team>>(ResultType.Failure, ex.Message);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Failure, ex.Message);
             }
         }
 
         // Get team by ID
-        public async Task<ResultModel<Team>> GetTeamById(long id)
+        public async Task<ResultModel<TeamDto>> GetTeamById(long id)
         {
             try
             {
                 var team = await _context.Teams.FindAsync(id);
                 if (team == null)
                 {
-                    return new ResultModel<Team>(ResultType.NotFound, "Team not found");
+                    return new ResultModel<TeamDto>(ResultType.NotFound, "Team not found");
                 }
-                return new ResultModel<Team>(ResultType.Success, resultObject: team);
+                return new ResultModel<TeamDto>(ResultType.Success, resultObject: _mapper.Map<TeamDto>(team));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<Team>(ResultType.Failure, ex.Message);
+                return new ResultModel<TeamDto>(ResultType.Failure, ex.Message);
             }
         }
 
         // Create a new team
-        public async Task<ResultModel<Team>> CreateTeam(Team team)
+        public async Task<ResultModel<TeamDto>> CreateTeam(Team team)
         {
             try
             {
                 _context.Teams.Add(team);
                 await _context.SaveChangesAsync();
-                return new ResultModel<Team>(ResultType.Success, resultObject: team);
+                return new ResultModel<TeamDto>(ResultType.Success, resultObject: _mapper.Map<TeamDto>(team));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<Team>(ResultType.Failure, ex.Message);
+                return new ResultModel<TeamDto>(ResultType.Failure, ex.Message);
             }
         }
 
         // Update an existing team
-        public async Task<ResultModel<Team>> UpdateTeam(Team team)
+        public async Task<ResultModel<TeamDto>> UpdateTeam(Team team)
         {
             try
             {
                 var existingTeam = await _context.Teams.FindAsync(team.Id);
                 if (existingTeam == null)
                 {
-                    return new ResultModel<Team>(ResultType.NotFound, "Team not found");
+                    return new ResultModel<TeamDto>(ResultType.NotFound, "Team not found");
                 }
 
                 // Update team properties
@@ -88,39 +92,39 @@ namespace Frogmarks.Services
 
                 _context.Teams.Update(existingTeam);
                 await _context.SaveChangesAsync();
-                return new ResultModel<Team>(ResultType.Success, resultObject: existingTeam);
+                return new ResultModel<TeamDto>(ResultType.Success, resultObject: _mapper.Map<TeamDto>(existingTeam));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<Team>(ResultType.Failure, ex.Message);
+                return new ResultModel<TeamDto>(ResultType.Failure, ex.Message);
             }
         }
 
         // Delete a team
-        public async Task<ResultModel<Team>> DeleteTeam(long id)
+        public async Task<ResultModel<TeamDto>> DeleteTeam(long id)
         {
             try
             {
                 var team = await _context.Teams.FindAsync(id);
                 if (team == null)
                 {
-                    return new ResultModel<Team>(ResultType.NotFound, "Team not found");
+                    return new ResultModel<TeamDto>(ResultType.NotFound, "Team not found");
                 }
 
                 _context.Teams.Remove(team);
                 await _context.SaveChangesAsync();
-                return new ResultModel<Team>(ResultType.Success, resultObject: team);
+                return new ResultModel<TeamDto>(ResultType.Success, resultObject: _mapper.Map<TeamDto>(team));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<Team>(ResultType.Failure, ex.Message);
+                return new ResultModel<TeamDto>(ResultType.Failure, ex.Message);
             }
         }
 
         // Search teams with filtering, sorting, and pagination
-        public async Task<ResultModel<IEnumerable<Team>>> SearchTeams(string filterQuery, string sortBy, string sortDirection, int pageIndex, int pageSize)
+        public async Task<ResultModel<IEnumerable<TeamDto>>> SearchTeams(string filterQuery, string sortBy, string sortDirection, int pageIndex, int pageSize)
         {
             try
             {
@@ -168,16 +172,16 @@ namespace Frogmarks.Services
                 // Pagination
                 var result = await query.Skip(pageIndex * pageSize).Take(pageSize).ToListAsync();
 
-                return new ResultModel<IEnumerable<Team>>(ResultType.Success, resultObject: result);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Success, resultObject: _mapper.Map<List<TeamDto>>(result));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<IEnumerable<Team>>(ResultType.Failure, ex.Message);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Failure, ex.Message);
             }
         }
 
-        public async Task<ResultModel<IEnumerable<Team>>> GetTeamsByApplicationUserId(string userId)
+        public async Task<ResultModel<IEnumerable<TeamDto>>> GetTeamsByApplicationUserId(string userId)
         {
             try
             {
@@ -191,7 +195,7 @@ namespace Frogmarks.Services
                     var userData = await _context.ApplicationUsers.FindAsync(userId);
                     if (userData != null)
                     {
-                        // Create new default team
+                        // Create new default team  
                         var defaultTeam = new Team
                         {
                             Name = !string.IsNullOrEmpty(userData.FirstName) ? $"{userData.FirstName}'s Team" : "My Team",
@@ -215,16 +219,16 @@ namespace Frogmarks.Services
                     }
                     else
                     {
-                        return new ResultModel<IEnumerable<Team>>(ResultType.Failure, "User does not exist.");
+                        return new ResultModel<IEnumerable<TeamDto>>(ResultType.Failure, "User does not exist.");
                     }
                 }
 
-                return new ResultModel<IEnumerable<Team>>(ResultType.Success, resultObject: teams);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Success, resultObject: _mapper.Map<List<TeamDto>>(teams));
             }
             catch (Exception ex)
             {
                 // Log the exception if needed
-                return new ResultModel<IEnumerable<Team>>(ResultType.Failure, ex.Message);
+                return new ResultModel<IEnumerable<TeamDto>>(ResultType.Failure, ex.Message);
             }
         }
 
