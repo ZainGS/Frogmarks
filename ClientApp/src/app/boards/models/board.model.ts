@@ -10,6 +10,7 @@ export class Board {
   name?: string = "Untitled";
   description?: string;
   thumbnailUrl?: string;
+  isCustomThumbnail?: boolean = false;
   isDraft?: boolean;
   isFavorite?: boolean;
   startViewLeftTop?: number = 0;
@@ -24,4 +25,6 @@ export class Board {
   preferences?: BoardUserPreferences;
   permissions?: BoardPermissions;
   sceneGraphData?: string;
+  isArchived?: boolean;
+  type?: string = 'board';
 }

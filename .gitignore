@@ -237,3 +237,6 @@ appsettings.*.json
 
 # ignore cache
 ClientApp/.angular/cache
+
+# Local blob storage (development only)
+wwwroot/blob-storage/

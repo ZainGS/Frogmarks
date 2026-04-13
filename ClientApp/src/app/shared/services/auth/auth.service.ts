@@ -16,7 +16,7 @@ export class AuthService extends ApiService{
     super(http, configService, router, notify);
   }
 
-  private userId: string | null = null;
+  public userId: string | null = null;
 
   sendSignInEmail(email: string) {
     const headers = new HttpHeaders({

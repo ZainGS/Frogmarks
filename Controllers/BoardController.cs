@@ -1,12 +1,12 @@
 ﻿using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs;
-using Frogmarks.Models.DTOs;
 using Frogmarks.Services;
 using Frogmarks.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Frogmarks.Utilities;
-using Frogmarks.Models.Dtos;
+using Frogmarks.Models.Board;
+using Frogmarks.Models.Dtos.Board;
 
 namespace Frogmarks.Controllers
 {
@@ -45,7 +45,8 @@ namespace Frogmarks.Controllers
             [FromQuery] string sortDirection = "desc",
             [FromQuery] int pageIndex = 0,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string cachedThumbnailBoardIds = "")
+            [FromQuery] string cachedThumbnailBoardIds = "",
+            [FromQuery] bool isArchived = false)
         {
             try
             {
@@ -58,7 +59,40 @@ namespace Frogmarks.Controllers
                         boardIds.Add(longId);
                     }
                 }
-                var boards = await _boardService.SearchBoards(name, teamId, favorites, sortBy, sortDirection, pageIndex, pageSize, boardIds);
+                var boards = await _boardService.SearchBoards(name, teamId, favorites, sortBy, sortDirection, pageIndex, pageSize, boardIds, isArchived);
+                return Ok(boards);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        [HttpGet("explore")]
+        public async Task<IActionResult> Explore(
+            [FromQuery] string name = "",
+            [FromQuery] long teamId = 0,
+            [FromQuery] bool favorites = false,
+            [FromQuery] string sortBy = "name",
+            [FromQuery] string sortDirection = "desc",
+            [FromQuery] int pageIndex = 0,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string cachedThumbnailBoardIds = "",
+            [FromQuery] bool isArchived = false)
+        {
+            try
+            {
+                // Pre-allocate the HashSet length and then assign values to avoid internal HashSet resizing.
+                var splitIds = cachedThumbnailBoardIds?.Split(',') ?? Array.Empty<string>();
+                var boardIds = new HashSet<long>(splitIds.Length);
+                foreach (var id in splitIds)
+                {
+                    if (long.TryParse(id, out var longId))
+                    {
+                        boardIds.Add(longId);
+                    }
+                }
+                var boards = await _boardService.SearchBoards(name, teamId, favorites, sortBy, sortDirection, pageIndex, pageSize, boardIds, isArchived);
                 return Ok(boards);
             }
             catch (Exception ex)
@@ -117,7 +151,7 @@ namespace Frogmarks.Controllers
         /// </summary>
         /// <param name="board"></param>
         /// <returns></returns>
-        [HttpPut("{id}")]
+        [HttpPut]
         public async Task<IActionResult> UpdateBoard([FromBody] BoardDto board)
         {
             try
@@ -203,11 +237,11 @@ namespace Frogmarks.Controllers
         }
 
         [HttpPost("thumbnails/{boardUid}")]
-        public async Task<IActionResult> UploadThumbnail(string boardUid, [FromForm] IFormFile thumbnail)
+        public async Task<IActionResult> UploadThumbnail(string boardUid, [FromForm] IFormFile thumbnail, [FromQuery] bool? isCustom = null)
         {
             try
             {
-                var result = await _boardService.UploadThumbnail(boardUid, thumbnail);
+                var result = await _boardService.UploadThumbnail(boardUid, thumbnail, isCustom);
                 return GenerateResponseActionResult(result);
             }
             catch (Exception ex)
@@ -247,5 +281,38 @@ namespace Frogmarks.Controllers
         //        return HandleErrorActionResult(ex);
         //    }
         //}
+
+        [HttpPost("duplicate/{id:long}")]
+        public async Task<IActionResult> DuplicateBoard(long id, [FromBody] DuplicateBoardRequestDto request)
+        {
+            try
+            {
+                var result = await _boardService.DuplicateBoard(
+                    id,
+                    request?.Name,
+                    request?.TeamId,
+                    request?.CopyThumbnail ?? false
+                );
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        [HttpPut("rename/{id:long}")]
+        public async Task<IActionResult> RenameBoard(long id, [FromBody] RenameBoardRequestDto request)
+        {
+            try
+            {
+                var result = await _boardService.RenameBoard(id, request.NewName);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
     }
 }

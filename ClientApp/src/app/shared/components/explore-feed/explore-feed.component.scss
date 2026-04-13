@@ -1,0 +1,524 @@
+.explore-feed {
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: visible; /* allow scaled cards to spill */
+  padding: 0;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0;
+  margin: 0 auto;
+}
+
+.grid-item {
+  position: relative;
+  aspect-ratio: 3/4;
+  cursor: pointer;
+  overflow: visible !important; /* ensure scale overflow shows */
+  border-radius: 0;
+  transform-origin: 50% 70%;
+  /* IMPORTANT: no opacity animation on the card itself */
+  opacity: 1;
+  transition: transform 160ms ease-out;
+  will-change: transform;
+}
+
+/* Hover only affects transform once; rotation classes augment it */
+@media (hover: hover) {
+  .grid-item:hover { z-index: 10; transform: scale(1.12); }
+  .grid-item.rotate-left:hover  { transform: scale(1.12) rotateZ(-4deg); }
+  .grid-item.rotate-right:hover { transform: scale(1.12) rotateZ( 4deg); }
+}
+
+/* Fade-in belongs to the INNER image (not the card) */
+.item-image {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 0 solid rgba(255,255,255,0.1);
+  border-radius: 0;
+
+  opacity: 0;
+  animation: fadeIn .5s ease-out var(--fade-delay, 0ms) forwards;
+  transition: box-shadow .15s ease-out; /* only shadow here */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Optional: subtle 2x pulse on hover, not infinite */
+@media (hover: hover) {
+  .grid-item:hover .item-image {
+    box-shadow: 0 8px 24px rgba(0,0,0,.6);
+    animation: fadeIn .5s ease-out var(--fade-delay, 0ms) forwards, borderFlash .8s ease-in-out 2;
+  }
+}
+
+@keyframes borderFlash {
+  0%,100% { box-shadow: 0 0 0 4px rgba(255,255,255,1), 0 8px 24px rgba(0,0,0,.6); }
+  50%     { box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 8px 24px rgba(0,0,0,.6); }
+}
+
+/* Press / release */
+.grid-item.pressed {
+  transform: none !important;
+  transition: transform 30ms ease-out !important;
+}
+
+/* LIFT: only transform, no opacity changes; disable hover/transition while lifting */
+.grid-item.lift {
+  pointer-events: none;
+  transition: none !important;
+  animation: growSettle 320ms forwards;
+}
+
+@keyframes growSettle {
+  0% {
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(.25,1,.3,1);
+  }
+  70% {
+    transform: scale(1.25);
+    animation-timing-function: cubic-bezier(.34,1.56,.64,1);
+  }
+  100% {
+    transform: scale(1.16);
+  }
+}
+
+.explore-feed.overlay-open .grid-container { pointer-events: none; }
+
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  // background: rgba(0,0,0,.25);
+  z-index: 10020; /* sits above grid items */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: visible; /* allow tail/menu to overflow viewport edges if needed */
+}
+
+.menu-container {
+  width: min(1000px, 92vw);
+  /* allow menu to expand to full height without internal scrollbars */
+  max-height: none;
+  overflow: visible !important;
+  position: fixed; /* we position it via inline styles from TS */
+  z-index: 10030; /* above overlay and grid items */
+  box-sizing: border-box;
+}
+
+/* Tail: a small diamond rotated to act as a pointer. Positioned outside the menu container
+   using fixed coordinates computed in TS. We use transform to rotate into a triangular pointer
+   and a subtle drop-shadow to match the menu. */
+.menu-tail {
+  width: 18px;
+  height: 18px;
+  background: #ffffff;
+  border: 4px solid #8a2be2;
+  transform: rotate(45deg);
+  // box-shadow: 0 0px 8px rgb(255, 255, 255);
+  z-index: 10050 !important; /* ensure tail draws above selected card */
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.menu-wrapper {
+  width: 100%;
+  /* Apply drop-shadow to wrapper, not the clipped card */
+  filter: 
+  drop-shadow(0px 2px 0px rgba(255, 255, 255, 1))
+  drop-shadow(2px 0px 0px rgba(255, 255, 255, 1))
+  drop-shadow(0px -2px 0px rgba(255, 255, 255, 1))
+  drop-shadow(-2px 0px 0px rgba(255, 255, 255, 1))
+  /* Add more for extra thickness */
+  drop-shadow(2px 2px 0px rgb(255, 255, 255))
+  drop-shadow(-2px -2px 0px rgb(255, 255, 255))
+  drop-shadow(2px -2px 0px rgb(255, 255, 255))
+  drop-shadow(-2px 2px 0px #ffffff);
+}
+
+.menu-card {
+  display: flex;
+  gap: 18px;
+  
+  background: 
+    radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px),
+    #000;
+  background-size: 
+    10px 10px,
+    100%;
+  background-position: 
+    bottom right,
+    0 0;
+  background-repeat: 
+    repeat,
+    no-repeat;
+  
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 18px;
+  box-shadow: inset -2px -2px 48px rgb(97, 95, 99);
+  align-items: center;
+  opacity: 0;
+  //menuPop .22s cubic-bezier(.2,.9,.3,1) 160ms both,
+  //growSettle .12s cubic-bezier(.25,1,.3,1) 160ms both,
+  animation: 
+    menuPop .22s cubic-bezier(.2,.9,.3,1) both,
+    dotScroll 1s linear infinite;
+  box-sizing: border-box;
+  width: 100%;
+  z-index: 10040;
+}
+/* Chamfered corners using clip-path for crisp diagonal corners */
+.menu-card {
+  --chamfer: 12px;
+  clip-path: polygon(var(--chamfer) 0, calc(100% - var(--chamfer)) 0, 100% var(--chamfer), 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, var(--chamfer) 100%, 0 calc(100% - var(--chamfer)), 0 var(--chamfer));
+}
+@keyframes dotScroll {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 10px -10px, 0 0;
+  }
+}
+@keyframes menuPop {
+  from { transform: scale(.985) translateY(6px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);      opacity: 1; }
+}
+
+.menu-left, .menu-image { display: none; }
+.menu-right { flex: 1 1 auto; color: #fff; }
+.menu-title { margin: 6px 0 12px; font-weight: 500; }
+.menu-actions { display: flex; gap: 12px; margin-bottom: 12px; }
+.primary-btn { 
+  background: #fff; 
+  color: #111; 
+  border: 0; 
+  padding: 8px 16px; 
+  cursor: pointer; 
+  border-radius: 0; /* Remove border-radius since we're using clip-path */
+  
+  /* Chamfered corners - adjust --chamfer value for size */
+  --chamfer: 8px;
+  clip-path: polygon(
+    var(--chamfer) 0, 
+    calc(100% - var(--chamfer)) 0, 
+    100% var(--chamfer), 
+    100% calc(100% - var(--chamfer)), 
+    calc(100% - var(--chamfer)) 100%, 
+    var(--chamfer) 100%, 
+    0 calc(100% - var(--chamfer)), 
+    0 var(--chamfer)
+  );
+}
+
+.menu-title {
+    text-shadow: 0 0 36px rgb(0, 0, 0, 1),
+                 0 0 36px rgba(0, 0, 0, 1),
+                 0 0 36px rgba(0, 0, 0, 1);
+}
+
+/* Slight tint of primary action buttons when menu is disliked/liked */
+.menu-card.disliked .primary-btn {
+  /* subtle red-tint over white */
+  background: linear-gradient(180deg, rgba(255, 107, 107, 0.95), rgba(255, 107, 107, 0.85));
+  color: #3b0000;
+  box-shadow: inset 0 -2px 6px rgba(255, 0, 0, 0.06), 0 2px 6px rgba(255, 0, 0, 0.04);
+}
+.menu-card.disliked .primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 -2px 8px rgba(255, 0, 0, 0.08), 0 6px 18px rgba(255, 0, 0, 0.06);
+}
+
+.menu-card.liked .primary-btn {
+  /* subtle medium-green tint */
+  background: linear-gradient(180deg, rgba(178,248,4,0.98), rgba(178,248,4,0.88));
+  color: #0b2f00;
+  box-shadow: inset 0 -2px 6px rgba(178,248,4,0.06), 0 2px 6px rgba(178,248,4,0.04);
+}
+.menu-card.liked .primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 -2px 8px rgba(178,248,4,0.08), 0 6px 18px rgba(178,248,4,0.06);
+}
+.icon-actions { display: flex; gap: 8px; }
+.icon-btn { background: transparent; color: #fff; border: 0; padding: 8px; cursor: pointer; font-size: 18px; }
+.close-btn { position: absolute; right: 8px; top: 8px; background: transparent; border: 0; color: #fff; font-size: 20px; cursor: pointer; z-index: 2020; display: none; }
+
+/* Press -> pop animations for icon buttons (like/dislike) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 120ms ease-out;
+  will-change: transform;
+}
+
+/* On mousedown: shrink slightly */
+.icon-btn.pressing {
+  transform: scale(0.86);
+  transition: transform 90ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* Pop animation: grow beyond normal then settle back via keyframes */
+.icon-btn.pop {
+  animation: iconPop 220ms cubic-bezier(.2,1.2,.3,1) both;
+}
+
+@keyframes iconPop {
+  0%   { transform: scale(0.86); }
+  40%  { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .icon-btn.pressing, .icon-btn.pop { animation: none !important; transition: none !important; transform: none !important; }
+}
+
+/* When menu is on the right of the item, tail should sit on the menu's left edge.
+  When on the left, tail should sit on the menu's right edge. We add small offsets
+  via a container class so the tail visually connects to the menu card edge. */
+.menu-container.side-right .menu-tail { transform: rotate(45deg) translate(-50%, -50%); }
+.menu-container.side-left  .menu-tail { transform: rotate(45deg) translate(-50%, -50%); }
+
+/* Ensure the tail visually overlaps the menu card slightly so it looks connected. */
+.menu-container.side-right .menu-card { margin-left: 8px; }
+.menu-container.side-left  .menu-card { margin-right: 8px; }
+
+/* Selected: style only; do not fight transforms with !important */
+.grid-item.selected { 
+  /* ensure the selected card sits above the backdrop but below the menu */
+  //position: relative; 
+  //z-index: 10025; /* overlay is 10020, menu is 10030+ */
+}
+.grid-item.selected .item-image {
+  border: 4px solid #8a2be2;
+  box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  /* no extra animations here */
+}
+
+/* Like / Dislike circular badge shown over the top-right of the item image */
+.vote-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(178,248,4,1); /* default to liked green */
+  color: #fff; /* icon color */
+  border: 4px solid #fff; /* thick white border */
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+}
+
+.vote-badge.liked {
+  background: linear-gradient(180deg, rgb(135, 238, 9), rgb(135, 238, 9));
+}
+.vote-badge.disliked {
+  background: linear-gradient(180deg, rgba(255,107,107,1), rgba(255,107,107,1));
+}
+
+.vote-badge .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+  color: #fff;
+  transform: translateY(1px);
+}
+
+/* Disliked state styling */
+.icon-btn.disliked {
+  color: red;
+  filter: drop-shadow(0 0 2px rgba(255, 0, 0, 1));
+}
+
+/* Liked state styling (mirrors disliked but warm light yellow) */
+.icon-btn.liked {
+  color: #B2F804; /* requested color */
+  filter: drop-shadow(0 0 6px rgba(178,248,4,0.95));
+}
+
+/* Make menu outline red when disliked */
+.menu-card.disliked {
+  border-color: rgba(255, 0, 0, 0.6);
+  box-shadow: inset -2px -2px 48px rgba(192, 11, 11, 0.8), 0 0 0 4px rgba(255,0,0,1);
+
+  background: 
+    radial-gradient(circle, rgba(255, 0, 0, 0.5) 1px, transparent 1px),
+    #1b0000;
+  background-size: 
+    10px 10px,
+    100%;
+  background-position: 
+    bottom right,
+    0 0;
+  background-repeat: 
+    repeat,
+    no-repeat;
+}
+
+/* Make menu outline warm yellow when liked */
+.menu-card.liked {
+  border-color: rgba(178,248,4,0.8);
+  box-shadow: inset -2px -2px 48px rgba(90,110,20,0.35), 0 0 0 4px rgba(178,248,4,0.9);
+
+  background: 
+    radial-gradient(circle, rgba(178,248,4,0.42) 1px, transparent 1px),
+    #162202;
+  background-size: 
+    10px 10px,
+    100%;
+  background-position: 
+    bottom right,
+    0 0;
+  background-repeat: 
+    repeat,
+    no-repeat;
+}
+
+/* Add red outline/glow to wrapper so the entire menu visually turns red when disliked */
+// .menu-wrapper .menu-card.disliked {
+//   box-shadow: 0 6px 18px rgba(255, 0, 0, 0.08), inset -2px -2px 48px rgba(97, 30, 30, 0.6);
+//   border-color: rgba(255, 0, 0, 0.55);
+// }
+
+.menu-wrapper:has(.menu-card.disliked) {
+  width: 100%;
+  /* Apply drop-shadow to wrapper, not the clipped card */
+  filter: 
+  drop-shadow(0px 2px 0px rgb(255, 0, 0))
+  drop-shadow(2px 0px 0px rgb(255, 0, 0))
+  drop-shadow(0px -2px 0px rgb(255, 0, 0))
+  drop-shadow(-2px 0px 0px rgb(255, 0, 0))
+  drop-shadow(2px 2px 0px rgb(255, 0, 0))
+  drop-shadow(-2px -2px 0px rgb(255, 0, 0))
+  drop-shadow(2px -2px 0px rgb(255, 0, 0))
+  drop-shadow(-2px 2px 0px rgb(255, 0, 0));
+}
+
+/* Wrapper glow when liked */
+.menu-wrapper:has(.menu-card.liked) {
+  width: 100%;
+  filter: 
+  drop-shadow(0px 2px 0px rgb(178,248,4))
+  drop-shadow(2px 0px 0px rgb(178,248,4))
+  drop-shadow(0px -2px 0px rgb(178,248,4))
+  drop-shadow(-2px 0px 0px rgb(178,248,4))
+  drop-shadow(2px 2px 0px rgb(178,248,4))
+  drop-shadow(-2px -2px 0px rgb(178,248,4))
+  drop-shadow(2px -2px 0px rgb(178,248,4))
+  drop-shadow(-2px 2px 0px rgb(178,248,4));
+}
+
+/* Tail border when disliked (fixed declarations) */
+.menu-container.disliked .menu-tail {
+  background: #fff; /* keep white fill so red border shows */
+  border: 4px solid rgba(255,0,0,1);
+}
+
+/* Tail border when liked */
+.menu-container.liked .menu-tail {
+  background: #fff; /* white fill keeps contrast */
+  border: 4px solid rgba(178,248,4,1);
+}
+
+/* Reduce-motion + touch safety */
+@media (prefers-reduced-motion: reduce) {
+  .grid-item, .menu-card, .hint-banner .hint-text { animation: none !important; transition: none !important; }
+}
+@media (hover: none) {
+  .grid-item { transition: none; }
+}
+
+.hint-banner {
+  overflow: hidden;
+  clip-path: inset(0 100% 0 0);
+  animation: growFromRight 0.6s ease-out 0.75s forwards,
+  fadeOut 0.5s ease-out 6.8s forwards; /* fade out after 4s of visibility */
+}
+
+.hint-text {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: textSlideUp 0.8s ease-out 1.5s forwards;
+}
+
+/* Banner grows from right to left */
+@keyframes growFromRight {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Text slides up and fades in */
+@keyframes textSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden; /* Optional: removes from accessibility tree */
+  }
+}
+
+/* Menu meta info (three spans) fade-in: base delay 500ms, duration 500ms, stagger 200ms */
+/* (previous .menu-meta rules were removed because they were empty) */
+.menu-meta {
+    opacity: 0;
+    transform: translateY(6px);
+    animation: metaFadeIn 100ms ease-out both;
+    animation-delay: 100ms;
+}
+
+.menu-meta-item {
+  color: black; /* keep inline style fallback */
+  opacity: 0;
+  transform: translateY(6px);
+  /* animation duration 500ms; we'll calculate delay from data-index */
+  animation: metaFadeIn 150ms ease-out both;
+  /* set a CSS variable for the index-based delay; default 0 */
+  --meta-index: 0;
+  animation-delay: calc(150ms + var(--meta-index) * 100ms);
+}
+
+/* Allow using data-index attribute to set --meta-index via attribute selector */
+[data-index="0"] { --meta-index: 0; }
+[data-index="1"] { --meta-index: 1; }
+[data-index="2"] { --meta-index: 2; }
+
+@keyframes metaFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-meta-item { animation: none !important; opacity: 1 !important; transform: none !important; }
+}

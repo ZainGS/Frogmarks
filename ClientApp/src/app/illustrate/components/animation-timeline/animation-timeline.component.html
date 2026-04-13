@@ -1,0 +1,318 @@
+<!-- ═══════════════════════════════════════════════════════════
+     Animation Timeline — bottom panel
+     ═══════════════════════════════════════════════════════════ -->
+
+<div class="timeline-panel" (click)="closeContextMenu()">
+
+  <!-- ── Layer labels (left column) ──────────────────────── -->
+  <div class="timeline-layers" #timelineLayers (wheel)="onLayersWheel($event)">
+    <div class="tl-header-cell">Layers</div>
+    <div *ngFor="let layer of layers"
+         class="tl-layer-label"
+         [class.animated]="layer.animated"
+         [class.static]="!layer.animated"
+         (contextmenu)="onLayerLabelContextMenu($event, layer)"
+         [title]="layer.animated
+           ? 'Animated: this layer has separate drawings per frame. Right-click for options.'
+           : 'Static: this layer shows the same drawing on every frame. Right-click to make animated.'">
+      <span class="layer-type-icon">{{ layer.animated ? '✏️' : '🔒' }}</span>
+      <span class="layer-name">{{ layer.name }}</span>
+    </div>
+  </div>
+
+  <!-- ── Timeline grid (scrollable) ──────────────────────── -->
+  <div class="timeline-grid-wrapper"
+       #timelineGrid
+       (scroll)="onGridVerticalScroll()"
+       (wheel)="onTimelineWheel($event)">
+
+    <!-- Frame numbers header row -->
+    <div class="tl-frame-header" (mousedown)="onFrameHeaderMouseDown($event)">
+      <div *ngFor="let f of frameNumbers"
+           class="tl-frame-number"
+           [class.current]="f === currentFrame"
+           [class.in-range]="f >= playRangeStart && f <= playRangeEnd"
+           [style.width.px]="frameWidth"
+           (click)="onFrameClick(f)"
+           [title]="'Click to jump to frame ' + f + '. Drag to scrub.'">
+        {{ f }}
+      </div>
+    </div>
+
+    <!-- Cel rows per layer -->
+    <div *ngFor="let layer of layers" class="tl-layer-row">
+
+      <!-- Static layer: solid bar -->
+      <div *ngIf="!layer.animated" class="tl-static-bar"
+           [style.width.px]="frameCount * frameWidth"
+           (contextmenu)="onStaticBarContextMenu($event, layer)"
+           title="This layer shows the same image on every frame. Right-click to convert to animated.">
+      </div>
+
+      <!-- Animated layer: per-frame cells -->
+      <ng-container *ngIf="layer.animated">
+        <div *ngFor="let f of frameNumbers"
+             class="tl-cell"
+             [class.current]="f === currentFrame"
+             [class.cel-start]="isCelStart(layer, f)"
+             [class.cel-hold]="isCelHold(layer, f)"
+             [class.blank]="isBlankFrame(layer, f)"
+             [style.width.px]="frameWidth"
+             (click)="onFrameClick(f)"
+             (dblclick)="onCellDoubleClick(layer, f)"
+             (contextmenu)="onCellContextMenu($event, layer, f)"
+             (mousedown)="onCelDragStart($event, layer, f)"
+             [class.drag-ghost]="isDragging && draggingLayerId === layer.id && dragGhostFrame === f"
+             [class.drag-swap]="isDragging && isDragSwap && draggingLayerId === layer.id && dragGhostFrame === f"
+             [title]="isBlankFrame(layer, f)
+               ? 'Blank frame — no drawing. Click to jump here, double-click to create a new cel.'
+               : isCelHold(layer, f)
+                 ? 'This frame holds the previous drawing.'
+                 : 'This frame has a drawing. Click to select it. Drag to move. Alt+drag to swap.'">
+          <!-- Key / inbetween markers -->
+          <span *ngIf="isCelStart(layer, f)" class="cel-marker">
+            {{ getCelAtFrame(layer, f)?.isKey ? '◆' : '○' }}
+          </span>
+          <span *ngIf="isCelHold(layer, f)" class="hold-marker">→</span>
+          <!-- Duration drag handle at the last frame of each cel -->
+          <span *ngIf="isCelEnd(layer, f)"
+                class="duration-handle"
+                (mousedown)="onDurationDragStart($event, layer, getCelAtFrame(layer, f)!)"
+                title="Drag to change how many frames this drawing is held for.">┃</span>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- Current frame indicator line -->
+    <div class="tl-playhead"
+         [style.left.px]="(currentFrame - 1) * frameWidth + frameWidth / 2">
+    </div>
+  </div>
+
+  <!-- ── Transport bar ───────────────────────────────────── -->
+  <div class="transport-bar">
+
+    <!-- Playback controls -->
+    <div class="transport-group">
+      <button class="transport-btn" (click)="goToFirstFrame()" title="Jump to the first frame.">⏮</button>
+      <button class="transport-btn" (click)="goToPrevFrame()" title="Step back one frame. Keyboard: , (comma)">◀</button>
+      <button class="transport-btn play-btn" (click)="togglePlayPause()"
+              [title]="isPlaying ? 'Pause the animation. Keyboard: Space' : 'Play the animation. Keyboard: Space'">
+        {{ isPlaying ? '⏸' : '▶' }}
+      </button>
+      <button class="transport-btn" (click)="goToNextFrame()" title="Step forward one frame. Keyboard: . (period)">▶</button>
+      <button class="transport-btn" (click)="goToLastFrame()" title="Jump to the last frame.">⏭</button>
+      <button class="transport-btn" (click)="stopPlayback()" title="Stop playback and return to frame 1.">⏹</button>
+    </div>
+
+    <!-- Loop mode -->
+    <div class="transport-group">
+      <div class="segment-row">
+        <button class="segment-btn" [class.active]="loopMode === 'none'"
+                (click)="onLoopModeChange('none')" title="Play once and stop at the last frame.">None</button>
+        <button class="segment-btn" [class.active]="loopMode === 'loop'"
+                (click)="onLoopModeChange('loop')" title="Repeat the animation continuously.">⟲ Loop</button>
+        <button class="segment-btn" [class.active]="loopMode === 'ping-pong'"
+                (click)="onLoopModeChange('ping-pong')" title="Play forward, then backward, then forward again.">↔ Ping</button>
+      </div>
+    </div>
+
+    <!-- FPS -->
+    <div class="transport-group fps-group">
+      <span class="transport-label">FPS</span>
+      <input type="number" class="transport-input" min="1" max="120"
+             [ngModel]="fps" (ngModelChange)="onFpsChange($event)"
+             title="Frames per second. 8 = simple, 12 = standard anime, 24 = full animation, 30 = smooth.">
+      <div class="fps-presets">
+        <button class="fps-btn" [class.active]="fps === 8" (click)="setFpsPreset(8)" title="8 fps — simple flipbook style.">8</button>
+        <button class="fps-btn" [class.active]="fps === 12" (click)="setFpsPreset(12)" title="12 fps — standard anime timing (on 2s).">12</button>
+        <button class="fps-btn" [class.active]="fps === 24" (click)="setFpsPreset(24)" title="24 fps — full film animation.">24</button>
+        <button class="fps-btn" [class.active]="fps === 30" (click)="setFpsPreset(30)" title="30 fps — smooth digital animation.">30</button>
+      </div>
+    </div>
+
+    <!-- Frame counter -->
+    <div class="transport-group">
+      <span class="frame-counter" title="Current frame / total frames.">{{ currentFrame }} / {{ frameCount }}</span>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="transport-group transport-actions">
+      <button class="transport-btn icon-btn"
+              [class.active]="onionSkin.enabled"
+              (click)="toggleOnionSkinPanel()"
+              title="Show ghost images of adjacent frames. Previous frames appear in red, next frames in blue.">🧅</button>
+      <button class="transport-btn icon-btn" (click)="toggleSettingsPanel()"
+              title="Timeline settings — frame count, play range.">⚙</button>
+      <button class="transport-btn icon-btn" (click)="addFrames(12)"
+              title="Add more frames to the end of the timeline.">+</button>
+      <button class="transport-btn icon-btn" (click)="openExportDialog()"
+              title="Export the animation as GIF, MP4, sprite sheet, or PNG sequence.">📤</button>
+    </div>
+  </div>
+
+  <!-- ── Onion Skin floating panel ───────────────────────── -->
+  <div *ngIf="showOnionSkinPanel" class="floating-panel onion-panel">
+    <div class="fp-header">
+      <span>🧅 Onion Skin</span>
+      <button class="fp-close" (click)="showOnionSkinPanel = false">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="check-row">
+        <input type="checkbox" id="onionEnable" [ngModel]="onionSkin.enabled"
+               (ngModelChange)="onOnionSkinEnabledChange($event)"
+               title="Show ghost images of adjacent frames. Essential for smooth animation.">
+        <label for="onionEnable">Enable</label>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="How many previous frames to show as ghosts.">Before</span>
+        <input type="range" min="0" max="6" step="1"
+               [ngModel]="onionSkin.framesBefore" (ngModelChange)="onOnionSkinBeforeChange($event)">
+        <span class="slider-value">{{ onionSkin.framesBefore }}</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="How many upcoming frames to show as ghosts.">After</span>
+        <input type="range" min="0" max="6" step="1"
+               [ngModel]="onionSkin.framesAfter" (ngModelChange)="onOnionSkinAfterChange($event)">
+        <span class="slider-value">{{ onionSkin.framesAfter }}</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="How visible the ghost frames are.">Opacity</span>
+        <input type="range" min="0" max="1" step="0.05"
+               [ngModel]="onionSkin.opacity" (ngModelChange)="onOnionSkinOpacityChange($event)">
+        <span class="slider-value">{{ onionSkin.opacity | number:'1.2-2' }}</span>
+      </div>
+      <!-- Tint presets -->
+      <div class="tint-row">
+        <span class="slider-label" title="Color tint for previous frames. Red is the industry standard.">Prev Tint</span>
+        <div class="tint-swatches">
+          <div *ngFor="let t of beforeTintPresets"
+               class="tint-swatch"
+               [class.active]="tintEquals(onionSkin.tintBefore, t)"
+               [style.background-color]="tintToRgb(t)"
+               (click)="setBeforeTint(t)"></div>
+        </div>
+      </div>
+      <div class="tint-row">
+        <span class="slider-label" title="Color tint for upcoming frames. Blue is the industry standard.">Next Tint</span>
+        <div class="tint-swatches">
+          <div *ngFor="let t of afterTintPresets"
+               class="tint-swatch"
+               [class.active]="tintEquals(onionSkin.tintAfter, t)"
+               [style.background-color]="tintToRgb(t)"
+               (click)="setAfterTint(t)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings floating panel ─────────────────────────── -->
+  <div *ngIf="showSettingsPanel" class="floating-panel settings-panel">
+    <div class="fp-header">
+      <span>⚙ Timeline Settings</span>
+      <button class="fp-close" (click)="showSettingsPanel = false">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="setting-row">
+        <span class="slider-label">Total Frames</span>
+        <input type="number" class="setting-input" min="1" max="9999"
+               [ngModel]="frameCount" (ngModelChange)="onFrameCountChange($event)"
+               title="Total number of frames in the animation.">
+      </div>
+      <div class="setting-row">
+        <span class="slider-label">Play Start</span>
+        <input type="number" class="setting-input" min="1" [max]="frameCount"
+               [ngModel]="playRangeStart" (ngModelChange)="onPlayRangeStartChange($event)"
+               title="Playback starts from this frame.">
+      </div>
+      <div class="setting-row">
+        <span class="slider-label">Play End</span>
+        <input type="number" class="setting-input" [min]="playRangeStart" [max]="frameCount"
+               [ngModel]="playRangeEnd" (ngModelChange)="onPlayRangeEndChange($event)"
+               title="Playback ends at this frame.">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Context menu ────────────────────────────────────── -->
+  <div *ngIf="contextMenuVisible" class="ctx-menu"
+       [style.left.px]="contextMenuX"
+       [style.top]="contextMenuFlipUp ? 'auto' : contextMenuY + 'px'"
+       [style.bottom]="contextMenuFlipUp ? (windowHeight - contextMenuY) + 'px' : 'auto'">
+
+    <!-- ═══ STATIC layer: only option is "Make Animated" ═══ -->
+    <ng-container *ngIf="!contextMenuLayerAnimated">
+      <div class="ctx-item" style="opacity:.5; pointer-events:none; font-size:10px; padding: 4px 14px;">
+        This layer is static — it shows the
+        same image on every frame.
+      </div>
+      <div class="ctx-divider"></div>
+      <div class="ctx-item" (click)="ctxToggleLayerAnimated()"
+           title="Convert this layer to animated so it can have separate drawings per frame.">
+        ✏️ Make Animated
+      </div>
+    </ng-container>
+
+    <!-- ═══ ANIMATED layer ═══ -->
+    <ng-container *ngIf="contextMenuLayerAnimated">
+
+      <!-- Cel-specific items (right-clicked on an existing drawing) -->
+      <ng-container *ngIf="contextMenuCelId">
+        <div class="ctx-item" (click)="ctxSetCelType('key')"
+             title="Key drawing — an important pose. Shown as ◆ in timeline.">◆ Set as Key Drawing</div>
+        <div class="ctx-item" (click)="ctxSetCelType('inbetween')"
+             title="Transitional drawing between keys. Shown as ○ in timeline.">○ Set as Inbetween</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" (click)="ctxDuplicateCel()"
+             title="Copy this drawing to another frame.">📋 Duplicate to Frame…</div>
+        <div class="ctx-item" (click)="ctxMoveCel()"
+             title="Move this drawing to a different frame position.">✂️ Move to Frame…</div>
+        <div class="ctx-item" (click)="ctxSwapCel()"
+             title="Exchange two drawings' positions.">🔄 Swap with…</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" (click)="ctxDeleteCel()"
+             title="Remove this drawing. The frame becomes blank.">🗑️ Delete Cel</div>
+      </ng-container>
+
+      <!-- Empty frame items (right-clicked on a blank frame) -->
+      <ng-container *ngIf="!contextMenuCelId">
+        <div class="ctx-item" (click)="ctxNewCel()"
+             title="Create a new blank drawing on this frame. You can then draw on the canvas.">✏️ New Blank Cel</div>
+      </ng-container>
+
+      <div class="ctx-divider"></div>
+      <div class="ctx-item" (click)="ctxInsertFrame()"
+           title="Insert a blank frame here. All subsequent frames shift right.">➕ Insert Frame</div>
+      <div class="ctx-item" (click)="ctxDeleteFrame()"
+           title="Remove this frame. All subsequent frames shift left.">➖ Delete Frame</div>
+      <div class="ctx-divider"></div>
+      <div class="ctx-item" (click)="ctxToggleLayerAnimated()">
+        {{ getContextLayerAnimatedLabel() }}
+      </div>
+
+    </ng-container>
+  </div>
+
+  <!-- ── Duplicate cel prompt dialog ────────────────────── -->
+  <div *ngIf="showDuplicatePrompt" class="floating-panel duplicate-panel">
+    <div class="fp-header">
+      <span>Duplicate Cel</span>
+      <button class="fp-close" (click)="cancelDuplicate()">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="setting-row">
+        <span class="slider-label">Target Frame</span>
+        <input type="number" class="setting-input" min="1" [max]="frameCount"
+               [(ngModel)]="duplicateTargetFrame">
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button class="transport-btn" style="flex: 1;" (click)="confirmDuplicate()">Duplicate</button>
+        <button class="transport-btn" style="flex: 1;" (click)="cancelDuplicate()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Export dialog ───────────────────────────────────── -->
+  <app-animation-export *ngIf="showExportDialog" (close)="closeExportDialog()"></app-animation-export>
+
+</div>

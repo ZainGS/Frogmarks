@@ -44,7 +44,7 @@ export const applicationConfig = {
   },
   local: {
     clientId: '',
-    clientUrl: 'http://localhost:4200',
+    clientUrl: 'https://localhost:44452',
     apiUri: 'https://localhost:44362',
     redirectUri: '',
     postLogoutRedirectUri: '',

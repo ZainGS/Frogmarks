@@ -1,0 +1,657 @@
+/* ═══════════════════════════════════════════════════════════════
+   Brush Options Panel — dark theme, grid + editor views
+   ═══════════════════════════════════════════════════════════════ */
+
+$bg: rgba(42, 42, 42, 0.98);
+$surface: #333;
+$border: #555;
+$text: #e0e0e0;
+$muted: #aaa;
+$accent: #9B59B6;
+$accent-light: #b87fd9;
+$radius: 6px;
+
+/* ── Root panel ──────────────────────────────────────────────── */
+
+.brush-panel {
+  color: $text;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  max-height: 70vh;
+}
+
+.brush-panel-header {
+  font-weight: 700;
+  font-size: 13px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid $border;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: 2px;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GRID VIEW
+   ═══════════════════════════════════════════════════════════════ */
+
+.brush-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+  padding: 8px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: $border transparent;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: $border; border-radius: 4px; }
+}
+
+.brush-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: $surface;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 62px;
+
+  &:hover {
+    border-color: $accent-light;
+
+    .gear-icon { opacity: 1; }
+  }
+
+  &.active {
+    border-color: $accent;
+    background: rgba($accent, 0.12);
+  }
+}
+
+.brush-cell-icon {
+  margin-bottom: 2px;
+
+  img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+}
+
+.brush-cell-name {
+  font-size: 9px;
+  color: $muted;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 58px;
+}
+
+.gear-icon {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  opacity: 0;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, background 0.1s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+
+    svg { fill: $text; }
+  }
+}
+
+/* + Create cell */
+.create-cell {
+  border-style: dashed;
+  border-color: $border;
+
+  &:hover {
+    border-color: $accent;
+    background: rgba($accent, 0.08);
+  }
+}
+
+.create-icon {
+  font-size: 24px;
+  font-weight: 300;
+  color: $muted;
+  line-height: 1;
+
+  .create-cell:hover & { color: $accent-light; }
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  color: $muted;
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+  font-size: 11px;
+}
+
+/* ── Quick controls (below grid) ─────────────────────────────── */
+
+.quick-controls {
+  padding-top: 6px;
+  border-top: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.quick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  input[type='range'] {
+    flex: 1;
+    accent-color: $accent;
+    height: 4px;
+  }
+}
+
+.quick-label {
+  min-width: 48px;
+  font-size: 11px;
+  color: $muted;
+}
+
+.quick-value {
+  min-width: 46px;
+  flex-shrink: 0;
+  // text-align: right;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EDITOR VIEW
+   ═══════════════════════════════════════════════════════════════ */
+
+.editor-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: $border transparent;
+
+  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar-thumb { background: $border; border-radius: 4px; }
+}
+
+.editor-footer {
+  display: flex;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid $border;
+  flex-wrap: wrap;
+}
+
+.name-input {
+  width: 100%;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  padding: 4px 6px;
+  font-size: 12px;
+
+  &:focus { outline: 2px solid $accent; }
+}
+
+/* ── Sections ────────────────────────────────────────────────── */
+
+.section {
+  padding: 4px 0;
+}
+
+.section-label {
+  display: block;
+  font-weight: 600;
+  font-size: 11px;
+  color: $muted;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.section-divider {
+  border-top: 1px solid $border;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+/* ── Color ───────────────────────────────────────────────────── */
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid $border;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+
+  &:hover { border-color: $accent; }
+}
+
+.hex-input {
+  width: 72px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 12px;
+
+  &:focus { outline: 2px solid $accent; }
+}
+
+/* ── Sliders ─────────────────────────────────────────────────── */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+
+  input[type='range'] {
+    flex: 1;
+    accent-color: $accent;
+    height: 4px;
+  }
+}
+
+.slider-label {
+  min-width: 55px;
+  font-size: 11px;
+  color: $muted;
+}
+
+.slider-value {
+  min-width: 38px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* ── Size inputs ─────────────────────────────────────────────── */
+
+.size-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.size-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  label {
+    font-size: 11px;
+    color: $muted;
+    min-width: 25px;
+  }
+
+  input[type='number'] {
+    width: 50px;
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: 3px;
+    color: $text;
+    padding: 2px 4px;
+    font-size: 11px;
+    text-align: right;
+
+    &:focus { outline: 2px solid $accent; }
+  }
+
+  span {
+    font-size: 10px;
+    color: $muted;
+  }
+}
+
+/* ── Stabilization / Select ──────────────────────────────────── */
+
+.stab-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+
+  select {
+    flex: 1;
+    background: $surface;
+    color: $text;
+    border: 1px solid $border;
+    border-radius: 3px;
+    padding: 3px 6px;
+    font-size: 11px;
+
+    &:focus { outline: 2px solid $accent; }
+  }
+}
+
+/* ── Collapsible sections ────────────────────────────────────── */
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 12px;
+  color: $muted;
+  user-select: none;
+  transition: color 0.15s;
+
+  &:hover { color: $text; }
+}
+
+.collapsible-body {
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid $border;
+  margin-left: 4px;
+}
+
+/* ── Tip preview ─────────────────────────────────────────────── */
+
+.tip-preview {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.tip-ellipse {
+  background: $text;
+  border-radius: 50%;
+  min-width: 8px;
+  min-height: 8px;
+}
+
+/* ── Curve group ─────────────────────────────────────────────── */
+
+.curve-group {
+  margin-bottom: 8px;
+
+  label {
+    font-size: 11px;
+    color: $muted;
+    display: block;
+    margin-bottom: 2px;
+  }
+}
+
+/* ── Radio / Checkbox rows ───────────────────────────────────── */
+
+.radio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.radio-option {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+  &.active { background: rgba($accent, 0.2); color: $accent-light; }
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+
+  input[type='checkbox'] { accent-color: $accent; }
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 11px;
+
+  input[type='file'] {
+    font-size: 10px;
+    color: $muted;
+  }
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+
+.btn-brush {
+  background: $surface;
+  color: $text;
+  border: 1px solid $border;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+
+  &:hover { background: lighten($surface, 10%); }
+}
+
+.btn-save {
+  background: $accent;
+  border-color: $accent;
+
+  &:hover { background: $accent-light; }
+}
+
+.btn-cancel {
+  opacity: 0.8;
+}
+
+.btn-reset {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.btn-delete {
+  margin-left: auto;
+  border-color: #c0392b;
+
+  &:hover { background: #c0392b; }
+}
+
+/* ── Mat-icon sizing ───────────────────────────────────────── */
+
+.brush-header-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  line-height: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NEW SECTIONS — Dual Brush, Color Jitter, Wet Edges, Stroke Texture
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Toggle checkbox in collapsible headers */
+.section-toggle {
+  margin-left: auto;
+  accent-color: $accent;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+/* Greyed-out body when section is disabled */
+.section-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Segmented toggle (e.g. tile mode) */
+.segment-row {
+  display: flex;
+  gap: 0;
+  margin: 4px 0;
+  border: 1px solid $border;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segment-btn {
+  flex: 1;
+  background: transparent;
+  color: $muted;
+  border: none;
+  padding: 4px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:not(:last-child) { border-right: 1px solid $border; }
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+
+  &.active {
+    background: rgba($accent, 0.25);
+    color: $accent-light;
+  }
+}
+
+/* Texture thumbnail preview */
+.texture-preview {
+  margin: 4px 0;
+  border: 1px solid $border;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #222;
+
+  img {
+    width: 100%;
+    height: 48px;
+    object-fit: cover;
+    opacity: 0.8;
+    filter: grayscale(1);
+  }
+}
+
+/* Info hint (e.g. "Applied when you lift the pen.") */
+.info-hint {
+  font-size: 10px;
+  color: $muted;
+  padding: 4px 0 2px;
+  font-style: italic;
+}
+
+/* ── Brush Pack Import ───────────────────────────────────────── */
+
+.import-row {
+  padding-top: 6px;
+  border-top: 1px solid $border;
+  margin-top: 4px;
+}
+
+.btn-import {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+/* Import confirmation dialog overlay */
+.import-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.import-dialog {
+  background: $bg;
+  border: 1px solid $border;
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 240px;
+  max-width: 300px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.import-dialog-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: $text;
+}
+
+.import-dialog-info {
+  font-size: 12px;
+  color: $muted;
+  margin-bottom: 12px;
+
+  div { margin-bottom: 3px; }
+  strong { color: $text; }
+}
+
+.import-dialog-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}

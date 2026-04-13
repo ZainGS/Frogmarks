@@ -1,0 +1,568 @@
+<!-- ═══════════════════════════════════════════════════════════════
+     Brush Options — Grid / Editor dual-view component
+     ═══════════════════════════════════════════════════════════════ -->
+
+<div class="brush-panel">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GRID VIEW  (default when pen tool first opened)
+       ═══════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="view === 'grid'">
+
+    <div class="brush-panel-header">
+      <span><mat-icon class="brush-header-icon">brush</mat-icon> Brushes</span>
+    </div>
+
+    <div class="brush-grid">
+      <!-- + Create New Brush cell -->
+      <div class="brush-cell create-cell" (click)="startCreateBrush()" title="Create new brush">
+        <div class="create-icon">+</div>
+      </div>
+
+      <!-- Preset cells -->
+      <div *ngFor="let preset of presets"
+           class="brush-cell"
+           [class.active]="activePresetId === preset.id"
+           (click)="quickSelectBrush(preset.id)">
+        <!-- Gear icon (top-right) -->
+        <div class="gear-icon" (click)="openEditor(preset.id, $event)" title="Edit brush settings">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#aaa">
+            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/>
+          </svg>
+        </div>
+        <!-- Brush preview -->
+        <span class="brush-cell-icon" *ngIf="preset.icon">
+          <img [src]="preset.icon" alt="">
+        </span>
+        <span class="brush-cell-icon" *ngIf="!preset.icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
+            <circle cx="12" cy="12" r="8" opacity="0.6"/>
+          </svg>
+        </span>
+        <span class="brush-cell-name">{{ preset.name }}</span>
+      </div>
+
+      <!-- Empty state -->
+      <div *ngIf="presets.length === 0" class="empty-state">
+        No brushes yet — click <strong>+</strong> to create one
+      </div>
+    </div>
+
+    <!-- Quick controls shown below grid for active brush -->
+    <div class="quick-controls" *ngIf="activePresetId">
+      <!-- Size -->
+      <div class="quick-row">
+        <span class="quick-label">Size</span>
+        <input type="range" min="1" max="500" step="1"
+               [(ngModel)]="maxSize" (ngModelChange)="onMaxSizeChange($event)">
+        <span class="quick-value">{{ maxSize }}px</span>
+      </div>
+      <!-- Opacity -->
+      <div class="quick-row">
+        <span class="quick-label">Opacity</span>
+        <input type="range" min="0" max="100" step="1"
+               [(ngModel)]="opacity" (ngModelChange)="onOpacityChange($event)">
+        <span class="quick-value">{{ opacity }}%</span>
+      </div>
+    </div>
+
+    <!-- Import Brush Pack -->
+    <div class="import-row">
+      <label class="btn-brush btn-import" title="Import a brush pack file containing presets and textures.">
+        📦 Import Pack
+        <input type="file" accept=".json" (change)="onBrushPackFileSelected($event)" hidden>
+      </label>
+    </div>
+
+    <!-- Import confirmation dialog -->
+    <div *ngIf="showImportDialog" class="import-dialog-overlay" (click)="cancelImport()">
+      <div class="import-dialog" (click)="$event.stopPropagation()">
+        <div class="import-dialog-title">Import Brush Pack</div>
+        <div class="import-dialog-info">
+          <div><strong>Pack:</strong> {{ importPackName }}</div>
+          <div><strong>Author:</strong> {{ importPackAuthor }}</div>
+          <div><strong>Brushes:</strong> {{ importPresetCount }}</div>
+        </div>
+        <div class="import-dialog-actions">
+          <button class="btn-brush btn-save" (click)="confirmImportPack()">Import</button>
+          <button class="btn-brush btn-cancel" (click)="cancelImport()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </ng-container>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       EDITOR VIEW  (shown when gear icon clicked or + create)
+       ═══════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="view === 'editor'">
+
+    <div class="brush-panel-header editor-header">
+      <button class="back-btn" (click)="closeEditor()" title="Back to brushes">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#e0e0e0">
+          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+        </svg>
+      </button>
+      <span *ngIf="!isCreating">{{ editingPresetName }}</span>
+      <span *ngIf="isCreating">New Brush</span>
+    </div>
+
+    <!-- Scrollable editor body -->
+    <div class="editor-body">
+
+      <!-- Brush name (for new brushes) -->
+      <div *ngIf="isCreating" class="section">
+        <label class="section-label">Name</label>
+        <input type="text" class="name-input" [(ngModel)]="newPresetName" placeholder="My Brush…">
+      </div>
+
+      <!-- ── ERASER sub-options ─────────────────────────────── -->
+      <ng-container *ngIf="activeRasterTool === 'eraser'">
+        <div class="section">
+          <label class="section-label">Mode</label>
+          <div class="radio-row">
+            <label class="radio-option" [class.active]="eraserHardness === 'soft'">
+              <input type="radio" name="eraserHardness" value="soft"
+                     [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
+              <span>● Soft</span>
+            </label>
+            <label class="radio-option" [class.active]="eraserHardness === 'hard'">
+              <input type="radio" name="eraserHardness" value="hard"
+                     [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
+              <span>● Hard</span>
+            </label>
+          </div>
+        </div>
+        <div class="section">
+          <label class="section-label">Eraser Style</label>
+          <div class="radio-row">
+            <label class="radio-option" [class.active]="eraserStyle === 'fade'">
+              <input type="radio" name="eraserStyle" value="fade"
+                     [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
+              <span>● Fade — gradual</span>
+            </label>
+            <label class="radio-option" [class.active]="eraserStyle === 'clear'">
+              <input type="radio" name="eraserStyle" value="clear"
+                     [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
+              <span>● Clear — hard cutout</span>
+            </label>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── BRUSH / AIRBRUSH editor ──────────────────────── -->
+      <ng-container *ngIf="activeRasterTool !== 'eraser'">
+
+        <!-- Color (only when editing an existing brush, not when creating) -->
+        <div class="section" *ngIf="!isCreating">
+          <label class="section-label">Color</label>
+          <div class="color-row">
+            <div class="color-swatch" [style.background-color]="brushColor" (click)="$event.stopPropagation(); toggleColorPicker()"></div>
+            <input type="text" class="hex-input" [value]="brushColor" (change)="onHexInput($event)" maxlength="7" spellcheck="false">
+          </div>
+          <app-color-picker #editorColorPicker
+              *ngIf="showColorPicker"
+              [color]="brushColor"
+              [hideInput]="false"
+              (colorSelected)="onColorSelected($event)"
+              (close)="showColorPicker = false"
+              style="position: relative; z-index: 10; margin-top: 4px;">
+          </app-color-picker>
+        </div>
+
+        <!-- Size -->
+        <div class="section">
+          <label class="section-label">Size</label>
+          <div class="size-inputs">
+            <div class="size-field">
+              <label>Min</label>
+              <input type="number" min="1" max="500" [(ngModel)]="minSize" (ngModelChange)="onMinSizeChange($event)">
+              <span>px</span>
+            </div>
+            <div class="size-field">
+              <label>Max</label>
+              <input type="number" min="1" max="500" [(ngModel)]="maxSize" (ngModelChange)="onMaxSizeChange($event)">
+              <span>px</span>
+            </div>
+          </div>
+          <div class="slider-row">
+            <input type="range" min="1" max="500" step="1"
+                   [(ngModel)]="maxSize" (ngModelChange)="onMaxSizeChange($event)">
+            <span class="slider-value">{{ maxSize }}</span>
+          </div>
+        </div>
+
+        <!-- Opacity & Flow -->
+        <div class="section">
+          <label class="section-label">Opacity &amp; Flow</label>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" min="0" max="100" step="1"
+                   [(ngModel)]="opacity" (ngModelChange)="onOpacityChange($event)">
+            <span class="slider-value">{{ opacity }}%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Flow</span>
+            <input type="range" min="0" max="100" step="1"
+                   [(ngModel)]="flow" (ngModelChange)="onFlowChange($event)">
+            <span class="slider-value">{{ flow }}%</span>
+          </div>
+          <div class="stab-row">
+            <span class="slider-label" title="How the brush color combines with existing pixels.">Blend</span>
+            <select [(ngModel)]="brushBlendMode" (ngModelChange)="onBrushBlendModeChange($event)">
+              <option *ngFor="let m of brushBlendModeOptions" [ngValue]="m.value" [title]="m.tooltip">{{ m.label }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Stabilization -->
+        <div class="section">
+          <label class="section-label">Stabilization</label>
+          <div class="stab-row">
+            <span class="slider-label" title="Choose how brush input is smoothed. Each method feels different — try them to find your preference.">Method</span>
+            <select [(ngModel)]="stabilizationMethod" (ngModelChange)="onStabilizationMethodChange($event)"
+                    title="Choose how brush input is smoothed.">
+              <option *ngFor="let m of stabilizationMethods" [ngValue]="m.value" [title]="m.tooltip">{{ m.label }}</option>
+            </select>
+          </div>
+          <div *ngIf="stabilizationMethod !== 'none'" class="slider-row">
+            <span class="slider-label" title="Smoothing strength. 0 = off, 3 = light, 6 = medium, 10 = maximum.">Level</span>
+            <input type="range" min="0" max="10" step="1"
+                   [(ngModel)]="stabilizationLevel" (ngModelChange)="onStabilizationLevelChange($event)"
+                   title="Smoothing strength. 0 = off, 3 = light, 6 = medium, 10 = maximum.">
+            <span class="slider-value">{{ stabilizationLevel }}{{ stabilizationLevel === 0 ? ' (off)' : '' }}</span>
+          </div>
+          <div *ngIf="stabilizationMethod === 'pull-string'" class="slider-row">
+            <span class="slider-label" title="Pull-string length in pixels. Longer = more control, slower response.">String</span>
+            <input type="range" min="10" max="60" step="1"
+                   [(ngModel)]="pullStringLength" (ngModelChange)="onPullStringLengthChange($event)"
+                   title="Pull-string length in pixels. Longer = more control, slower response.">
+            <span class="slider-value">{{ pullStringLength }}px</span>
+          </div>
+        </div>
+
+        <!-- ADVANCED divider -->
+        <div class="section section-divider">
+          <label class="section-label">Advanced</label>
+        </div>
+
+        <!-- ▶ Tip Shape -->
+        <div class="collapsible-header" (click)="showTipShape = !showTipShape">
+          <span>{{ showTipShape ? '▼' : '▶' }}</span> Tip Shape
+        </div>
+        <div *ngIf="showTipShape" class="collapsible-body">
+          <div class="slider-row">
+            <span class="slider-label">Hardness</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="tipHardness" (ngModelChange)="onHardnessChange($event)">
+            <span class="slider-value">{{ tipHardness | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Roundness</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="tipRoundness" (ngModelChange)="onRoundnessChange($event)">
+            <span class="slider-value">{{ tipRoundness | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Angle</span>
+            <input type="range" min="0" max="360" step="1"
+                   [(ngModel)]="tipAngleDeg" (ngModelChange)="onAngleChange($event)">
+            <span class="slider-value">{{ tipAngleDeg }}°</span>
+          </div>
+          <div class="tip-preview">
+            <div class="tip-ellipse"
+                 [style.width.px]="40 * tipRoundness"
+                 [style.height.px]="40"
+                 [style.transform]="'rotate(' + tipAngleDeg + 'deg)'"
+                 [style.opacity]="tipHardness"></div>
+          </div>
+        </div>
+
+        <!-- ▶ Dynamics Curves -->
+        <div class="collapsible-header" (click)="showDynamics = !showDynamics">
+          <span>{{ showDynamics ? '▼' : '▶' }}</span> Dynamics Curves
+        </div>
+        <div *ngIf="showDynamics" class="collapsible-body">
+          <div class="curve-group">
+            <label>Size Pressure</label>
+            <app-curve-editor [points]="sizeCurve" (pointsChange)="onSizeCurveChange($event)"></app-curve-editor>
+          </div>
+          <div class="curve-group">
+            <label>Opacity Pressure</label>
+            <app-curve-editor [points]="opacityCurve" (pointsChange)="onOpacityCurveChange($event)"></app-curve-editor>
+          </div>
+          <div class="curve-group">
+            <label>Flow Pressure</label>
+            <app-curve-editor [points]="flowCurve" (pointsChange)="onFlowCurveChange($event)"></app-curve-editor>
+          </div>
+          <div class="curve-group">
+            <label title="Maps pen speed to brush size. Left = slow strokes, right = fast strokes.">Velocity → Size</label>
+            <app-curve-editor [points]="velocitySizeCurve" (pointsChange)="onVelocitySizeCurveChange($event)"></app-curve-editor>
+          </div>
+        </div>
+
+        <!-- ▶ Spacing & Scatter -->
+        <div class="collapsible-header" (click)="showSpacing = !showSpacing">
+          <span>{{ showSpacing ? '▼' : '▶' }}</span> Spacing &amp; Scatter
+        </div>
+        <div *ngIf="showSpacing" class="collapsible-body">
+          <div class="slider-row">
+            <span class="slider-label">Spacing</span>
+            <input type="range" min="0.01" max="2" step="0.01"
+                   [(ngModel)]="spacing" (ngModelChange)="onSpacingChange($event)">
+            <span class="slider-value">{{ spacing | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Scatter</span>
+            <input type="range" min="0" max="2" step="0.01"
+                   [(ngModel)]="scatterDistance" (ngModelChange)="onScatterChange($event)">
+            <span class="slider-value">{{ scatterDistance | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Size Jitter</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="sizeJitter" (ngModelChange)="onSizeJitterChange($event)">
+            <span class="slider-value">{{ sizeJitter | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Rot. Jitter</span>
+            <input type="range" min="0" max="180" step="1"
+                   [(ngModel)]="rotationJitterDeg" (ngModelChange)="onRotJitterChange($event)">
+            <span class="slider-value">{{ rotationJitterDeg }}°</span>
+          </div>
+          <div class="curve-group" style="margin-top: 6px;">
+            <label title="Maps pen pressure to scatter amount. Left = light pressure, right = heavy pressure.">Scatter Pressure</label>
+            <app-curve-editor [points]="scatterPressureCurve" (pointsChange)="onScatterPressureCurveChange($event)"></app-curve-editor>
+          </div>
+        </div>
+
+        <!-- ▶ Brush Grain (per-brush dab texture) -->
+        <div class="collapsible-header" (click)="showCanvasGrain = !showCanvasGrain">
+          <span>{{ showCanvasGrain ? '▼' : '▶' }}</span> Brush Grain
+        </div>
+        <div *ngIf="showCanvasGrain" class="collapsible-body">
+          <div class="stab-row">
+            <span class="slider-label">Paper</span>
+            <select [(ngModel)]="canvasGrainType" (ngModelChange)="onCanvasGrainTypeChange($event)">
+              <option *ngFor="let g of canvasGrainOptions" [ngValue]="g.value" [title]="g.tooltip">{{ g.label }}</option>
+            </select>
+          </div>
+          <ng-container *ngIf="canvasGrainType !== 'none'">
+            <div class="slider-row">
+              <span class="slider-label">Scale</span>
+              <input type="range" min="0.1" max="5" step="0.1"
+                     [(ngModel)]="canvasGrainScale" (ngModelChange)="onCanvasGrainScaleChange($event)">
+              <span class="slider-value">{{ canvasGrainScale | number:'1.1-1' }}</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Strength</span>
+              <input type="range" min="0" max="1" step="0.01"
+                     [(ngModel)]="canvasGrainStrength" (ngModelChange)="onCanvasGrainStrengthChange($event)">
+              <span class="slider-value">{{ canvasGrainStrength | number:'1.2-2' }}</span>
+            </div>
+          </ng-container>
+        </div>
+
+        <!-- ▶ Dual Brush (Texture Overlay) -->
+        <div class="collapsible-header" (click)="showDualBrush = !showDualBrush">
+          <span>{{ showDualBrush ? '▼' : '▶' }}</span>
+          Dual Brush
+          <input type="checkbox" class="section-toggle" [(ngModel)]="dualBrushEnabled"
+                 (ngModelChange)="onDualBrushToggle($event)" (click)="$event.stopPropagation()"
+                 title="Overlay a second texture on each brush dab to add grain, grit, or organic variation.">
+        </div>
+        <div *ngIf="showDualBrush" class="collapsible-body" [class.section-disabled]="!dualBrushEnabled">
+          <div class="file-row">
+            <label>Texture</label>
+            <input type="file" accept="image/png,image/jpeg" (change)="onDualBrushTextureSelected($event)"
+                   title="The grayscale image that modulates the brush tip. White = full paint, black = no paint.">
+          </div>
+          <div *ngIf="dualBrushTexturePreview" class="texture-preview">
+            <img [src]="dualBrushTexturePreview" alt="Dual brush texture">
+          </div>
+          <div class="segment-row" title="Dab-Local: texture moves with each dab. Canvas-Tiling: texture stays fixed to the canvas.">
+            <button class="segment-btn" [class.active]="dualBrushTileMode === 'dab-local'"
+                    (click)="onDualBrushTileModeChange('dab-local')">Dab-Local</button>
+            <button class="segment-btn" [class.active]="dualBrushTileMode === 'canvas-tiling'"
+                    (click)="onDualBrushTileModeChange('canvas-tiling')">Canvas-Tiling</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How large the texture appears relative to the brush tip.">Scale</span>
+            <input type="range" min="0.1" max="5" step="0.1"
+                   [(ngModel)]="dualBrushScale" (ngModelChange)="onDualBrushScaleChange($event)">
+            <span class="slider-value">{{ dualBrushScale | number:'1.1-1' }}</span>
+          </div>
+          <div class="stab-row">
+            <span class="slider-label" title="How the texture combines with the tip shape.">Blend</span>
+            <select [(ngModel)]="dualBrushBlendOp" (ngModelChange)="onDualBrushBlendOpChange($event)">
+              <option value="multiply">Multiply</option>
+              <option value="subtract">Subtract</option>
+              <option value="minimum">Minimum</option>
+            </select>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How much the texture affects the brush. 0 = none, 1 = full grit.">Strength</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="dualBrushStrength" (ngModelChange)="onDualBrushStrengthChange($event)">
+            <span class="slider-value">{{ dualBrushStrength | number:'1.2-2' }}</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="dualRandRot" [(ngModel)]="dualBrushRandomRotation"
+                   (ngModelChange)="onDualBrushRandomRotationChange($event)"
+                   title="Randomly rotate the texture on each dab for organic variation.">
+            <label for="dualRandRot">Random Rotation</label>
+          </div>
+        </div>
+
+        <!-- ▶ Color Variation (Jitter) -->
+        <div class="collapsible-header" (click)="showColorJitter = !showColorJitter">
+          <span>{{ showColorJitter ? '▼' : '▶' }}</span> Color Variation
+        </div>
+        <div *ngIf="showColorJitter" class="collapsible-body">
+          <div class="slider-row">
+            <span class="slider-label" title="Randomly shifts the color hue on each dab. Low values (2-5°) add subtle warmth variation.">Hue</span>
+            <input type="range" min="0" max="180" step="1"
+                   [(ngModel)]="hueJitter" (ngModelChange)="onHueJitterChange($event)">
+            <span class="slider-value">{{ hueJitter }}°</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="Randomly shifts color intensity on each dab.">Saturation</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="saturationJitter" (ngModelChange)="onSaturationJitterChange($event)">
+            <span class="slider-value">{{ saturationJitter | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="Randomly shifts lightness on each dab. Great for watercolor and gouache.">Brightness</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="brightnessJitter" (ngModelChange)="onBrightnessJitterChange($event)">
+            <span class="slider-value">{{ brightnessJitter | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="Randomly varies the transparency of each dab.">Opacity</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="opacityJitter" (ngModelChange)="onOpacityJitterChange($event)">
+            <span class="slider-value">{{ opacityJitter | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <!-- ▶ Wet Edges -->
+        <div class="collapsible-header" (click)="showWetEdges = !showWetEdges">
+          <span>{{ showWetEdges ? '▼' : '▶' }}</span>
+          Wet Edges
+          <input type="checkbox" class="section-toggle" [(ngModel)]="wetEdgesEnabled"
+                 (ngModelChange)="onWetEdgesToggle($event)" (click)="$event.stopPropagation()"
+                 title="Darken the edges of each stroke to simulate watercolor pigment pooling.">
+        </div>
+        <div *ngIf="showWetEdges" class="collapsible-body" [class.section-disabled]="!wetEdgesEnabled">
+          <div class="slider-row">
+            <span class="slider-label" title="How much darker the edges become.">Darkness</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="wetEdgeDarkness" (ngModelChange)="onWetEdgeDarknessChange($event)">
+            <span class="slider-value">{{ wetEdgeDarkness | number:'1.2-2' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How wide the darkened edge band is, in pixels.">Width</span>
+            <input type="range" min="1" max="5" step="1"
+                   [(ngModel)]="wetEdgeWidth" (ngModelChange)="onWetEdgeWidthChange($event)">
+            <span class="slider-value">{{ wetEdgeWidth }}px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="Overall intensity of the wet edge effect.">Strength</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="wetEdgeStrength" (ngModelChange)="onWetEdgeStrengthChange($event)">
+            <span class="slider-value">{{ wetEdgeStrength | number:'1.2-2' }}</span>
+          </div>
+          <div class="info-hint">ℹ Applied when you lift the pen.</div>
+        </div>
+
+        <!-- ▶ Stroke Texture -->
+        <div class="collapsible-header" (click)="showStrokeTexture = !showStrokeTexture">
+          <span>{{ showStrokeTexture ? '▼' : '▶' }}</span>
+          Stroke Texture
+          <input type="checkbox" class="section-toggle" [(ngModel)]="strokeTextureEnabled"
+                 (ngModelChange)="onStrokeTextureToggle($event)" (click)="$event.stopPropagation()"
+                 title="Render a continuous textured strip along the stroke path instead of individual dabs.">
+        </div>
+        <div *ngIf="showStrokeTexture" class="collapsible-body" [class.section-disabled]="!strokeTextureEnabled">
+          <div class="file-row">
+            <label>Texture</label>
+            <input type="file" accept="image/png,image/jpeg" (change)="onStrokeTextureFileSelected($event)"
+                   title="A grayscale strip texture. Horizontal = across stroke width, vertical = along stroke length (tiles).">
+          </div>
+          <div *ngIf="strokeTexturePreview" class="texture-preview">
+            <img [src]="strokeTexturePreview" alt="Stroke texture">
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How quickly the texture repeats along the stroke.">Tiling</span>
+            <input type="range" min="0.1" max="5" step="0.1"
+                   [(ngModel)]="strokeTextureTilingDensity" (ngModelChange)="onStrokeTextureTilingChange($event)">
+            <span class="slider-value">{{ strokeTextureTilingDensity | number:'1.1-1' }}</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How soft the edges of the stroke are. 0 = hard cut, 1 = fully feathered.">Softness</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="strokeTextureEdgeSoftness" (ngModelChange)="onStrokeTextureEdgeSoftnessChange($event)">
+            <span class="slider-value">{{ strokeTextureEdgeSoftness | number:'1.2-2' }}</span>
+          </div>
+          <div *ngIf="dualBrushEnabled" class="info-hint">ℹ Dual Brush is bypassed when Stroke Texture is active.</div>
+        </div>
+
+        <!-- ▶ Texture / Grain -->
+        <div class="collapsible-header" (click)="showTexture = !showTexture">
+          <span>{{ showTexture ? '▼' : '▶' }}</span> Texture / Grain
+        </div>
+        <div *ngIf="showTexture" class="collapsible-body">
+          <div class="check-row">
+            <input type="checkbox" id="texEnable" [(ngModel)]="textureEnabled" (ngModelChange)="onTextureToggle($event)">
+            <label for="texEnable">Enable Texture</label>
+          </div>
+          <ng-container *ngIf="textureEnabled">
+            <div class="file-row">
+              <label>Image</label>
+              <input type="file" accept="image/png" (change)="onTextureFileSelected($event)">
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Scale</span>
+              <input type="range" min="0.1" max="5" step="0.1"
+                     [(ngModel)]="textureScale" (ngModelChange)="onTextureScaleChange($event)">
+              <span class="slider-value">{{ textureScale | number:'1.1-1' }}</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Strength</span>
+              <input type="range" min="0" max="1" step="0.01"
+                     [(ngModel)]="textureStrength" (ngModelChange)="onTextureStrengthChange($event)">
+              <span class="slider-value">{{ textureStrength | number:'1.2-2' }}</span>
+            </div>
+            <div class="stab-row">
+              <span class="slider-label">Mode</span>
+              <select [(ngModel)]="textureMode" (ngModelChange)="onTextureModeChange($event)">
+                <option value="multiply">Multiply</option>
+                <option value="subtract">Subtract</option>
+              </select>
+            </div>
+            <div class="check-row">
+              <input type="checkbox" id="texFixed" [(ngModel)]="textureFixed" (ngModelChange)="onTextureFixedChange($event)">
+              <label for="texFixed">Fixed to Canvas</label>
+            </div>
+          </ng-container>
+        </div>
+      </ng-container>
+
+    </div><!-- /.editor-body -->
+
+    <!-- Footer actions -->
+    <div class="editor-footer">
+      <ng-container *ngIf="isCreating">
+        <button class="btn-brush btn-save" (click)="saveNewBrush()">Save</button>
+        <button class="btn-brush btn-cancel" (click)="cancelCreate()">Cancel</button>
+      </ng-container>
+      <ng-container *ngIf="!isCreating">
+        <button class="btn-brush btn-reset" (click)="resetToDefault()" title="Reset this brush to its default settings">Reset to Default</button>
+        <button class="btn-brush btn-save" (click)="saveEdits()">Save Changes</button>
+        <button class="btn-brush btn-delete" (click)="deleteBrush()" title="Delete this brush"><mat-icon class="brush-header-icon">delete</mat-icon></button>
+      </ng-container>
+    </div>
+
+  </ng-container>
+
+</div>

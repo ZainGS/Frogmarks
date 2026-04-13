@@ -2,14 +2,34 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="././assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="././assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="././assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="manifest" href="././assets/favicon/site.webmanifest">
+
     <meta charset="utf-8" />
     <title>Frogmarks</title>
     <base href="/" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+
+    <style>
+      body {
+        user-select: none;         /* modern browsers */
+        -webkit-user-select: none; /* Safari/Chrome */
+        -moz-user-select: none;    /* Firefox */
+        -ms-user-select: none;     /* old IE/Edge */
+      }
+    </style>
   </head>
-  <body>
+  <body class="base-body">
+    <script>
+      document.addEventListener("contextmenu", function (e) {
+        e.preventDefault(); // suppress native browser menu (Angular custom menus still fire)
+      });
+    </script>
     <app-root></app-root>
   </body>
 </html>

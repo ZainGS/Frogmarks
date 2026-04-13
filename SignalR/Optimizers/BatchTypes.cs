@@ -3,6 +3,7 @@
     public enum BatchTypes
     {
         Board,
-        BoardItem
+        BoardItem,
+        Illustration
     }
 }

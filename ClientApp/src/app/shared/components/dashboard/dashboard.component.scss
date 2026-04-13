@@ -18,6 +18,59 @@ $enable-negative-margins: true;
   //overflow-x: auto; /* Prevents horizontal scrolling */
 }
 
+.compact-logo {
+    display: none !important;
+    margin-left: 5px !important;
+    margin-top: -50px !important;
+  }
+
+.col-2,
+.base-sidenav-column {
+  width: 250px !important; // Explicit normal width
+  max-width: 250px !important; // Explicit normal max-width
+  min-width: 250px !important; // Explicit normal min-width
+  flex: 0 0 250px !important; // Explicit flex for Bootstrap columns
+  transition: all 0.3s ease !important;
+  
+  // Smooth transitions for specific elements
+  .frogmarks-logo,
+  .sidenav-list li label,
+  .list-link label,
+  .horizontal-line,
+  .row.ms-0.text-nowrap.flex-nowrap,
+  span[style*="blueviolet"] {
+    transition: opacity 0.3s ease;
+    opacity: 1; // Explicit normal opacity
+  }
+}
+
+.col-10,
+.base-work-pane {
+  flex: 0 0 calc(100% - 250px) !important; // Explicit normal flex
+  max-width: calc(100% - 250px) !important; // Explicit normal max-width
+  transition: all 0.3s ease !important;
+}
+
+.sidenav-list li label,
+.list-link label {
+  transition: opacity 0.3s ease, width 0.3s ease;
+}
+
+.sidenav-list li label,
+.list-link label {
+  opacity: 1; // Explicitly set normal opacity
+  width: auto; // Allow natural width
+  transition: opacity 0.3s ease, width 0.3s ease;
+}
+
+.frogmarks-logo {
+  max-width: 180px;
+  padding-left: 28px;
+  padding-top: 8px;
+  opacity: 1; // Explicit normal opacity
+  transition: opacity 0.3s ease;
+}
+
 // LIGHT
 .dashboard-container {
   max-height: 100vh;
@@ -132,6 +185,7 @@ li {
   display: flex; /* Use flexbox */
   align-items: center; /* Center items vertically */
   height: 40px; /* Set a height for demonstration, adjust as needed */
+  font-size: 14px;
 }
 
 .list-item-icon {
@@ -174,7 +228,7 @@ li {
 }
 
 .search-bar::placeholder {
-  color: #a3a3a3;
+  color: var(--text-color);
   transform: scale(.9);
   padding-top: 15px;
   text-align: left;
@@ -207,12 +261,14 @@ li {
 }
 
 .draggable-template {
+  /* no-op placeholder to avoid empty ruleset lint errors */
+  --empty: 0;
 }
 
 .overlay-content {
   position: absolute; /* or fixed, depending on your requirements */
   width: 80%; /* adjust as necessary */
-  z-index: 1000; /* ensure this is higher than other content */
+  z-index: 2000; /* ensure this is higher than other content */
   background: white; /* optional: add a background to make it stand out */
   border-radius: 10px;
   margin-top: 15px;
@@ -330,6 +386,7 @@ li {
 
 .new-file-row {
   padding-left: 12px;
+  padding-right: 24px !important;
   margin-right: -12px !important;
   flex-flow: nowrap
 }
@@ -351,6 +408,32 @@ li {
   background-color: #F5F5F5;
   padding: 10px 0px 24px 14px;
   border-radius: 8px;
+}
+
+/* Selected list item: subtle patterned background, soft outline and gentle lift */
+.list-item.board-item.selected,
+.list-item.selected {
+  /* Very faint diagonal stripe pattern using an inline SVG data URI */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='6' viewBox='0 0 6 6'><rect width='12' height='12' fill='%23000000' opacity='0.94'/><path d='M0 6 L6 0' stroke='%23494453' stroke-opacity='0.2' stroke-width='1'/></svg>");
+  background-color: rgba(19, 19, 19, 0.03); /* slight tint to help pattern read */
+  background-repeat: repeat;
+  border: 1px solid rgba(0,0,0,0.04);
+  border-radius: 6px;
+  // box-shadow: 3px 5px 0px #afa8ba;
+  box-shadow: 0px 0px 8px #000000;
+}
+
+/* Gentle hover while selected to make the selection feel tactile */
+.list-item.board-item.selected:hover,
+.list-item.selected:hover {
+  box-shadow: 0px 0px 8px #000000;
+}
+
+/* Ensure keyboard-focused selection is visible */
+.list-item.board-item.selected:focus,
+.list-item.selected:focus {
+  outline: 2px solid rgba(107,114,255,0.12);
+  outline-offset: 2px;
 }
 
 /*
@@ -467,16 +550,37 @@ li {
 
 
 // For design item grid
-
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
 }
 
 .list-container {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* 3 columns for tablets / small desktops */
+@media (max-width: 1900px) {
+  .list-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* 2 columns for large phones / small tablets */
+@media (max-width: 1460px) {
+  .list-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 1 column for phones */
+@media (max-width: 1120px) {
+  .list-container {
+    grid-template-columns: 1fr;
+  }
 }
 
 .list-item {
@@ -490,7 +594,7 @@ li {
 }
 
 .list-item.board-item {
-  border-radius: 0px !important;
+  border-radius: 6px !important;
   padding-left: 0px !important;
 }
 
@@ -500,8 +604,9 @@ li {
 
 .list-image-wrapper {
   position: relative;
-  border: 1px solid rgb(216, 216, 216);
-  border-radius: 0px !important;
+  //border: 1px solid rgb(216, 216, 216);
+  //border: 1px solid var(--background-color);
+  border-radius: 6px !important;
 }
 
 .image-wrapper img {
@@ -513,7 +618,7 @@ li {
 .list-image-wrapper img {
   height: 75px;
   display: block;
-  border-right: 1px solid rgb(216, 216, 216);
+  // border-right: 1px solid rgb(216, 216, 216);
   // border-radius: 8px;
 }
 
@@ -618,6 +723,15 @@ li {
   .image-wrapper .favorite-icon {
       opacity: 1;
   }
+
+  .grid-item-icon {
+    color: var(--text-color-high-contrast);
+  }
+  // color: var(--text-color-high-contrast);
+  // transition: 500ms;
+  // text-shadow: rgb(195, 84, 255) 0px 0px 1px,
+  //              rgb(195, 84, 255) 0px 0px 1px,
+  //              rgb(195, 84, 255) 0px 0px 1px !important;
 }
 
 .list-item:hover {
@@ -630,6 +744,15 @@ li {
   .list-image-wrapper .favorite-icon {
       opacity: 1;
   }
+
+  .list-item-icon {
+    color: var(--text-color-high-contrast);
+  }
+  // color: var(--text-color-high-contrast);
+  // transition: 500ms;
+  // text-shadow: rgb(195, 84, 255) 0px 0px 1px,
+  //              rgb(195, 84, 255) 0px 0px 1px,
+  //              rgb(195, 84, 255) 0px 0px 1px !important;
 }
 
 .image-wrapper .favorite-icon:active:not(.favorited-icon) {
@@ -642,10 +765,12 @@ li {
 
 .image-wrapper .favorite-icon:active:is(.favorited-icon) {
   // animation: cancel-heart .6s linear;
+  --empty: 0;
 }
 
 .list-image-wrapper .favorite-icon:active:is(.favorited-icon) {
   // animation: cancel-heart .6s linear;
+  --empty: 0;
 }
 
 @keyframes prep-heart-burst {
@@ -711,9 +836,20 @@ li {
 // }
 
 .autocomplete-dropdown-content {
-  background-color: rgb(253, 253, 253) !important;
-  border: 1px solid rgb(236, 236, 236);
+  background-color: var(--background-color) !important;
+  color: var(--text-color);
 }
+
+.autocomplete-dropdown-content:hover {
+  background-color: var(--new-design-item-container-hover-color) !important;
+  color: var(--text-color);
+}
+
+.autocomplete-dropdown-content:active {
+  background-color: rgb(137, 124, 255) !important;
+  color: white;
+}
+
 
 .mat-mdc-option.mat-mdc-option-active {
   background-color: rgb(137, 124, 255) !important;
@@ -722,16 +858,173 @@ li {
 
 .grid-item:hover:not(.selected) img {
   // border: 1px solid #949494;
+  --empty: 0;
 }
 
-.selected img {
-  border: 3px solid rgb(146, 119, 221);
-  // border: 4px solid #AFF4C6;
+// .selected img {
+//   border: 3px solid rgb(146, 119, 221);
+//   // border: 4px solid #AFF4C6;
+// }
+
+img {
+  border-radius: 6px !important;
 }
+
+.selected {
+  /*
+    Spinning 18-spike star behind the selected image.
+    - Uses a repeating-conic-gradient to create 18 alternating spikes.
+    - A radial mask keeps the spikes in an outer ring so they look like a starburst.
+    - Variables below let you tweak size, color, inner ring (hole) and speed.
+  */
+  /* Usage:
+    --star-size: change to make star larger/smaller (px)
+    --star-color: color/opacity of spikes
+    --star-inner-radius: how much of the center is kept empty (0%..100%)
+    --star-spike-width-deg: angular width of each spike; smaller = sharper spikes
+    --star-rotation-duration: how long one rotation takes
+  */
+  --star-size: 68px; /* overall diameter of star */
+  --star-color: rgba(146,119,221,1);
+  --secondary-star-color: #ba9eff;
+  --alternate-star-color: rgb(136, 0, 255);
+  --selected-border-color: rgba(146,119,221,1);
+  --alternate-border-color: rgb(0, 255, 145);
+  --star-inner-radius: 28%; /* percent of radius left empty in center - smaller makes longer spikes */
+  /* Each 360/18 = 20deg segment; spike should be a narrow slice within that segment */
+  --star-segment-deg: 20deg;
+  --star-spike-width-deg: 6deg; /* angular width of the visible spike within each segment */
+  --star-rotation-duration: 12s;
+  position: relative; /* create stacking context for pseudo-element */
+  /* animate scale on the container so pseudo-elements (stars) scale with the image growth */
+  animation: selected-scale-grow 0.45s cubic-bezier(.2,.9,.2,1) forwards;
+
+  img {
+  position: relative;
+  z-index: 2; /* keep image above the star */
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 rgba(146, 119, 221, 0);
+  transform-origin: center center;
+  /* keep box-shadow/pulse animation on the image, but the scale portion is applied to the container */
+  animation: selected-shadow-grow-img 0.45s cubic-bezier(.2,.9,.2,1) forwards,
+         selected-pulse-img 2s ease-in-out 0.45s infinite;
+  }
+
+  &::before {
+    display: none;
+    content: "";
+    position: absolute;
+    left: 12px;
+    top: -20px; /* nudges star slightly above the image; tweak as needed */
+    /* Keep the element centered with translate(-50%, 0) and rotate around its center. */
+    transform: translate(-50%, 0) rotate(0deg);
+    width: var(--star-size);
+    height: var(--star-size);
+    border-radius: 50%;
+    z-index: 1; /* behind the img (img is z-index:2) */
+
+      /* Use an embedded SVG with 18 thin rectangles rotated around center to form pointed spikes.
+        The SVG uses `currentColor` so we can control color via CSS var --star-color. */
+    /* base64-encoded 18-spike SVG using currentColor */
+    /* solid 18-spike polygon star with rounded corners via filter */
+    /* exact user-provided SVG star (percent-encoded) */
+    /* Use the SVG as a mask so we can reliably color it via background-color */
+    -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%22400px%22%20height%3D%22400px%22%20viewBox%3D%220%200%20400%20400%22%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%22M200%2C0%2C228.6519493150435%2C37.50672075298567%2C268.40402866513375%2C12.06147584281834%2C282.5%2C57.10580837556762%2C328.5575219373079%2C46.791111376204384%2C326.39733311463135%2C93.94004440172102%2C373.20508075688775%2C100.00000000000001%2C355.0492824296749%2C143.56667635126468%2C396.9615506024416%2C165.27036446661393%2C365%2C200%2C396.9615506024416%2C234.72963553338607%2C355.0492824296749%2C256.4333236487353%2C373.20508075688775%2C300%2C326.39733311463135%2C306.059955598279%2C328.5575219373079%2C353.2088886237956%2C282.5%2C342.8941916244324%2C268.40402866513375%2C387.93852415718163%2C228.6519493150435%2C362.49327924701436%2C200%2C400%2C171.3480506849565%2C362.49327924701436%2C131.59597133486625%2C387.9385241571817%2C117.50000000000004%2C342.8941916244324%2C71.44247806269212%2C353.2088886237956%2C73.60266688536865%2C306.05995559827903%2C26.794919243112247%2C300%2C44.95071757032514%2C256.4333236487354%2C3.038449397558395%2C234.72963553338604%2C35%2C200.00000000000003%2C3.038449397558395%2C165.2703644666139%2C44.95071757032511%2C143.56667635126468%2C26.794919243112275%2C99.99999999999997%2C73.60266688536863%2C93.94004440172102%2C71.44247806269212%2C46.79111137620441%2C117.49999999999993%2C57.105808375567676%2C131.59597133486614%2C12.061475842818368%2C171.3480506849565%2C37.50672075298567Z%22%20fill%3D%22%23fff%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    mask-image: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%22400px%22%20height%3D%22400px%22%20viewBox%3D%220%200%20400%20400%22%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%22M200%2C0%2C228.6519493150435%2C37.50672075298567%2C268.40402866513375%2C12.06147584281834%2C282.5%2C57.10580837556762%2C328.5575219373079%2C46.791111376204384%2C326.39733311463135%2C93.94004440172102%2C373.20508075688775%2C100.00000000000001%2C355.0492824296749%2C143.56667635126468%2C396.9615506024416%2C165.27036446661393%2C365%2C200%2C396.9615506024416%2C234.72963553338607%2C355.0492824296749%2C256.4333236487353%2C373.20508075688775%2C300%2C326.39733311463135%2C306.059955598279%2C328.5575219373079%2C353.2088886237956%2C282.5%2C342.8941916244324%2C268.40402866513375%2C387.93852415718163%2C228.6519493150435%2C362.49327924701436%2C200%2C400%2C171.3480506849565%2C362.49327924701436%2C131.59597133486625%2C387.9385241571817%2C117.50000000000004%2C342.8941916244324%2C71.44247806269212%2C353.2088886237956%2C73.60266688536865%2C306.05995559827903%2C26.794919243112247%2C300%2C44.95071757032514%2C256.4333236487354%2C3.038449397558395%2C234.72963553338604%2C35%2C200.00000000000003%2C3.038449397558395%2C165.2703644666139%2C44.95071757032511%2C143.56667635126468%2C26.794919243112275%2C99.99999999999997%2C73.60266688536863%2C93.94004440172102%2C71.44247806269212%2C46.79111137620441%2C117.49999999999993%2C57.105808375567676%2C131.59597133486614%2C12.061475842818368%2C171.3480506849565%2C37.50672075298567Z%22%20fill%3D%22%23fff%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    background-color: var(--star-color);
+
+    /* subtle blur + smooth rotation */
+    filter: drop-shadow(0 0 6px rgba(146,119,221,0.25));
+    animation: star-spin var(--star-rotation-duration) linear infinite;
+    pointer-events: none;
+  }
+
+  /* White star underneath, 1px larger than the colored star */
+  &::after {
+    display: none;
+    content: "";
+    position: absolute;
+    left: 12px;
+    top: -23px; /* nudge 1px to keep visually centered when slightly larger */
+    transform: translate(-50%, 0) rotate(0deg);
+    width: calc(var(--star-size) + 6px);
+    height: calc(var(--star-size) + 6px);
+    border-radius: 50%;
+    z-index: 0; /* underneath the ::before (z-index:1) and img (z-index:2) */
+
+    /* reuse the same embedded SVG as a mask */
+    -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%22400px%22%20height%3D%22400px%22%20viewBox%3D%220%200%20400%20400%22%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%22M200%2C0%2C228.6519493150435%2C37.50672075298567%2C268.40402866513375%2C12.06147584281834%2C282.5%2C57.10580837556762%2C328.5575219373079%2C46.791111376204384%2C326.39733311463135%2C93.94004440172102%2C373.20508075688775%2C100.00000000000001%2C355.0492824296749%2C143.56667635126468%2C396.9615506024416%2C165.27036446661393%2C365%2C200%2C396.9615506024416%2C234.72963553338607%2C355.0492824296749%2C256.4333236487353%2C373.20508075688775%2C300%2C326.39733311463135%2C306.059955598279%2C328.5575219373079%2C353.2088886237956%2C282.5%2C342.8941916244324%2C268.40402866513375%2C387.93852415718163%2C228.6519493150435%2C362.49327924701436%2C200%2C400%2C171.3480506849565%2C362.49327924701436%2C131.59597133486625%2C387.9385241571817%2C117.50000000000004%2C342.8941916244324%2C71.44247806269212%2C353.2088886237956%2C73.60266688536865%2C306.05995559827903%2C26.794919243112247%2C300%2C44.95071757032514%2C256.4333236487354%2C3.038449397558395%2C234.72963553338604%2C35%2C200.00000000000003%2C3.038449397558395%2C165.2703644666139%2C44.95071757032511%2C143.56667635126468%2C26.794919243112275%2C99.99999999999997%2C73.60266688536863%2C93.94004440172102%2C71.44247806269212%2C46.79111137620441%2C117.49999999999993%2C57.105808375567676%2C131.59597133486614%2C12.061475842818368%2C171.3480506849565%2C37.50672075298567Z%22%20fill%3D%22%23fff%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    mask-image: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%22400px%22%20height%3D%22400px%22%20viewBox%3D%220%200%20400%20400%22%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%22M200%2C0%2C228.6519493150435%2C37.50672075298567%2C268.40402866513375%2C12.06147584281834%2C282.5%2C57.10580837556762%2C328.5575219373079%2C46.791111376204384%2C326.39733311463135%2C93.94004440172102%2C373.20508075688775%2C100.00000000000001%2C355.0492824296749%2C143.56667635126468%2C396.9615506024416%2C165.27036446661393%2C365%2C200%2C396.9615506024416%2C234.72963553338607%2C355.0492824296749%2C256.4333236487353%2C373.20508075688775%2C300%2C326.39733311463135%2C306.059955598279%2C328.5575219373079%2C353.2088886237956%2C282.5%2C342.8941916244324%2C268.40402866513375%2C387.93852415718163%2C228.6519493150435%2C362.49327924701436%2C200%2C400%2C171.3480506849565%2C362.49327924701436%2C131.59597133486625%2C387.9385241571817%2C117.50000000000004%2C342.8941916244324%2C71.44247806269212%2C353.2088886237956%2C73.60266688536865%2C306.05995559827903%2C26.794919243112247%2C300%2C44.95071757032514%2C256.4333236487354%2C3.038449397558395%2C234.72963553338604%2C35%2C200.00000000000003%2C3.038449397558395%2C165.2703644666139%2C44.95071757032511%2C143.56667635126468%2C26.794919243112275%2C99.99999999999997%2C73.60266688536863%2C93.94004440172102%2C71.44247806269212%2C46.79111137620441%2C117.49999999999993%2C57.105808375567676%2C131.59597133486614%2C12.061475842818368%2C171.3480506849565%2C37.50672075298567Z%22%20fill%3D%22%23fff%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    background-color: var(--secondary-star-color);
+
+    /* slight, subtler shadow so the white layer reads against varied backgrounds */
+    filter: drop-shadow(0 0 4px rgba(0,0,0,0.12));
+    animation: star-spin var(--star-rotation-duration) linear infinite;
+    pointer-events: none;
+  }
+}
+
+@keyframes star-spin {
+  from {
+    transform: translate(-50%, 0) rotate(0deg);
+  }
+
+  to {
+    transform: translate(-50%, 0) rotate(360deg);
+  }
+}
+
+@keyframes selected-shadow-grow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(146,119,221,0);
+    transform: scale(1);
+  }
+
+  60% {
+    box-shadow: 0 0 0px 6px var(--selected-border-color);
+    transform: scale(1.03);
+  }
+
+  100% {
+    box-shadow: 0 0 0px 4px var(--selected-border-color);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes selected-pulse {
+  0% {
+    box-shadow: 0 0 0px 4px var(--selected-border-color);
+    transform: scale(1.02);
+  }
+
+  50% {
+    box-shadow: 0 0 0px 6px var(--selected-border-color);
+    transform: scale(1.01);
+  }
+
+  100% {
+    box-shadow: 0 0 0px 4px var(--selected-border-color);
+    transform: scale(1.02);
+  }
+}
+
 
 img:active:not(.selected)
 {
   // border: 1px solid black !important;
+  --empty: 0;
 }
 
 .grid-item:is(.selected) {
@@ -756,17 +1049,623 @@ img:active:not(.selected)
 
 .thumbnail-img {
   opacity: .9925; 
-  filter: brightness(1);
+  max-width: 100%;
+  min-width: 200px;
+  max-height: 100px;
+  border-radius: 6px;
 }
 
 .new-design-item-button-chevron {
   // change display if we want to show the chevron
   display: none;
   transform: scale(1.5);
-  background-color: #d8d8d8;
+  background-color: rgb(67, 62, 87);
   // #9f7bff or #d8d8d8
   padding: 20px;
   padding-left: 28px;
-  color: white;
+  color: rgb(216, 204, 228);
   clip-path: polygon(100% 0%, 100% 50%, 100% 100%, 0% 100%, 25% 50%, 0% 0%);
+}
+
+::ng-deep .mat-autocomplete-panel.search-auto-panel.search-auto-empty {
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+}
+
+.frogmarks-footer {
+  font-weight: 50;
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  white-space: nowrap;
+  color: var(--footer-text-color);
+  border-top: 8px solid var(--footer-text-color);
+  border-bottom: 8px solid var(--footer-text-color);
+  margin-top: 50px;
+  font-size: 32px;
+}
+
+.frogmarks-footer .alt-bg {
+  background-color: var(--footer-highlight-color);
+  color: var(--footer-text-alt-color);
+  // border-top: 5px solid #312932;
+}
+
+.newspaper-container {
+  font-family: 'Times New Roman', Times, serif;
+  padding: 2rem 2rem 3.5rem; /* extra bottom space for the tear */
+  color: #222;
+  background: #fdfaf4 url('https://www.transparenttextures.com/patterns/paper-fibers.png');
+  background-size: 300px 300px;
+  // border: 1px solid #cfcfcf;
+  position: relative;
+  // max-width: 1000px;   /* tweak or remove */
+  margin: 2rem auto;   /* center */
+  box-shadow: 0 8px 18px rgba(0,0,0,0.18), inset 0 0 50px rgba(0,0,0,0.06);
+  overflow: visible; /* so the tear can “hang” below */
+}
+
+.newspaper-header .masthead {
+  font-size: 3rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+  margin: 0;
+  text-shadow: 0.5px 0.5px 0 rgba(0,0,0,0.2);
+}
+
+.newspaper-header .issue-date {
+  font-size: 1.2rem;
+  border-top: 3px solid rgb(72, 72, 72);
+  border-bottom: 3px solid rgb(72, 72, 72);
+  display: inline-block;
+  padding: 0.3rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.thick-line {
+  border: none;
+  border-top: 4px double #000;
+  margin: 1rem 0;
+}
+
+.headline {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+  text-shadow: 0.5px 0.5px rgba(0,0,0,0.15);
+}
+
+.article-columns {
+  display: flex;
+  gap: 2rem;
+}
+
+.article-columns .column {
+  flex: 1;
+  text-align: justify;
+}
+
+.article-columns h2 {
+  font-size: 1.2rem;
+  border-bottom: 1px solid #000;
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Slightly yellowed paper edges */
+.newspaper-container::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.1), transparent 70%),
+              radial-gradient(circle at bottom right, rgba(44, 44, 44, 0.1), transparent 70%);
+  z-index: 0;
+}
+
+.newspaper-container::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -305px;
+  width: 100%;
+  height: 800px;
+  // background: url('../../../../assets/torn-border.png') repeat-x;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* base (muted) */
+.edited-time {
+  color: var(--template-container-color);
+  // transition: color 150ms ease;
+}
+
+/* brighten on hover, same as titles */
+.grid-container .grid-item:hover .edited-time,
+.list-container .list-item:hover .edited-time {
+  // color: var(--grid-item-description-color);
+  // text-shadow: none !important;
+  // transition: 500ms;
+  --empty: 0;
+}
+
+.rename-input {
+  width: 100%;
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2e2e2e);
+  background: var(--background-color);
+  color: var(--text-color);
+  outline: none;
+  font-size: 12px;
+}
+
+/* Container-level scale: used so pseudo-elements scale with the selected growth */
+@keyframes selected-scale-grow {
+  0% { transform: scale(1); }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1.02); }
+}
+
+/* Image-only variants keep box-shadow/pulse but avoid scaling (scale applied to container) */
+@keyframes selected-shadow-grow-img {
+  0% { box-shadow: 0 0 0 0 rgba(146,119,221,0); }
+  60% { box-shadow: 0 0 0px 6px rgba(146,119,221,1); }
+  100% { box-shadow: 0 0 0px 4px rgba(146,119,221,1); }
+}
+
+@keyframes selected-pulse-img {
+  0% { box-shadow: 0 0 0px 4px rgba(146,119,221,1); }
+  50% { box-shadow: 0 0 0px 6px rgba(146,119,221,1); }
+  100% { box-shadow: 0 0 0px 4px rgba(146,119,221,1); }
+}
+
+// Compact sidebar when Explore/Frogmarks Galaxy is active
+// Add this to your dashboard.component.scss
+.row {
+    --bs-gutter-x: 0 !important;
+  --bs-gutter-y: 0 !important;
+}
+.base-sidenav-column.frogmarks-galaxy-compact {
+  width: 70px !important;
+  max-width: 70px !important;
+  min-width: 70px !important;
+  transition: width 0.3s ease;
+  padding: 0 !important;
+  
+   // Override Bootstrap gutter CSS variables
+  --bs-gutter-x: 0 !important;
+  --bs-gutter-y: 0 !important;
+
+  // Force remove all padding and margins on ALL children
+  * {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    --bs-gutter-x: 0 !important;
+    --bs-gutter-y: 0 !important;
+  }
+  
+  // Exception: keep top/bottom padding for spacing
+  .sidenav-list li {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  
+  // Remove all row/column padding from Bootstrap AND override CSS variables
+  .row,
+  .row > *,
+  div[class*="col-"],
+  div[class*="ps-"],
+  div[class*="pe-"],
+  div[class*="ms-"],
+  div[class*="me-"] {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    --bs-gutter-x: 0 !important;
+    --bs-gutter-y: 0 !important;
+  }
+  
+  // Hide logo
+  .frogmarks-logo {
+    opacity: 0 !important;
+  }
+  
+  // Hide beta badge
+  span[style*="blueviolet"] {
+    display: none !important;
+  }
+
+// Hide all text labels in list items - keep in layout but invisible
+  .sidenav-list li label,
+  .list-link label {
+    opacity: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    transition: opacity 0.3s ease, width 0.3s ease !important;
+  }
+  
+  // Center icons and adjust spacing
+  .sidenav-list {
+    padding-left: 0 !important;
+    width: 100%;
+    
+      li {
+      // Add padding to center the content block
+      padding: 8px 0 8px 20px !important;
+      width: 100%;
+      
+      &.list-item {
+        display: flex !important;
+        // Remove this line:
+        // justify-content: center !important;
+        align-items: center !important;
+        height: 40px !important;
+        border-radius: 0px !important;
+        
+        &:hover {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+      }
+      
+      .list-item-icon {
+        // Keep the original margin-right so position doesn't change
+        margin-right: .25vw !important;
+        transform: scale(.85) !important;
+      }
+    } 
+  }
+  
+  // Hide horizontal lines
+  .horizontal-line {
+    //display: none !important;
+    opacity: 0;
+  }
+  
+  // Hide team section
+  .row.ms-0.text-nowrap.flex-nowrap {
+    //display: none !important;
+    opacity: 0;
+  }
+  
+  // Hide the team dropdown arrow and payment tier
+  .team-dropdown-arrow,
+  .payment-tier {
+    //display: none !important;
+    opacity: 0;
+  }
+  
+  // Active state indicators - center the colored bar
+  .frogmarks-galaxy-active,
+  .design-center-active,
+  .templates-active,
+  .archived-filter-active {
+    // background-color: rgba(108, 99, 255, 0.2) !important;
+    background-color: #2E2E2E !important;
+    // border-left: 4px solid #6C63FF !important;
+    border-radius: 0 0px 0px 0 !important;
+    // margin: 4px 4px 4px 0 !important;
+  }
+  
+  // Center the icons in links
+  .list-link {
+    display: flex !important;
+    // justify-content: center !important;
+    width: 100% !important;
+  }
+  
+  // Force remove padding on wrapper div
+  > div,
+  > div.ps-2 {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .team-section {
+    visibility: hidden !important;
+    transform: scale(0) !important;
+  }
+
+  .compact-logo {
+    display: flex !important;
+    margin-left: 5px !important;
+    margin-top: -50px !important;
+  }
+}
+
+// Adjust work pane to accommodate compact sidebar
+.base-work-pane {
+  transition: all 0.3s ease;
+}
+
+// When sidebar is compact, adjust columns
+.row.flex-nowrap:has(.base-sidenav-column.frogmarks-galaxy-compact) {
+  .col-2,
+  .base-sidenav-column.frogmarks-galaxy-compact {
+    flex: 0 0 70px !important;
+    max-width: 70px !important;
+    min-width: 70px !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  .col-10,
+  .base-work-pane {
+    flex: 0 0 calc(100% - 70px) !important;
+    max-width: calc(100% - 70px) !important;
+    transition: all 0.3s ease !important;
+  }
+}
+
+// Mobile responsive: keep overlay behavior
+@media (max-width: 991.98px) {
+  .base-sidenav-column.frogmarks-galaxy-compact {
+    width: 70px !important;
+    
+    &.open {
+      width: 250px !important;
+      
+      // Re-enable padding when expanded
+      * {
+        padding-left: revert !important;
+        padding-right: revert !important;
+        margin-left: revert !important;
+        margin-right: revert !important;
+      }
+      
+      // Show everything when opened on mobile
+      .frogmarks-logo,
+      .horizontal-line,
+      .sidenav-list li label,
+      .list-link label,
+      .row.ms-0.text-nowrap.flex-nowrap,
+      span[style*="blueviolet"] {
+        display: block !important;
+      }
+      
+      .sidenav-list li {
+        justify-content: flex-start !important;
+        padding-left: 8px !important;
+        
+        .list-item-icon {
+          margin-right: 0.25vw !important;
+        }
+      }
+    }
+  }
+
+  
+  // Hide all text labels in list items
+  .sidenav-list li label {
+    display: none;
+  }
+  
+  // Center icons and adjust spacing
+  .sidenav-list {
+    padding-left: 0;
+    
+    li {
+      justify-content: center;
+      padding: 0;
+      margin: 8px 0;
+      
+      &.list-item {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 48px;
+        border-radius: 0px;
+        margin: 4px 8px;
+        
+        &:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+      }
+      
+      .list-item-icon {
+        // Keep original margin, don't recalculate position
+        margin-right: .25vw !important;
+        transform: scale(.85) !important;
+      }
+    }
+  }
+  
+  // Hide horizontal lines
+  .horizontal-line {
+    //display: none;
+    opacity: 0;
+  }
+  
+  // Hide team section labels
+  .row.ms-0.text-nowrap.flex-nowrap {
+    //display: none;
+    opacity: 0;
+  }
+  
+  // Hide the team dropdown arrow and payment tier
+  .team-dropdown-arrow,
+  .payment-tier {
+    //display: none;
+    opacity: 0;
+  }
+  
+  // Hide beta badge
+  span[style*="blueviolet"] {
+    //display: none;
+    opacity: 0;
+  }
+  
+  // Active state indicators
+  .frogmarks-galaxy-active,
+  .design-center-active,
+  .templates-active,
+  .archived-filter-active {
+    background-color: rgba(108, 99, 255, 0.2);
+    border-left: 4px solid #6C63FF;
+    border-radius: 0 0px 0px 0;
+  }
+  
+  // Hide links with labels
+  .list-link label {
+    display: none;
+  }
+  
+  // Center the icons in links
+  .list-link {
+    display: flex;
+    // justify-content: center;
+    width: 100%;
+  }
+  
+  // Adjust padding
+  .ps-2 {
+    padding-left: 0 !important;
+  }
+}
+
+// Adjust work pane to accommodate compact sidebar
+.base-work-pane {
+  transition: margin-left 0.3s ease;
+}
+
+// When sidebar is compact, adjust columns
+.row.flex-nowrap:has(.base-sidenav-column.frogmarks-galaxy-compact) {
+  .col-2 {
+    flex: 0 0 70px !important;
+    max-width: 70px !important;
+  }
+  
+  .col-10 {
+    flex: 0 0 calc(100% - 70px) !important;
+    max-width: calc(100% - 70px) !important;
+  }
+}
+
+// Mobile responsive: keep overlay behavior
+@media (max-width: 991.98px) {
+  .base-sidenav-column.frogmarks-galaxy-compact {
+    width: 70px !important;
+    
+    &.open {
+      width: 250px !important;
+      
+      // Show everything when opened on mobile
+      .frogmarks-logo,
+      .horizontal-line,
+      .sidenav-list li label,
+      .list-link label,
+      .row.ms-0.text-nowrap.flex-nowrap,
+      span[style*="blueviolet"] {
+        display: block;
+      }
+      
+      .sidenav-list li {
+        justify-content: flex-start;
+        
+        .list-item-icon {
+          margin-right: 0.25vw !important;
+        }
+      }
+    }
+  }
+}
+.base-sidenav-column {
+  transition: width 0.3s ease;
+  
+  // Smooth transitions for specific elements
+  .frogmarks-logo,
+  .sidenav-list li label,
+  .list-link label,
+  .horizontal-line,
+  .row.ms-0.text-nowrap.flex-nowrap,
+  span[style*="blueviolet"] {
+    transition: opacity 0.3s ease;
+  }
+}
+
+.base-sidenav-column.frogmarks-galaxy-compact {
+  width: 70px !important;
+  
+  // Fade out logo
+  .frogmarks-logo {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  // Fade out labels
+  .sidenav-list li label,
+  .list-link label {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  // Hide team section BUT keep it in DOM (prevents layout shift)
+  .row.ms-0.text-nowrap.flex-nowrap {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    // NO display: none - this keeps it taking up space
+  }
+  
+  // Fade out horizontal lines
+  .horizontal-line {
+    opacity: 0;
+  }
+  
+  // Fade out beta badge
+  span[style*="blueviolet"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  // Remove the .socials-list margin-top since nothing is shifting now
+}
+
+// Fade-in animation for Design Center content
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Apply fade-in to Design Center content
+.design-center-content {
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+// Delayed fade-in for sidebar labels when expanding
+@keyframes fadeInDelayed {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+// Apply to labels when NOT in compact mode
+.base-sidenav-column:not(.frogmarks-galaxy-compact) {
+  .sidenav-list li label,
+  .list-link label,
+  .frogmarks-logo,
+  .horizontal-line,
+  .row.ms-0.text-nowrap.flex-nowrap,
+  span[style*="blueviolet"] {
+    animation: fadeInDelayed 0.4s ease-in-out;
+  }
 }

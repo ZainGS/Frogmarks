@@ -2,7 +2,9 @@
 :root {
     --background-color: #ffffff;
     --text-color: #000000;
-    --primary-color: #007bff;
+    --text-color-high-contrast: #000000;
+    --primary-color: #8c00ff;
+    --search-bar-selected-border-color: #8c00ff;
     --template-container-color: white;
     --flow-container-color: #F5F5F5;
     --new-design-item-container-color: #F5F5F5;
@@ -13,7 +15,7 @@
     --base-sidenav-column-color: #F5F5F5;
     --list-item-hover-color: rgb(248, 248, 248);
     --list-item-active-color: #E5E5E5;
-    --horizontal-line-color: white;
+    --horizontal-line-color: rgb(230, 230, 230);
     --search-bar-color: #F5F5F5;
     --search-bar-border-color: #F5F5F5;
     --payment-tier-color: antiquewhite;
@@ -30,6 +32,13 @@
     --notification-panel-border-color: rgb(219, 219, 219);
     --raised-button-hover-color: #fcfcfc;
     --template-default-icon-color: #ababab;
+    --loading-container-color: #fafafa;
+    --delete-color: #ff5252;
+    --footer-text-color: #F5F5F5;
+    --footer-highlight-color: #F5F5F5;
+    --footer-text-alt-color: #ffffff;
+    --board-context-menu-bg-color: rgba(255, 255, 255, 0.85);
+    --board-context-menu-border-color: rgba(255, 255, 255, 0.08);
   }
   
   // Define dark theme
@@ -37,7 +46,9 @@
     --background-color: #121212;
     // --background-color: #121316;
     --text-color: rgb(192, 192, 192);
-    --primary-color: #90caf9;
+    --text-color-high-contrast: rgb(255, 255, 255);
+    --primary-color: #3b3b3b;
+    --search-bar-selected-border-color: #3b3b3b;
     --template-container-color: #575757;
     --flow-container-color: #222222;
     --new-design-item-container-color: #222222;
@@ -55,7 +66,7 @@
     --list-item-active-color: #2E2E2E;
     --horizontal-line-color: #393939;
     --search-bar-color: #222222;
-    --search-bar-border-color: #4D4D4D;
+    --search-bar-border-color: #2e2e2e;
     --payment-tier-color: #565656;
     --selected-chip-color: #262626;
     --outlined-button-color: #121212;
@@ -71,5 +82,23 @@
     --notification-panel-border-color: rgb(66 66 66);
     --raised-button-hover-color: #292929;
     --template-default-icon-color: #ababab;
+    --loading-container-color: #1a1a1a;
+    --delete-color: #ff5252;
+    --footer-text-color: rgb(50, 42, 57);
+    --footer-text-alt-color: #121212;
+    --footer-highlight-color: rgb(50, 42, 57);
+    --board-context-menu-bg-color: rgba(0, 0, 0, 0.825);
+    --board-context-menu-border-color: rgba(0,0,0,.08);
+
+    .loading-container::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(69, 39, 98, 0.8) 50%, rgba(255, 255, 255, 0) 100%) !important;
+      animation: loading .75s infinite;
+    }
   }
 

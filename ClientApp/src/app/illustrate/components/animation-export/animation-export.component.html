@@ -1,0 +1,72 @@
+<!-- ═══════════════════════════════════════════════════════════
+     Animation Export Dialog
+     ═══════════════════════════════════════════════════════════ -->
+
+<div class="export-overlay" (click)="onClose()">
+  <div class="export-dialog" (click)="$event.stopPropagation()">
+
+    <div class="export-header">
+      <span>📤 Export Animation</span>
+      <button class="close-btn" (click)="onClose()">✕</button>
+    </div>
+
+    <div class="export-body">
+
+      <!-- Format -->
+      <div class="export-row">
+        <span class="export-label" title="Choose the output format for your animation.">Format</span>
+        <select [(ngModel)]="format">
+          <option *ngFor="let opt of formatOptions" [value]="opt.value" [title]="opt.tooltip">
+            {{ opt.label }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Frame range -->
+      <div class="export-row">
+        <span class="export-label" title="Export only a section of the animation.">Range</span>
+        <input type="number" class="range-input" min="1" [(ngModel)]="rangeStart"> –
+        <input type="number" class="range-input" min="1" [(ngModel)]="rangeEnd">
+      </div>
+
+      <!-- Scale -->
+      <div class="export-row">
+        <span class="export-label" title="Scale the output resolution.">Scale</span>
+        <select [(ngModel)]="scale">
+          <option *ngFor="let s of scaleOptions" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+
+      <!-- Sprite columns (sprite-sheet only) -->
+      <div *ngIf="format === 'sprite-sheet'" class="export-row">
+        <span class="export-label" title="How many frames per row in the sprite sheet grid.">Columns</span>
+        <input type="number" class="range-input" min="1" max="64" [(ngModel)]="spriteColumns">
+      </div>
+
+      <!-- Background (GIF / PNG only) -->
+      <div *ngIf="format !== 'mp4'" class="export-row">
+        <span class="export-label" title="Include a background color or keep transparency.">Background</span>
+        <label class="toggle-label">
+          <input type="checkbox" [(ngModel)]="bgTransparent"> Transparent
+        </label>
+        <input *ngIf="!bgTransparent" type="color" [(ngModel)]="bgColor" class="color-input">
+      </div>
+
+      <!-- Quality (MP4 only) -->
+      <div *ngIf="format === 'mp4'" class="export-row">
+        <span class="export-label" title="Video quality. Higher = larger file.">Quality</span>
+        <input type="range" min="10" max="100" step="5" [(ngModel)]="quality">
+        <span class="quality-value">{{ quality }}%</span>
+      </div>
+
+    </div>
+
+    <div class="export-footer">
+      <button class="btn-export" (click)="onExport()" [disabled]="isExporting">
+        {{ isExporting ? 'Exporting…' : 'Export' }}
+      </button>
+      <button class="btn-cancel" (click)="onClose()">Cancel</button>
+    </div>
+
+  </div>
+</div>

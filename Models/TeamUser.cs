@@ -14,6 +14,7 @@ namespace Frogmarks.Models
         public virtual Models.Team.Team Team { get; set; }
         public virtual List<TeamRole> TeamRoles { get; set; } = new List<TeamRole>();
         public virtual List<Models.Board.Board> FavoriteBoards { get; set; } = new List<Models.Board.Board>();
+        public virtual List<Models.Illustration.Illustration> FavoriteIllustrations { get; set; } = new List<Models.Illustration.Illustration>();
 
         public string ApplicationUserId { get; set; }
         [ForeignKey("ApplicationUserId")]

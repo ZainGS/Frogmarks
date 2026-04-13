@@ -1,8 +1,9 @@
-﻿namespace Frogmarks.Models.Board
+﻿using Frogmarks.Models.Base;
+
+namespace Frogmarks.Models.Board
 {
-    public class BoardRole
+    public class BoardRole : Role
     {
-        public long Id { get; set; }
-        public string RoleName { get; set; } = string.Empty;
+        
     }
 }

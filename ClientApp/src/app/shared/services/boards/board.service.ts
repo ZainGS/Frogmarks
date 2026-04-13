@@ -56,6 +56,7 @@ export class BoardService extends ApiService {
   id: number,
   name: string = "",
   favorites: boolean = false,
+  isArchived: boolean = false,
   sortBy: string = "name",
   sortDirection: string = "desc",
   pageIndex: number = 0,
@@ -65,6 +66,7 @@ export class BoardService extends ApiService {
     .set('teamId', id.toString())
     .set('name', name)
     .set('favorites', favorites)
+    .set('isArchived', isArchived)
     .set('sortBy', sortBy)
     .set('sortDirection', sortDirection)
     .set('pageIndex', pageIndex.toString())
@@ -92,7 +94,7 @@ export class BoardService extends ApiService {
       tap((res: any) => {
         // Merge new thumbnails into cache if needed
         let updatedCache = { ...validThumbnails };
-        res.resultObject.forEach((board: Board) => {
+        (res.resultObject ?? []).forEach((board: Board) => {
           if (board.thumbnailUrl && !updatedCache[board.id]) {
             updatedCache[board.id] = { url: board.thumbnailUrl, timestamp: Date.now() };
           }
@@ -122,7 +124,7 @@ export class BoardService extends ApiService {
   }
 
   updateBoard(updatedBoard: Board) {
-    return this.http.put('Board', updatedBoard, { withCredentials: true });
+    return this.http.put(`${this.apiUrl}/api/board`, updatedBoard, { withCredentials: true });
   }
 
   favoritedBoard(favoritedBoard: Board) {
@@ -149,14 +151,54 @@ export class BoardService extends ApiService {
     return this.http.get<string>(`${this.apiUrl}/api/board/load/${id}`, { withCredentials: true });
   }
 
-  uploadThumbnail(boardUid: string, blob: Blob): Observable<void> {
+  uploadThumbnail(boardUid: string, blob: Blob, isCustom: boolean | null = null): Observable<void> {
     const formData = new FormData();
     formData.append("thumbnail", blob, `${boardUid}.png`);
-    return this.http.post<void>(`${this.apiUrl}/api/board/thumbnails/${boardUid}`, formData, { withCredentials: true });
+
+    let url = `${this.apiUrl}/api/board/thumbnails/${boardUid}`;
+    if (isCustom !== null) {
+      url += `?isCustom=${isCustom}`;
+    }
+
+    return this.http.post<void>(url, formData, { withCredentials: true });
   }
 
   getThumbnail(boardUid: string): Observable<Blob> {
       return this.http.get(`${this.apiUrl}/thumbnails/${boardUid}`, { responseType: "blob" });
+  }
+
+  duplicateBoard(sourceBoardId: number, payload: { 
+    name?: string; 
+    teamId?: number; 
+    copyThumbnail?: boolean;
+    } = {}) {
+    const headers = new HttpHeaders({ 'Content-Type': 'application/json' });
+    return this.http.post(
+      `${this.apiUrl}/api/board/duplicate/${sourceBoardId}`,
+      JSON.stringify(payload),
+      { headers, withCredentials: true }
+    );
+  }
+
+  renameBoard(boardId: number, newName: string) {
+    const headers = new HttpHeaders({ 'Content-Type': 'application/json' });
+    return this.http.put(
+      `${this.apiUrl}/api/board/rename/${boardId}`,
+      { newName },
+      { headers, withCredentials: true }
+    );
+  }
+
+  getTemplates(): Observable<void> {
+    return;
+  }
+
+  setIsCustomThumbnail(boardId: number, isCustom: boolean) {
+    return this.http.patch(
+      `${this.apiUrl}/api/board/${boardId}`,
+      { isCustomThumbnail: isCustom },
+      { withCredentials: true }
+    );
   }
 
 }

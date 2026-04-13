@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, HostListener, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
 import { BoardService } from '../../../shared/services/boards/board.service';
@@ -7,11 +7,13 @@ import ShapeManager from "@zaings/salsa/shape-manager";
 import WorldManager from "@zaings/salsa/world-manager";
 //import startWebGPURendering from "@zaings/salsa";
 import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from "@zaings/salsa";
-import { CommonModule } from '@angular/common';
 import { ShapeType } from '../../../shared/enums/shape-type';
-import { interval, Subscription } from 'rxjs';
+import { auditTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
 import { ColorPickerComponent } from 'app/shared/components/color-picker/color-picker.component';
 import { LayerTreeNode } from 'app/boards/models/layer-tree-node.model';
+import { AuthService } from 'app/shared/services/auth/auth.service';
+import { NotifyService } from 'app/shared/services/notify/notify.service';
+import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
 
 @Component({
   selector: 'app-board',
@@ -19,10 +21,87 @@ import { LayerTreeNode } from 'app/boards/models/layer-tree-node.model';
   templateUrl: './board.component.html',
   styleUrl: './board.component.scss'
 })
+
 export class BoardComponent implements OnInit {
   
+  private routeSub?: Subscription;
+  @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('bgColorPicker') bgColorPickerRef: ColorPickerComponent;
   @ViewChild('dotColorPicker') dotColorPickerRef: ColorPickerComponent;
+  @ViewChild('shapeColorPicker') shapeColorPickerRef: ColorPickerComponent;
+  @ViewChild('boardShell', { static: true }) boardShellRef!: ElementRef<HTMLDivElement>;
+
+  // Close on any document click, scroll, resize, or Escape
+  @HostListener('document:click')
+  onDocClick() { this.closeContextMenu(); }
+  
+  @HostListener('window:scroll')
+  onWinScroll() { this.closeContextMenu(); }
+  
+  @HostListener('window:resize')
+  onWinResize() { this.closeContextMenu(); }
+  
+  @HostListener('document:keydown.escape')
+  onEsc() { this.closeContextMenu(); }
+
+  // State flags
+  uiHidden = false;
+  isFullscreen = false;
+  layerTreeHidden = false;
+
+  // Hide/show all UI chrome you wrap in a top-level container
+  toggleUI(force?: boolean) {
+    this.notifyService.success("Press the X button to toggle UI");
+    this.uiHidden = typeof force === 'boolean' ? force : !this.uiHidden;
+    if (this.uiHidden) this.closeContextMenu(); // keep menus tidy when hiding UI
+  }
+
+  toggleLayerTree() {
+    this.layerTreeHidden = !this.layerTreeHidden;
+    this.closeContextMenu();
+  }
+
+  // Fullscreen toggle (container -> fullscreen; falls back to documentElement)
+  async toggleFullscreen() {
+    const el: any =
+      this.boardShellRef?.nativeElement ??
+      this.canvasRef?.nativeElement ??
+      document.documentElement;
+
+    try {
+      const isActive =
+        !!document.fullscreenElement ||
+        // Safari (older)
+        !!(document as any).webkitFullscreenElement;
+
+      if (!isActive) {
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen(); // Safari
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen(); // Safari
+        }
+      }
+    } catch (err) {
+      console.error('Fullscreen toggle failed:', err);
+    }
+  }
+
+  // Keep isFullscreen in sync with browser state
+  @HostListener('document:fullscreenchange')
+  onFullscreenChange() {
+    this.isFullscreen = !!document.fullscreenElement;
+  }
+
+  @HostListener('document:webkitfullscreenchange')
+  onFullscreenChangeWebkit() {
+    this.isFullscreen = !!(document as any).webkitFullscreenElement;
+  }
 
   canvas: HTMLCanvasElement;
   boardUid: string | null = null;
@@ -30,8 +109,72 @@ export class BoardComponent implements OnInit {
   layerTree: LayerTreeNode | null = null;
   selectedLayerIds: Set<string> = new Set();
   hoveredLayerId: string | null = null;
+
+  // Arrowhead defaults for new lines
+  arrowheadStart: ArrowheadStyle = 'none';
+  arrowheadEnd: ArrowheadStyle = 'triangle';
+  arrowheadSize = 6;
+  arrowheadOptions = ARROWHEAD_OPTIONS;
+
+  onArrowheadChange(): void {
+    this.shapeManager.setDefaultArrowheads?.(this.arrowheadStart, this.arrowheadEnd);
+  }
+
+  // Polygon tool
+  defaultPolygonSides = 6;
+  polygonPresets: string[] = [];
+
+  onPolygonSidesChange(sides: number): void {
+    this.defaultPolygonSides = +sides;
+    (this.shapeManager as any).defaultPolygonSides = this.defaultPolygonSides;
+  }
+
+  placePresetPolygon(preset: string): void {
+    this.shapeManager.createPresetPolygon?.(0, 0, 0.5, 0.5, preset as any, { r: 0, g: 0, b: 0, a: 1 }, 1);
+  }
+
+  loadPolygonPresets(): void {
+    this.polygonPresets = (ShapeManager as any).PolygonPresets || [];
+  }
+
   private selectionChangedSubscription: { unsubscribe: () => void };
   public selectedNode: any | null = null;
+
+  contextMenu = {
+    visible: false,
+    x: 0,
+    y: 0
+  };
+
+  closeContextMenu() {
+    if (this.contextMenu.visible) {
+      this.contextMenu.visible = false;
+    }
+  }
+  
+  openBoardMenu(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if(this.contextMenu.visible == true) {
+      this.closeContextMenu();
+      return;
+    }
+
+    const clickX = event.clientX;
+    const clickY = event.clientY;
+
+    // Optional: keep menu within viewport
+    const menuWidth = 220;  // match CSS
+    const menuHeight = 44;  // approx for one item
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const x = Math.min(285, vw - menuWidth - 8);
+    const y = Math.min(8, vh - menuHeight - 8);
+
+    this.contextMenu = { visible: true, x, y };
+  }
 
   private autoSaveSubscription!: Subscription;
   private thumbnailSaveSubscription!: Subscription;
@@ -51,6 +194,60 @@ export class BoardComponent implements OnInit {
   cursorSelected: boolean = true;
   panHandSelected: boolean = false;
 
+  selectedStamp: string = "assets/stamps/star.png"; // Default stamp
+  selectedStampColor: string = "#FFFFFF";
+  selectedStampSize: number = 0.10;
+  stampPalette: string[] = [
+    "assets/stamps/star.png",
+    "assets/stamps/heart.png", 
+    "assets/stamps/check.png",
+    "assets/stamps/arrow.png",
+    "assets/stamps/circle.png",
+    "assets/stamps/x.png",
+    "assets/stamps/thumbs_up.png",
+    "assets/stamps/icecream/icecream_strawberry.png"
+  ];
+
+  iceCreamStamps: string[] = [
+    "assets/stamps/icecream/icecream_chocolate.png",
+    "assets/stamps/icecream/icecream_chocolate2.png", 
+    "assets/stamps/icecream/icecream_matcha.png",
+    "assets/stamps/icecream/icecream_matcha2.png",
+    "assets/stamps/icecream/icecream_strawberry.png",
+    "assets/stamps/icecream/icecream_strawberry2.png",
+    "assets/stamps/icecream/icecream_vanilla.png",
+    "assets/stamps/icecream/icecream_vanilla2.png"
+  ];
+
+getRandomIceCreamStamp(): string {
+  const randomIndex = Math.floor(Math.random() * this.iceCreamStamps.length);
+  return this.iceCreamStamps[randomIndex];
+}
+
+setStamp(stamp: string) {
+  // Check if this is the ice cream stamp that should randomize
+  if (stamp.startsWith("assets/stamps/icecream")) {
+    // Use a random ice cream instead
+    const randomIceCream = this.getRandomIceCreamStamp();
+    this.selectedStamp = randomIceCream;
+    this.shapeManager.setStampTexture(randomIceCream);
+    this.stampPalette[7] = this.selectedStamp;
+  } else {
+    this.selectedStamp = stamp;
+    this.shapeManager.setStampTexture(stamp);
+  }
+}
+
+setStampColor(color: string) {
+  this.selectedStampColor = color;
+  this.shapeManager.setStampColor(color);
+}
+
+setStampSize(size: number) {
+  this.selectedStampSize = size;
+  this.shapeManager.setStampSize(size);
+}
+
   strokeWidth: number = 2;
   selectedShapeType: ShapeType | null = null;
 
@@ -62,6 +259,24 @@ export class BoardComponent implements OnInit {
   showDotColorPicker: boolean = false;
   dotColor: string = "#fff";
   dotHexInputDraft: string = this.dotColor.replace('#', '');
+  // Nodes fill color picker
+  showShapeColorPicker: boolean = false;
+  shapeColor: string = "#fff";
+  shapeHexInputDraft: string = this.bgColor.replace('#', '');
+
+
+  // SDF Text properties
+  selectedSDFTextColor: string = "#FFFFFF";
+  selectedSDFTextOutlineColor: string = "#000000";
+  selectedSDFTextFontSize: number = 120;
+  selectedSDFTextFont: string = "Arial";
+  selectedSDFTextThreshold: number = 0.485;
+  selectedSDFTextSmoothing: number = 1;
+  selectedSDFTextOutlineWidth: number = 0;
+
+  // Add SDF text color picker states
+  showSDFTextColorPicker: boolean = false;
+  showSDFTextOutlineColorPicker: boolean = false;
 
   getBackgroundColor() { 
     this.bgColor = this.shapeManager.getBackgroundColor();
@@ -73,6 +288,38 @@ export class BoardComponent implements OnInit {
     this.dotHexInputDraft = this.dotColor;
   }
 
+  public layerSearchTerm: string = "";
+  public get filteredLayers(): LayerTreeNode[] {
+    //return this.filterLayers([this.layerTree]);
+    return this.filterLayers(this.layerTree?.children ?? []);
+  }
+
+  filterLayers(layers: LayerTreeNode[] | undefined): LayerTreeNode[] {
+    if (!layers) return [];
+    if (!this.layerSearchTerm || this.layerSearchTerm.trim() === '') {
+      return layers;
+    }
+
+    const term = this.layerSearchTerm.toLowerCase();
+
+    const matches = (layer: LayerTreeNode): boolean =>
+      layer.name.toLowerCase().includes(term);
+
+    const filterRecursively = (nodes: LayerTreeNode[]): LayerTreeNode[] => {
+      return nodes
+        .map(node => {
+          const filteredChildren = node.children ? filterRecursively(node.children) : [];
+          if (matches(node) || filteredChildren.length) {
+            return { ...node, children: filteredChildren };
+          }
+          return null;
+        })
+        .filter(Boolean) as LayerTreeNode[];
+    };
+
+    return filterRecursively(layers);
+  }
+
   hoverLayer(event: MouseEvent, layer: LayerTreeNode) {
     event.stopPropagation();
     this.hoveredLayerId = layer.id;
@@ -81,6 +328,7 @@ export class BoardComponent implements OnInit {
 
   selectLayer(layer: LayerTreeNode, event?: MouseEvent) {
     event.stopPropagation();
+    this.closeContextMenu();
     const isCtrl = event?.ctrlKey || event?.metaKey;
 
     if (!isCtrl) {
@@ -112,14 +360,12 @@ export class BoardComponent implements OnInit {
 
   toggleVisibility(layer: LayerTreeNode) {
     layer.visible = !layer.visible;
-    // Optionally update scene visibility
-    //this.shapeManager?.setNodeVisibility(layer.id, layer.visible);
+    this.shapeManager?.setNodeVisibility(layer.id, layer.visible);
   }
 
   toggleLock(layer: LayerTreeNode) {
     layer.locked = !layer.locked;
-    // Optionally update scene lock status
-    //this.shapeManager?.setNodeLocked(layer.id, layer.locked);
+    this.shapeManager?.setNodeLocked(layer.id, layer.locked);
   }
 
   openBgColorPicker() {
@@ -152,6 +398,24 @@ export class BoardComponent implements OnInit {
     }
   }
 
+  openShapeColorPicker() {
+    if (!this.showShapeColorPicker) {
+      setTimeout(() => {
+        this.showShapeColorPicker = true;
+        setTimeout(() => {
+          if (this.shapeColorPickerRef) {
+            this.shapeColorPickerRef.setColor(this.shapeColor.startsWith('#') ? this.shapeColor : '#' + this.shapeColor);
+          }
+        });
+      }, 0);
+    } else {
+      this.showShapeColorPicker = false;
+    }
+  }
+
+  onShapeHexInputChange(value: string) {
+    this.shapeHexInputDraft = value;
+  }
   onBgHexInputChange(value: string) {
     this.bgHexInputDraft = value;
   }
@@ -193,6 +457,34 @@ export class BoardComponent implements OnInit {
       this.dotHexInputDraft = this.dotColor.replace('#', '');
     }
   }
+  onShapeHexInputBlur(layerId: string) {
+    const raw = this.shapeHexInputDraft.trim();
+    const hex = '#' + raw;
+
+    const isValidHex = /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(hex);
+
+    if (isValidHex) {
+      this.shapeHexInputDraft = raw;
+      this.onNodeFillColorSelected(layerId, hex);
+    } else {
+      // Revert input field to last valid color - convert RGBA to hex
+      const rgba = this.shapeManager.getNodeFillColor(layerId);
+      this.shapeHexInputDraft = this.rgbaToHex(rgba);
+    }
+  }
+
+  // Add this helper method to your component
+  private rgbaToHex(rgba: {r: number, g: number, b: number, a: number}): string {
+    const toHex = (value: number) => {
+      // Convert from 0-1 range to 0-255 range
+      const scaled = Math.round(value * 255);
+      const hex = scaled.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    
+    return `${toHex(rgba.r)}${toHex(rgba.g)}${toHex(rgba.b)}`;
+  }
+
 
 onBgColorSelected(color: string) {
   this.bgColor = color;
@@ -255,7 +547,6 @@ onBgColorSelected(color: string) {
 
 onDotColorSelected(color: string) {
   this.dotColor = color;
-  console.log(color);
   this.dotHexInputDraft = color.replace('#', ''); // keep in sync
   let r = 255, g = 255, b = 255, a = 1.0;
 
@@ -312,13 +603,71 @@ onDotColorSelected(color: string) {
   }
 }
 
+onNodeFillColorSelected(layerId: string, color: string) {
+  this.shapeColor = color;
+  this.shapeHexInputDraft = color.replace('#', ''); // keep in sync
+  let r = 255, g = 255, b = 255, a = 1.0;
+
+  if (typeof color === "string") {
+    if (color.startsWith('#')) {
+      const hex = color.replace('#', '');
+      if (hex.length === 3) {
+        // Handle short hex (#RGB)
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+      } else if (hex.length === 8) {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+        a = parseInt(hex.substring(6, 8), 16) / 255;
+      }
+    } else if (color.startsWith('rgb')) {
+      // Handles rgb(...) or rgba(...)
+      const values = color.match(/\d+(\.\d+)?/g);
+      if (values && (values.length === 3 || values.length === 4)) {
+        r = parseInt(values[0]);
+        g = parseInt(values[1]);
+        b = parseInt(values[2]);
+        if (values.length === 4) {
+          a = parseFloat(values[3]);
+        }
+      }
+    } else {
+      // Try to convert named colors or hsl to rgb
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.fillStyle = color;
+      const computed = ctx.fillStyle;
+      if (computed.startsWith('rgb')) {
+        const values = computed.match(/\d+(\.\d+)?/g);
+        if (values && (values.length === 3 || values.length === 4)) {
+          r = parseInt(values[0]);
+          g = parseInt(values[1]);
+          b = parseInt(values[2]);
+          if (values.length === 4) {
+            a = parseFloat(values[3]);
+          }
+        }
+      }
+    }
+  }
+
+  if (this.shapeManager) {
+    this.shapeManager.setNodeFillColor(layerId, {r: r/255, g: g/255, b: b/255, a: a});
+  }
+}
+
   showPenColorPicker: boolean = false;
   customPenColor: string = "#fff";
   penColorPalette: string[] = [
     "#000000", // Black
     "#E74C3C", // Red
     "#F39C12", // Orange
-    "#F1C40F", // Yellow
+    "#ffff00", // Yellow
     "#2ECC71", // Green
     "#3498DB", // Blue
     "#9B59B6", // Purple
@@ -375,11 +724,41 @@ onDotColorSelected(color: string) {
 // ];
 
 
+  private onMouseMove!: (e: MouseEvent) => void;
+  private onClick!: (e: MouseEvent) => void;
+  private onKeyDown!: (e: KeyboardEvent) => void;
+  private onDocMousedown!: (e: MouseEvent) => void;
+
+  private sceneChanged$ = new Subject<string>();
+
   constructor(private route: ActivatedRoute,
               private boardService: BoardService,
-              private router: Router,) { }
+              private router: Router,
+              private authService: AuthService,
+              private notifyService: NotifyService) { }
 
-  async ngOnInit() {
+  ngOnInit() {
+    // React whenever /board/:id changes (same component instance)
+    this.routeSub = this.route.paramMap.pipe(
+      map(p => p.get('id')),
+      filter((id): id is string => !!id),
+      distinctUntilChanged()
+    ).subscribe((boardUid) => {
+      this.initForBoard(boardUid);
+    });
+  }
+
+  private async initForBoard(boardUid: string) {
+    this.isLoading = true;
+    this.boardUid = boardUid;
+
+    // IMPORTANT: clean up prior board state when switching ids in-place
+    this.autoSaveSubscription?.unsubscribe();
+    this.thumbnailSaveSubscription?.unsubscribe();
+    this.selectionChangedSubscription?.unsubscribe();
+    this.resetSceneState();
+    this.lastSavedThumbnailJSON = '';
+    this.lastThumbnailTime = 0;
 
     // Ensure WebGPU only initializes if not already running
     if (!isRendererLive) {
@@ -387,6 +766,20 @@ onDotColorSelected(color: string) {
         // Get the singleton ShapeManager & WorldManager instances after Salsa has initialized
         this.shapeManager = ShapeManager.getInstance();
         this.worldManager = WorldManager.getInstance();
+        this.loadPolygonPresets();
+
+        // Loading screen state:
+        this.markLoaded('renderer');
+        // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
+        const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
+          .subscribe(() => {
+            this.markLoaded('sceneApplied');
+            sceneAppliedOnce.unsubscribe();
+            if(!this.board.isCustomThumbnail) {
+              this.saveThumbnail();
+            }
+          });
+
         this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
           if(this.selectedLayerIds.has(this.hoveredLayerId)) {
             this.selectedLayerIds = new Set(selectedIds);
@@ -398,13 +791,19 @@ onDotColorSelected(color: string) {
             const selectedId = this.selectedLayerIds.values().next().value;
             this.selectedNode = this.getNodeById(selectedId);
           }
+
+          if(selectedIds.length == 1) {
+            var nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
+            this.shapeColor = '#'+nodeColor;
+            this.shapeHexInputDraft = nodeColor; // keep in sync
+          }
         });
 
         this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
           const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
           const parsed = JSON.parse(currentSceneJSON);
           this.layerTree = this.buildLayerTree(parsed.root);
-          console.log("UPDATED");
+          this.sceneChanged$.next(currentSceneJSON);
         });
 
       });
@@ -413,6 +812,20 @@ onDotColorSelected(color: string) {
         // Get the singleton ShapeManager & WorldManager instances after Salsa has initialized
         this.shapeManager = ShapeManager.getInstance();
         this.worldManager = WorldManager.getInstance();
+        this.loadPolygonPresets();
+
+        // Loading screen state:
+        this.markLoaded('renderer');
+        // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
+        const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
+          .subscribe(() => {
+            this.markLoaded('sceneApplied');
+            sceneAppliedOnce.unsubscribe();
+            if(!this.board.isCustomThumbnail) {
+              this.saveThumbnail();
+            }
+          });
+
         this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
           if(this.selectedLayerIds.has(this.hoveredLayerId)) {
             this.selectedLayerIds = new Set(selectedIds);
@@ -426,17 +839,17 @@ onDotColorSelected(color: string) {
           const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
           const parsed = JSON.parse(currentSceneJSON);
           this.layerTree = this.buildLayerTree(parsed.root);
-          console.log("UPDATED");
+          this.sceneChanged$.next(currentSceneJSON);
         });
       });
     }
 
-    this.canvas = document.getElementById("webgpuCanvas") as HTMLCanvasElement;
+    this.canvas = this.canvasRef.nativeElement;
     this.shapeManager.setStrokeWidth(this.strokeWidth);
 
     this.boardUid = this.route.snapshot.paramMap.get('id');
     if (this.boardUid) {
-      this.boardService.getBoardByUid(this.boardUid).subscribe(res => {
+      this.boardService.getBoardByUid(this.boardUid).subscribe(async res => {
         if (res.resultType === ResultType.Success) {
           this.board = res.resultObject;
           this.boardTitle = res.resultObject.name;
@@ -444,39 +857,92 @@ onDotColorSelected(color: string) {
           this.resetSceneState();
 
           if(this.board.sceneGraphData && this.board.sceneGraphData.length > 0) {
-            this.setBoardSceneGraph(this.board.sceneGraphData);
+            // Await the scene loading so textures are loaded before proceeding
+            await this.setBoardSceneGraph(this.board.sceneGraphData);
+            
             const rawSceneGraph = JSON.parse(this.board.sceneGraphData);
+            console.log(rawSceneGraph);
             this.layerTree = this.buildLayerTree(rawSceneGraph.root); // Top-level
+
+            // Fallback: if no event within a frame, consider applied
+            requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+          } else {
+            // No scene → still mark as applied
+            requestAnimationFrame(() => this.markLoaded('sceneApplied'));
           }
           
 
           // Initialize autosave:
-          this.startAutoSave();
+          this.autoSaveSubscription = this.sceneChanged$
+            .pipe(
+              auditTime(1000),
+              distinctUntilChanged()
+            )
+            .subscribe(json => { 
+              if (!this.board) return;
+              if (json !== this.lastSavedJSON) {
+                this.lastSavedJSON = json;
+                this.boardService.saveBoard(this.board!.id, json).subscribe();
+              }
+            });
+
+          // thumbnail: at most once per 60s if changed
+          this.thumbnailSaveSubscription = this.sceneChanged$
+            .pipe(auditTime(5000))
+            .subscribe(() => {
+              if(!this.board.isCustomThumbnail) {
+                this.saveThumbnailIfChanged();
+              }
+            });
+
+          this.markLoaded('board');
         }
       });
+
+      // Set initial SDF text properties after shapeManager is initialized
+      if (this.shapeManager) {
+        this.setSDFTextColor(this.selectedSDFTextColor);
+        this.setSDFTextOutlineColor(this.selectedSDFTextOutlineColor);
+        this.setSDFTextFontSize(this.selectedSDFTextFontSize);
+        this.setSDFTextFont(this.selectedSDFTextFont);
+        this.setSDFTextThreshold(this.selectedSDFTextThreshold);
+        this.setSDFTextSmoothing(this.selectedSDFTextSmoothing);
+        this.setSDFTextOutlineWidth(this.selectedSDFTextOutlineWidth);
+
+        // Initialize stamp settings
+        this.setStamp(this.selectedStamp);
+        this.setStampColor(this.selectedStampColor);
+        this.setStampSize(this.selectedStampSize);
+      }
+    } else {
+      // No board id; fail-safe so you don’t get stuck
+      this.markLoaded('board');
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
     }
 
     // Track mouse movement for preview
-    document.addEventListener("mousemove", (event: MouseEvent) => {
+    this.onMouseMove = (event: MouseEvent) => {
       if (event.target !== this.canvas) return;
-      if (this.selectedShapeType) {
-          this.shapeManager.updatePreviewShapePosition(event);
-      }
-    });
+      if (this.selectedShapeType) this.shapeManager.updatePreviewShapePosition(event);
+    };
+    document.addEventListener("mousemove", this.onMouseMove);
 
     // On click, confirm the preview shape as a real shape
-    document.addEventListener("click", (event: MouseEvent) => {
+    this.onClick = (event: MouseEvent) => {
       if (event.target !== this.canvas) return;
       if (this.selectedShapeType) {
         this.shapeManager.confirmPreviewShape();
-          this.shapeManager.setPreviewShape(this.selectedShapeType, event);
+        this.shapeManager.setPreviewShape(this.selectedShapeType, event);
       }
-    });
+    };
+    document.addEventListener("click", this.onClick);
 
     // Listen for hotkeys
-    window.addEventListener("keydown", this.handleHotkeys.bind(this));
+    this.onKeyDown = this.handleHotkeys.bind(this);
+    window.addEventListener("keydown", this.onKeyDown);
 
-    document.addEventListener('mousedown', this.handleBgColorPickerClick.bind(this));
+    this.onDocMousedown = this.handleBgColorPickerClick.bind(this);
+    document.addEventListener('mousedown', this.onDocMousedown);
     
     this.getBackgroundColor();
     this.getDotColor();
@@ -502,7 +968,10 @@ onDotColorSelected(color: string) {
 
 
   handleHotkeys(event: KeyboardEvent) {
-    if(this.shapeManager.isTextDrawingInProgress()) return;
+    const target = event.target as HTMLElement;
+    const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+    if (isEditable || this.shapeManager.isTextDrawingInProgress() || this.shapeManager.isSDFTextDrawingInProgress()) return;
     switch (event.key) {
         case "Escape": // Esc → Cursor (Selection Tool)
             this.selectCursor("cursor");
@@ -519,6 +988,13 @@ onDotColorSelected(color: string) {
         case "t": // T → Text Tool
             this.setActiveTool("text");
             break;
+        case "T": // Capital T → SDF Text Tool (Shift + T)
+            if (event.shiftKey) {
+                this.setActiveTool("sdftext");
+            } else {
+                this.setActiveTool("text");
+            }
+            break;
         case "p": // P → Pen (Scribble)
             this.setActiveTool("drawing:pen");
             break;
@@ -530,6 +1006,7 @@ onDotColorSelected(color: string) {
             break;
         case "s":
             this.setActiveTool("section");
+            break;
         case "+" : // + → Zoom In
         case "=" :
             this.zoomIn();
@@ -542,6 +1019,15 @@ onDotColorSelected(color: string) {
             this.layerTree.children = this.pruneDeletedLayers(this.layerTree.children, this.selectedLayerIds);
             this.shapeManager.deleteSelectedShapes();
             break;
+        case "f": // F -> toggle fullscreen
+          this.toggleFullscreen();
+          break;
+        case "x": // x -> toggle UI chrome
+          this.toggleUI();
+          break;
+        case "m": // M → Stamp Tool
+          this.setActiveTool("stamp");
+          break;
         default:
             return; // Ignore keys that are not mapped
     }
@@ -560,6 +1046,89 @@ onDotColorSelected(color: string) {
       }))
       .filter(node => !selectedIds.has(node.id));
   }
+
+  // SDF Text color and styling methods
+  setSDFTextColor(color: string) {
+    this.selectedSDFTextColor = color;
+    this.shapeManager.setSDFTextColor(color);
+  }
+
+  setSDFTextOutlineColor(color: string) {
+    this.selectedSDFTextOutlineColor = color;
+    this.shapeManager.setSDFTextOutlineColor(color);
+  }
+
+  setSDFTextFontSize(size: number) {
+    this.selectedSDFTextFontSize = size;
+    this.shapeManager.setSDFTextFontSize(size);
+  }
+
+  setSDFTextFont(font: string) {
+    this.selectedSDFTextFont = font;
+    this.shapeManager.setSDFTextFont(font);
+  }
+
+  setSDFTextThreshold(threshold: number) {
+    this.selectedSDFTextThreshold = threshold;
+    this.shapeManager.setSDFTextThreshold(threshold);
+  }
+
+  setSDFTextSmoothing(smoothing: number) {
+    this.selectedSDFTextSmoothing = smoothing;
+    this.shapeManager.setSDFTextSmoothing(smoothing);
+  }
+
+  setSDFTextOutlineWidth(width: number) {
+    this.selectedSDFTextOutlineWidth = width;
+    this.shapeManager.setSDFTextOutlineWidth(width);
+  }
+
+  // Color picker methods for SDF text
+  openSDFTextColorPicker() {
+    this.showSDFTextColorPicker = !this.showSDFTextColorPicker;
+    if (this.showSDFTextColorPicker) {
+      this.showSDFTextOutlineColorPicker = false;
+    }
+  }
+
+  openSDFTextOutlineColorPicker() {
+    this.showSDFTextOutlineColorPicker = !this.showSDFTextOutlineColorPicker;
+    if (this.showSDFTextOutlineColorPicker) {
+      this.showSDFTextColorPicker = false;
+    }
+  }
+
+  onSDFTextColorSelected(color: string) {
+    this.setSDFTextColor(color);
+    this.showSDFTextColorPicker = false;
+  }
+
+  onSDFTextOutlineColorSelected(color: string) {
+    this.setSDFTextOutlineColor(color);
+    this.showSDFTextOutlineColorPicker = false;
+  }
+
+  // Font options for SDF text
+  sdfTextFonts: string[] = [
+    "Arial",
+    "Helvetica",
+    "Times New Roman",
+    "Courier New",
+    "Verdana",
+    "Georgia",
+    "Palatino",
+    "Garamond",
+    "Bookman",
+    "Comic Sans MS",
+    "Trebuchet MS",
+    "Arial Black",
+    "Impact"
+  ];
+
+  // Font size options
+  sdfTextFontSizes: number[] = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72];
+
+  //
 
   selectCursor(cursor: string) {
     switch(cursor) {
@@ -610,7 +1179,8 @@ onDotColorSelected(color: string) {
 
   setHighlightColor(color: string) {
     this.selectedHighlightColor = color;
-    this.shapeManager.setHighlightColor(this.highlightColorMapping.get(this.selectedHighlightColor));
+    const mapped = this.highlightColorMapping.get(color) ?? color;
+    this.shapeManager.setHighlightColor(mapped);
   }
 
   setPattern(pattern: string) {
@@ -637,6 +1207,7 @@ onDotColorSelected(color: string) {
 
     if(this.controlPanelActiveTool == 'connector')
     {
+      this.shapeManager.setDefaultArrowheads?.(this.arrowheadStart, this.arrowheadEnd);
       this.shapeManager.enableLineDrawing();
     }
     else {
@@ -696,8 +1267,30 @@ onDotColorSelected(color: string) {
       this.setPreviewShapeSelected(ShapeType.Circle, event);
     } else if(this.controlPanelActiveTool == 'shape:triangle') {
       this.setPreviewShapeSelected(ShapeType.Triangle, event);
+    } else if(this.controlPanelActiveTool == 'shape:polygon') {
+      (this.shapeManager as any).defaultPolygonSides = this.defaultPolygonSides;
+      this.setPreviewShapeSelected(ShapeType.Polygon, event);
     } else {
       this.setPreviewShapeSelected(null, event);
+    }
+
+    // Freeform polygon drawing
+    this.controlPanelActiveTool === 'polygon:freeform'
+      ? this.shapeManager.enablePolygonDrawing?.()
+      : this.shapeManager.disablePolygonDrawing?.();
+
+    if(this.controlPanelActiveTool == 'sdftext') {
+      this.shapeManager.enableSDFTextDrawing();
+    } else {
+      this.shapeManager.disableSDFTextDrawing();
+    }
+
+    if(this.controlPanelActiveTool == 'stamp')
+    {
+      this.shapeManager.enableStampDrawing();
+    }
+    else {
+      this.shapeManager.disableStampDrawing();
     }
 
   }
@@ -721,13 +1314,19 @@ onDotColorSelected(color: string) {
       case 'triangle':
         this.shapeManager.createTriangle(0, 0, .5, .5, { r: 0, g: 0, b: 0, a: 1 }, 1);
         break;
+      case 'stickynote':
+        this.shapeManager.createStickyNote(0, 0, "Type anything!", { r: 1, g: 1, b: 0.56, a: 1 }, "Zain S.");
+        break;
+      case 'polygon':
+        this.shapeManager.createRegularPolygon?.(0, 0, 0.3, this.defaultPolygonSides, { r: 0, g: 0, b: 0, a: 1 }, 1);
+        break;
       default:
         break;
     }
   }
 
   downloadCanvasViewAsPng() {
-    const canvas = document.getElementById("webgpuCanvas") as HTMLCanvasElement;
+    const canvas = this.canvas;
     if (!canvas) {
         console.error("Canvas element not found!");
         return;
@@ -756,9 +1355,9 @@ onDotColorSelected(color: string) {
   // In the future, you can setup your WebSocket comms here.
   private saveBoardIfChanged() {
     const currentJSON = this.shapeManager.getSceneGraphJSON();
+    if (!this.board) return;
     if (currentJSON !== this.lastSavedJSON) {
       this.lastSavedJSON = currentJSON; // Update last saved JSON
-      console.log(this.board);
       this.boardService.saveBoard(this.board.id, currentJSON).subscribe(() => {
         console.log('Board auto-saved.');
       });
@@ -771,29 +1370,8 @@ onDotColorSelected(color: string) {
     });
   }
 
-  setBoardSceneGraph(sceneGraphJSON: string) {
-    this.shapeManager.setSceneGraphJSON(sceneGraphJSON);
-  }
-
-  private startAutoSave() {
-    
-    // Avoid multiple subscriptions
-    if (this.autoSaveSubscription) {
-      this.autoSaveSubscription.unsubscribe();
-    }
-    if (this.thumbnailSaveSubscription) {
-        this.thumbnailSaveSubscription.unsubscribe();
-    }
-
-    // Autosave scene every 2 seconds
-    this.autoSaveSubscription = interval(2000).subscribe(() => {
-      this.saveBoardIfChanged();
-    });
-
-    // Thumbnail save every 1 minute (if changes detected)
-    this.thumbnailSaveSubscription = interval(60000).subscribe(() => {
-      this.saveThumbnailIfChanged();
-    });
+  async setBoardSceneGraph(sceneGraphJSON: string) {
+    await this.shapeManager.setSceneGraphJSON(sceneGraphJSON);
   }
 
   lastThumbnailTime = 0;
@@ -813,25 +1391,25 @@ onDotColorSelected(color: string) {
     }
   }
 
-  async saveThumbnail() {
+  // async saveThumbnail() {
+  //   const canvas = this.canvas;
+  //   if (!canvas) return;
 
-    const canvas = document.getElementById("webgpuCanvas") as HTMLCanvasElement;
-    if (!canvas) {
-        console.error("Canvas element not found!");
-        return;
+  //   // Wait until a fully rendered frame is on-screen
+  //   await (this.shapeManager as any)['webgpuRenderer'].waitForFrameSettled();
+  //   // or expose a wrapper on ShapeManager if you prefer
+
+  //   const thumbnailBlob = await this.getThumbnailBlob(canvas);
+  //   this.boardService.uploadThumbnail(this.boardUid, thumbnailBlob).subscribe();
+  //   // const url = URL.createObjectURL(thumbnailBlob);
+  //   // window.open(url); // Check if it displays correctly before upload
+  // }
+
+    async saveThumbnail() {
+      if (!this.boardUid) return;
+      const blob = await this.shapeManager.captureThumbnailBlob(300);
+      this.boardService.uploadThumbnail(this.boardUid, blob).subscribe();
     }
-
-    requestAnimationFrame(async () => {
-      const thumbnailBlob = await this.getThumbnailBlob(canvas);
-
-      // const url = URL.createObjectURL(thumbnailBlob);
-      // window.open(url); // Check if it displays correctly before upload
-
-      this.boardService.uploadThumbnail(this.boardUid, thumbnailBlob).subscribe(res => {
-        console.log(res);
-      });
-    });
-  }
 
   private async getThumbnailBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     if (!canvas) {
@@ -886,19 +1464,24 @@ onDotColorSelected(color: string) {
   }
 
   buildLayerTree(data: any): LayerTreeNode {
+    const isSticky = data.type === 'Sticky Note';
+
     return {
-      id: data.id, // || generateRandomId(),
+      id: data.id,
       type: data.type || 'Unknown',
       name: data.name || data.type || 'Untitled',
       visible: data.visible !== false,
       locked: data.locked,
-      children: Array.isArray(data.children) ? data.children.map(child => this.buildLayerTree(child)) : []
+      // Hide children for StickyNote in the layer panel
+      children: isSticky
+        ? []
+        : Array.isArray(data.children) ? data.children.map(c => this.buildLayerTree(c)) : []
     };
   }
 
   boardTitle: string = '';
   updateBoardTitle() {
-    /// todo: make an API call to update the board title
+    this.boardService.renameBoard(this.board.id, this.boardTitle).subscribe(() => {});
   }
 
   trackById(index: number, item: LayerTreeNode): string {
@@ -906,6 +1489,8 @@ onDotColorSelected(color: string) {
   }
 
   ngOnDestroy(): void {
+    this.routeSub?.unsubscribe();
+
     if (this.autoSaveSubscription) {
       this.autoSaveSubscription.unsubscribe();
     }
@@ -915,6 +1500,11 @@ onDotColorSelected(color: string) {
     if (this.selectionChangedSubscription) {
       this.selectionChangedSubscription.unsubscribe();
     }
+
+    if (this.onMouseMove) document.removeEventListener("mousemove", this.onMouseMove);
+    if (this.onClick) document.removeEventListener("click", this.onClick);
+    if (this.onKeyDown) window.removeEventListener("keydown", this.onKeyDown);
+    if (this.onDocMousedown) document.removeEventListener("mousedown", this.onDocMousedown);
 
     // Ensure WebGPU is reset before switching boards
     this.resetSceneState();
@@ -932,18 +1522,144 @@ onDotColorSelected(color: string) {
     return this.shapeManager.getNodeById(nodeId);
   }
 
-  get xFormatted(): number {
-    return parseFloat(this.selectedNode?.x?.toFixed(2) || '0');
-  }
-  set xFormatted(val: number) {
-    if (this.selectedNode) this.selectedNode.x = val;
+  onNameBlur(layer: LayerTreeNode) {
+    layer.name = layer.name.trim();
+    this.shapeManager.setNodeName(layer.id, layer.name);
   }
 
-  get yFormatted(): number {
-    return parseFloat(this.selectedNode?.y?.toFixed(2) || '0');
+  onEnter(input: HTMLInputElement, layer: LayerTreeNode) {
+    this.onNameBlur(layer); // or pass in layer if available
+    input.blur();
   }
-  set yFormatted(val: number) {
-    if (this.selectedNode) this.selectedNode.y = val;
+
+  updateSDFText(change: Partial<{
+    text: string;
+    font: string;
+    fontSize: number;
+    lineHeight: number;
+    fill: string;
+    outline: string;
+    outlineWidth: number;
+    threshold: number;
+    smoothing: number;
+  }>) {
+    
+    if (!this.selectedNode) return;
+    // push the change to the engine first
+    this.shapeManager.updateSDFText(this.selectedNode.id, change);
+    // now reflect it locally in the side-panel model
+    const type = this.selectedNode.getType?.();
+    if (type === 'Sticky Note') {
+      if (change.text !== undefined) this.selectedNode.text.text = change.text;
+      // update other props carefully if you expose them
+    } else {
+      Object.assign(this.selectedNode, change);
+    }
+  }
+
+  openColorPickerFor(kind: 'fill' | 'outline'): void {
+    if (kind === 'fill') {
+      this.openSDFTextColorPicker();
+    } else {
+      this.openSDFTextOutlineColorPicker();
+    }
+  }
+
+  isLoading = true;
+  private loadingState = {
+    renderer: false,
+    board: false,
+    sceneApplied: false,
+  };
+
+  private markLoaded(key: keyof typeof this.loadingState) {
+    this.loadingState[key] = true;
+    if (Object.values(this.loadingState).every(Boolean)) {
+      this.isLoading = false;
+    }
+  }
+
+  onTextChange(val: string) {
+    if (!this.selectedNode) return;
+
+    // Update engine (handles StickyNote & plain SDFText paths)
+    this.shapeManager.updateSDFText(this.selectedNode.id, { text: val });
+
+    // Keep side-panel model in sync without breaking references
+    const type = this.selectedNode.getType?.();
+    if (type === 'Sticky Note') {
+      // DO NOT do: this.selectedNode.text = val;
+      this.selectedNode.text.text = val; // update the child’s string
+    } else {
+      this.selectedNode.text = val; // plain SDFText node
+    }
+  }
+
+  newBoardButtonClicked(): void {
+    this.closeContextMenu();
+    let newBoard: Board = {
+      id: 0, // Assuming you need an initial id
+      name: 'Untitled Board', // Default name or handle name input
+      description: '', // Default description or handle description input
+      teamId: this.board.teamId
+    };
+
+    this.boardService.createBoard(newBoard).subscribe((res: any) => {
+      if (res.resultType === ResultType.Success) {
+        this.router.navigate(['/board', res.resultObject.uuid]);
+        this.saveThumbnailIfChanged();
+      } else {
+        this.notifyService.error('There was an error creating a new board :(');
+      }
+    }, (error) => {
+      this.notifyService.error('There was an error creating a new board :(');
+      console.error(error);
+    });
+  }
+
+  duplicateBoardButtonClicked(): void {
+    this.closeContextMenu();
+    if (!this.board) { 
+      this.notifyService.error('No board loaded to duplicate.');
+      return;
+    }
+
+    const payload = {
+      name: `Copy of ${this.board.name}`,
+      teamId: this.board.teamId,
+      copyThumbnail: false // let the new board generate its own thumbnail after first render
+    };
+
+    this.boardService.duplicateBoard(this.board.id, payload).subscribe({
+      next: (res: any) => {
+        if (res.resultType === ResultType.Success) {
+          const newUuid = res.resultObject.uuid;
+          this.router.navigate(['/board', newUuid]);
+        } else {
+          this.notifyService.error('There was an error duplicating the board :(');
+        }
+      },
+      error: (err) => {
+        console.error(err);
+        this.notifyService.error('There was an error duplicating the board :(');
+      }
+    });
+  }
+
+  async setCurrentViewAsThumbnail() {
+    if (!this.boardUid || !this.board || !this.shapeManager) return;
+
+    try {
+      const blob = await this.shapeManager.captureThumbnailBlob(300);
+      await firstValueFrom(this.boardService.uploadThumbnail(this.boardUid, blob, true));
+      this.lastSavedThumbnailJSON = this.shapeManager.getSceneGraphJSON();
+      this.notifyService.success('Thumbnail updated to the current view.');
+    } catch (e) {
+      console.error(e);
+      this.notifyService.error('Could not set the thumbnail. Try again.');
+    } finally {
+      this.closeContextMenu();
+    }
   }
 
 }

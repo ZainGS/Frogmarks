@@ -1,0 +1,135 @@
+<!-- ═══════════════════════════════════════════════════════════
+     Raster Layers Panel — Phase 2 Compositor UI
+     ═══════════════════════════════════════════════════════════ -->
+<div class="raster-layers-panel">
+
+  <div class="rl-header">
+    <span>Layers</span>
+    <button class="rl-btn rl-btn-add" (click)="addLayer()" title="Add Layer">+ Add</button>
+  </div>
+
+  <!-- Search -->
+  <div class="rl-search">
+    <input type="text" placeholder="Search layers…" [(ngModel)]="searchTerm">
+  </div>
+
+  <!-- Layer list -->
+  <div class="rl-list">
+    <div *ngFor="let layer of filteredLayers; let i = index"
+         class="rl-item"
+         [class.active]="activeLayerId === layer.id"
+         [class.invisible-layer]="!layer.visible"
+         [class.clipped]="layer.clipped"
+         [class.drag-over]="dragOverIndex === i"
+         draggable="true"
+         (click)="onLayerRowClick(layer, $event)"
+         (dragstart)="onDragStart(i)"
+         (dragover)="onDragOver(i, $event)"
+         (dragleave)="onDragLeave()"
+         (drop)="onDrop(i)"
+         (dragend)="onDragEnd()">
+
+      <!-- Clipping indicator -->
+      <span *ngIf="layer.clipped" class="clip-indicator" title="Clipped to layer below">⤵</span>
+
+      <!-- Row 1: visibility, name, toggles -->
+      <div class="rl-row-top">
+        <!-- Visibility -->
+        <span class="rl-icon rl-eye" (click)="toggleVisibility(layer, $event)"
+              [title]="layer.visible ? 'Hide layer' : 'Show layer'">
+          <mat-icon class="rl-mat-icon">{{ layer.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
+        </span>
+
+        <!-- Layer name (display or edit) -->
+        <span *ngIf="renamingLayerId !== layer.id"
+              class="rl-name"
+              (dblclick)="startRename(layer, $event)">
+          {{ layer.name }}
+        </span>
+        <input *ngIf="renamingLayerId === layer.id"
+               type="text" class="rl-rename-input"
+               [(ngModel)]="renameValue"
+               (blur)="commitRename(layer)"
+               (keyup.enter)="commitRename(layer)"
+               (keyup.escape)="cancelRename()"
+               (click)="$event.stopPropagation()"
+               autofocus>
+
+        <!-- Clipping toggle (not on bottom layer) -->
+        <span *ngIf="!isBottomLayer(layer)"
+              class="rl-icon rl-clip"
+              [class.on]="layer.clipped"
+              (click)="toggleClipping(layer, $event)"
+              title="Clipping mask">
+          🔗
+        </span>
+
+        <!-- Lock transparency toggle -->
+        <span class="rl-icon rl-lock-alpha"
+              [class.on]="layer.lockTransparency"
+              (click)="toggleLockTransparency(layer, $event)"
+              title="Lock transparency">
+          {{ layer.lockTransparency ? '🔒' : '🔓' }}
+        </span>
+      </div>
+
+      <!-- Row 2: blend mode + opacity -->
+      <div class="rl-row-bottom">
+        <!-- Blend mode dropdown trigger -->
+        <div class="blend-dropdown-wrapper">
+          <button class="blend-trigger"
+                  (click)="toggleBlendDropdown(layer.id, $event)"
+                  [title]="getBlendLabel(layer.blendMode)">
+            {{ getBlendLabel(layer.blendMode) }} ▾
+          </button>
+
+          <!-- Dropdown panel -->
+          <div *ngIf="openBlendDropdownId === layer.id" class="blend-dropdown"
+               [ngStyle]="blendDropdownStyle">
+            <ng-container *ngFor="let cat of blendModeCategories">
+              <div class="blend-cat-label">{{ cat }}</div>
+              <div *ngFor="let opt of optionsForCategory(cat)"
+                   class="blend-option"
+                   [class.active]="layer.blendMode === opt.value"
+                   [title]="opt.tooltip"
+                   (click)="setBlendMode(layer, opt.value, $event)">
+                {{ opt.label }}
+              </div>
+            </ng-container>
+          </div>
+        </div>
+
+        <!-- Opacity slider -->
+        <div class="opacity-control">
+          <input type="range" min="0" max="100" step="1"
+                 [value]="layer.opacity * 100"
+                 (input)="onOpacityChange(layer, $event)"
+                 (click)="$event.stopPropagation()">
+          <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="filteredLayers.length === 0" class="rl-empty">
+      No raster layers
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="rl-actions">
+    <button class="rl-btn" *ngIf="activeLayerId"
+            [disabled]="!canDeleteLayer"
+            (click)="deleteLayer(activeLayerId!)" title="Delete Layer"><mat-icon class="rl-mat-icon">delete</mat-icon></button>
+    <span class="rl-actions-spacer"></span>
+    <button class="rl-btn rl-btn-sm" *ngIf="activeLayerId"
+            (click)="moveDown(activeLayerIndex)"
+            title="Move up">
+      <mat-icon class="rl-mat-icon">arrow_upward</mat-icon>
+    </button>
+    <button class="rl-btn rl-btn-sm" *ngIf="activeLayerId"
+            (click)="moveUp(activeLayerIndex)"
+            title="Move down">
+      <mat-icon class="rl-mat-icon">arrow_downward</mat-icon>
+    </button>
+  </div>
+</div>

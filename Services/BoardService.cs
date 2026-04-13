@@ -1,11 +1,8 @@
 ﻿using AutoMapper;
-using Azure.Storage.Blobs.Models;
-using Azure.Storage.Blobs;
 using Duende.IdentityServer.Extensions;
 using Frogmarks.Data;
 using Frogmarks.Models;
 using Frogmarks.Models.Board;
-using Frogmarks.Models.DTOs;
 using Frogmarks.Models.Team;
 using Frogmarks.SignalR.Hubs;
 using Frogmarks.SignalR.Optimizers;
@@ -18,8 +15,9 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
-using Azure.Storage.Sas;
 using Frogmarks.Models.Dtos;
+using Frogmarks.Models.Dtos.Board;
+using Frogmarks.Services.Interfaces;
 
 namespace Frogmarks.Services
 {
@@ -29,16 +27,16 @@ namespace Frogmarks.Services
         private readonly IMapper _mapper;
         private readonly BatchService _batchService;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly BlobServiceClient _blobServiceClient;
+        private readonly IBlobStorageProvider _blobStorage;
         private readonly string _containerName = "board-thumbnails-dev"; // Blob Storage container, TODO: Use environment variable to determine.
 
-        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, BlobServiceClient blobServiceClient)
+        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage)
         {
             _context = context;
             _mapper = mapper;
             _batchService = batchService;
             _httpContextAccessor = httpContextAccessor;
-            _blobServiceClient = blobServiceClient;
+            _blobStorage = blobStorage;
         }
 
         public async Task<ResultModel<IEnumerable<Board>>> GetAllBoards()
@@ -219,9 +217,6 @@ namespace Frogmarks.Services
 
                 // Map the changes from boardDto to the existingBoard
                 _mapper.Map(boardDto, existingBoard);
-
-                // Mark the existing board as modified & update
-                _context.Boards.Update(existingBoard);
                 await _context.SaveChangesAsync();
 
                 // Alert Batch Service of updated board item
@@ -331,7 +326,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IEnumerable<BoardDto>>> SearchBoards(
             string name, long teamId, bool favorites, string sortBy, string sortDirection,
-            int pageIndex, int pageSize, HashSet<long> cachedThumbnailBoardIds)
+            int pageIndex, int pageSize, HashSet<long> cachedThumbnailBoardIds, bool isArchived)
         {
             try
             {
@@ -344,6 +339,8 @@ namespace Frogmarks.Services
                 var query = _context.Boards
                     .AsNoTracking()
                     .Where(b => teamId <= 0 || b.TeamId == teamId);
+
+                query = query.Where(b => b.IsArchived == isArchived);
 
                 if (favorites)
                 {
@@ -379,8 +376,10 @@ namespace Frogmarks.Services
                         Id = b.Id,
                         UUID = b.UUID,
                         Name = b.Name,
+                        IsArchived = b.IsArchived,
                         Created = b.Created,
-                        DateModified = b.DateModified
+                        DateModified = b.DateModified,
+                        IsCustomThumbnail = b.IsCustomThumbnail
                     })
                     .ToListAsync();
 
@@ -486,6 +485,7 @@ namespace Frogmarks.Services
                         Name = b.Name,
                         Description = b.Description,
                         ThumbnailUrl = b.ThumbnailUrl,
+                        IsCustomThumbnail = b.IsCustomThumbnail,
                         StartViewLeftTop = b.StartViewLeftTop,
                         StartViewLeftBottom = b.StartViewLeftBottom,
                         StartViewRightTop = b.StartViewRightTop,
@@ -531,25 +531,32 @@ namespace Frogmarks.Services
             }
         }
 
-        public async Task<ResultModel<string>> UploadThumbnail(string boardUid, IFormFile thumbnail)
+        public async Task<ResultModel<string>> UploadThumbnail(string boardUid, IFormFile thumbnail, bool? isCustom = null)
         {
             try
             {
                 if (thumbnail == null || thumbnail.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
-                var containerClient = _blobServiceClient.GetBlobContainerClient(this._containerName);
-
-                await containerClient.CreateIfNotExistsAsync();
-
-                var blobClient = containerClient.GetBlobClient($"{boardUid}.png");
-
+                var blobName = $"{boardUid}.png";
                 using (var stream = thumbnail.OpenReadStream())
                 {
-                    await blobClient.UploadAsync(stream, overwrite: true);
+                    await _blobStorage.UploadAsync(_containerName, blobName, stream, overwrite: true);
                 }
 
-                return new ResultModel<string>(ResultType.Success, blobClient.Uri.ToString());
+                if (isCustom.HasValue && Guid.TryParse(boardUid, out var uuid))
+                {
+                    var board = await _context.Boards.FirstOrDefaultAsync(b => b.UUID == uuid);
+                    if (board != null)
+                    {
+                        board.IsCustomThumbnail = isCustom.Value;
+                        board.DateModified = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                var url = await _blobStorage.GetReadUrlAsync(_containerName, blobName);
+                return new ResultModel<string>(ResultType.Success, url);
             }
             catch (Exception ex)
             {
@@ -583,24 +590,93 @@ namespace Frogmarks.Services
 
         public async Task<string> GetThumbnailSasUrl(Board board)
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(this._containerName);
-            var blobClient = containerClient.GetBlobClient($"{board.UUID}.png");
-
-            if (!(await blobClient.ExistsAsync()))
-                //// TODO: Return default/blank image URL instead.
-                // throw new Exception("Thumbnail not found");
-                return "";
-
-            var sasBuilder = new BlobSasBuilder
+            try
             {
-                BlobContainerName = containerClient.Name,
-                BlobName = blobClient.Name,
-                ExpiresOn = DateTime.UtcNow.AddHours(1),
-                Resource = "b"
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Read);
+                return await _blobStorage.GetReadUrlAsync(_containerName, $"{board.UUID}.png");
+            }
+            catch
+            {
+                return "";
+            }
+        }
 
-            return blobClient.GenerateSasUri(sasBuilder).ToString();
+        public async Task<ResultModel<BoardDto>> DuplicateBoard(
+            long sourceBoardId,
+            string? nameOverride,
+            long? targetTeamId,
+            bool copyThumbnail)
+        {
+            var source = await _context.Boards
+                .FirstOrDefaultAsync(b => b.Id == sourceBoardId);
+
+            if (source == null)
+                return new ResultModel<BoardDto>(ResultType.NotFound, "Source board not found.");
+
+            var newBoard = new Board
+            {
+                UUID = Guid.NewGuid(),
+                Name = string.IsNullOrWhiteSpace(nameOverride) ? $"Copy of {source.Name}" : nameOverride,
+                Description = source.Description,
+                TeamId = targetTeamId ?? source.TeamId,
+                // copy scene + look & preferences
+                SceneGraphData = source.SceneGraphData,
+                BackgroundColor = source.BackgroundColor,
+                StartViewLeftTop = source.StartViewLeftTop,
+                StartViewLeftBottom = source.StartViewLeftBottom,
+                StartViewRightTop = source.StartViewRightTop,
+                StartViewRightBottom = source.StartViewRightBottom,
+                PreferencesId = source.PreferencesId, // or deep copy Preferences entity if needed
+                PermissionsId = source.PermissionsId, // ditto if you want a separate permissions row
+                Created = DateTime.UtcNow,
+                DateModified = DateTime.UtcNow,
+                IsArchived = false,
+                IsCustomThumbnail = source.IsCustomThumbnail
+            };
+
+            _context.Boards.Add(newBoard);
+            await _context.SaveChangesAsync();
+
+            if (copyThumbnail)
+            {
+                try
+                {
+                    var srcBlobName = $"{source.UUID}.png";
+                    var dstBlobName = $"{newBoard.UUID}.png";
+
+                    if (await _blobStorage.ExistsAsync(_containerName, srcBlobName))
+                    {
+                        var data = await _blobStorage.DownloadAsync(_containerName, srcBlobName);
+                        using var ms = new MemoryStream(data);
+                        await _blobStorage.UploadAsync(_containerName, dstBlobName, ms, overwrite: true);
+                    }
+                }
+                catch
+                {
+                    // swallow or log; thumbnail can be regenerated later by frontend
+                }
+            }
+
+            var dto = _mapper.Map<BoardDto>(newBoard);
+            dto.ThumbnailUrl = await GetThumbnailSasUrl(newBoard);
+            return new ResultModel<BoardDto>(ResultType.Success, resultObject: dto);
+        }
+
+        public async Task<ResultModel<BoardDto>> RenameBoard(long boardId, string newName)
+        {
+            var board = await _context.Boards.FindAsync(boardId);
+            if (board == null)
+                return new ResultModel<BoardDto>(ResultType.NotFound, "Board not found");
+
+            if (string.IsNullOrWhiteSpace(newName))
+                return new ResultModel<BoardDto>(ResultType.Failure, "New name cannot be empty.");
+
+            board.Name = newName.Trim();
+            board.DateModified = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            var dto = _mapper.Map<BoardDto>(board);
+            return new ResultModel<BoardDto>(ResultType.Success, resultObject: dto);
         }
     }
 

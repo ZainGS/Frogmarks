@@ -19,6 +19,8 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json.Serialization;
 using Azure.Storage.Blobs;
+using Frogmarks.Services;
+using Frogmarks.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -166,13 +168,28 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddTransient<IErrorService, ErrorService>();
 builder.Services.AddScoped<IBoardService, BoardService>();
+builder.Services.AddScoped<IIllustrationService, IllustrationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITeamUserService, TeamUserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<BatchService>();
 builder.Services.AddScoped<TokenGenerator>();
-builder.Services.AddSingleton(x => new BlobServiceClient(builder.Configuration["AzureBlobStorage:ConnectionString"]));
+
+// Blob storage: use local filesystem in Development, Azure Blob Storage otherwise
+if (builder.Environment.IsDevelopment() && string.IsNullOrEmpty(builder.Configuration["AzureBlobStorage:ConnectionString"]))
+{
+    builder.Services.AddSingleton<IBlobStorageProvider>(sp =>
+    {
+        var env = sp.GetRequiredService<IWebHostEnvironment>();
+        return new LocalBlobStorageProvider(env.WebRootPath);
+    });
+}
+else
+{
+    builder.Services.AddSingleton(x => new BlobServiceClient(builder.Configuration["AzureBlobStorage:ConnectionString"]));
+    builder.Services.AddSingleton<IBlobStorageProvider, AzureBlobStorageProvider>();
+}
 
 // Register Hubs
 builder.Services.AddSingleton<BoardHub>(); // Register BoardHub, if it doesn't depend on scoped services, otherwise use 
@@ -257,6 +274,19 @@ else
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Serve local blob storage files in development
+if (app.Environment.IsDevelopment())
+{
+    var blobStoragePath = Path.Combine(app.Environment.WebRootPath, "blob-storage");
+    Directory.CreateDirectory(blobStoragePath);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(blobStoragePath),
+        RequestPath = "/blob-storage"
+    });
+}
+
 app.UseRouting();
 
 // Use session middleware

@@ -11,6 +11,7 @@ using Duende.IdentityServer.EntityFramework.Entities;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Frogmarks.Models.Illustration;
 
 namespace Frogmarks.Data
 {
@@ -33,10 +34,20 @@ namespace Frogmarks.Data
         public DbSet<Team> Teams { get; set; }
         public DbSet<TeamUser> TeamUsers { get; set; }
         public DbSet<TeamProject> TeamProjects { get; set; }
+
+        // BOARDS
         public DbSet<Board> Boards { get; set; }
         public DbSet<BoardCollaborator> BoardsCollaborators { get; set; }
         public DbSet<BoardItem> BoardItems { get; set; }
         public DbSet<BoardViewLog> BoardViewLogs { get; set; }
+
+        // ILLUSTRATIONS
+        public DbSet<Illustration> Illustrations { get; set; }
+        public DbSet<IllustrationCollaborator> IllustrationCollaborators { get; set; }
+        // public DbSet<BoardItem> BoardItems { get; set; }
+        public DbSet<IllustrationViewLog> IllustrationViewLogs { get; set; }
+        public DbSet<IllustrationLayer> IllustrationLayers { get; set; }
+        public DbSet<IllustrationCel> IllustrationCels { get; set; }
 
         // AUTH
         public DbSet<EmailToken> EmailTokens { get; set; }
@@ -149,6 +160,28 @@ namespace Frogmarks.Data
                 .WithMany()
                 .HasForeignKey(b => b.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // IllustrationLayer: unique (IllustrationId, LayerId)
+            modelBuilder.Entity<IllustrationLayer>()
+                .HasIndex(l => new { l.IllustrationId, l.LayerId })
+                .IsUnique();
+
+            modelBuilder.Entity<IllustrationLayer>()
+                .HasOne(l => l.Illustration)
+                .WithMany(i => i.Layers)
+                .HasForeignKey(l => l.IllustrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // IllustrationCel: unique (LayerDbId, CelId)
+            modelBuilder.Entity<IllustrationCel>()
+                .HasIndex(c => new { c.LayerDbId, c.CelId })
+                .IsUnique();
+
+            modelBuilder.Entity<IllustrationCel>()
+                .HasOne(c => c.Layer)
+                .WithMany(l => l.Cels)
+                .HasForeignKey(c => c.LayerDbId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Apply configuration to all entities that inherit from AuditLog
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())

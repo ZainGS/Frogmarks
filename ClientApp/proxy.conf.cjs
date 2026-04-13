@@ -11,7 +11,8 @@ const PROXY_CONFIG = [
       "/Identity",
       "/connect",
       "/ApplyDatabaseMigrations",
-      "/_framework"
+      "/_framework",
+      "/blob-storage"
    ],
     target: target,
     secure: false,

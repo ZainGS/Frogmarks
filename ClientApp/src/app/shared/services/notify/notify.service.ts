@@ -12,7 +12,7 @@ export class NotifyService {
 
   success(message: string = "Success!", action: string = "Dismiss") {
     this.notify.open(message, action, {
-      duration: 2000,
+      duration: 5000,
     });
   }
 

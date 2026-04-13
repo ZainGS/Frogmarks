@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════════════
+   Selection Toolbar — dark theme, compact layout
+   ═══════════════════════════════════════════════════════════ */
+
+$surface: #333;
+$border: #555;
+$text: #e0e0e0;
+$muted: #aaa;
+$accent: #9B59B6;
+$accent-light: #b87fd9;
+
+.sel-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: $text;
+  font-size: 12px;
+}
+
+.sel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.sel-spacer {
+  flex: 1;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.sel-btn {
+  background: $surface;
+  color: $text;
+  border: 1px solid $border;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: lighten($surface, 10%);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &.active {
+    background: rgba($accent, 0.25);
+    border-color: $accent;
+    color: $accent-light;
+  }
+}
+
+.tool-btn {
+  min-width: 32px;
+  text-align: center;
+  font-size: 14px;
+  padding: 4px 6px;
+}
+
+.sel-btn.commit {
+  border-color: #4CAF50;
+  color: #81C784;
+
+  &:hover:not(:disabled) {
+    background: rgba(#4CAF50, 0.15);
+  }
+}
+
+.sel-btn.cancel {
+  border-color: #f44336;
+  color: #ef9a9a;
+
+  &:hover:not(:disabled) {
+    background: rgba(#f44336, 0.15);
+  }
+}
+
+.sel-btn.danger {
+  &:hover:not(:disabled) {
+    border-color: #f44336;
+    color: #ef9a9a;
+  }
+}
+
+/* ── Feather ─────────────────────────────────────────────── */
+
+.feather-label {
+  font-size: 11px;
+  color: $muted;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.feather-input {
+  width: 42px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  padding: 2px 4px;
+  font-size: 11px;
+  text-align: center;
+
+  &:focus {
+    outline: 1px solid $accent;
+  }
+}
+
+/* ── Mat-icon sizing ───────────────────────────────────────── */
+
+.sel-mat-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  vertical-align: middle;
+  line-height: 15px;
+}

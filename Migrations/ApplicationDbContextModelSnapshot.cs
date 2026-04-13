@@ -253,6 +253,12 @@ namespace Frogmarks.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCustomThumbnail")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ModifiedById")
                         .HasColumnType("nvarchar(450)");
 
@@ -612,6 +618,380 @@ namespace Frogmarks.Migrations
                     b.ToTable("BoardViewLogs");
                 });
 
+            modelBuilder.Entity("Frogmarks.Models.Illustration.Illustration", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("AnimationEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CanvasData")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("Created")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedIp")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateTime?>("DateModified")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Fps")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FrameCount")
+                        .HasColumnType("int");
+
+                    b.Property<double>("Height")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCustomThumbnail")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LoopMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ModifiedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OnionSkinConfig")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("PermissionsId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PlayRangeEnd")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PlayRangeStart")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("PreferencesId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SceneVersion")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("TeamUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("UUID")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UpdatedIp")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("isDraft")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.HasIndex("PermissionsId")
+                        .IsUnique()
+                        .HasFilter("[PermissionsId] IS NOT NULL");
+
+                    b.HasIndex("PreferencesId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("TeamUserId");
+
+                    b.ToTable("Illustrations");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationCel", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CelId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CelType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Duration")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Frame")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsKey")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("LayerDbId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PixelDataUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PixelFormat")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("PixelHeight")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PixelWidth")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LayerDbId", "CelId")
+                        .IsUnique();
+
+                    b.ToTable("IllustrationCels");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationCollaborator", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("IllustrationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IllustrationId");
+
+                    b.HasIndex("TeamUserId");
+
+                    b.ToTable("IllustrationCollaborators");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationLayer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("Animated")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("BlendMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool>("Clipped")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("IllustrationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LayerId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("LockTransparency")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Locked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<double>("Opacity")
+                        .HasColumnType("float");
+
+                    b.Property<string>("PixelDataUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PixelFormat")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("PixelHeight")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PixelWidth")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Visible")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IllustrationId", "LayerId")
+                        .IsUnique();
+
+                    b.ToTable("IllustrationLayers");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationPermissions", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("CanNonCollaboratorsEdit")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CanNonCollaboratorsView")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("IllustrationId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IllustrationPermissions");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationRole", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("IllustrationCollaboratorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IllustrationCollaboratorId");
+
+                    b.ToTable("IllustrationRole");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationUserPreferences", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("IllustrationdId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IllustrationUserPreferences");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationViewLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ApplicationUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("IllustrationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LastViewed")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("TeamUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.HasIndex("IllustrationId");
+
+                    b.HasIndex("TeamUserId");
+
+                    b.ToTable("IllustrationViewLogs");
+                });
+
             modelBuilder.Entity("Frogmarks.Models.Team.Team", b =>
                 {
                     b.Property<long>("Id")
@@ -918,6 +1298,120 @@ namespace Frogmarks.Migrations
                     b.Navigation("TeamUser");
                 });
 
+            modelBuilder.Entity("Frogmarks.Models.Illustration.Illustration", b =>
+                {
+                    b.HasOne("Frogmarks.Models.ApplicationUser", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById");
+
+                    b.HasOne("Frogmarks.Models.ApplicationUser", "ModifiedBy")
+                        .WithMany()
+                        .HasForeignKey("ModifiedById");
+
+                    b.HasOne("Frogmarks.Models.Illustration.IllustrationPermissions", "Permissions")
+                        .WithOne("Illustration")
+                        .HasForeignKey("Frogmarks.Models.Illustration.Illustration", "PermissionsId");
+
+                    b.HasOne("Frogmarks.Models.Illustration.IllustrationUserPreferences", "Preferences")
+                        .WithMany()
+                        .HasForeignKey("PreferencesId");
+
+                    b.HasOne("Frogmarks.Models.Team.TeamProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId");
+
+                    b.HasOne("Frogmarks.Models.Team.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId");
+
+                    b.HasOne("Frogmarks.Models.TeamUser", null)
+                        .WithMany("FavoriteIllustrations")
+                        .HasForeignKey("TeamUserId");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("ModifiedBy");
+
+                    b.Navigation("Permissions");
+
+                    b.Navigation("Preferences");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationCel", b =>
+                {
+                    b.HasOne("Frogmarks.Models.Illustration.IllustrationLayer", "Layer")
+                        .WithMany("Cels")
+                        .HasForeignKey("LayerDbId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Layer");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationCollaborator", b =>
+                {
+                    b.HasOne("Frogmarks.Models.Illustration.Illustration", null)
+                        .WithMany("Collaborators")
+                        .HasForeignKey("IllustrationId");
+
+                    b.HasOne("Frogmarks.Models.TeamUser", "TeamUser")
+                        .WithMany()
+                        .HasForeignKey("TeamUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TeamUser");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationLayer", b =>
+                {
+                    b.HasOne("Frogmarks.Models.Illustration.Illustration", "Illustration")
+                        .WithMany("Layers")
+                        .HasForeignKey("IllustrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Illustration");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationRole", b =>
+                {
+                    b.HasOne("Frogmarks.Models.Illustration.IllustrationCollaborator", null)
+                        .WithMany("IllustrationRoles")
+                        .HasForeignKey("IllustrationCollaboratorId");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationViewLog", b =>
+                {
+                    b.HasOne("Frogmarks.Models.ApplicationUser", "ApplicationUser")
+                        .WithMany()
+                        .HasForeignKey("ApplicationUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Frogmarks.Models.Illustration.Illustration", "Illustration")
+                        .WithMany()
+                        .HasForeignKey("IllustrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Frogmarks.Models.TeamUser", "TeamUser")
+                        .WithMany()
+                        .HasForeignKey("TeamUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApplicationUser");
+
+                    b.Navigation("Illustration");
+
+                    b.Navigation("TeamUser");
+                });
+
             modelBuilder.Entity("Frogmarks.Models.Team.Team", b =>
                 {
                     b.HasOne("Frogmarks.Models.ApplicationUser", "CreatedBy")
@@ -1012,6 +1506,28 @@ namespace Frogmarks.Migrations
                     b.Navigation("Board");
                 });
 
+            modelBuilder.Entity("Frogmarks.Models.Illustration.Illustration", b =>
+                {
+                    b.Navigation("Collaborators");
+
+                    b.Navigation("Layers");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationCollaborator", b =>
+                {
+                    b.Navigation("IllustrationRoles");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationLayer", b =>
+                {
+                    b.Navigation("Cels");
+                });
+
+            modelBuilder.Entity("Frogmarks.Models.Illustration.IllustrationPermissions", b =>
+                {
+                    b.Navigation("Illustration");
+                });
+
             modelBuilder.Entity("Frogmarks.Models.Team.Team", b =>
                 {
                     b.Navigation("Boards");
@@ -1036,6 +1552,8 @@ namespace Frogmarks.Migrations
             modelBuilder.Entity("Frogmarks.Models.TeamUser", b =>
                 {
                     b.Navigation("FavoriteBoards");
+
+                    b.Navigation("FavoriteIllustrations");
 
                     b.Navigation("TeamRoles");
                 });

@@ -3,7 +3,7 @@ using Frogmarks.Models.Logging;
 using Frogmarks.Models.Team;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Frogmarks.Models.Dtos
+namespace Frogmarks.Models.Dtos.Board
 {
     /// <summary>
     /// A Board is the primary object that BoardCollaborators will modify; multiple BoardCollaborators will add BoardItems to the Board 
@@ -16,6 +16,7 @@ namespace Frogmarks.Models.Dtos
         public string Name { get; set; } = "Untitled";
         public string? Description { get; set; } = string.Empty;
         public string? ThumbnailUrl { get; set; } = string.Empty;
+        public bool IsCustomThumbnail { get; set; } = false;
         public int StartViewLeftTop { get; set; } = 0;
         public int StartViewLeftBottom { get; set; } = 0;
         public int StartViewRightTop { get; set; } = 0;
@@ -42,6 +43,7 @@ namespace Frogmarks.Models.Dtos
         public DateTime? LastViewed { get; set; }
         public List<string>? CachedThumbnailBoardIds { get; set; }
         public string? SceneGraphData { get; set; } // Stored as JSON string
+        public bool IsArchived { get; set; } = false;
 
     }
 }

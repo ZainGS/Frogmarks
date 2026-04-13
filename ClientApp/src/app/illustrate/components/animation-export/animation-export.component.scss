@@ -1,0 +1,167 @@
+/* ═══════════════════════════════════════════════════════════════
+   Animation Export Dialog
+   ═══════════════════════════════════════════════════════════════ */
+
+$bg: #1a1a1a;
+$surface: #2a2a2a;
+$border: #444;
+$text: #e0e0e0;
+$muted: #999;
+$accent: #9B59B6;
+$accent-light: #b87fd9;
+
+.export-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-dialog {
+  background: $bg;
+  border: 1px solid $border;
+  border-radius: 8px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color: $text;
+  font-size: 12px;
+}
+
+.export-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid $border;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: $muted;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+
+  &:hover { background: rgba(255, 255, 255, 0.08); color: $text; }
+}
+
+.export-body {
+  padding: 14px 16px;
+}
+
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  select {
+    flex: 1;
+    background: $surface;
+    color: $text;
+    border: 1px solid $border;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 11px;
+
+    &:focus { outline: 2px solid $accent; }
+  }
+
+  input[type='range'] {
+    flex: 1;
+    accent-color: $accent;
+  }
+}
+
+.export-label {
+  min-width: 72px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $muted;
+}
+
+.range-input {
+  width: 52px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  padding: 3px 6px;
+  font-size: 11px;
+  text-align: right;
+
+  &:focus { outline: 2px solid $accent; }
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+
+  input[type='checkbox'] { accent-color: $accent; }
+}
+
+.color-input {
+  width: 28px;
+  height: 24px;
+  border: 1px solid $border;
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.quality-value {
+  min-width: 32px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.export-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid $border;
+}
+
+.btn-export {
+  background: $accent;
+  color: white;
+  border: 1px solid $accent;
+  border-radius: 4px;
+  padding: 6px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: $accent-light; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.btn-cancel {
+  background: $surface;
+  color: $text;
+  border: 1px solid $border;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover { background: lighten($surface, 10%); }
+}

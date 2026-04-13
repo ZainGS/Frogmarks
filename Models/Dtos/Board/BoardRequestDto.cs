@@ -1,4 +1,4 @@
-﻿namespace Frogmarks.Models.DTOs
+﻿namespace Frogmarks.Models.Dtos.Board
 {
     public class BoardRequestDto
     {

@@ -1,0 +1,92 @@
+<!-- ═══════════════════════════════════════════════════════════
+     Selection Toolbar — tools, actions, clipboard, transform
+     ═══════════════════════════════════════════════════════════ -->
+<div class="sel-toolbar">
+
+  <!-- ── Tool buttons ──────────────────────────────────────── -->
+  <div class="sel-section">
+    <div class="sel-row">
+      <button class="sel-btn tool-btn"
+              [class.active]="activeTool === 'rect'"
+              (click)="setTool('rect')"
+              title="Rectangle Select (M)">
+        <mat-icon class="sel-mat-icon">crop_square</mat-icon>
+      </button>
+      <button class="sel-btn tool-btn"
+              [class.active]="activeTool === 'ellipse'"
+              (click)="setTool('ellipse')"
+              title="Ellipse Select (O)">
+        <mat-icon class="sel-mat-icon">radio_button_unchecked</mat-icon>
+      </button>
+      <button class="sel-btn tool-btn"
+              [class.active]="activeTool === 'lasso'"
+              (click)="setTool('lasso')"
+              title="Lasso Select (L)">
+        <mat-icon class="sel-mat-icon">gesture</mat-icon>
+      </button>
+      <button class="sel-btn tool-btn"
+              [class.active]="activeTool === 'magic-wand'"
+              (click)="setTool('magic-wand')"
+              title="Magic Wand (W)">
+        <mat-icon class="sel-mat-icon">auto_fix_high</mat-icon>
+      </button>
+
+      <span class="sel-spacer"></span>
+
+      <!-- Feather -->
+      <label class="feather-label" title="Feather radius (soft edge)">
+        Feather:
+        <input type="number" class="feather-input" min="0" max="50" step="1"
+               [value]="feather"
+               (change)="onFeatherChange($event)"> px
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Selection actions ─────────────────────────────────── -->
+  <div class="sel-section">
+    <div class="sel-row">
+      <button class="sel-btn" (click)="selectAll()" title="Select All (Ctrl+A)">Select All</button>
+      <button class="sel-btn" (click)="deselect()"
+              [disabled]="!info.hasSelection"
+              title="Deselect (Ctrl+D)">Deselect</button>
+      <button class="sel-btn" (click)="invert()"
+              [disabled]="!info.hasSelection"
+              title="Invert Selection (Ctrl+Shift+I)">Invert</button>
+    </div>
+  </div>
+
+  <!-- ── Clipboard / delete ────────────────────────────────── -->
+  <div class="sel-section">
+    <div class="sel-row">
+      <button class="sel-btn" (click)="cut()"
+              [disabled]="!info.hasSelection"
+              title="Cut (Ctrl+X)"><mat-icon class="sel-mat-icon">content_cut</mat-icon> Cut</button>
+      <button class="sel-btn" (click)="copy()"
+              [disabled]="!info.hasSelection"
+              title="Copy (Ctrl+C)"><mat-icon class="sel-mat-icon">content_copy</mat-icon> Copy</button>
+      <button class="sel-btn" (click)="paste()"
+              title="Paste (Ctrl+V)"><mat-icon class="sel-mat-icon">content_paste</mat-icon> Paste</button>
+      <button class="sel-btn danger" (click)="deleteSelection()"
+              [disabled]="!info.hasSelection"
+              title="Delete (Del)"><mat-icon class="sel-mat-icon">delete</mat-icon> Delete</button>
+    </div>
+  </div>
+
+  <!-- ── Transform ─────────────────────────────────────────── -->
+  <div class="sel-section">
+    <div class="sel-row">
+      <button class="sel-btn" (click)="beginTransform()"
+              *ngIf="!info.isTransforming"
+              [disabled]="!info.hasSelection"
+              title="Transform (Ctrl+T)"><mat-icon class="sel-mat-icon">open_with</mat-icon> Transform</button>
+      <button class="sel-btn commit" (click)="commitTransform()"
+              *ngIf="info.isTransforming"
+              title="Commit (Enter)"><mat-icon class="sel-mat-icon">check</mat-icon> Commit</button>
+      <button class="sel-btn cancel" (click)="cancelTransform()"
+              *ngIf="info.isTransforming"
+              title="Cancel (Escape)"><mat-icon class="sel-mat-icon">close</mat-icon> Cancel</button>
+    </div>
+  </div>
+
+</div>

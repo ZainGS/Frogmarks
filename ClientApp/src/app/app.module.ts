@@ -34,6 +34,14 @@ import { BoardComponent } from './boards/components/board/board.component';
 import { InviteModalComponent } from './shared/components/invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from './shared/components/upgrade-modal/upgrade-modal.component';
 import { ColorPickerComponent } from './shared/components/color-picker/color-picker.component';
+import { IllustrationComponent } from './illustrate/components/illustration/illustration.component';
+import { ExploreFeedComponent } from './shared/components/explore-feed/explore-feed.component';
+import { BrushOptionsComponent } from './boards/components/brush-options/brush-options.component';
+import { CurveEditorComponent } from './boards/components/curve-editor/curve-editor.component';
+import { RasterLayersComponent } from './boards/components/raster-layers/raster-layers.component';
+import { SelectionToolbarComponent } from './boards/components/selection-toolbar/selection-toolbar.component';
+import { AnimationTimelineComponent } from './illustrate/components/animation-timeline/animation-timeline.component';
+import { AnimationExportComponent } from './illustrate/components/animation-export/animation-export.component';
 
 // Define MSAL configuration
 /*
@@ -58,10 +66,18 @@ export function MSALInstanceFactory(): PublicClientApplication {
     NavMenuComponent,
     HomeComponent,
     DashboardComponent,
+    ExploreFeedComponent,
     InviteModalComponent,
     UpgradeModalComponent,
     ColorPickerComponent,
-    BoardComponent
+    BoardComponent,
+    IllustrationComponent,
+    BrushOptionsComponent,
+    CurveEditorComponent,
+    RasterLayersComponent,
+    SelectionToolbarComponent,
+    AnimationTimelineComponent,
+    AnimationExportComponent
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
@@ -90,6 +106,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
       { path: 'signin', component: SignInComponent},
       { path: 'dashboard', component: DashboardComponent},
       { path: 'board/:id', component: BoardComponent},
+      { path: 'illustration/:id', component: IllustrationComponent},
     ])
   ],
   exports: [RouterModule],

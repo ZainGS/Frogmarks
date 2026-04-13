@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit, ViewChild, ViewChildren, ElementRef, QueryList } from '@angular/core';
 import { Board } from '../../../boards/models/board.model';
 import { CdkDragDrop, CdkDragRelease, CdkDragStart, CdkDragMove, CdkDragEnd, moveItemInArray } from '@angular/cdk/drag-drop';
 import { BoardService } from '../../services/boards/board.service';
@@ -16,6 +16,14 @@ import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component'
 import { FormControl } from '@angular/forms';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { ThemeService } from 'app/shared/services/theme/theme.service';
+import { ConfigurationService } from 'app/shared/services/api/configuration.service';
+import { Illustration } from 'app/illustrate/models/illustration.model';
+import { IllustrationService } from 'app/shared/services/illustrate/illustration.service';
+import { FrogFileService } from 'app/shared/services/illustrate/frog-file.service';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+
+type DashboardItem = Board | Illustration;
 
 @Component({
   selector: 'app-dashboard',
@@ -57,6 +65,35 @@ import { ThemeService } from 'app/shared/services/theme/theme.service';
 
 export class DashboardComponent implements OnInit, AfterViewInit {
 
+  editingId: string | null = null;
+  nameControl = new FormControl<string>('');
+  @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef<HTMLInputElement>>;
+  startInlineRename(item: DashboardItem) {
+    this.closeContextMenu();
+    this.editingId = item.uuid;
+    this.nameControl.setValue(item.name);
+    // focus after view updates
+    setTimeout(() => this.renameInputs?.find(_=>true)?.nativeElement?.focus(), 0);
+  }
+
+  commitInlineRename(item: DashboardItem) {
+    const newName = (this.nameControl.value ?? '').trim();
+    if (!newName || newName === item.name) { this.cancelInlineRename(); return; }
+    
+    item.name = newName;
+    this.editingId = null;
+    
+    if (this.isBoard(item)) {
+      this.boardService.renameBoard(item.id, newName).subscribe(() => {});
+    } else if (this.isIllustration(item)) {
+      this.illustrationService.renameIllustration(item.id, newName).subscribe(() => {});
+    }
+  }
+
+  cancelInlineRename() {
+    this.editingId = null;
+  }
+
   // Click Host Listener for dropdown menus
   @HostListener('document:click', ['$event'])
   handleOutsideClick(event: MouseEvent) {
@@ -92,6 +129,132 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   hoveringNewBoardButton: boolean = false;
   isTeamSelected: boolean = false;
 
+  frogmarksList = Array(40).fill('FROGMARKS //');
+
+  contextMenu = {
+    visible: false,
+    x: 0,
+    y: 0,
+    item: null as DashboardItem | null
+  };
+
+  isBoard(item: DashboardItem): item is Board {
+    return item.type == 'board';
+  }
+
+  isIllustration(item: DashboardItem): item is Illustration {
+    return item.type == 'illustration';
+  }
+
+  openBoardMenu(event: MouseEvent, item: DashboardItem) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const clickX = event.clientX;
+    const clickY = event.clientY;
+
+    // Optional: keep menu within viewport
+    const menuWidth = 220;  // match CSS
+    const menuHeight = 44;  // approx for one item
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const x = Math.min(clickX, vw - menuWidth - 8);
+    const y = Math.min(clickY, vh - menuHeight - 8);
+
+    this.contextMenu = { visible: true, x, y, item };
+  }
+
+  onArchiveItem(item: DashboardItem | null) {
+    if (!item) return;
+    // Optimistic UI update
+    const id = item.id;        // or use const uuid = item.uuid;
+    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
+    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
+    this.boards            = this.boards.filter((b: any) => b.id !== id);
+
+    this.closeContextMenu();
+
+    // Persist
+    item.isArchived = true;
+    if (this.isBoard(item)) {
+      this.boardService.updateBoard(item).subscribe(() => {});
+    } else if (this.isIllustration(item)) {
+      this.illustrationService.updateIllustration(item).subscribe(() => {});
+    }
+  }
+
+  onUnarchiveBoard(item: DashboardItem | null) {
+    if (!item) return;
+    // Optimistic UI update
+    const id = item.id;        // or use const uuid = item.uuid;
+    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
+    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
+    this.boards            = this.boards.filter((b: any) => b.id !== id);
+
+    this.closeContextMenu();
+
+    // Persist
+    item.isArchived = false;
+    if (this.isBoard(item)) {
+      this.boardService.updateBoard(item).subscribe(() => {});
+    } else if (this.isIllustration(item)) {
+      this.illustrationService.updateIllustration(item).subscribe(() => {});
+    }
+  }
+
+  onDeleteBoard(item: DashboardItem | null) {
+    if (!item) return;
+    // Optimistic UI update
+    const id = item.id;        // or use const uuid = item.uuid;
+    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
+    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
+    this.boards            = this.boards.filter((b: any) => b.id !== id);
+
+    this.closeContextMenu();
+
+    // Persist
+    if (this.isBoard(item)) {
+      this.boardService.deleteBoard(item.id).subscribe(() => {});
+    } else if (this.isIllustration(item)) {
+      this.illustrationService.deleteIllustration(item.id).subscribe(() => {});
+    }
+  }
+
+  openItemInNewTab(item: DashboardItem | null) {
+    if (!item || !item.uuid) return;
+    this.closeContextMenu();
+
+    let url: string;
+    if (this.isBoard(item)) {
+      url = this.router.serializeUrl(this.router.createUrlTree(['/board', item.uuid]));
+    } else if (this.isIllustration(item)) {
+      url = this.router.serializeUrl(this.router.createUrlTree(['/illustration', item.uuid]));
+    }
+    
+    window.open(url, '_blank');
+  } 
+
+  closeContextMenu() {
+    if (this.contextMenu.visible) {
+      this.contextMenu.visible = false;
+      this.contextMenu.item = null;
+    }
+  }
+
+// Close on any document click, scroll, resize, or Escape
+@HostListener('document:click')
+onDocClick() { this.closeContextMenu(); }
+
+@HostListener('window:scroll')
+onWinScroll() { this.closeContextMenu(); }
+
+@HostListener('window:resize')
+onWinResize() { this.closeContextMenu(); }
+
+@HostListener('document:keydown.escape')
+onEsc() { this.closeContextMenu(); }
+
   // Dashboard Data
   uid: string = "";
   teams: Team[] = [];
@@ -108,8 +271,11 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   // Filtering
   isFrogmarksGalaxyActive: boolean = false;
+  isTemplatesActive: boolean = false;
   isDesignCenterActive: boolean = true;
   isFavoritesFilterActive: boolean = false;
+  isArchivedFilterActive: boolean = false;
+  isUpdatesActive: boolean = false;
   currentRecentCreationsTab = 1;
   sortBy: number = SortByOptions.LastViewed;
   orderBy: number = OrderByOptions.Descending;
@@ -162,19 +328,24 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   private _teamService: TeamService;
   private _boardService: BoardService;
+  private _illustrationService: IllustrationService;
   private _authService: AuthService;
   private _notifyService: NotifyService;
 
   constructor(private cdr: ChangeDetectorRef,
     private teamService: TeamService,
     private boardService: BoardService,
+    private illustrationService: IllustrationService,
     private authService: AuthService,    
     private notifyService: NotifyService,
     private namingHelper: NamingHelperService,
     private router: Router,
     private dialog: MatDialog,
-    public themeService: ThemeService) {
+    public themeService: ThemeService,
+    public configurationService: ConfigurationService,
+    private frogFileService: FrogFileService) {
       this._boardService = boardService;
+      this._illustrationService = illustrationService;
       this._teamService = teamService;
       this._authService = authService;
       this._notifyService = notifyService;
@@ -190,14 +361,26 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }, 300);
   };
 
-  onSearch() {
-    if(this.searchControl.value!.length > 0)
-    {
-      this.filterItems(this.searchControl.value!);
-    }else {
-      this.filteredSearchItems = [];
+    onSearch() {
+      const q = (this.searchControl.value ?? '').trim();
+
+      if (q.length === 0) {
+        // 1) Close first, then clear options to avoid overlay measuring/layout blips
+        if (this.autocompleteTrigger && this.autocompleteTrigger.panelOpen) {
+          this.autocompleteTrigger.closePanel();
+        }
+        this.filteredSearchItems = [];
+        return;
+      }
+
+      // Normal flow
+      this.filterItems(q);
+      if (this.filteredSearchItems.length > 0) {
+        this.autocompleteTrigger.openPanel();
+      } else {
+        this.autocompleteTrigger.closePanel();
+      }
     }
-  }
 
   filterItems(query: string) {
     if (!query) {
@@ -345,23 +528,30 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         this.teams = res.resultObject;
         this.currentTeam = this.teams[0];
 
-        // Fetch items for the user by current team
-        this._boardService.getBoardsByTeamId(this.currentTeam.id!).subscribe((res: any) => {
-          
-          if (res && res.resultObject && Array.isArray(res.resultObject)) {
-            this.clearData();
-            (res.resultObject as Board[]).forEach(board => {
-              // Push board objects to lists
-              this.boards.push(board);
-              this.listItems.push(board);
-              if (board.isFavorite && board.uuid != undefined) {
-                this.favorites.add(board.uuid);
-              }
-            });
-          }
-          this.changeFileType(0);
+        if (!this.currentTeam?.id) {
+          // no teams — still stop the global loader
           this.isLoading = false;
-        });
+          return;
+        }
+
+        // Fetch items for the user by current team
+        // this._boardService.getBoardsByTeamId(this.currentTeam.id!).subscribe((res: any) => {
+          
+        //   if (res && res.resultObject && Array.isArray(res.resultObject)) {
+        //     this.clearData();
+        //     (res.resultObject as Board[]).forEach(board => {
+        //       // Push board objects to lists
+        //       this.boards.push(board);
+        //       this.listItems.push(board);
+        //       if (board.isFavorite && board.uuid != undefined) {
+        //         this.favorites.add(board.uuid);
+        //       }
+        //     });
+        //   }
+        //   this.changeFileType(0);
+        //   this.isLoading = false;
+        // });
+        this.loadAllItems();
 
         // ...
 
@@ -426,60 +616,8 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   setRecentCreationsTab(selection: number) {
     this.currentRecentCreationsTab = selection;
-    switch (selection) {
-      case 1:
-        // Recently viewed
-        var sortByValue = this.sortByEnumToString(this.sortBy);
-        var orderByValue = this.orderByEnumToString(this.orderBy);
-
-        this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
-          if (res && res.resultObject && Array.isArray(res.resultObject)) {
-            this.clearData();
-            (res.resultObject as Board[]).forEach(board => {
-              // push board objects to lists
-              this.boards.push(board);
-              this.listItems.push(board);
-              this.filteredListItems = this.listItems;
-              if (board.isFavorite && board.uuid != undefined) {
-                this.favorites.add(board.uuid);
-              }
-            });
-          }
-          this.isLoadingItems = false;
-        });
-
-        return;
-      case 2:
-        // Shared files
-        var sortByValue = this.sortByEnumToString(this.sortBy);
-        var orderByValue = this.orderByEnumToString(this.orderBy);
-        
-        this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
-          if (res && res.resultObject && Array.isArray(res.resultObject)) {
-            (res.resultObject as Board[]).forEach(board => {
-              if(board.collaborators && board.collaborators.length > 0) {
-                // push board objects to lists
-                this.boards.push(board);
-                this.listItems.push(board);
-                this.filteredListItems = this.listItems;
-                if (board.isFavorite && board.uuid != undefined) {
-                  this.favorites.add(board.uuid);
-                }
-              }
-            });
-          }
-          this.isLoadingItems = false;
-        });
-        return;
-      case 3:
-        // Shares projects
-
-        return;
-      default:
-        // Recently viewed
-
-        return;
-    }
+    // Remove all the individual service calls and just use:
+    this.loadAllItems();
   }
 
   sortByEnumToString(sortBy: number): string {
@@ -529,6 +667,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this.isFrogmarksGalaxyActive = true;
       this.isDesignCenterActive = false;
       this.isFavoritesFilterActive = false;
+      this.isArchivedFilterActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = false;
     }
   }
 
@@ -538,24 +679,28 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this.isDesignCenterActive = true;
       this.isFavoritesFilterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isArchivedFilterActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = false;
 
-      this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false).subscribe((res: any) => {
-
-        if (res && res.resultObject && Array.isArray(res.resultObject)) {
-          //this.clearData();
-          (res.resultObject as Board[]).forEach(board => {
-            // Push board objects to lists
-            this.boards.push(board);
-            this.listItems.push(board);
-            this.filteredListItems = this.listItems;
-            if (board.isFavorite && board.uuid != undefined) {
-              this.favorites.add(board.uuid);
-            }
-          });
-        }
-        this.isLoadingItems = false;
-      }
-      );
+      // this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false).subscribe((res: any) => {
+      // if (res && res.resultObject && Array.isArray(res.resultObject)) {
+      //       //this.clearData();
+      //       (res.resultObject as Board[]).forEach(board => {
+      //         // Push board objects to lists
+      //         this.boards.push(board);
+      //         this.listItems.push(board);
+      //         this.filteredListItems = this.listItems;
+      //         if (board.isFavorite && board.uuid != undefined) {
+      //           this.favorites.add(board.uuid);
+      //         }
+      //       });
+      //     }
+      //     this.isLoadingItems = false;
+      //   }
+      //   );
+      // }
+      this.loadAllItems();
     }
   }
 
@@ -565,25 +710,55 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       this.isFavoritesFilterActive = true;
       this.isDesignCenterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isArchivedFilterActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = false;
 
-      this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', true).subscribe((res: any) => {
-        if (res && res.resultObject && Array.isArray(res.resultObject)) {
-          // this.clearData();
-          (res.resultObject as Board[]).forEach(board => {
-            // push board objects to lists
-            this.boards.push(board);
-            this.listItems.push(board);
-            this.filteredListItems = this.listItems;
+      // this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', true).subscribe((res: any) => {
+      //   if (res && res.resultObject && Array.isArray(res.resultObject)) {
+      //     // this.clearData();
+      //     (res.resultObject as Board[]).forEach(board => {
+      //       // push board objects to lists
+      //       this.boards.push(board);
+      //       this.listItems.push(board);
+      //       this.filteredListItems = this.listItems;
 
-            if (board.isFavorite && board.uuid != undefined) {
-              this.favorites.add(board.uuid);
-            }
+      //       if (board.isFavorite && board.uuid != undefined) {
+      //         this.favorites.add(board.uuid);
+      //       }
 
-          });
-        }
-        this.isLoadingItems = false;
-      }
-      );
+      //     });
+      //   }
+      //   this.isLoadingItems = false;
+      // }
+      // );
+      this.loadAllItems();
+    }
+  }
+
+  templatesClicked(): void {
+    if (!this.isTemplatesActive) {
+      this.clearData();
+      this.isFavoritesFilterActive = false;
+      this.isDesignCenterActive = false;
+      this.isFrogmarksGalaxyActive = false;
+      this.isArchivedFilterActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = true;
+
+      // this._boardService.getTemplates().subscribe((res: any) => {
+      //   if (res && res.resultObject && Array.isArray(res.resultObject)) {
+      //     // this.clearData();
+      //     (res.resultObject as Board[]).forEach(board => {
+      //       // push board objects to lists
+      //       this.boards.push(board);
+      //       this.listItems.push(board);
+      //       this.filteredListItems = this.listItems;
+      //     });
+      //   }
+      //   this.isLoadingItems = false;
+      // }
+      // );
     }
   }
 
@@ -591,67 +766,28 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     this.filteredListItems = this.listItems;
     this.fileType = option;
     switch(option) {
-      case 0:
-        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes(''));
+      case 0: // All files
+        this.filteredListItems = this.listItems;
         break;
-      case 1:
-        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Design'));
+      case 1: // Boards
+        this.filteredListItems = this.listItems.filter((item: any) => this.isBoard(item));
         break;
-      case 2:
-        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Board'));
-        break;
-      case 3:
-        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes('Slide'));
-        break;
-      default:
-        this.filteredListItems = this.listItems.filter((b: any) => b.name.includes(''));
+      case 2: // Illustrations
+        this.filteredListItems = this.listItems.filter((item: any) => this.isIllustration(item));
         break;
     }
   }
 
   sort(option: number) {
     this.sortBy = option;
-    var sortByValue = this.sortByEnumToString(this.sortBy);
-    var orderByValue = this.orderByEnumToString(this.orderBy);
-
-    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
-      if (res && res.resultObject && Array.isArray(res.resultObject)) {
-        this.clearData();
-        (res.resultObject as Board[]).forEach(board => {
-          // Push board objects to lists
-          this.boards.push(board);
-          this.listItems.push(board);
-          this.filteredListItems = this.listItems;
-          if (board.isFavorite && board.uuid != undefined) {
-            this.favorites.add(board.uuid);
-          }
-        });
-      }
-      this.isLoadingItems = false;
-    });
-
+    // Remove all the board-only logic and replace with:
+    this.loadAllItems();
   }
 
   order(option: number) {
     this.orderBy = option;
-    var sortByValue = this.sortByEnumToString(this.sortBy);
-    var orderByValue = this.orderByEnumToString(this.orderBy);
-
-    this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, sortByValue, orderByValue).subscribe((res: any) => {
-      if (res && res.resultObject && Array.isArray(res.resultObject)) {
-        this.clearData();
-        (res.resultObject as Board[]).forEach(board => {
-          // Push board objects to lists
-          this.boards.push(board);
-          this.listItems.push(board);
-          this.filteredListItems = this.listItems;
-          if (board.isFavorite && board.uuid != undefined) {
-            this.favorites.add(board.uuid);
-          }
-        });
-      }
-      this.isLoadingItems = false;
-    });
+    // Replace with:
+    this.loadAllItems();
   }
 
   toggleSortOrderDropdown() {
@@ -700,6 +836,73 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     });
   }
 
+  newIllustrationButtonClicked(): void {
+    if (!this.currentTeam || !this.currentTeam.id) {
+      this._notifyService.error('No current team selected');
+      return;
+    }
+
+    let newIllustration: Illustration = {
+      id: 0, // Assuming you need an initial id
+      name: `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Illustration`, // Default name or handle name input
+      description: '', // Default description or handle description input
+      teamId: this.currentTeam.id
+    };
+
+    this._illustrationService.createIllustration(newIllustration).subscribe((res: any) => {
+      if (res.resultType === ResultType.Success) {
+        this.router.navigate(['/illustration', res.resultObject.uuid]);
+      } else {
+        this._notifyService.error('There was an error creating a new board :(');
+      }
+    }, (error) => {
+      this._notifyService.error('There was an error creating a new board :(');
+      console.error(error);
+    });
+  }
+
+  /** Import a .frog file: pick file → parse it → create a new illustration → navigate to it with pending import data. */
+  async importFrogFile(): Promise<void> {
+    try {
+      // 1. Pick and parse the .frog file
+      const result = await this.frogFileService.importFrogFile();
+
+      if (!this.currentTeam || !this.currentTeam.id) {
+        this._notifyService.error('No current team selected');
+        return;
+      }
+
+      // 2. Create a new illustration with the imported name
+      const newIllustration: Illustration = {
+        id: 0,
+        name: result.manifest.name || 'Imported Illustration',
+        description: '',
+        teamId: this.currentTeam.id
+      };
+
+      this._illustrationService.createIllustration(newIllustration).subscribe({
+        next: (res: any) => {
+          if (res.resultType === ResultType.Success) {
+            // 3. Stash the parsed data so the illustration editor can pick it up
+            this.frogFileService.pendingImport = result;
+            // 4. Navigate to the new illustration
+            this.router.navigate(['/illustration', res.resultObject.uuid]);
+          } else {
+            this._notifyService.error('Failed to create illustration for import');
+          }
+        },
+        error: (err) => {
+          console.error('[Dashboard] import create failed', err);
+          this._notifyService.error('Failed to create illustration for import');
+        }
+      });
+    } catch (e: any) {
+      if (e?.message === 'No file selected') return; // user cancelled picker
+      console.error('[Dashboard] .frog import failed', e);
+      this._notifyService.error('Failed to import .frog file');
+    }
+  }
+
   listItemSelected(event: MouseEvent, uuid: string) {
     event.stopPropagation();
     if (event.ctrlKey && this.selectedItems.has(uuid)) {
@@ -719,29 +922,38 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
-  listItemDoubleClicked(event: MouseEvent, uuid: string) { 
-    this.router.navigate(['/board', uuid]);
+  listItemDoubleClicked(event: MouseEvent, listItem: DashboardItem) { 
+  console.log(listItem);
+    if(!listItem.isArchived) {
+      if (this.isBoard(listItem)) {
+        this.router.navigate(['/board', listItem.uuid]);
+      } else if (this.isIllustration(listItem)) {
+        this.router.navigate(['/illustration', listItem.uuid]);
+      }
+    }
   }
 
-  toggleFavorite(uuid: string, board: any) {
-    board.teamId = this.currentTeam.id;
+  toggleFavorite(uuid: string, item: DashboardItem) {
+    item.teamId = this.currentTeam.id;
     if (this.favorites.has(uuid)) {
-      board.isFavorite = false;
-      this.boardService.favoritedBoard(board).subscribe((res: any) => {
-        if (res.resultType == 0) {
-          this.favorites.delete(uuid);
-        }
-      });
-
-    }
-    else {
-      board.isFavorite = true;
+      item.isFavorite = false;
+      if (this.isBoard(item)) {
+        this.boardService.favoritedBoard(item).subscribe((res: any) => {
+          if (res.resultType == 0) this.favorites.delete(uuid);
+        });
+      } else if (this.isIllustration(item)) {
+        this.illustrationService.favoriteIllustration(item).subscribe((res: any) => {
+          if (res.resultType == 0) this.favorites.delete(uuid);
+        });
+      }
+    } else {
+      item.isFavorite = true;
       this.favorites.add(uuid);
-      this.boardService.favoritedBoard(board).subscribe((res: any) => {
-        if (res.resultType == 0) {
-          // this.favorites.add(uuid);
-        }
-      });
+      if (this.isBoard(item)) {
+        this.boardService.favoritedBoard(item).subscribe(() => {});
+      } else if (this.isIllustration(item)) {
+        this.illustrationService.favoriteIllustration(item).subscribe(() => {});
+      }
     }
   }
 
@@ -785,6 +997,181 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   }
 
+  archivedClicked(): void {
+    if (!this.isArchivedFilterActive) {
+      this.clearData();
+      this.isArchivedFilterActive = true;
+      this.isFavoritesFilterActive = false;
+      this.isDesignCenterActive = false;
+      this.isFrogmarksGalaxyActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = false;
+
+      // this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', false, true).subscribe((res: any) => {
+      //   if (res && res.resultObject && Array.isArray(res.resultObject)) {
+      //     (res.resultObject as Board[]).forEach(board => {
+      //       this.boards.push(board);
+      //       this.listItems.push(board);
+      //       this.filteredListItems = this.listItems;
+
+      //       if (board.isFavorite && board.uuid != undefined) {
+      //         this.favorites.add(board.uuid);
+      //       }
+      //     });
+      //   }
+      //   this.isLoadingItems = false;
+      // });
+      this.loadAllItems();
+    }
+  }
+
+  updatesClicked(): void {
+    if (!this.isUpdatesActive) {
+      this.clearData();
+      this.isArchivedFilterActive = false;
+      this.isFavoritesFilterActive = false;
+      this.isDesignCenterActive = false;
+      this.isFrogmarksGalaxyActive = false;
+      this.isUpdatesActive = true;
+      this.isTemplatesActive = false;
+    }
+  }
+
+  copyItemLink(item: DashboardItem | null) {
+    if (!item || !item.uuid) return;
+    
+    const baseUrl = this.configurationService.loadConfigurations().clientUrl;
+    let url: string;
+    
+    if (this.isBoard(item)) {
+      url = `${baseUrl}/board/${item.uuid}`;
+    } else if (this.isIllustration(item)) {
+      url = `${baseUrl}/illustration/${item.uuid}`;
+    }
+    
+    navigator.clipboard.writeText(url);
+    this.closeContextMenu();
+    this.notifyService.success('Copied link to clipboard');
+  }
+
+  renameBoard(item: Board | null) {
+    if (!item || !item.uuid) return;
+    this.closeContextMenu();
+  }
+
+  duplicateItem(item: DashboardItem | null): void {
+    if (!item || !item.uuid) return;
+    this.closeContextMenu();
+    
+    if (this.isBoard(item)) {
+      const payload = {
+        name: `Copy of ${item.name}`,
+        teamId: item.teamId,
+        copyThumbnail: true // let the new board generate its own thumbnail after first render
+      };
+
+      this.boardService.duplicateBoard(item.id, payload).subscribe({
+        next: (res: any) => {
+          if (res.resultType === ResultType.Success) {
+            const newUuid = res.resultObject.uuid;
+            //this.router.navigate(['/board', newUuid]);
+            this.listItems.unshift(res.resultObject);
+            this.filteredListItems.unshift(res.resultObject);
+            this.boards.unshift(res.resultObject);
+          } else {
+            this.notifyService.error('There was an error duplicating the board :(');
+          }
+        },
+        error: (err) => {
+          console.error(err);
+          this.notifyService.error('There was an error duplicating the board :(');
+        }
+      });
+    } else if (this.isIllustration(item)) {
+      const payload = {
+        name: `Copy of ${item.name}`,
+        teamId: item.teamId,
+        copyThumbnail: true // let the new board generate its own thumbnail after first render
+      };
+
+      this.illustrationService.duplicateIllustration(item.id, payload).subscribe({
+        next: (res: any) => {
+          if (res.resultType === ResultType.Success) {
+            const newUuid = res.resultObject.uuid;
+            //this.router.navigate(['/board', newUuid]);
+            this.listItems.unshift(res.resultObject);
+            this.filteredListItems.unshift(res.resultObject);
+            this.boards.unshift(res.resultObject);
+          } else {
+            this.notifyService.error('There was an error duplicating the illustration :(');
+          }
+        },
+        error: (err) => {
+          console.error(err);
+          this.notifyService.error('There was an error duplicating the illustration :(');
+        }
+      });
+    }
+  }
+
+  private loadAllItems() {
+    const promises = [];
+    
+    promises.push(
+      this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
+        .pipe(catchError(err => { console.error('[Dashboard] boards fetch failed:', err); return of(null); }))
+    );
+    
+    promises.push(
+      this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
+        .pipe(catchError(err => { console.error('[Dashboard] illustrations fetch failed:', err); return of(null); }))
+    );
+
+    forkJoin(promises).subscribe({
+      next: ([boardsRes, illustrationsRes] : any) => {
+        this.clearData();
+        
+        console.log('[Dashboard] boardsRes:', boardsRes);
+        console.log('[Dashboard] illustrationsRes:', illustrationsRes);
+        
+        // Handle boards
+        if (boardsRes?.resultObject) {
+          boardsRes.resultObject.forEach((board: Board) => {
+            const item: DashboardItem = { ...board, type: 'board' };
+            this.boards.push(board);
+            this.listItems.push(item);
+            if (board.isFavorite && board.uuid) {
+              this.favorites.add(board.uuid);
+            }
+          });
+        }
+        
+        // Handle illustrations
+        if (illustrationsRes?.resultObject) {
+          illustrationsRes.resultObject.forEach((illustration: Illustration) => {
+            const item: DashboardItem = { ...illustration, type: 'illustration' };
+            this.listItems.push(item);
+            if (illustration.isFavorite && illustration.uuid) {
+              this.favorites.add(illustration.uuid);
+            }
+          });
+        }
+        
+        console.log('[Dashboard] total listItems:', this.listItems.length,
+                    'boards:', this.boards.length,
+                    'illustrations:', this.listItems.length - this.boards.length);
+        
+        this.filteredListItems = this.listItems;
+        this.isLoadingItems = false;
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('[Dashboard] forkJoin error:', err);
+        this.isLoadingItems = false;
+        this.isLoading = false;
+      }
+    });
+  }
 }
 
 // TODO: Abstract these into their own classes

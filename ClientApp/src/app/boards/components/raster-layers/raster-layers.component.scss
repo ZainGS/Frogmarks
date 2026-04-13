@@ -1,0 +1,307 @@
+/* ═══════════════════════════════════════════════════════════
+   Raster Layers Panel — Phase 2 Compositor UI (dark theme)
+   ═══════════════════════════════════════════════════════════ */
+
+$bg: rgba(42, 42, 42, 0.98);
+$surface: #333;
+$border: #555;
+$text: #e0e0e0;
+$muted: #aaa;
+$accent: #9B59B6;
+$accent-light: #b87fd9;
+$radius: 6px;
+
+/* ── Root panel ──────────────────────────────────────────── */
+
+.raster-layers-panel {
+  background: transparent;
+  color: $text;
+  border-radius: 0;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.rl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 13px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid $border;
+}
+
+.rl-btn-add {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* ── Search ──────────────────────────────────────────────── */
+
+.rl-search {
+  input {
+    width: 100%;
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: 4px;
+    color: $text;
+    padding: 4px 8px;
+    font-size: 11px;
+
+    &:focus { outline: 2px solid $accent; }
+    &::placeholder { color: $muted; }
+  }
+}
+
+/* ── Layer list ──────────────────────────────────────────── */
+
+.rl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Layer item ──────────────────────────────────────────── */
+
+.rl-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s, opacity 0.15s;
+
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+
+  &.active {
+    background: rgba($accent, 0.18);
+    border-left: 3px solid $accent;
+  }
+
+  &.invisible-layer { opacity: 0.45; }
+
+  &.clipped {
+    margin-left: 16px;
+    border-left: 2px solid $muted;
+  }
+
+  &.drag-over {
+    border-top: 2px solid $accent-light;
+  }
+}
+
+/* ── Clipping indicator ──────────────────────────────────── */
+
+.clip-indicator {
+  position: absolute;
+  left: -14px;
+  top: 6px;
+  font-size: 11px;
+  color: $muted;
+  pointer-events: none;
+}
+
+/* ── Row 1: eye, name, clip, lock ────────────────────────── */
+
+.rl-row-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 20px;
+}
+
+.rl-icon {
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.7; }
+}
+
+.rl-clip,
+.rl-lock-alpha {
+  opacity: 0.35;
+  font-size: 12px;
+
+  &.on { opacity: 1; }
+}
+
+.rl-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  user-select: none;
+}
+
+.rl-rename-input {
+  flex: 1;
+  background: $surface;
+  border: 1px solid $accent;
+  border-radius: 3px;
+  color: $text;
+  padding: 1px 4px;
+  font-size: 12px;
+
+  &:focus { outline: none; }
+}
+
+/* ── Row 2: blend dropdown + opacity ─────────────────────── */
+
+.rl-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 22px; /* align with name (past eye icon) */
+}
+
+/* ── Blend mode dropdown ─────────────────────────────────── */
+
+.blend-dropdown-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.blend-trigger {
+  background: $surface;
+  color: $text;
+  border: 1px solid $border;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: left;
+  transition: border-color 0.15s;
+
+  &:hover { border-color: $accent; }
+}
+
+.blend-dropdown {
+  position: fixed;
+  z-index: 10000;
+  background: darken($bg, 3%);
+  border: 1px solid $border;
+  border-radius: 4px;
+  min-width: 130px;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.5);
+  scrollbar-width: thin;
+  scrollbar-color: $border transparent;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: $border; border-radius: 4px; }
+}
+
+.blend-cat-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: $muted;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 5px 8px 2px;
+  user-select: none;
+}
+
+.blend-option {
+  padding: 3px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+
+  &.active {
+    color: $accent-light;
+    background: rgba($accent, 0.15);
+  }
+}
+
+/* ── Opacity control ─────────────────────────────────────── */
+
+.opacity-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+
+  input[type='range'] {
+    flex: 1;
+    accent-color: $accent;
+    height: 4px;
+    min-width: 40px;
+  }
+}
+
+.opacity-label {
+  min-width: 32px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 10px;
+  color: $muted;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ─────────────────────────────────────────── */
+
+.rl-empty {
+  color: $muted;
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* ── Actions bar ─────────────────────────────────────────── */
+
+.rl-actions {
+  display: flex;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid $border;
+  align-items: center;
+}
+
+.rl-actions-spacer {
+  flex: 1;
+}
+
+.rl-btn {
+  background: $surface;
+  color: $text;
+  border: 1px solid $border;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: lighten($surface, 10%); }
+}
+
+.rl-btn-sm {
+  padding: 3px 6px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ── Mat-icon sizing ─────────────────────────────────────── */
+
+.rl-mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  line-height: 16px;
+}

@@ -1,0 +1,171 @@
+<div class="explore-feed" [class.overlay-open]="overlayOpen">
+  <div class="grid-container">
+    <div
+      *ngFor="let item of gridItems; let i = index"
+      class="grid-item"
+      [class.pressed]="pressedIndex === i"
+      [class.lift]="releasedIndex === i"
+      [class.rotate-left]="isLeftHalf(i)"
+      [class.rotate-right]="!isLeftHalf(i)"
+      [class.selected]="selectedIndex === i"
+      [style.--fade-delay]="(i * 15) + 'ms'"
+      (mousedown)="onItemMouseDown(item, i, $event)"
+      (mouseup)="onItemMouseUp(item, i, $event)"
+      (mouseleave)="onItemMouseLeave(i, $event)"
+      (click)="$event.preventDefault()"
+      [attr.data-id]="item.id"
+    >
+            <div class="item-image" [style.background-image]="'url(' + item.imageUrl + ')'" aria-hidden="true">
+                <!-- Like/Dislike badge -->
+                <div class="vote-badge" *ngIf="isLiked(item) || isDisliked(item)" [class.liked]="isLiked(item)" [class.disliked]="isDisliked(item)" aria-hidden="true">
+                    <span class="material-symbols-outlined">{{ isLiked(item) ? 'thumbs_up_double' : 'thumb_down' }}</span>
+                </div>
+            </div>
+    </div>
+  </div>
+  
+  <!-- Overlay backdrop + menu -->
+    <div *ngIf="overlayOpen" class="overlay-backdrop" (click)="closeOverlay($event)">
+        <div class="menu-container" [ngStyle]="menuStyle" [class.side-left]="menuSide === 'left'" [class.side-right]="menuSide === 'right'" [class.disliked]="isDisliked(selectedItem)" [class.liked]="isLiked(selectedItem)" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+            <div class="menu-tail" *ngIf="menuTailStyle" [ngStyle]="menuTailStyle" [class.disliked]="isDisliked(selectedItem)" [class.liked]="isLiked(selectedItem)" aria-hidden="true"></div>
+            <div class="menu-wrapper">
+                    <div class="menu-card menu-card-compact" [class.disliked]="isDisliked(selectedItem)" [class.liked]="isLiked(selectedItem)">
+                <button type="button" class="close-btn" aria-label="Close menu" (click)="closeOverlay()">✕</button>
+                <div class="menu-right">
+                <h3 class="menu-title">{{ selectedItem?.title }}</h3>
+
+                <div class="menu-actions">
+                    <button class="primary-btn" (click)="view(selectedItem)">View</button>
+                    <button class="primary-btn" (click)="remix(selectedItem)">Remix</button>
+                </div>
+
+                <div class="row">
+                    <div class="col-6 icon-actions">
+                        <button
+                            class="icon-btn"
+                            title="Like"
+                            (click)="toggleLike(selectedItem, $event)"
+                            (mousedown)="onIconMouseDown('like', $event)"
+                            (mouseup)="onIconMouseUp('like', $event)"
+                            (mouseleave)="onIconMouseLeave('like', $event)"
+                            (touchstart)="onIconMouseDown('like', $event)"
+                            (touchend)="onIconMouseUp('like', $event)"
+                            [class.liked]="isLiked(selectedItem)"
+                            [class.pressing]="iconState === 'like-press'"
+                            [class.pop]="iconState === 'like-pop'"
+                        >
+                            <span class="material-symbols-outlined">thumbs_up_double</span>
+                        </button>
+                        <button
+                            class="icon-btn"
+                            title="Dislike"
+                            (click)="toggleDislike(selectedItem, $event)"
+                            (mousedown)="onIconMouseDown('dislike', $event)"
+                            (mouseup)="onIconMouseUp('dislike', $event)"
+                            (mouseleave)="onIconMouseLeave('dislike', $event)"
+                            (touchstart)="onIconMouseDown('dislike', $event)"
+                            (touchend)="onIconMouseUp('dislike', $event)"
+                            [class.disliked]="isDisliked(selectedItem)"
+                            [class.pressing]="iconState === 'dislike-press'"
+                            [class.pop]="iconState === 'dislike-pop'"
+                        >
+                            <span class="material-symbols-outlined">thumb_down</span>
+                        </button>
+                        <button class="icon-btn" title="Report">
+                            <span class="material-symbols-outlined">flag</span>
+                        </button>
+                    </div>
+                    <div class="col-6 text-end">
+                        <button class="icon-btn text-end" title="Tag">
+                            <!-- <span class="material-symbols-outlined">label</span> -->
+                            <!-- <span style="background-color:rgba(64, 64, 64, 0.757) !important; color: white; transform: scale(.75); border-radius: 8px; width: min-content; height: min-content; padding: 2px 4px;">Illustration</span> -->
+                             <!-- <span class="material-symbols-outlined" style="color: rgba(255, 255, 255, 0.468);">
+                                planner_banner_ad_pt
+                             </span> -->
+                             <!-- <span class="material-symbols-outlined">
+                                two_pager
+                             </span> -->
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        <!-- <div class="menu-meta" style="font-family:'Courier New', Courier, monospace; font-weight: 700; filter:drop-shadow(0px 0px 2px rgb(255, 255, 255)); margin-top: 12px;">
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="0" style="color: black;">Illustration</span>
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="1" style="color: black;">22 Pages</span>
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="2" style="color: black;">Zain Syed</span>
+        </div> -->
+
+        <div class="menu-meta" style="font-family:'Courier New', Courier, monospace; font-weight: 700; margin-top: 22px; margin-left: 16px; background-color: black; padding-top: 4px; padding-bottom: 4px;">
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="0" style="color: white;">Illustration</span>
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="1" style="color: white;">22 Pages</span>
+            <span class="menu-meta-item pt-4 mt-5 ms-5" data-index="2" style="color: white;">Zain Syed</span>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hint-banner" style="position: absolute; bottom: 40px; left: 40%; right: 0; height: min-content; background: rgba(0, 0, 0, 0.85); padding: 8px 4px 8px 18px; border-radius: 0px 0px 0px 0px;">
+    <span class="hint-text" style="color: white; font-size: 24px; font-weight: lighter;">
+        <span class="material-symbols-outlined" style="color: white; font-size: 18px; transform: scale(1.1);">
+        highlight_mouse_cursor
+        </span>
+        <span class="ms-2">Select an item to view details</span>
+    </span>
+</div>
+<div style="position: absolute; bottom: 5px; right: 20px; height: 24px; width: 24px; background: rgba(255, 0, 242, 1); border-radius: 100px; display: flex; align-items: center; justify-content: center;">
+    <mat-icon style="transform: scale(.75);">
+        <span class="material-symbols-outlined" style="color: white">
+            hr_resting
+        </span>
+    </mat-icon>  
+</div>
+<div style="position: absolute; bottom: 5px; right: 50px; height: 24px; width: 24px; background: rgb(95, 21, 180); border-radius: 100px; display: flex; align-items: center; justify-content: center;">
+    <mat-icon style="transform: scale(.75);">
+        <span class="material-symbols-outlined" style="color: white">
+            stars_2
+        </span>
+    </mat-icon>  
+</div>
+<div style="position: absolute; bottom: 5px; right: 80px; height: 24px; width: 24px; background: rgb(0, 145, 255); border-radius: 100px; display: flex; align-items: center; justify-content: center;">
+    <mat-icon style="transform: scale(.75);">
+        <span class="material-symbols-outlined" style="color: white">
+            motion_mode
+        </span>
+    </mat-icon>  
+</div>
+
+<img 
+  src="assets/CornerDecoration.svg" 
+  style="position: absolute; top: 60px; left: 60px; transform: translate(-50%, -50%) scale(.5); width: 200px; height: 200px; z-index: 1000; filter: brightness(0) invert(1) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black)"
+>
+
+<img 
+  src="assets/CornerDecoration.svg" 
+  style="position: absolute; bottom: -140px; left: 60px; transform: translate(-50%, -50%) scaleX(.5) scaleY(-.5); width: 200px; height: 200px; z-index: 1000; filter: brightness(0) invert(1) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black)"
+>
+
+<img 
+  src="assets/CornerDecoration.svg" 
+  style="position: absolute; top: 60px; right: -120px; transform: translate(-50%, -50%) scaleX(-.5) scaleY(.5); width: 200px; height: 200px; z-index: 1000; filter: brightness(0) invert(1) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black) drop-shadow(0px 0px 4px black)"
+>
+
+<!-- <img 
+  src="https://www.webarcode.com/barcode/image.php?code=Product%20of%20Frogistan&type=C128B&xres=1&height=50&width=310&font=3&output=png&style=708" 
+  style="position: absolute; bottom: -54px; right: -185px; transform: translate(-50%, -50%) scaleX(.5) scaleY(.5); width: 400px; height: 68px; z-index: 1000; opacity: 1;"
+> -->
+
+
+<!-- <div style="font-size: 18px; position: absolute; top: 0px; left: 35vw; right: 0; height: min-content; width: min-content; background: rgba(0, 0, 0, 0.95); padding: 8px 4px 8px 18px; border-radius: 0px 0px 12px 12px; text-wrap: nowrap; font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;">
+    <span class="ms-4" style="color: white; font-weight: lighter;">
+        EXPLORE 
+    </span>
+    <span class="ms-5" style="color: white; font-weight: lighter;">
+        STICKER RUN
+    </span>
+    <span class="ms-5 me-5" style="color: white; font-weight: lighter;">
+        CONTEST
+    </span>
+</div> -->

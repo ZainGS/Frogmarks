@@ -2,6 +2,7 @@
 using Frogmarks.Models;
 using Frogmarks.Models.Auth;
 using Frogmarks.Models.Board;
+using Frogmarks.Models.Illustration;
 using Frogmarks.Models.Team;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -27,10 +28,19 @@ namespace Frogmarks.Data
         DbSet<Team> Teams { get; set; }
         DbSet<TeamUser> TeamUsers { get; set; }
         DbSet<TeamProject> TeamProjects { get; set; }
+
+        // BOARDS
         DbSet<Board> Boards { get; set; }
         DbSet<BoardCollaborator> BoardsCollaborators { get; set; }
         DbSet<BoardItem> BoardItems { get; set; }
         DbSet<BoardViewLog> BoardViewLogs { get; set; }
+
+        // ILLUSTRATIONS
+        DbSet<Illustration> Illustrations { get; set; }
+        DbSet<IllustrationCollaborator> IllustrationCollaborators { get; set; }
+        DbSet<IllustrationViewLog> IllustrationViewLogs { get; set; }
+        DbSet<IllustrationLayer> IllustrationLayers { get; set; }
+        DbSet<IllustrationCel> IllustrationCels { get; set; }
 
         // AUTH
         DbSet<EmailToken> EmailTokens { get; set; }

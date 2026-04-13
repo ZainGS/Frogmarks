@@ -25,8 +25,8 @@
       </label>
       -->
       <label>
-        Design better.<br/>
-        Jump-start <span>perfection</span>.
+        Draw with friends!<br/>
+        Illustrate <span>a whole new world</span> :)
       </label>
     </div>
     <div class="col-12 col-md-1">
@@ -58,7 +58,7 @@
       <div class="row text-center justify-content-center">
         <label class="rounded sub-header-text">
           <img hidden style="position: absolute; width: 100px; margin-top: -60px; margin-left: -80px; opacity: 1;" src="../../../../assets/images/fishing_frog.png">
-          Frogmarks brings teams together to quickly reach goals with a workspace that assists at every stage.
+          Frogmarks brings people together to hang out, draw, and animate on the web.
         </label>
       </div>
       <div class="row mt-5 text-center mx-auto email-row">
@@ -78,17 +78,19 @@
             <div *ngIf="emailForm.get('email')?.errors?.required">Email is required</div>
             <div *ngIf="emailForm.get('email')?.errors?.email">Email must be a valid email address</div>
           </mat-error>
-          <input
+          <br>
+          <button
             class="mt-3 p-2 fw-semibold submission-btn"
             type="submit"
-            value="Get started for free"
             [disabled]="emailForm.invalid"
           >
+            Get started now 🐸🎨
+          </button>
           <label
             class="mt-3 fw-semibold"
             style="color: dimgray; font-size: 14px;"
           >
-            Keep work and life separate by using your work email
+            Send a sign-in link straight to your inbox
           </label>
         </form>
       </div>

@@ -5,10 +5,10 @@
 /* Color Picker Container */
 .custom-color-picker {
     width: 220px;
-    background: white;
+    background: rgb(75, 75, 75);
     padding: 10px;
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
 }
 
 /* Input and Eyedropper */
@@ -28,8 +28,11 @@
 .color-input {
     width: 100%;
     padding: 5px;
-    border: 1px solid #ccc;
+    // border: 1px solid #ccc;
+    border: none;
     border-radius: 4px;
+    background-color: #333;
+    color: white;
 }
 
 /* Hue Slider */

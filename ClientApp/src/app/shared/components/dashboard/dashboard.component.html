@@ -51,13 +51,20 @@
       </div> -->
     </div>
     <!-- Base Row -->
-    <div class="row flex-nowrap">
+    <div class="row flex-nowrap" style="height: -webkit-fill-available;">
         <!-- Base Sidenav Column -->
-        <div class="col-2 base-sidenav-column" [class.open]="isSidenavOpen">
+        <div class="col-2 base-sidenav-column" 
+          [class.open]="isSidenavOpen"
+          [class.frogmarks-galaxy-compact]="isFrogmarksGalaxyActive"
+          style="max-height: min-content;">
             <!-- Frogmarks Logo -->
             <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png">
             <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png">
-            
+            <img class="compact-logo" src="../../../../assets/images/fishing_frog.png">
+            <!-- <span style="background-color: blueviolet; 
+                         color: white; 
+                         padding: 2px 4px 2px 4px; 
+                         border-radius: 4px; font-weight: 600; font-size: 10px;">Beta</span> -->
             <!-- Primary Sidenav Contents -->
             <div class="ps-2">
 
@@ -75,8 +82,8 @@
                   <li class="list-item" 
                       (click)="frogmarksGalaxyClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'frogmarks-galaxy-active': isFrogmarksGalaxyActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">home</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Home</label>
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">explore</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Explore</label>  
                   </li>
                   <li class="list-item"
                       (click)="designCenterClicked()"
@@ -84,47 +91,65 @@
                     <mat-icon *ngIf="!isLoading" class="list-item-icon">storefront</mat-icon>
                     <label *ngIf="!isLoading" class="ms-1">Design Center</label>
                   </li>
-                  <li class="list-item"
+                  <li class="list-item" 
+                      (click)="templatesClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'templates-active': isTemplatesActive }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">view_quilt</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Templates</label>
+                  </li>
+                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">history_edu</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Tutorials</label>
+                  </li>
+                  <!-- <li class="list-item"
                       (click)="favoriteClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'favorite-filter-active': isFavoritesFilterActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon out">favorite</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Favorites</label>
-                  </li>
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon out">person_play</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Shared with me</label>
+                  </li> -->
                 </ul>
               </div>
               <hr class="ms-2 horizontal-line">
 
               <!-- Team Selection -->
-              <div class="row ms-0 text-nowrap flex-nowrap">
-                <div class="col-9 dropdown-button" [ngClass]="{ 'loading-container': isLoading }">
-                  <div *ngIf="!isLoading" class="col-2">
+              <div class="team-section row ms-0 text-nowrap flex-nowrap">
+                <div class="col-9" [ngClass]="{ 'loading-container': isLoading }">
+                  <!-- <div *ngIf="!isLoading" class="col-2">
                     <mat-icon class="list-item-icon">people_outline</mat-icon>
-                  </div>
+                  </div> -->
                   <div *ngIf="!isLoading" class="col-10 fw-semibold">
-                    <label class="ms-1">{{currentTeam.name}}</label>
-                    <span class="team-dropdown-arrow material-symbols-outlined">
+                    <!-- <label class="ms-1">{{currentTeam.name}}</label> -->
+                     <label class="ms-1">Teams</label>
+                     
+                    <!-- <span class="team-dropdown-arrow material-symbols-outlined">
                       keyboard_arrow_down
-                    </span>
+                    </span> -->
                   </div>
                 </div>
 
                 <!-- Team Payment Tier -->
                 <div class="col-3 ms-1" [ngClass]="{ 'loading-container': isLoading }">
-                  <label *ngIf="!isLoading" class="payment-tier">Free</label>
+                  <span class="team-dropdown-arrow material-symbols-outlined" >
+                      add
+                    </span>
+                  <!-- <label *ngIf="!isLoading" class="payment-tier">Free</label> -->
                 </div>
               </div>
               
               <!-- Team Content Options -->
-              <div>
+              <div class="team-section">
                 <ul class="sidenav-list" [ngClass]="{ 'loading-container': isLoading }">
-                  <li class="list-item" (click)="draftsClicked()">
+                  <li class="list-item">
+                    <label class="ms-1">{{currentTeam.name}}</label>
+                  </li>
+                  <!-- <li class="list-item" (click)="draftsClicked()">
                     <mat-icon *ngIf="!isLoading" class="list-item-icon ">insert_drive_file</mat-icon>
                     <label *ngIf="!isLoading" class="ms-1">Drafts</label>
-                  </li>
-                  <li class="list-item" (click)="allProjectsClicked()" [ngClass]="{ 'loading-container': isLoading }">
+                  </li> -->
+                  <!-- <li class="list-item" (click)="allProjectsClicked()" [ngClass]="{ 'loading-container': isLoading }">
                     <mat-icon *ngIf="!isLoading" class="list-item-icon">grid_view</mat-icon>
                     <label *ngIf="!isLoading" class="ms-1">All Projects</label>
-                  </li>
+                  </li> -->
                 </ul>
               </div>
               <hr class="ms-2 horizontal-line">
@@ -132,9 +157,52 @@
               <!-- Templates & Tools Section -->
               <div>
                 <ul class="sidenav-list">
-                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                  <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
                     <mat-icon *ngIf="!isLoading" class="list-item-icon">view_quilt</mat-icon>
                     <label *ngIf="!isLoading" class="ms-1">Templates</label>
+                  </li> -->
+                  <!-- Frogmarks Galaxy List Item -->
+                  <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">public</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Frogmarks Galaxy</label>
+                  </li> -->
+                  <!-- Import List Item -->
+                  <!-- <li class="list-item disabled">
+                      <mat-icon class="list-item-icon">file_upload</mat-icon>
+                      <label class="ms-1">Import Board</label>
+                  </li> -->
+                </ul>
+              </div>
+              <!-- <hr class="ms-2 horizontal-line"> -->
+              <div class="socials-list" style="height: max-content; justify-content: end;">
+                <ul class="sidenav-list">
+                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
+                    <a href="https://discord.gg/wmEbYgwTz5" target="_blank" class="list-link">
+                        <mat-icon *ngIf="!isLoading" class="list-item-icon" style="color: rgb(145, 123, 255);">discord</mat-icon>
+                        <label *ngIf="!isLoading" style="color: rgb(184, 170, 255);" class="ms-1">Join our discord</label>
+                    </a>
+                  </li>
+                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
+                    <a href="https://www.instagram.com/frogmarks/" target="_blank" class="list-link">
+                      <mat-icon *ngIf="!isLoading" class="list-item-icon" style="color: rgb(255, 0, 166);">photo_camera</mat-icon>
+                      <label *ngIf="!isLoading" class="ms-1" style="color: rgb(255, 83, 195);">Follow us on instagram</label>
+                    </a>
+                  </li>
+                  <li class="list-item"
+                      (click)="archivedClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'archived-filter-active': isArchivedFilterActive }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">inventory_2</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Archive</label>
+                  </li>
+                  <li class="list-item" 
+                  (click)="updatesClicked()"
+                  [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">newspaper</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Updates</label>
+                  </li>
+                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
+                    <mat-icon *ngIf="!isLoading" class="list-item-icon">help</mat-icon>
+                    <label *ngIf="!isLoading" class="ms-1">Help & Feedback</label>
                   </li>
                   <!-- Frogmarks Galaxy List Item -->
                   <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
@@ -148,7 +216,6 @@
                   </li> -->
                 </ul>
               </div>
-              <hr class="ms-2 horizontal-line">
 
               <!-- Pinned Items Section -->
               <!--
@@ -165,7 +232,9 @@
         </div>
 
         <!-- Base Work-Pane -->
-        <div class="col-10 base-work-pane">
+        <div class="col-10 base-work-pane mb-2" 
+             [class.design-center-content]="!isFrogmarksGalaxyActive"
+             style="max-height: min-content;">
           
           <!-- Expand/Collapse Button for the Side Panel on mobile -->
           <div class="sidenav-toggle-button" [ngClass]="{ 'sidenav-toggle-button-expanded': isSidenavOpen }">
@@ -177,7 +246,7 @@
           </div>
 
           <!-- Header toolbar for the Base Work Pane -->
-          <div *ngIf="!isFrogmarksGalaxyActive" class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
+          <div *ngIf="!isFrogmarksGalaxyActive && !isUpdatesActive" class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
             <!-- Search Column -->
             <div class="col-6">
               <div *ngIf="!isLoading" class="search-wrapper ms-1">
@@ -187,21 +256,11 @@
                   matInput
                   placeholder="Search for anything"
                   type="text"
-                  [matAutocomplete]="auto"
+                  [matAutocomplete]="filteredSearchItems.length ? auto : null"
                   [formControl]="searchControl"
                   (input)="onSearch()"
                 />
-                <mat-autocomplete #auto="matAutocomplete">
-                  <!-- Update item.name based on item structure -->
-                  <mat-option
-                    class="autocomplete-dropdown-content"
-                    *ngFor="let item of filteredSearchItems"
-                    [value]="item.name"
-                    (click)="onOptionSelected(item)"
-                  >
-                    {{ item.name }}
-                  </mat-option>
-                </mat-autocomplete>
+                
                 
               </div>
             </div>
@@ -222,8 +281,7 @@
           </div>
 
           <!-- Row: Add new file in Design Center -->
-          <div class="d-flex pe-1 container-fluid gap-2 pt-3 fw-normal new-file-row" *ngIf="!isFavoritesFilterActive && !isFrogmarksGalaxyActive">
-
+          <div class="d-flex pe-1 container-fluid gap-2 pt-3 fw-normal new-file-row" *ngIf="isDesignCenterActive">
             <!-- New Board File -->
             <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
@@ -233,7 +291,7 @@
                 <div class="col-9 col-md-9 text-start">
                   <label *ngIf="!isLoading" class="new-design-item-title">New whiteboard</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Plan with friends!</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Doodle with friends!</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -245,7 +303,7 @@
             </div>
 
             <!-- New Slide Deck File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-md-block" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newIllustrationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
@@ -287,16 +345,18 @@
             </div>
 
             <!-- Import File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-xl-block" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-xl-block"
+                 (click)="importFrogFile()"
+                 [ngClass]="{ 'loading-container': isLoading }"
+                 style="cursor: pointer;">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
                   <label *ngIf="!isLoading" class="new-design-item-title">Import</label>
-                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Bring in external files</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Open a .frog file</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -358,9 +418,40 @@
           <!-- File Explorer for Design Center -->
           <div *ngIf="!isFrogmarksGalaxyActive" class="row pt-3 fw-normal display-6 ps-4" >
             <!-- <span *ngIf="!isLoading && isDesignCenterActive">Design Center</span> -->
-            <span *ngIf="!isLoading && isFavoritesFilterActive">Favorites</span>
+            <span *ngIf="!isLoading && isFavoritesFilterActive">My Files</span>
+            <span *ngIf="!isLoading && isArchivedFilterActive">Archive</span>
+            <span *ngIf="!isLoading && isUpdatesActive">Updates</span>
+            <span *ngIf="!isLoading && isTemplatesActive">Templates</span>
           </div>
-          <div *ngIf="!isFrogmarksGalaxyActive" class="mobile-chips-row row pe-4 fw-normal display-6">
+
+          <div *ngIf="isUpdatesActive" class="newspaper-container mt-4">
+            <div class="newspaper-header text-center">
+              <h1 class="masthead">FROGMARKS TIMES</h1>
+              <div class="issue-date">TUESDAY, AUGUST 12 2025</div>
+            </div>
+
+            <hr class="thick-line" />
+
+            <div class="headline text-center">
+              Frogmarks Beta 0.1.0 is now live! Check out the new features and improvements.
+            </div>
+
+            <div class="article-columns">
+              <div class="column">
+                <h2>Breaking News</h2>
+                <p>Whiteboards are live for freeform doodling and brainstorming!</p>
+                <p>Illustrations for mixed vector+raster layers, custom brushes, and advanced tooling is coming soon!</p>
+              </div>
+
+              <div class="column">
+                <h2>Community Spotlight</h2>
+                <p>If you are reading this, thank you for visiting the beta site!</p>
+                <p>Frogmarks is being built with love and care by a team of one, so your support is invaluable.</p>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="isDesignCenterActive" class="mobile-chips-row row pe-4 fw-normal display-6">
             <div class="col-4" [ngClass]="{ 'loading-container': isLoading }">
               <mat-chip-set class="mobile-chips">
                 <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 1 ? 'selected-chip' : 'unselected-chip'"
@@ -407,21 +498,21 @@
                            [ngClass]="{ 'selected-dropdown-option': fileType == 1 }"
                            [@slideInOut]="fileType == 1 ? 'flash-in' : 'out'"
                            (click)="changeFileType(1)">
-                        Design files
+                        Boards
                       </div>
 
                       <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
                            [ngClass]="{ 'selected-dropdown-option': fileType == 2 }"
                            [@slideInOut]="fileType == 2 ? 'flash-in' : 'out'"
                            (click)="changeFileType(2)">
-                        Boards
+                        Illustrations
                       </div>
 
                       <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
                            [ngClass]="{ 'selected-dropdown-option': fileType == 3 }"
                            [@slideInOut]="fileType == 3 ? 'flash-in' : 'out'"
                            (click)="changeFileType(3)">
-                        Slide decks
+                        Animations
                       </div>
 
                     </div>
@@ -518,15 +609,26 @@
             <div *ngIf="filteredListItems.length == 0 && !isLoadingItems"
                  [ngClass]="{ 'loading-container': isLoading }"
                  class="row ms-1 files-container justify-content-center align-content-center"
-                 style="height: 400px; width: 100%; font-size: small; color:rgb(133, 133, 133)">
-              <label class="text-center" *ngIf="!isLoading">Couldn't find any matches. Try adjusting your filters.</label>
+                 style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 22px; font-weight: 800;">
+              <label class="text-center me-5" *ngIf="!isLoading && !isArchivedFilterActive">
+                Couldn't find any matches. Try adjusting your filters.
+              </label>
+              <label class="text-center" *ngIf="!isLoading && isArchivedFilterActive">
+                <div style="background-color: var(--selected-chip-color); padding: 8px; max-width: min-content; justify-self: center; border-radius: 4px; margin-bottom: 4px;">
+                  <mat-icon>delete_forever</mat-icon>
+                </div>
+                Your trash can is empty.<br/>
+                <span style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 16px; font-weight: 400;">Here you can restore or permanently delete your archived items.</span>
+                 
+              </label>
             </div>
 
             <div *ngIf="!isLoading && filteredListItems.length > 0" class="grid-container">
-              <div class="grid-item"
+              <div class="grid-item mb-2 me-2"
                    *ngFor="let listItem of filteredListItems; trackBy: trackByUuid"
                    (click)="listItemSelected($event, listItem.uuid)"
-                   (dblclick)="listItemDoubleClicked($event, listItem.uuid)"
+                   (dblclick)="listItemDoubleClicked($event, listItem)"
+                   (contextmenu)="openBoardMenu($event, listItem)"
                    [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
                 <div class="image-wrapper shadow-sm" style="border-radius: 10px;" [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
                   <img [src]="listItem.thumbnailUrl && listItem.thumbnailUrl !== '' ? listItem.thumbnailUrl : 'https://placehold.jp/ffffff/ffffff/150x150.png'"
@@ -539,9 +641,21 @@
                     </mat-icon> <!-- Change 'favorite' to your desired icon -->
                   </div>
                 </div>
-                <div class="content">
-                  <div class="title"></div>
-                  <div class="description">{{ listItem.name }}</div>
+                <!-- Normal (not editing) -->
+                <div (dblclick)="startInlineRename(listItem)" class="mt-1 flex-grow-1 text-start fw-bold" style="font-size: 12px;" *ngIf="editingId !== listItem.uuid">
+                  {{ listItem.name }}<br/>
+                  <span class="fw-bold edited-time">Edited {{ listItem.dateModified | date:'short' }}</span>
+                </div>
+
+                <!-- Editing -->
+                <div class="mt-1 flex-grow-1" *ngIf="editingId === listItem.uuid" style="max-width: 260px;">
+                  <input #renameInput
+                        class="rename-input"
+                        [formControl]="nameControl"
+                        (keydown.enter)="commitInlineRename(listItem)"
+                        (keydown.escape)="cancelInlineRename()"
+                        (blur)="commitInlineRename(listItem)" />
+                  <div style="font-size: 11px; opacity:.7; margin-top:4px; margin-left: 3px;">Enter to save • Esc to cancel</div>
                 </div>
               </div>
             </div>
@@ -553,90 +667,100 @@
             <div *ngIf="filteredListItems.length == 0 && !isLoadingItems"
                  [ngClass]="{ 'loading-container': isLoading }"
                  class="row ms-1 files-container justify-content-center align-content-center"
-                 style="height: 400px; width: 100%; font-size: small; color:rgb(133, 133, 133)">
-              <label class="text-center" *ngIf="!isLoading">Couldn't find any matches. Try adjusting your filters.</label>
+                 style="height: 400px; width: 100%; font-size: small; color:var(--text-color); background-color: var(--background-color);">
+              <label class="text-center me-5" *ngIf="!isLoading && !isArchivedFilterActive">
+                Couldn't find any matches. Try adjusting your filters.
+              </label>
             </div>
 
             <div *ngIf="!isLoading && filteredListItems.length > 0" class="list-container">
-              <div class="list-item board-item" *ngFor="let listItem of filteredListItems; let i = index"
-                   (click)="listItemSelected($event, listItem.uuid)"
-                   (dblclick)="listItemDoubleClicked($event, listItem.uuid)"
-                   [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
-                <div class="list-image-wrapper shadow-sm" style="border-radius: 10px;" [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
-                  <div class="row">
-                    <div class="col-1" style="min-width: 86px; max-width: 86px;">
-                      <img [src]="listItem.thumbnailUrl && listItem.thumbnailUrl !== '' ? listItem.thumbnailUrl : 'https://placehold.jp/ffffff/ffffff/150x150.png'"
-                        class="thumbnail-img">
-                    </div>
-                    <div class="col-6 text-start align-content-center">
-                      {{ listItem.name }}
-                    </div>
+              <div class="list-item board-item"
+                  *ngFor="let listItem of filteredListItems; let i = index"
+                  (click)="listItemSelected($event, listItem.uuid)"
+                  (dblclick)="listItemDoubleClicked($event, listItem)"
+                  (contextmenu)="openBoardMenu($event, listItem)"
+                  [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
+
+                <div class="list-image-wrapper shadow-sm d-flex align-items-center" 
+                    style="border-radius: 10px;" 
+                    [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
+
+                  <!-- Image on left -->
+                  <div style="flex: 0 0 80px;">
+                    <img [src]="listItem.thumbnailUrl && listItem.thumbnailUrl !== '' 
+                                ? listItem.thumbnailUrl 
+                                : 'https://placehold.jp/ffffff/ffffff/150x150.png'"
+                        class="thumbnail-img" 
+                        style="width: 80px; height: auto; border-radius: 6px;">
                   </div>
-                  
-                  
-                  <mat-icon class="type-icon material-symbols-outlined">draw</mat-icon> <!-- Change 'favorite' to your desired icon -->
-                  <div class="favorite-icon-wrapper">
+
+                  <!-- Text on right -->
+                  <div class="ms-3 flex-grow-1 text-start fw-bold" style="font-size: 12px;">
+                    {{ listItem.name }}<br/>
+                    <span class="fw-bold" class="edited-time">Edited {{ listItem.dateModified | date:'short' }}</span>
+                  </div>
+
+                  <!-- Icons -->
+                  <mat-icon class="type-icon material-symbols-outlined ms-auto">draw</mat-icon>
+
+                  <div class="favorite-icon-wrapper ms-2">
                     <mat-icon class="favorite-icon HeartAnimation"
-                              [ngClass]="{ 'material-symbols-outlined': !isFavorite(listItem.uuid), 'favorited-icon': isFavorite(listItem.uuid), 'heart-animate': isFavorite(listItem.uuid) }"
+                              [ngClass]="{ 
+                                  'material-symbols-outlined': !isFavorite(listItem.uuid), 
+                                  'favorited-icon': isFavorite(listItem.uuid), 
+                                  'heart-animate': isFavorite(listItem.uuid) 
+                              }"
                               (click)="toggleFavorite(listItem.uuid, listItem)">
-                    </mat-icon> <!-- Change 'favorite' to your desired icon -->
+                    </mat-icon>
                   </div>
                 </div>
-                <!-- <div class="content">
-                  <div class="title"></div>
-                  <div class="description">{{ listItem.name }}</div>
-                </div> -->
               </div>
             </div>
 
           </div>
           <!-- Frogmarks Galaxy -->
-          <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
-            <div class="col-6">
+          <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" [ngClass]="{ 'loading-container': isLoading }">
+            <!-- <div class="col-6">
+              <div class="row mt-2 fs-6 fw-bold">
+                <div class="col-1" style="color: var(--text-color-high-contrast);">
+                  Explore
+                </div>
+                <div class="col-1 ms-4">
+                  Feed
+                </div>
+                <div class="col-1">
+                  Notifications
+                </div>
+              </div>
               <div *ngIf="!isLoading" class="search-wrapper ms-1">
-                <mat-icon class="search-icon">search</mat-icon>
-                <input
-                  class="search-bar"
-                  matInput
-                  placeholder="Search for anything"
-                  type="text"
-                  [matAutocomplete]="auto"
-                  [formControl]="searchControl"
-                  (input)="onSearch()"
-                  style="background-color: rgb(0, 0, 0);"
-                />
-                <mat-autocomplete #auto="matAutocomplete">
-                  <!-- Update item.name based on item structure -->
-                  <mat-option
-                    class="autocomplete-dropdown-content"
-                    *ngFor="let item of filteredSearchItems"
-                    [value]="item.name"
-                    (click)="onOptionSelected(item)"
-                  >
-                    {{ item.name }}
-                  </mat-option>
-                </mat-autocomplete>
                 
               </div>
+              
             </div>
             <div class="col-6 text-end text-nowrap" style="padding-right: 42px;">
-              <button *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button style="background-color:#000000 !important; color: white !important;">
+              <button [hidden]="!isTeamSelected" *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button style="background-color:#000000 !important; color: white !important;">
                 <mat-icon>add</mat-icon>
                 Invite members
               </button>
-              <button *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
+              <button [hidden]="!isTeamSelected" *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
                 Upgrade
               </button>
-              
-              <!--
-              <button class="align-top" style="margin-top: -5px" mat-icon-button><mat-icon class="align-top">help_outline</mat-icon></button>
-              -->
               <button *ngIf="!isLoading" class="ms-2 align-top" style="margin-top: -5px" mat-icon-button (click)="showNotificationPanel=true"><mat-icon style="color:white">notifications_none</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon style="color:white">settings</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon style="color:white">person</mat-icon></button>
-            </div>
-
+            </div> -->
+            <app-explore-feed></app-explore-feed>
           </div>
+
+          <!-- Templates Selected -->
+          <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isTemplatesActive" class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
+            
+            
+            
+          </div>
+
+         
+
           <!-- <div *ngIf="isFrogmarksGalaxyActive" style="margin-left: -10px !important; margin-right: -50px !important;">
             <span style="color: white; position: absolute; font-weight: bold; font-size: 36px; left: 18%; top: 8%; font-family:monospace; color: #00ffdd; text-shadow: #00ffdd 0px 0px 24px;">Frogmarks Galaxy is coming soon.</span>
             <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.73/build/spline-viewer.js" async></script>
@@ -644,6 +768,74 @@
           </div> -->
 
         </div>
-        
+        <!-- Context menu -->
+        <div *ngIf="contextMenu.visible && !isArchivedFilterActive"
+            class="board-context-menu shadow-sm"
+            [style.left.px]="contextMenu.x"
+            [style.top.px]="contextMenu.y"
+            role="menu"
+            (click)="$event.stopPropagation()">
+
+          <button class="menu-item" role="menuitem" (click)="openItemInNewTab(contextMenu.item)">
+            <mat-icon class="menu-icon mt-1">open_in_new</mat-icon>
+            Open in new tab
+          </button>
+          <hr class="mt-1 mb-1"/>
+          <button (click)="copyItemLink(contextMenu.item)" class="menu-item" role="menuitem">
+            <mat-icon class="menu-icon mt-1">link</mat-icon>
+            Copy Link
+          </button>
+          <button (click)="duplicateItem(contextMenu.item)" class="menu-item" role="menuitem">
+            <mat-icon class="menu-icon mt-1">file_copy</mat-icon>
+            Duplicate
+          </button>
+          <button class="menu-item" role="menuitem" (click)="startInlineRename(contextMenu.item)">
+            <mat-icon class="menu-icon mt-1">text_fields</mat-icon>
+            Rename
+          </button>
+          <hr class="mt-1 mb-1"/>
+          <button class="menu-item" role="menuitem" (click)="onArchiveItem(contextMenu.item)">
+            <mat-icon class="menu-icon">inventory_2</mat-icon>
+            Archive
+          </button>
+        </div>
+
+        <div *ngIf="contextMenu.visible && isArchivedFilterActive"
+            class="board-context-menu shadow-sm"
+            [style.left.px]="contextMenu.x"
+            [style.top.px]="contextMenu.y"
+            role="menu"
+            (click)="$event.stopPropagation()">
+          <button class="menu-item" role="menuitem" (click)="onUnarchiveBoard(contextMenu.item)">
+            <mat-icon class="menu-icon mt-1">unarchive</mat-icon>
+            Restore
+          </button>
+          <button class="menu-item deletion-menu-item" role="menuitem" (click)="onDeleteBoard(contextMenu.item)">
+            <mat-icon class="menu-icon mt-1">local_fire_department</mat-icon>
+            Delete Permanently
+          </button>
+        </div>
+
+        <mat-autocomplete
+        #auto="matAutocomplete"
+        panelClass="search-auto-panel"
+        [class.search-auto-empty]="!filteredSearchItems.length">
+          <!-- Update item.name based on item structure -->
+          <mat-option
+            class="autocomplete-dropdown-content"
+            *ngFor="let item of filteredSearchItems"
+            [value]="item.name"
+            (click)="onOptionSelected(item)"
+          >
+            {{ item.name }}
+          </mat-option>
+        </mat-autocomplete>
+    </div>
+    <div class="frogmarks-footer">
+      <span class="ms-1 me-1 ps-3 pe-2" *ngFor="let text of frogmarksList; let i = index"
+            [class.alt-bg]="i % 2 === 1">
+        {{ text }}
+      </span>
     </div>
 </div>
+
