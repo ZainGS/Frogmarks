@@ -35,5 +35,14 @@ namespace Frogmarks.Models.Dtos.Illustration
         public bool IsArchived { get; set; } = false;
         public double Width { get; set; }
         public double Height { get; set; }
+
+        // Sync mode: 0=CloudSync (default), 1=NoCloud, 2=LocalOnly
+        public int SyncMode { get; set; } = 0;
+
+        // Publishing
+        public bool IsPublic { get; set; } = false;
+        public string? PublishedTitle { get; set; }
+        public DateTime? PublishedAt { get; set; }
+        public int PublishedVersion { get; set; } = 0;
     }
 }

@@ -21,9 +21,7 @@ export class NavMenuComponent implements OnInit {
       
       if (event instanceof NavigationEnd) {
         // Show the navbar only on certain routes
-        if (this.router.url === '/' 
-          || this.router.url.startsWith('/home')
-          || this.router.url.startsWith('/check-your-email')) {
+        if (this.router.url.startsWith('/check-your-email')) {
           this.navbarService.show();
         } else {
           this.navbarService.hide();

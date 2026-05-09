@@ -1,0 +1,135 @@
+<div class="nid">
+  <div class="nid-header">
+    <span class="nid-title">{{ importMode ? 'Import Illustration' : 'New Illustration' }}</span>
+    <button class="nid-close" (click)="cancel()">✕</button>
+  </div>
+
+  <div class="nid-body">
+
+    <!-- Import name -->
+    <div class="nid-row" *ngIf="importMode">
+      <span class="nid-label">Name</span>
+      <span class="nid-import-name">{{ importName }}</span>
+    </div>
+
+    <!-- Canvas mode (hidden in import mode — size comes from the file) -->
+    <ng-container *ngIf="!importMode">
+    <div class="nid-row">
+      <span class="nid-label">Canvas</span>
+      <div class="nid-toggle">
+        <button [class.on]="bounded"  (click)="bounded = true">Bounded</button>
+        <button [class.on]="!bounded" (click)="bounded = false">Infinite</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="bounded">
+
+      <!-- Preset -->
+      <div class="nid-row">
+        <span class="nid-label">Preset</span>
+        <select class="nid-select" [(ngModel)]="selectedPreset" (ngModelChange)="onPresetChange($event)">
+          <option *ngFor="let p of presets" [value]="p.label">{{ p.label }}</option>
+        </select>
+      </div>
+
+      <!-- Size -->
+      <div class="nid-row">
+        <span class="nid-label">Size</span>
+        <div class="nid-dims">
+          <input class="nid-num" type="number" [(ngModel)]="docW" (ngModelChange)="onWidthChange($event)" min="1" max="8192">
+          <span class="nid-x">×</span>
+          <input class="nid-num" type="number" [(ngModel)]="docH" (ngModelChange)="onHeightChange($event)" min="1" max="8192">
+          <span class="nid-unit">px</span>
+          <button class="nid-lock" (click)="toggleAspectLock()"
+                  [title]="aspectLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'">
+            <mat-icon>{{ aspectLocked ? 'lock' : 'lock_open' }}</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="nid-aspect-row">{{ aspectLabel }}</div>
+
+      <!-- Orientation -->
+      <div class="nid-row">
+        <span class="nid-label">Orientation</span>
+        <div class="nid-orient">
+          <button [class.on]="getOrientation() === 'portrait'"  (click)="setOrientation('portrait')">Portrait</button>
+          <button [class.on]="getOrientation() === 'landscape'" (click)="setOrientation('landscape')">Landscape</button>
+          <button [class.on]="getOrientation() === 'square'"    (click)="setOrientation('square')">Square</button>
+        </div>
+      </div>
+
+      <!-- Large canvas warning -->
+      <div class="nid-warn" *ngIf="sizeWarning">
+        ⚠ Large canvases may be slow on some devices.
+      </div>
+
+      <!-- Aspect-ratio preview -->
+      <div class="nid-preview">
+        <div class="nid-preview-box" [ngStyle]="getPreviewStyle()"></div>
+      </div>
+
+    </ng-container>
+
+    <div class="nid-infinite-hint" *ngIf="!bounded">
+      Infinite canvas — no fixed boundary. Pan and zoom freely.
+    </div>
+
+    </ng-container><!-- end !importMode -->
+
+    <!-- Sync mode -->
+    <div class="nid-storage-section">
+      <span class="nid-label">Storage</span>
+      <div class="nid-sync-modes">
+
+        <!-- Local only -->
+        <div class="nid-sync-btn" [class.on]="syncMode === 2" (click)="syncMode = 2">
+          <div class="nid-sync-btn-header">
+            <span class="nid-sync-icon">⬡</span>
+            <span class="nid-sync-label">Local only</span>
+            <span class="nid-hint-icon" (click)="$event.stopPropagation()">?
+              <span class="nid-hint-tip">Nothing about this illustration is sent to any server. All data — settings, layers, and pixel data — lives entirely in this browser via OPFS and IndexedDB. Maximum privacy. The trade-off: this device is the only copy. Clearing browser storage permanently deletes it, so export a .frogmarks file regularly.</span>
+            </span>
+          </div>
+          <span class="nid-sync-desc">Zero cloud. Everything stored locally in this browser only.</span>
+        </div>
+
+        <!-- No-cloud -->
+        <div class="nid-sync-btn" [class.on]="syncMode === 1" [class.nid-sync-btn--disabled]="!isLoggedIn"
+             (click)="isLoggedIn && (syncMode = 1)">
+          <div class="nid-sync-btn-header">
+            <span class="nid-sync-icon">⬡</span>
+            <span class="nid-sync-label">No-cloud</span>
+            <span class="nid-hint-icon" (click)="$event.stopPropagation()">?
+              <span class="nid-hint-tip">Illustration settings are saved to the server so you can find this file from any device, but your actual pixel data never leaves this browser. It is stored in OPFS — a private, sandboxed area of your local storage that no other site or service can access. Export a .frogmarks file to move your work to another device.</span>
+            </span>
+          </div>
+          <span class="nid-sync-desc">Metadata saved to server. Pixel data stays on this device — never uploaded to Azure.</span>
+        </div>
+
+        <!-- Cloud -->
+        <div class="nid-sync-btn" [class.on]="syncMode === 0" [class.nid-sync-btn--disabled]="!isLoggedIn"
+             (click)="isLoggedIn && (syncMode = 0)">
+          <div class="nid-sync-btn-header">
+            <span class="nid-sync-icon">☁</span>
+            <span class="nid-sync-label">Cloud</span>
+            <span class="nid-hint-icon" (click)="$event.stopPropagation()">?
+              <span class="nid-hint-tip">Your artwork is securely backed up and synced across your devices. Cloud projects are stored online to enable syncing, sharing, and collaboration. Prefer to keep projects only on your device? Choose Local only mode instead.</span>
+            </span>
+          </div>
+          <span class="nid-sync-desc">Syncs to cloud — accessible from any device.</span>
+        </div>
+
+      </div>
+      <div class="nid-sync-hint nid-sync-hint--warn" *ngIf="!isLoggedIn">
+        Sign in to use Cloud or No-cloud storage.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="nid-footer">
+    <button class="nid-btn nid-btn-cancel" (click)="cancel()">Cancel</button>
+    <button class="nid-btn nid-btn-create" (click)="create()">Create</button>
+  </div>
+</div>

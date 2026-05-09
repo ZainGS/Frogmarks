@@ -40,6 +40,42 @@ $radius: 6px;
   padding: 2px 8px;
 }
 
+/* ── Add dropdown ────────────────────────────────────────── */
+
+.rl-add-dropdown-wrapper {
+  position: relative;
+}
+
+.rl-add-dropdown {
+  position: absolute;
+  z-index: 100;
+  right: 0;
+  top: calc(100% + 2px);
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  button {
+    background: none;
+    border: none;
+    color: $text;
+    padding: 6px 12px;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover { background: rgba(255, 255, 255, 0.08); }
+    &:disabled { color: $muted; cursor: default; &:hover { background: none; } }
+    &:first-child { border-radius: 4px 4px 0 0; }
+    &:last-child { border-radius: 0 0 4px 4px; }
+  }
+}
+
 /* ── Search ──────────────────────────────────────────────── */
 
 .rl-search {
@@ -105,6 +141,86 @@ $radius: 6px;
   font-size: 11px;
   color: $muted;
   pointer-events: none;
+}
+
+/* ── Header actions ──────────────────────────────────────── */
+
+.rl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Folder row ──────────────────────────────────────────── */
+
+.rl-folder {
+  background: rgba(255, 255, 255, 0.03);
+
+  .rl-folder-chevron {
+    cursor: pointer;
+    font-size: 10px;
+    width: 14px;
+    text-align: center;
+    color: $muted;
+    flex-shrink: 0;
+
+    &:hover { color: $text; }
+  }
+
+  .rl-folder-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+}
+
+/* ── 3D Scene row ────────────────────────────────────────── */
+
+.rl-scene {
+  cursor: default;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+
+  &:hover { background: rgba(255, 255, 255, 0.03); }
+
+  &.active {
+    background: rgba($accent, 0.12);
+
+    .rl-scene-line { opacity: 1; }
+    .rl-scene-label { color: $text; }
+  }
+}
+
+.rl-scene-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.rl-scene-line {
+  flex: 1;
+  height: 1px;
+  background: $accent;
+  opacity: 0.5;
+}
+
+.rl-scene-label {
+  font-size: 10px;
+  color: $accent-light;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.rl-scene-remove {
+  background: none;
+  border: none;
+  color: $muted;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+
+  &:hover { color: #f77; }
 }
 
 /* ── Row 1: eye, name, clip, lock ────────────────────────── */

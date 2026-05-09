@@ -340,6 +340,23 @@ namespace Frogmarks.Controllers
         }
 
         /// <summary>
+        /// Returns just the savedAt timestamp for OPFS freshness comparison — much lighter than loading the full state.
+        /// </summary>
+        [HttpGet("{id:long}/state/savedAt")]
+        public async Task<IActionResult> GetStateSavedAt(long id)
+        {
+            try
+            {
+                var savedAt = await _illustrationService.GetStateSavedAt(id);
+                return Ok(new { savedAt = savedAt ?? 0 });
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
         /// Loads the full illustration state with SAS URLs for pixel data.
         /// Replaces GET /api/illustration/load for v2 illustrations.
         /// </summary>
@@ -392,6 +409,58 @@ namespace Frogmarks.Controllers
         }
 
         /// <summary>
+        /// Uploads gzip binary for a single 3D mesh. Called per dirty mesh instead of embedding base64 in the state DTO.
+        /// </summary>
+        [HttpPut("{id:long}/mesh/{meshId}")]
+        public async Task<IActionResult> UploadMeshBlob(long id, string meshId, [FromForm] IFormFile meshData)
+        {
+            try
+            {
+                var result = await _illustrationService.UploadMeshBlob(id, meshId, meshData);
+                return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Uploads gzip binary for the texture library snapshot.
+        /// </summary>
+        [HttpPut("{id:long}/texture-library")]
+        public async Task<IActionResult> UploadTextureLibraryBlob(long id, [FromForm] IFormFile texLibData)
+        {
+            try
+            {
+                var result = await _illustrationService.UploadTextureLibraryBlob(id, texLibData);
+                return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Returns fresh read SAS URLs for a set of mesh blob IDs. Used by the OPFS load path to get non-expired URLs.
+        /// </summary>
+        [HttpGet("{id:long}/mesh-read-urls")]
+        public async Task<IActionResult> GetMeshReadUrls(long id, [FromQuery] string meshIds)
+        {
+            try
+            {
+                var ids = (meshIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+                var result = await _illustrationService.GetMeshReadUrls(id, ids);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
         /// Deletes a specific cel and its pixel data from blob storage.
         /// </summary>
         [HttpDelete("{id:long}/cel/{celId}")]
@@ -418,6 +487,75 @@ namespace Frogmarks.Controllers
             {
                 var result = await _illustrationService.GetCelStatus(id, request.CelIds);
                 return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Publishes the illustration as a public bundle. Accepts a multipart form with the packed .frogmarks file.
+        /// </summary>
+        [HttpPost("{id:long}/publish")]
+        public async Task<IActionResult> PublishIllustration(long id, IFormFile bundle, [FromForm] string? publishedTitle = null)
+        {
+            try
+            {
+                var result = await _illustrationService.PublishIllustration(id, bundle, publishedTitle);
+                return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Unpublishes the illustration, making it private again.
+        /// </summary>
+        [HttpPost("{id:long}/unpublish")]
+        public async Task<IActionResult> UnpublishIllustration(long id)
+        {
+            try
+            {
+                var result = await _illustrationService.UnpublishIllustration(id);
+                return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Returns the current user's storage usage and quota.
+        /// </summary>
+        [HttpGet("quota")]
+        public async Task<IActionResult> GetStorageQuota()
+        {
+            try
+            {
+                var result = await _illustrationService.GetStorageQuota();
+                return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Returns a short-lived bundle URL for viewing a published illustration. No authentication required.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("view/{uid:guid}")]
+        public async Task<IActionResult> GetPublicView(Guid uid)
+        {
+            try
+            {
+                var result = await _illustrationService.GetPublicView(uid);
+                return GenerateResponseActionResult(result);
             }
             catch (Exception ex)
             {

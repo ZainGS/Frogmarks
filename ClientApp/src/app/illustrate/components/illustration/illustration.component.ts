@@ -1,8 +1,11 @@
 import { Component, OnInit, ViewChild, HostListener, ElementRef, NgZone } from '@angular/core';
+import JSZip from 'jszip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
 
 import { IllustrationService, IllustrationStateDto, AnimationStateDto, LayerStateDto, CelStateDto } from 'app/shared/services/illustrate/illustration.service';
+import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
+import { LocalIllustrationService } from 'app/shared/services/illustrate/local-illustration.service';
 import { FrogFileService, FrogImportResult } from 'app/shared/services/illustrate/frog-file.service';
 
 import { Illustration } from 'app/illustrate/models/illustration.model';
@@ -12,7 +15,7 @@ import WorldManager from '@zaings/salsa/world-manager';
 import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from '@zaings/salsa';
 
 import { ShapeType } from '../../../shared/enums/shape-type';
-import { auditTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
+import { auditTime, debounceTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
 import { ColorPickerComponent } from 'app/shared/components/color-picker/color-picker.component';
 
 import { AuthService } from 'app/shared/services/auth/auth.service';
@@ -65,6 +68,59 @@ import {
   ShaderSnippet, SHADER_SNIPPETS,
 } from 'app/illustrate/models/text-effect.model';
 
+async function gzipToBlob(data: unknown): Promise<Blob> {
+  const bytes = new TextEncoder().encode(JSON.stringify(data));
+  const cs = new CompressionStream('gzip');
+  const writer = cs.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  return new Response(cs.readable).blob();
+}
+
+async function gunzipFromBinary(buffer: ArrayBuffer): Promise<unknown> {
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  writer.write(new Uint8Array(buffer));
+  writer.close();
+  const chunks: Uint8Array[] = [];
+  const reader = ds.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  let total = 0;
+  for (const c of chunks) total += c.length;
+  const merged = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { merged.set(c, off); off += c.length; }
+  return JSON.parse(new TextDecoder().decode(merged));
+}
+
+
+async function gunzipFromBase64(b64: string): Promise<unknown> {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks: Uint8Array[] = [];
+  const reader = ds.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  let total = 0;
+  for (const c of chunks) total += c.length;
+  const merged = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { merged.set(c, off); off += c.length; }
+  return JSON.parse(new TextDecoder().decode(merged));
+}
+
 @Component({
   selector: 'app-illustration',
   standalone: false,
@@ -74,8 +130,12 @@ import {
 export class IllustrationComponent implements OnInit {
 
   private routeSub?: Subscription;
+  private _scene3dViewportSub: any = null;
+  private _scene3dResizeObserver: ResizeObserver | null = null;
 
   @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('handleCanvas') handleCanvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('titleInput') titleInputRef!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInput') imageFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInputLayer') imageFileInputLayer!: ElementRef<HTMLInputElement>;
   @ViewChild('bgColorPicker') bgColorPickerRef!: ColorPickerComponent;
@@ -90,6 +150,12 @@ export class IllustrationComponent implements OnInit {
   @HostListener('window:scroll') onWinScroll() { this.closeContextMenu(); }
   @HostListener('window:resize') onWinResize() { this.closeContextMenu(); }
   @HostListener('document:keydown.escape') onEsc() { this.closeContextMenu(); }
+  @HostListener('document:keydown', ['$event']) onCtrlSnapKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Control') this.scene3dSnapActive = true;
+  }
+  @HostListener('document:keyup', ['$event']) onCtrlSnapKeyUp(e: KeyboardEvent) {
+    if (e.key === 'Control') this.scene3dSnapActive = false;
+  }
 
   // State flags
   uiHidden = false;
@@ -116,11 +182,14 @@ export class IllustrationComponent implements OnInit {
   showEditMenu = false;
   showFileMenu = false;
   showAnimationMenu = false;
+  scene3dShowAddMeshMenu = false;
+  scene3dShowKeyframeHint = false;
 
   toggleAnimationMode(): void {
     this.animationEnabled = !this.animationEnabled;
     this.animationService.setAnimationEnabled(this.animationEnabled);
     this.closeContextMenu();
+    this._markStateDirty();
   }
 
   toggleUI(force?: boolean) {
@@ -160,6 +229,17 @@ export class IllustrationComponent implements OnInit {
       }
     } catch (err) {
       console.error('Fullscreen toggle failed:', err);
+    }
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    const sm = this.shapeManager as any;
+    const dirtyMeshIds: string[] = sm?.getDirtyMeshIds3D?.() ?? [];
+    // Warn for unsaved 3D changes (cloud-sync/no-cloud) or if a save is still in-flight
+    const hasUnsaved = dirtyMeshIds.length > 0 || this._saveRunning || this._saveQueued;
+    if (hasUnsaved) {
+      event.preventDefault();
     }
   }
 
@@ -216,6 +296,12 @@ export class IllustrationComponent implements OnInit {
 
   cursorSelected = true;
   panHandSelected = false;
+
+  // ── Artboard overlay ────────────────────────────────────────
+  artboardShadowStyle: Record<string, string> = {};
+  artboardLabelStyle: Record<string, string> = {};
+  artboardLabelText = '';
+  private _artboardViewportSub: any = null;
 
   selectedStamp = 'assets/stamps/star.png';
   selectedStampColor = '#FFFFFF';
@@ -341,51 +427,61 @@ export class IllustrationComponent implements OnInit {
       this.shapeManager.setDitherForegroundColor?.(fgRgba[0], fgRgba[1], fgRgba[2], fgRgba[3]);
     }
     this.shapeManager.setDitherEnabled?.(enabled);
+    this._markStateDirty();
   }
 
   onDitherAlgorithmChange(algorithm: DitherAlgorithm): void {
     this.ditherConfig.algorithm = algorithm;
     this.shapeManager.setDitherAlgorithm?.(algorithm);
+    this._markStateDirty();
   }
 
   onDitherColorLevelsChange(levels: number): void {
     this.ditherConfig.colorLevels = +levels;
     this.shapeManager.setDitherColorLevels?.(+levels);
+    this._markStateDirty();
   }
 
   onDitherStrengthChange(strength: number): void {
     this.ditherConfig.strength = +strength;
     this.shapeManager.setDitherStrength?.(+strength / 100);
+    this._markStateDirty();
   }
 
   onDitherPatternScaleChange(scale: number): void {
     this.ditherConfig.patternScale = +scale;
     this.shapeManager.setDitherPatternScale?.(+scale);
+    this._markStateDirty();
   }
 
   onDitherPerChannelChange(perChannel: boolean): void {
     this.ditherConfig.perChannel = perChannel;
     this.shapeManager.setDitherPerChannel?.(perChannel);
+    this._markStateDirty();
   }
 
   onDitherBayerLevelChange(level: number): void {
     this.ditherConfig.bayerLevel = +level;
     this.shapeManager.setDitherBayerLevel?.(+level);
+    this._markStateDirty();
   }
 
   onDitherHalftoneAngleChange(angle: number): void {
     this.ditherConfig.halftoneAngle = +angle;
     this.shapeManager.setDitherHalftoneAngle?.(+angle);
+    this._markStateDirty();
   }
 
   onDitherHalftoneFrequencyChange(freq: number): void {
     this.ditherConfig.halftoneFrequency = +freq;
     this.shapeManager.setDitherHalftoneFrequency?.(+freq);
+    this._markStateDirty();
   }
 
   onDitherHalftoneShapeChange(algorithm: DitherAlgorithm): void {
     this.ditherConfig.algorithm = algorithm;
     this.shapeManager.setDitherAlgorithm?.(algorithm);
+    this._markStateDirty();
   }
 
   get ditherStrengthPercent(): number {
@@ -395,6 +491,7 @@ export class IllustrationComponent implements OnInit {
   set ditherStrengthPercent(val: number) {
     this.ditherConfig.strength = val / 100;
     this.shapeManager.setDitherStrength?.(val / 100);
+    this._markStateDirty();
   }
 
   // Dither color controls
@@ -410,18 +507,21 @@ export class IllustrationComponent implements OnInit {
       this.shapeManager.setDitherForegroundColor?.(fgRgba[0], fgRgba[1], fgRgba[2], fgRgba[3]);
     }
     this.shapeManager.setDitherColorMode?.(mode);
+    this._markStateDirty();
   }
 
   onDitherForegroundColorChange(hex: string): void {
     const c = this.hexToRgba01(hex);
     this.ditherConfig.foregroundColor = c;
     this.shapeManager.setDitherForegroundColor?.(c[0], c[1], c[2], c[3]);
+    this._markStateDirty();
   }
 
   onDitherBackgroundColorChange(hex: string): void {
     const c = this.hexToRgba01(hex);
     this.ditherConfig.backgroundColor = c;
     this.shapeManager.setDitherBackgroundColor?.(c[0], c[1], c[2], c[3]);
+    this._markStateDirty();
   }
 
   onDitherSwapColors(): void {
@@ -429,21 +529,25 @@ export class IllustrationComponent implements OnInit {
     this.ditherConfig.foregroundColor = [...this.ditherConfig.backgroundColor] as [number, number, number, number];
     this.ditherConfig.backgroundColor = tmp;
     this.shapeManager.swapDitherColors?.();
+    this._markStateDirty();
   }
 
   onDitherInvertPatternChange(invert: boolean): void {
     this.ditherConfig.invertPattern = invert;
     this.shapeManager.setDitherInvertPattern?.(invert);
+    this._markStateDirty();
   }
 
   onDitherDuotoneBiasChange(value: number): void {
     this.ditherConfig.duotoneBias = +value / 100;
     this.shapeManager.setDitherDuotoneBias?.(+value / 100);
+    this._markStateDirty();
   }
 
   onDitherTintOpacityChange(opacity: number): void {
     this.ditherConfig.tintOpacity = +opacity / 100;
     this.shapeManager.setDitherTintOpacity?.(+opacity / 100);
+    this._markStateDirty();
   }
 
   get ditherTintPercent(): number {
@@ -470,12 +574,14 @@ export class IllustrationComponent implements OnInit {
     this.ditherConfig.foregroundColor[3] = +alpha / 100;
     const c = this.ditherConfig.foregroundColor;
     this.shapeManager.setDitherForegroundColor?.(c[0], c[1], c[2], c[3]);
+    this._markStateDirty();
   }
 
   onDitherBgAlphaChange(alpha: number): void {
     this.ditherConfig.backgroundColor[3] = +alpha / 100;
     const c = this.ditherConfig.backgroundColor;
     this.shapeManager.setDitherBackgroundColor?.(c[0], c[1], c[2], c[3]);
+    this._markStateDirty();
   }
 
   // Per-layer dither
@@ -510,6 +616,7 @@ export class IllustrationComponent implements OnInit {
       }
       this.shapeManager.setLayerDitherConfig?.(layerId, undefined);
     }
+    this._markStateDirty();
   }
 
   getLayerDitherConfig(layerId: string): DitherConfig {
@@ -523,6 +630,7 @@ export class IllustrationComponent implements OnInit {
     if (cfg.enabled) {
       this.shapeManager.setLayerDitherConfig?.(layerId, cfg);
     }
+    this._markStateDirty();
   }
 
   onLayerDitherAlgorithmChange(layerId: string, algorithm: DitherAlgorithm): void {
@@ -575,6 +683,7 @@ export class IllustrationComponent implements OnInit {
     cfg.backgroundColor = tmp;
     this.layerDitherConfigs.set(layerId, cfg);
     if (cfg.enabled) this.shapeManager.setLayerDitherConfig?.(layerId, cfg);
+    this._markStateDirty();
   }
 
   /** Sync the UI-side layerDitherConfigs map from the engine's per-layer dither state. */
@@ -667,6 +776,7 @@ export class IllustrationComponent implements OnInit {
     const cfg = this.getLayerFrameLinkConfig(layerId);
     (cfg as any)[field] = value;
     this.layerFrameLinkConfigs.set(layerId, cfg);
+    this._markStateDirty();
     if (cfg.enabled) {
       (this.shapeManager as any)?.setLayerFrameLinkAnimation?.(layerId, cfg);
     }
@@ -686,6 +796,7 @@ export class IllustrationComponent implements OnInit {
     } else {
       sm?.setLayerFrameLinkAnimation?.(layerId, undefined);
     }
+    this._markStateDirty();
   }
 
   onFrameLinkTypeChange(layerId: string, type: FrameLinkAnimationType): void {
@@ -828,17 +939,66 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
-  /** Canvas drop — import dropped image file as new layer */
+  /** Canvas drop — import 3D models (.glb/.gltf/.obj) or images when appropriate */
   async onCanvasDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
-    const file = Array.from(event.dataTransfer?.files ?? []).find(f => f.type.startsWith('image/'));
-    if (!file) return;
+    const files = Array.from(event.dataTransfer?.files ?? []);
+
+    if (this.scene3dPanelVisible) {
+      const modelFile = files.find(f => /\.(glb|gltf|obj)$/i.test(f.name));
+      if (modelFile) {
+        await this.scene3dImportModelFile(modelFile);
+        return;
+      }
+    }
+
+    // image → new raster layer
+    const imageFile = files.find(f => f.type.startsWith('image/'));
+    if (!imageFile) return;
     const sm = this.shapeManager as any;
-    const layerId = await sm.importImageAsNewLayer?.(file, file.name.replace(/\.[^.]+$/, ''));
+    const layerId = await sm.importImageAsNewLayer?.(imageFile, imageFile.name.replace(/\.[^.]+$/, ''));
     if (layerId) {
       console.log('[ImageImport] Dropped image → new layer:', layerId);
       this.selectRasterLayer(layerId);
       this.refreshRasterLayers();
+    }
+  }
+
+  private async scene3dImportModelFile(file: File): Promise<void> {
+    const sm = this.shapeManager as any;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'glb' || ext === 'gltf') {
+      const meshes: any[] = await sm.importGltfFile3D?.(0, 0, 0, file) ?? [];
+      if (meshes.length) {
+        this._scene3dAutoScale(meshes);
+        this.scene3dRefreshMeshes();
+        this.scene3dSelectMesh(meshes[0].id ?? meshes[0].nodeId);
+        this.scene3dMarkTexLibDirty(); // GLTF may embed textures into the library
+      }
+    } else if (ext === 'obj') {
+      const mesh = await sm.importObjFile3D?.(0, 0, 0, file);
+      if (mesh) {
+        this._scene3dAutoScale([mesh]);
+        this.scene3dRefreshMeshes();
+        this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+        this.scene3dMarkTexLibDirty();
+      }
+    }
+  }
+
+  /** Auto-scale imported meshes if they are tiny relative to the canvas (GLTF uses metres, canvas uses pixels). */
+  private _scene3dAutoScale(meshes: any[]): void {
+    if (!meshes.length) return;
+    const sm = this.shapeManager as any;
+    const canvasSize = this.canvas?.width ?? 800;
+    for (const mesh of meshes) {
+      const bbox = mesh.calculateBoundingBox?.() ?? mesh.boundingBox;
+      if (!bbox) continue;
+      const modelSize = Math.max(bbox.width ?? 0, bbox.height ?? 0, bbox.depth ?? 0, 0.001);
+      if (modelSize < canvasSize * 0.05) {
+        const scale = (canvasSize * 0.3) / modelSize;
+        sm.scene3d?.setScale?.(mesh.id ?? mesh.nodeId, scale, scale, scale);
+      }
     }
   }
 
@@ -951,6 +1111,7 @@ export class IllustrationComponent implements OnInit {
       scale: this.paperGrainScale,
       strength: this.paperGrainStrength,
     });
+    this._markStateDirty();
   }
   syncPaperGrain(): void {
     const grain = this.rasterBrushService.getPaperGrain();
@@ -965,6 +1126,1759 @@ export class IllustrationComponent implements OnInit {
   onSdfTextMaxWidthChange(v: number): void {
     this.sdfTextMaxWidth = +v;
     this.shapeManager.setSDFTextMaxWidth?.(this.sdfTextMaxWidth);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  3D Scene
+  // ══════════════════════════════════════════════════════════
+
+  /** Whether a 3D scene exists in the layer stack */
+  get has3DScene(): boolean {
+    return this.rasterLayers.some((l: any) => l.type === '3d-scene' || l.type === '3d-divider');
+  }
+
+  /** Whether the 3D scene entry is currently selected in the layer panel */
+  scene3dPanelVisible = false;
+
+  // Rotation drag readout
+  scene3dDragAngleDeg: number | null = null;
+  scene3dDragLabelPos: { x: number; y: number } | null = null;
+  private _scene3dGizmoRafId: number | null = null;
+
+  // Sidebar tool-swap animation state
+  tools2dVisible = true;
+  tools2dExiting = false;
+  tools3dVisible = false;
+  tools3dExiting = false;
+  private _toolsSwapTimer: ReturnType<typeof setTimeout> | null = null;
+
+  scene3dGizmoMode: 'move' | 'rotate' | 'scale' = 'move';
+  scene3dOrbitEnabled = false;
+  scene3dCameraMode: 'perspective' | 'orthographic' = 'perspective';
+  scene3dIllustrationProjection: 'perspective' | 'orthographic' = 'orthographic';
+  scene3dFOV = 60;
+
+  // Phase 4: shadows
+  scene3dShadowsEnabled = false;
+  scene3dShadowMapSize = 1024;
+  scene3dShadowExtent = 15;
+  scene3dShadowBias = 0.002;
+
+  // Phase 4: performance/debug
+  scene3dFrustumCulling = true;
+
+  // Phase 4: 3D animation panel state
+  scene3dAnimSyncWithTimeline = true;
+  scene3dAnimStartFrame = 0;
+  scene3dAnimEndFrame = 120;
+  scene3dAnimFps = 24;
+  scene3dAnimLoop = true;
+
+  // Frame-link animation (procedural per-mesh animation)
+  scene3dFrameLinkEnabled = false;
+  scene3dFrameLinkType: 'bounce' | 'sway' | 'spin' | 'pulse' | 'shake' | 'scroll' = 'bounce';
+  scene3dFrameLinkAxis: 'x' | 'y' | 'z' = 'y';
+  scene3dFrameLinkAmplitude = 0.15;
+  scene3dFrameLinkFramesPerCycle = 24;
+
+  // Ribbon mesh
+  // ── Cloth state ────────────────────────────────────────────
+  scene3dIsCloth = false;
+  scene3dClothIds = new Set<string>();
+  clothBuilderVisible = false;
+  clothBuilderExistingId: string | null = null;
+  clothBuilderInitialGrid: any = null;
+  clothBuilderInitialPhysics: any = null;
+  clothBuilderInitialSimMode: 'none' | 'hang' | 'drape' = 'none';
+  clothBuilderInitialSimPositions: Float32Array | null = null;
+  clothBuilderDropPosition: [number, number, number] = [0, 0, 0];
+  clothInfoGrid: any = null;
+  clothInfoSim: any = null;
+  clothInfoVertexCount: number | null = null;
+  clothInfoTriCount: number | null = null;
+  clothLiveEnabled = false;
+  clothWindEnabled = false;
+  clothWindAxis: 'x' | 'y' | 'z' = 'x';
+  clothWindAmplitude = 3.0;
+  clothWindFramesPerCycle = 48;
+  clothWindPhase = 0;
+
+  // ── Wind zones ─────────────────────────────────────────────────
+  windZones: any[] = [];
+  windZoneSelectedIdx: number | null = null;
+  windZoneShape: 'sphere' | 'box' = 'sphere';
+  windZoneCenter: [number, number, number] = [0, 0, 0];
+  windZoneRadius = 1.0;
+  windZoneBoxMin: [number, number, number] = [-0.5, -0.5, -0.5];
+  windZoneBoxMax: [number, number, number] = [0.5, 0.5, 0.5];
+  windZoneWindX = 0; windZoneWindY = 5; windZoneWindZ = 0;
+  windZoneFalloff = 1.0;
+  windZonePulseEnabled = false;
+  windZonePulsePeriod = 60;
+  windZonePulsePhase = 0;
+
+  scene3dIsRibbon = false;
+  scene3dRibbonWidth = 0.10;
+  scene3dRibbonSegments = 16;
+  scene3dRibbonPathMode: 'normal' | 'world-up' | 'camera-facing' = 'normal';
+  scene3dRibbonDoubleSided: 'double' | 'front' | 'back' = 'double';
+  scene3dRibbonShowHandles = true;
+  scene3dRibbonFlipRearU = true;
+  scene3dRibbonUvTileCount = 1;
+  scene3dRibbonControlPoints: { x: number; y: number; z: number }[] = [
+    { x: -1, y: 0, z: 0 }, { x: 0, y: 0.3, z: 0 }, { x: 1, y: 0, z: 0 }
+  ];
+
+  // Canvas overlay handle drag
+  private _scene3dActiveDragIndex: number | null = null;
+  private _scene3dHandleRafId: number | null = null;
+  private _scene3dDirtySeq = 0;
+
+  // Fix 1: concurrent save guard
+  private _saveRunning = false;
+  private _saveQueued = false;
+
+  // Opt 1: texture library dirty flag — skip re-uploading when only geometry/transforms changed
+  private _texLibDirty = false;
+
+  // Fix 3: per-layer dirty tracking — only upload layers that had strokes since last save
+  private _dirtyLayerIds = new Set<string>();
+  private _uploadedLayerIds = new Set<string>();
+
+  private scene3dMarkDirty(): void {
+    this.sceneChanged$.next('__3d_' + ++this._scene3dDirtySeq);
+  }
+
+  private scene3dMarkTexLibDirty(): void {
+    this._texLibDirty = true;
+    this.sceneChanged$.next('__3d_' + ++this._scene3dDirtySeq);
+  }
+
+  private _markStateDirty(): void {
+    this.sceneChanged$.next('__state_' + Date.now());
+    this._metaFlush$.next();
+  }
+
+  /** Write current non-pixel settings (dither, bgColor, etc.) to OPFS metadata fast,
+   *  without waiting for the 2s cloud-save debounce. Ensures a quick refresh doesn't lose changes. */
+  private async _quickFlushOpfsMeta(): Promise<void> {
+    if (!this.illustration?.id || this.isLoading) return;
+    try {
+      const { state } = await this.frogFileService.buildStatePayload(this.illustrationTitle);
+      state.ditherConfig = { ...this.ditherConfig };
+      for (const layer of state.layers) {
+        const cfg = this.layerDitherConfigs.get(layer.layerId);
+        if (cfg !== undefined) layer.ditherConfig = { ...cfg } as any;
+      }
+      state.documentSize = (this.shapeManager as any).getDocumentSize?.() ?? null;
+      state.bgColor = this.bgColor;
+      state.dotColor = this.dotColor;
+      state.paperGrain = { type: this.paperGrainType, scale: this.paperGrainScale, strength: this.paperGrainStrength };
+      const key = this.syncMode === 2
+        ? 'local-' + (this.illustration.uuid ?? '')
+        : this.illustration.id.toString();
+      (state as any).backendSynced = false;
+      void this.opfsMetadataService.write(key, state);
+    } catch (e) {
+      console.warn('[QuickFlush] OPFS meta write failed', e);
+    }
+  }
+
+  // Ribbon path presets
+  scene3dPresetType: 'spiral' | 'circle' | 'arc' | 'wave' | 'scurve' | 'zigzag' = 'spiral';
+  scene3dPresetDiameter = 0.5;
+  scene3dPresetHeight = 0.75;
+  scene3dPresetTurns = 4;
+  scene3dPresetAngle = 180;
+  scene3dPresetAmplitude = 0.5;
+  scene3dPresetFrequency = 2;
+  scene3dPresetReverse = false;
+
+  // HTML texture
+  scene3dHtmlEnabled = false;
+  scene3dHtmlContent = '';
+  scene3dHtmlTexWidth = 512;
+  scene3dHtmlTexHeight = 128;
+  scene3dHtmlTexBg = '#000000';
+  scene3dHtmlTexBgTransparent = true;
+  scene3dHtmlTexQuality: 64 | 128 | 256 = 128;  // targetHeight (px) for ribbon auto-sizing
+
+  get scene3dEffectiveTexBg(): string {
+    return this.scene3dHtmlTexBgTransparent ? '' : this.scene3dHtmlTexBg;
+  }
+  private _scene3dHtmlDebounce: any;
+
+  // PS1 config (spec defaults)
+  scene3dPS1Jitter = 0.8;
+  scene3dPS1Snap = 160;
+  scene3dPS1Affine = 0.5;
+  scene3dPS1ColorDepth = 32;
+
+  // Lighting (spec defaults)
+  scene3dLightDirX = 0.3;
+  scene3dLightDirY = -0.8;
+  scene3dLightDirZ = -0.5;
+  scene3dLightIntensity = 1.0;
+  scene3dAmbientR = 0.15;
+  scene3dAmbientG = 0.15;
+  scene3dAmbientB = 0.2;
+  scene3dAmbientIntensity = 1.0;
+
+  // Mesh list from engine
+  scene3dMeshes: Array<any> = [];
+
+  // Selected mesh
+  scene3dSelectedMeshId: string | null = null;
+  scene3dMeshPosX = 0; scene3dMeshPosY = 0; scene3dMeshPosZ = 0;
+  scene3dMeshRotX = 0; scene3dMeshRotY = 0; scene3dMeshRotZ = 0;
+  scene3dMeshScaleX = 1; scene3dMeshScaleY = 1; scene3dMeshScaleZ = 1;
+  scene3dMeshColor = '#ffffff';
+  scene3dMeshOpacity = 1.0;
+
+  // -- Multi-material submesh slots
+  scene3dSubmeshes: Array<{ label: string; color: string; opacity: number; renderStyle: string }> = [];
+
+  // -- Snap indicator
+  scene3dSnapActive = false;
+  scene3dSnapGridSize = 1.0;
+  scene3dSnapAngleDeg = 15;
+  scene3dSnapScaleStep = 0.25;
+
+  // -- Outliner hierarchy
+  scene3dHierarchy: Array<any> = [];
+  scene3dRenamingId: string | null = null;
+  scene3dRenamingName = '';
+  scene3dCollapsedGroups: Set<string> = new Set();
+
+  // -- Texture state for selected mesh
+  scene3dDiffuseTextureSet = false;
+  scene3dNormalMapSet = false;
+
+  // -- Keyframe recording feedback
+  scene3dKeyframeFlash = false;
+  private _scene3dFlashTimer: any = null;
+
+  // -- Dope Sheet data for the timeline component
+  scene3dSelectedMeshTracks: any = null;
+  scene3dSelectedMeshName = '';
+  scene3dAllMeshTracks: { meshId: string; name: string; tracks: any }[] = [];
+
+  get is3DContextActive(): boolean {
+    return this.scene3dPanelVisible || !!this.scene3dSelectedMeshId;
+  }
+
+  get canUndo3D(): boolean {
+    return !!(this.shapeManager as any).canUndo3D;
+  }
+
+  get canRedo3D(): boolean {
+    return !!(this.shapeManager as any).canRedo3D;
+  }
+
+  get undoDescription3D(): string {
+    return (this.shapeManager as any).undoDescription3D ?? 'Nothing to undo';
+  }
+
+  get redoDescription3D(): string {
+    return (this.shapeManager as any).redoDescription3D ?? 'Nothing to redo';
+  }
+
+  get scene3dAnimCurrentFrame(): number {
+    const player = (this.shapeManager as any).getAnimationPlayer3D?.();
+    return player?.currentFrame ?? this.animationService.getCurrentFrame?.() ?? 0;
+  }
+
+  /** Current raster timeline frame (1-based) for display in the 3D panel. */
+  get scene3dTimelineFrame(): number {
+    return this.animationService.getCurrentFrame?.() ?? 1;
+  }
+
+  /** Called by layer panel's (scene3dSelected) event */
+  onScene3dSelected(selected: boolean): void {
+    this.scene3dPanelVisible = selected;
+
+    if (this._toolsSwapTimer) { clearTimeout(this._toolsSwapTimer); this._toolsSwapTimer = null; }
+    if (selected) {
+      this._scene3dLoadSnapSettings();
+      // 2D exits first, then 3D enters
+      this.tools3dExiting = false;
+      this.tools2dExiting = true;
+      this._toolsSwapTimer = setTimeout(() => {
+        this.tools2dVisible = false;
+        this.tools2dExiting = false;
+        this.tools3dVisible = true;
+      }, 300);
+    } else {
+      // 3D exits first, then 2D enters
+      this.tools3dExiting = true;
+      this._toolsSwapTimer = setTimeout(() => {
+        this.tools3dVisible = false;
+        this.tools3dExiting = false;
+        this.tools2dVisible = true;
+      }, 200);
+    }
+
+    if (selected) {
+      this.selectedRasterLayerId = null;
+      this.scene3dRefreshMeshes();
+      this.scene3dRefreshHierarchy();
+      this.scene3dRefreshRuntimeState();
+      this.scene3dEnsureAnimationPlayer();
+      (this.shapeManager as any).scene3d?.enableTransformControls?.();
+
+      const sm = this.shapeManager as any;
+
+      // attachKeyframesToTimeline3D connects the 3D engine to the raster timeline
+      // internally — it handles applyAllKeyframesAtFrame on every frame tick itself.
+      sm.attachKeyframesToTimeline3D?.();
+      sm.scene3d?.attachKeyframesToTimeline?.();
+
+      // Disable all tools except cursor/pan while 3D viewport is active.
+      this.selectCursor('cursor');
+
+      // Apply the stored illustration projection (default: orthographic).
+      sm.setIllustrationProjection3D?.(this.scene3dIllustrationProjection);
+      this.scene3dSyncIllustrationCamera();
+
+      // Keep camera in sync on every pan/zoom
+      const is = sm.interactionService;
+      if (is?.onViewportChanged) {
+        this._scene3dViewportSub = is.onViewportChanged.subscribe(() => {
+          this.scene3dSyncIllustrationCamera();
+        });
+      }
+
+      // Keep camera in sync on canvas resize
+      if (this.canvas) {
+        this._scene3dResizeObserver = new ResizeObserver(() => {
+          this.scene3dSyncIllustrationCamera();
+        });
+        this._scene3dResizeObserver.observe(this.canvas);
+      }
+    } else {
+      this._scene3dViewportSub?.unsubscribe?.();
+      this._scene3dViewportSub = null;
+      this._scene3dResizeObserver?.disconnect();
+      this._scene3dResizeObserver = null;
+      this._scene3dStopGizmoLoop();
+    }
+
+    if (selected) this._scene3dStartGizmoLoop();
+  }
+
+  private _scene3dStartGizmoLoop(): void {
+    if (this._scene3dGizmoRafId != null) return;
+    this.ngZone.runOutsideAngular(() => {
+      const loop = () => {
+        this._scene3dPollDragInfo();
+        if (this.scene3dPanelVisible) {
+          this._scene3dGizmoRafId = requestAnimationFrame(loop);
+        } else {
+          this._scene3dGizmoRafId = null;
+        }
+      };
+      this._scene3dGizmoRafId = requestAnimationFrame(loop);
+    });
+  }
+
+  private _scene3dStopGizmoLoop(): void {
+    if (this._scene3dGizmoRafId != null) {
+      cancelAnimationFrame(this._scene3dGizmoRafId);
+      this._scene3dGizmoRafId = null;
+    }
+    if (this.scene3dDragAngleDeg !== null) {
+      this.ngZone.run(() => {
+        this.scene3dDragAngleDeg = null;
+        this.scene3dDragLabelPos = null;
+      });
+    }
+  }
+
+  private _scene3dPollDragInfo(): void {
+    const sm = this.shapeManager as any;
+
+    // Poll snap indicator
+    const snapNow = !!(sm.snapActive3D);
+    if (snapNow !== this.scene3dSnapActive) {
+      this.ngZone.run(() => { this.scene3dSnapActive = snapNow; });
+    }
+
+    const info = sm.scene3d?.getDragInfo?.();
+    if (!info?.isDragging || info.angleDeg == null || !info.gizmoCenterWorld) {
+      if (this.scene3dDragAngleDeg !== null) {
+        this.ngZone.run(() => {
+          this.scene3dDragAngleDeg = null;
+          this.scene3dDragLabelPos = null;
+        });
+      }
+      return;
+    }
+    const canvas = this.canvasRef?.nativeElement;
+    const cw = canvas ? (canvas.clientWidth || canvas.width) : 0;
+    const ch = canvas ? (canvas.clientHeight || canvas.height) : 0;
+    const [wx, wy, wz] = info.gizmoCenterWorld as [number, number, number];
+    const screen = sm.scene3d?.projectWorldToScreen3D?.(wx, wy, wz, cw, ch);
+    const newAngle = Math.round(info.angleDeg * 10) / 10;
+    const newPos = screen ? { x: screen.x, y: screen.y } : null;
+    if (this.scene3dDragAngleDeg !== newAngle ||
+        this.scene3dDragLabelPos?.x !== newPos?.x ||
+        this.scene3dDragLabelPos?.y !== newPos?.y) {
+      this.ngZone.run(() => {
+        this.scene3dDragAngleDeg = newAngle;
+        this.scene3dDragLabelPos = newPos;
+      });
+    }
+  }
+
+  scene3dRemoveScene(): void {
+    this.rasterBrushService.remove3DScene();
+    this.scene3dPanelVisible = false;
+    this.scene3dSelectedMeshId = null;
+  }
+
+  scene3dSyncIllustrationCamera(): void {
+    const sm = this.shapeManager as any;
+    const is = sm.interactionService;
+    if (!is || !this.canvas) return;
+    sm.syncIllustrationCamera3D?.(
+      is.getPanOffset().x, is.getPanOffset().y,
+      is.getZoomFactor(),
+      this.canvas.width, this.canvas.height
+    );
+  }
+
+  scene3dSetIllustrationProjection(mode: 'perspective' | 'orthographic'): void {
+    this.scene3dIllustrationProjection = mode;
+    (this.shapeManager as any).setIllustrationProjection3D?.(mode);
+    this._markStateDirty();
+  }
+
+  scene3dRefreshRuntimeState(): void {
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+    if (!s3d) return;
+
+    this.scene3dOrbitEnabled = !!s3d.getOrbitController?.()?.enabled;
+    const cam = s3d.getCamera?.();
+    if (cam) {
+      this.scene3dCameraMode = (cam.mode as any) ?? 'perspective';
+      this.scene3dFOV = Math.round(((cam.fov ?? (Math.PI / 3)) * 180) / Math.PI);
+    }
+
+    this.scene3dShadowsEnabled = !!(s3d.shadowsEnabled ?? sm.shadowsEnabled3D ?? false);
+    this.scene3dFrustumCulling = (s3d.frustumCulling ?? sm.frustumCulling3D ?? true) !== false;
+  }
+
+  scene3dRefreshMeshes(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    this.scene3dMeshes = s3d.getAllMeshes?.() ?? [];
+    // If selected mesh was removed, clear selection
+    if (this.scene3dSelectedMeshId && !this.scene3dMeshes.some((m: any) => (m.id ?? m.nodeId) === this.scene3dSelectedMeshId)) {
+      this.scene3dSelectedMeshId = null;
+    }
+    // Track which nodes are cloth meshes (API-based, no type-string guessing)
+    this.scene3dClothIds = new Set(
+      this.scene3dMeshes
+        .map((m: any) => m.id ?? m.nodeId)
+        .filter((id: string) => !!s3d.getClothConfig?.(id))
+    );
+    this.scene3dRefreshHierarchy();
+    this.scene3dRefreshKeyframeTracks();
+  }
+
+  scene3dRefreshHierarchy(): void {
+    const sm = this.shapeManager as any;
+    const hierarchy = sm.getScene3DHierarchy?.();
+    if (hierarchy) {
+      this.scene3dHierarchy = hierarchy;
+    } else {
+      // fallback: flat list from mesh array
+      this.scene3dHierarchy = this.scene3dMeshes.map((m: any) => ({
+        id: m.id ?? m.nodeId,
+        name: m.name ?? m.meshPrimitive ?? 'mesh',
+        type: 'mesh',
+        visible: m.visible !== false,
+        normalMapLibraryId: m.normalMapLibraryId ?? null,
+        children: [],
+      }));
+    }
+  }
+
+  scene3dAddMesh(primitive: string): void {
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+    if (!s3d) return;
+
+    // Place new meshes at the visible illustration center instead of world origin.
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+
+    let mesh: any;
+    switch (primitive) {
+      case 'box':      mesh = s3d.createBox(cx, cy, cz); break;
+      case 'sphere':   mesh = s3d.createSphere(cx, cy, cz); break;
+      case 'plane':    mesh = s3d.createPlane(cx, cy, cz); break;
+      case 'cylinder': mesh = s3d.createCylinder(cx, cy, cz); break;
+      case 'torus':    mesh = s3d.createTorus(cx, cy, cz); break;
+      default: return;
+    }
+    this.scene3dRefreshMeshes();
+    this.scene3dEnsureAnimationPlayer();
+    if (mesh) {
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+  }
+
+  scene3dSelectMesh(id: string): void {
+    this.scene3dRenamingId = null;
+    this._scene3dHideHandles();
+    this.scene3dSelectedMeshId = id;
+    // Reset per-mesh state so switching between mesh types clears the flags
+    this.scene3dIsCloth = false;
+    this.clothLiveEnabled = false;
+    this.clothWindEnabled = false;
+    this.windZones = [];
+    this.windZoneSelectedIdx = null;
+    this.scene3dIsRibbon = false;
+    this.scene3dRibbonPathMode = 'normal';
+    this.scene3dRibbonDoubleSided = 'double';
+    this.scene3dRibbonFlipRearU = true;
+    this.scene3dRibbonUvTileCount = 1;
+    this.scene3dHtmlEnabled = false;
+    this.scene3dHtmlContent = '';
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    (this.shapeManager as any).setSelectedNode?.(id);
+    const mesh = s3d.getMesh(id);
+    if (mesh) {
+      this.scene3dMeshPosX = mesh.x ?? mesh.position?.x ?? 0;
+      this.scene3dMeshPosY = mesh.y ?? mesh.position?.y ?? 0;
+      this.scene3dMeshPosZ = mesh.z ?? mesh.position?.z ?? 0;
+      // Engine stores radians — convert to degrees for UI
+      const r2d = 180 / Math.PI;
+      this.scene3dMeshRotX = (mesh.rotation?.x ?? 0) * r2d;
+      this.scene3dMeshRotY = (mesh.rotation?.y ?? 0) * r2d;
+      this.scene3dMeshRotZ = (mesh.rotation?.z ?? 0) * r2d;
+      this.scene3dMeshScaleX = mesh.scale?.x ?? 1;
+      this.scene3dMeshScaleY = mesh.scale?.y ?? 1;
+      this.scene3dMeshScaleZ = mesh.scale?.z ?? 1;
+      this.scene3dMeshOpacity = mesh.material?.opacity ?? mesh.opacity ?? 1;
+      const d = mesh.material?.diffuse;
+      this.scene3dMeshColor = d
+        ? '#' + [d[0], d[1], d[2]].map((v: number) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+        : '#ffffff';
+      this.scene3dDiffuseTextureSet = !!(mesh.textureLibraryId ?? mesh.diffuseTextureId ?? mesh.texture);
+      this.scene3dNormalMapSet = !!mesh.normalMapLibraryId;
+      this.scene3dRenderStyle = (mesh.material?.renderStyle ?? 'default') as any;
+      // Load submesh slots
+      const sm2 = this.shapeManager as any;
+      this._scene3dReloadSubmeshes();
+      // Load frame-link config from mesh if available
+      const fl = sm2.getFrameLinkAnimation3D?.(id) ?? mesh.frameLinkAnimation ?? mesh.frameLink;
+      if (fl) {
+        this.scene3dFrameLinkEnabled = fl.enabled ?? false;
+        this.scene3dFrameLinkType = fl.type ?? 'bounce';
+        this.scene3dFrameLinkAxis = fl.axis ?? 'y';
+        this.scene3dFrameLinkAmplitude = fl.amplitude ?? 0.15;
+        this.scene3dFrameLinkFramesPerCycle = fl.framesPerCycle ?? 24;
+      } else {
+        this.scene3dFrameLinkEnabled = false;
+        // Ribbons default to Scroll (UV) so the setting is ready to enable immediately
+        const isRibbonMesh = !!(sm2.getRibbonData3D?.(id)
+          ?? (mesh.type === 'ribbon' || mesh.type === 'Ribbon' || mesh.controlPoints ? mesh : null));
+        this.scene3dFrameLinkType = isRibbonMesh ? 'scroll' : 'bounce';
+        this.scene3dFrameLinkAxis = isRibbonMesh ? 'x' : 'y';
+        this.scene3dFrameLinkAmplitude = isRibbonMesh ? 1.0 : 0.15;
+        this.scene3dFrameLinkFramesPerCycle = isRibbonMesh ? 240 : 24;
+      }
+      // Load ribbon state — getRibbonData3D may return null on a just-restored scene,
+      // so also check mesh.type and mesh.controlPoints as fallbacks.
+      const ribbonData = sm2.getRibbonData3D?.(id)
+        ?? (mesh.type === 'ribbon' || mesh.type === 'Ribbon' || mesh.controlPoints ? mesh : null);
+      this.scene3dIsRibbon = !!ribbonData;
+      if (ribbonData) {
+        this.scene3dRibbonWidth = ribbonData.width ?? 0.10;
+        this.scene3dRibbonSegments = ribbonData.segments ?? 16;
+        this.scene3dRibbonPathMode = ribbonData.pathMode ?? 'normal';
+        const ds = ribbonData.doubleSided ?? 'double';
+        this.scene3dRibbonDoubleSided = ds === true ? 'double' : ds === false ? 'front' : ds;
+        this.scene3dRibbonShowHandles = ribbonData.showHandles !== false;
+        this.scene3dRibbonFlipRearU = ribbonData.flipRearU ?? true;
+        this.scene3dRibbonUvTileCount = ribbonData.uvTileCount ?? 1;
+        this.scene3dRibbonControlPoints = (ribbonData.controlPoints ?? []).map(
+          (p: any) => ({ x: p.x ?? 0, y: p.y ?? 0, z: p.z ?? 0 })
+        );
+        if (this.scene3dRibbonControlPoints.length < 2) {
+          this.scene3dRibbonControlPoints = [{ x: -1, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }];
+        }
+      }
+      // Show renderer-side handles after ribbon state is loaded
+      setTimeout(() => this._scene3dShowHandles(), 80);
+      // Load HTML texture state (including bg so quality-change re-apply preserves color)
+      this.scene3dHtmlEnabled = sm2.hasHtmlTexture3D?.(id) ?? false;
+      if (this.scene3dHtmlEnabled) {
+        const texData = sm2.getHtmlTexture3D?.(id);
+        this.scene3dHtmlContent = texData?.html ?? '';
+        const savedBg: string = texData?.bg ?? '';
+        this.scene3dHtmlTexBgTransparent = !savedBg;
+        if (savedBg) this.scene3dHtmlTexBg = savedBg;
+        if (texData?.width) this.scene3dHtmlTexWidth = texData.width;
+        if (texData?.height) this.scene3dHtmlTexHeight = texData.height;
+      } else {
+        this.scene3dHtmlContent = '';
+      }
+
+      // Cloth detection — use API-based set populated in scene3dRefreshMeshes
+      const isClothMesh = this.scene3dClothIds.has(id);
+      this.scene3dIsCloth = isClothMesh;
+      if (isClothMesh) {
+        const cfg = s3d.getClothConfig?.(id);
+        this.clothInfoGrid = cfg?.grid ?? null;
+        this.clothInfoSim = mesh.simState ?? null;
+        const geomResult = s3d.getClothGeometryResult?.(id);
+        this.clothInfoVertexCount = geomResult?.vertexCount ?? null;
+        this.clothInfoTriCount = geomResult ? Math.floor((geomResult.geometry?.indices?.length ?? 0) / 3) : null;
+        // Live config
+        this.clothLiveEnabled = mesh.liveConfig?.enabled ?? false;
+        // Wind frame link
+        const sm2 = this.shapeManager as any;
+        const windAnim = sm2.getFrameLinkAnimation3D?.(id);
+        if (windAnim?.type === 'wind') {
+          this.clothWindEnabled = windAnim.enabled ?? false;
+          this.clothWindAxis = windAnim.axis ?? 'x';
+          this.clothWindAmplitude = windAnim.amplitude ?? 3.0;
+          this.clothWindFramesPerCycle = windAnim.framesPerCycle ?? 48;
+          this.clothWindPhase = windAnim.phase ?? 0;
+        } else {
+          this.clothWindEnabled = false;
+          this.clothWindAxis = 'x';
+          this.clothWindAmplitude = 3.0;
+          this.clothWindFramesPerCycle = 48;
+          this.clothWindPhase = 0;
+        }
+        // Load wind zones (scene-level)
+        try {
+          this.windZones = s3d.getWindZones?.() ?? [];
+        } catch { this.windZones = []; }
+      } else {
+        this.clothInfoGrid = null;
+        this.clothInfoSim = null;
+        this.clothInfoVertexCount = null;
+        this.clothInfoTriCount = null;
+      }
+    }
+    this.scene3dRefreshKeyframeTracks();
+  }
+
+  scene3dOpenClothBuilder(meshId?: string): void {
+    const sm = this.shapeManager as any;
+    if (meshId) {
+      const cfg = sm.scene3d?.getClothConfig?.(meshId);
+      const node = (sm.scene3d?.getMesh?.(meshId) ?? sm.scene3d?.getNode?.(meshId));
+      this.clothBuilderExistingId = meshId;
+      this.clothBuilderInitialGrid = cfg?.grid ?? null;
+      this.clothBuilderInitialPhysics = cfg?.physics ?? null;
+      this.clothBuilderInitialSimMode = node?.simState?.simulationMode ?? 'none';
+      const rawPos = node?.simState?.positions;
+      this.clothBuilderInitialSimPositions = rawPos ? Float32Array.from(rawPos) : null;
+    } else {
+      this.clothBuilderExistingId = null;
+      this.clothBuilderInitialGrid = null;
+      this.clothBuilderInitialPhysics = null;
+      this.clothBuilderInitialSimMode = 'none';
+      this.clothBuilderInitialSimPositions = null;
+    }
+    this.clothBuilderDropPosition = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    this.clothBuilderVisible = true;
+  }
+
+  onClothPreviewReady(meshId: string): void {
+    const sm = this.shapeManager as any;
+    // Try various camera focus methods — whichever Salsa exposes
+    sm.focusOnMesh3D?.(meshId)
+      ?? sm.lookAtMesh3D?.(meshId)
+      ?? sm.zoomToNode3D?.(meshId)
+      ?? sm.scene3d?.focusCamera?.(meshId);
+  }
+
+  onClothBuilderCreated(result: any): void {
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+    if (!s3d) return;
+
+    const { grid, physics, simulatedPositions, simMode, existingMeshId, previewMeshId, stitches, bendStiffnessMap } = result;
+    let targetMeshId: string | null = null;
+
+    if (existingMeshId) {
+      s3d.replaceClothMesh?.(existingMeshId, grid, physics, simulatedPositions ?? undefined, simMode !== 'none' ? simMode : 'none');
+      if (previewMeshId && previewMeshId !== existingMeshId) {
+        s3d.removeNode?.(previewMeshId);
+      }
+      targetMeshId = existingMeshId;
+    } else if (previewMeshId) {
+      s3d.replaceClothMesh?.(previewMeshId, grid, physics, simulatedPositions ?? undefined, simMode !== 'none' ? simMode : 'none');
+      targetMeshId = previewMeshId;
+    } else {
+      const center: [number,number,number] = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+      const created = s3d.createClothMesh?.(center[0], center[1], center[2], grid, physics, simulatedPositions ?? undefined, 'Cloth');
+      targetMeshId = created?.id ?? created?.nodeId ?? null;
+    }
+
+    // Apply stitches
+    if (targetMeshId && Array.isArray(stitches) && stitches.length > 0) {
+      try {
+        s3d.clearClothStitches?.(targetMeshId);
+        for (const stitch of stitches) {
+          s3d.addClothStitch?.(targetMeshId, stitch.a, stitch.b, stitch.restLength, stitch.side);
+        }
+      } catch (e) { console.warn('[Cloth] Failed to apply stitches', e); }
+    }
+
+    // Apply bend stiffness map
+    if (targetMeshId && bendStiffnessMap instanceof Float32Array && bendStiffnessMap.length > 0) {
+      try {
+        s3d.setClothBendStiffness?.(targetMeshId, bendStiffnessMap);
+      } catch (e) { console.warn('[Cloth] Failed to apply bend stiffness', e); }
+    }
+
+    this.clothBuilderVisible = false;
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  onClothBuilderCancelled(): void {
+    this.clothBuilderVisible = false;
+    this.scene3dRefreshMeshes();
+  }
+
+  async scene3dReSimulateCloth(): Promise<void> {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+    if (!s3d) return;
+    const cfg = s3d.getClothConfig?.(id);
+    if (!cfg) return;
+    const node = s3d.getMesh?.(id) ?? s3d.getNode?.(id);
+    const mode: 'hang' | 'drape' = (node?.simState?.simulationMode !== 'none' ? node?.simState?.simulationMode : 'hang') ?? 'hang';
+    try {
+      const positions: Float32Array = await s3d.simulateCloth(cfg.grid, cfg.physics, mode);
+      s3d.updateClothMeshPose?.(id, positions, mode);
+      this.scene3dMarkDirty();
+    } catch (e) {
+      console.warn('[Cloth] Re-simulate failed', e);
+    }
+  }
+
+  async setLiveCloth(enabled: boolean): Promise<void> {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    if (enabled) {
+      s3d.enableLiveCloth?.(id);
+      this.clothLiveEnabled = true;
+    } else {
+      await s3d.disableLiveCloth?.(id, true);
+      this.clothLiveEnabled = false;
+      if (this.clothWindEnabled) {
+        this.clothWindEnabled = false;
+        this.applyWindAnimation();
+      }
+    }
+    this.scene3dMarkDirty();
+  }
+
+  applyWindAnimation(): void {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    (this.shapeManager as any).setFrameLinkAnimation3D?.(id, {
+      enabled: this.clothWindEnabled,
+      type: 'wind',
+      axis: this.clothWindAxis,
+      amplitude: this.clothWindAmplitude,
+      framesPerCycle: this.clothWindFramesPerCycle,
+      phase: this.clothWindPhase,
+    });
+    this.scene3dMarkDirty();
+  }
+
+  // ── Wind zones ─────────────────────────────────────────────────
+
+  private _loadWindZones(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    try { this.windZones = s3d?.getWindZones?.() ?? []; } catch { this.windZones = []; }
+  }
+
+  private _buildWindZonePayload(): any {
+    const zone: any = {
+      shape: this.windZoneShape,
+      center: [...this.windZoneCenter] as [number,number,number],
+      windVec: [this.windZoneWindX, this.windZoneWindY, this.windZoneWindZ] as [number,number,number],
+      falloff: this.windZoneFalloff,
+    };
+    if (this.windZoneShape === 'sphere') zone.radius = this.windZoneRadius;
+    else zone.halfExtents = [
+      (this.windZoneBoxMax[0] - this.windZoneBoxMin[0]) / 2,
+      (this.windZoneBoxMax[1] - this.windZoneBoxMin[1]) / 2,
+      (this.windZoneBoxMax[2] - this.windZoneBoxMin[2]) / 2,
+    ];
+    if (this.windZonePulseEnabled) zone.pulse = { period: this.windZonePulsePeriod, phase: this.windZonePulsePhase };
+    return zone;
+  }
+
+  private _loadWindZoneFields(zone: any): void {
+    this.windZoneShape = zone.shape ?? 'sphere';
+    this.windZoneCenter = [...(zone.center ?? [0, 0, 0])] as [number,number,number];
+    this.windZoneRadius = zone.radius ?? 1.0;
+    const he = zone.halfExtents ?? [0.5, 0.5, 0.5];
+    const c = zone.center ?? [0, 0, 0];
+    this.windZoneBoxMin = [c[0]-he[0], c[1]-he[1], c[2]-he[2]];
+    this.windZoneBoxMax = [c[0]+he[0], c[1]+he[1], c[2]+he[2]];
+    this.windZoneWindX = zone.windVec?.[0] ?? 0;
+    this.windZoneWindY = zone.windVec?.[1] ?? 5;
+    this.windZoneWindZ = zone.windVec?.[2] ?? 0;
+    this.windZoneFalloff = zone.falloff ?? 1.0;
+    this.windZonePulseEnabled = !!zone.pulse;
+    this.windZonePulsePeriod = zone.pulse?.period ?? 60;
+    this.windZonePulsePhase = zone.pulse?.phase ?? 0;
+  }
+
+  addWindZone(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    this.windZoneCenter = [...center] as [number,number,number];
+    const zone = this._buildWindZonePayload();
+    try {
+      const id = s3d.addWindZone?.(zone);
+      this._loadWindZones();
+      const idx = this.windZones.findIndex((z: any) => z.id === id);
+      this.windZoneSelectedIdx = idx >= 0 ? idx : this.windZones.length - 1;
+    } catch (e) { console.warn('[WindZone] add failed', e); }
+    this.scene3dMarkDirty();
+  }
+
+  removeWindZone(idx: number): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    const zone = this.windZones[idx];
+    if (!zone || !s3d) return;
+    try { s3d.removeWindZone?.(zone.id); } catch { /* ignore */ }
+    this._loadWindZones();
+    if (this.windZoneSelectedIdx === idx) this.windZoneSelectedIdx = null;
+    else if (this.windZoneSelectedIdx !== null && this.windZoneSelectedIdx > idx) this.windZoneSelectedIdx--;
+    this.scene3dMarkDirty();
+  }
+
+  selectWindZone(idx: number): void {
+    this.windZoneSelectedIdx = idx;
+    const zone = this.windZones[idx];
+    if (zone) this._loadWindZoneFields(zone);
+  }
+
+  updateSelectedWindZone(): void {
+    if (this.windZoneSelectedIdx === null) return;
+    const s3d = (this.shapeManager as any).scene3d;
+    const zone = this.windZones[this.windZoneSelectedIdx];
+    if (!zone || !s3d) return;
+    try {
+      s3d.updateWindZone?.(zone.id, this._buildWindZonePayload());
+      this._loadWindZones();
+    } catch (e) { console.warn('[WindZone] update failed', e); }
+    this.scene3dMarkDirty();
+  }
+
+  clearAllWindZones(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    try { s3d.clearWindZones?.(); } catch { /* ignore */ }
+    this.windZones = [];
+    this.windZoneSelectedIdx = null;
+    this.scene3dMarkDirty();
+  }
+
+  scene3dAddRibbon(): void {
+    const sm = this.shapeManager as any;
+    const center: [number, number, number] = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const scale: number = sm.getIllustrationMeshDefaultScale3D?.() || 1;
+    const [cx, cy, cz] = center;
+    const ribbon = sm.addRibbon3D?.(
+      cx, cy, cz,
+      [
+        { x: cx - scale,        y: cy,                z: cz },
+        { x: cx - scale * 0.3,  y: cy + scale * 0.25, z: cz },
+        { x: cx + scale * 0.3,  y: cy + scale * 0.25, z: cz },
+        { x: cx + scale,        y: cy,                z: cz },
+      ],
+      scale * 0.3,
+      16,
+    );
+    if (ribbon?.id) {
+      this.scene3dRefreshMeshes();
+      this.scene3dRefreshHierarchy();
+      this.scene3dSelectMesh(ribbon.id);
+    }
+  }
+
+  scene3dUpdateRibbonPath(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).updateRibbonPath3D?.(
+      this.scene3dSelectedMeshId, this.scene3dRibbonControlPoints.map(p => ({ ...p })));
+  }
+
+  scene3dUpdateRibbonWidth(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).updateRibbonWidth3D?.(this.scene3dSelectedMeshId, this.scene3dRibbonWidth);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonControlPoint(index: number): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const pt = this.scene3dRibbonControlPoints[index];
+    if (!pt) return;
+    (this.shapeManager as any).setRibbonControlPoint3D?.(
+      this.scene3dSelectedMeshId, index, pt.x, pt.y, pt.z);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonPathMode(mode: 'normal' | 'world-up' | 'camera-facing'): void {
+    this.scene3dRibbonPathMode = mode;
+    if (!this.scene3dSelectedMeshId) return;
+    const result = (this.shapeManager as any).setRibbonPathMode3D?.(this.scene3dSelectedMeshId, mode);
+    if (result === false) console.warn('[3D] setRibbonPathMode3D returned false — meshId:', this.scene3dSelectedMeshId, 'mode:', mode);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonSegments(n: number): void {
+    this.scene3dRibbonSegments = n;
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).updateRibbonSegments3D?.(this.scene3dSelectedMeshId, n);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonDoubleSided(v: 'double' | 'front' | 'back'): void {
+    this.scene3dRibbonDoubleSided = v;
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setRibbonDoubleSided3D?.(this.scene3dSelectedMeshId, v);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonShowHandles(show: boolean): void {
+    this.scene3dRibbonShowHandles = show;
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setRibbonShowHandles3D?.(this.scene3dSelectedMeshId, show);
+  }
+
+  scene3dSetRibbonFlipRearU(v: boolean): void {
+    this.scene3dRibbonFlipRearU = v;
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setRibbonFlipRearU3D?.(this.scene3dSelectedMeshId, v);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRibbonUvTileCount(n: number): void {
+    this.scene3dRibbonUvTileCount = n;
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setRibbonUvTileCount3D?.(this.scene3dSelectedMeshId, n);
+    this.scene3dMarkDirty();
+  }
+
+  // ── Canvas overlay handle management ────────────────────────────────────────
+  private _scene3dShowHandles(): void {
+    if (!this.scene3dIsRibbon || !this.scene3dSelectedMeshId) return;
+    this._scene3dStartHandleLoop();
+  }
+
+  private _scene3dHideHandles(): void {
+    this._scene3dStopHandleLoop();
+  }
+
+  private _scene3dStartHandleLoop(): void {
+    if (this._scene3dHandleRafId != null) return;
+    const loop = () => {
+      this._scene3dDrawHandles();
+      if (this.scene3dIsRibbon && this.scene3dSelectedMeshId) {
+        this._scene3dHandleRafId = requestAnimationFrame(loop);
+      } else {
+        this._scene3dHandleRafId = null;
+      }
+    };
+    this._scene3dHandleRafId = requestAnimationFrame(loop);
+  }
+
+  private _scene3dStopHandleLoop(): void {
+    if (this._scene3dHandleRafId != null) {
+      cancelAnimationFrame(this._scene3dHandleRafId);
+      this._scene3dHandleRafId = null;
+    }
+    const hc = this.handleCanvasRef?.nativeElement;
+    if (hc) hc.getContext('2d')?.clearRect(0, 0, hc.width, hc.height);
+    this._scene3dActiveDragIndex = null;
+  }
+
+  private _scene3dDrawHandles(): void {
+    const hc = this.handleCanvasRef?.nativeElement;
+    const canvas = this.canvasRef?.nativeElement;
+    if (!hc || !canvas || !this.scene3dSelectedMeshId) return;
+    const cw = canvas.clientWidth || canvas.width;
+    const ch = canvas.clientHeight || canvas.height;
+    if (hc.width !== cw || hc.height !== ch) { hc.width = cw; hc.height = ch; }
+    const ctx = hc.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, cw, ch);
+    const sm = this.shapeManager as any;
+    if (sm.getRibbonData3D?.(this.scene3dSelectedMeshId)?.showHandles === false) return;
+    const positions: { x: number; y: number; depth: number; index: number }[] =
+      sm.getRibbonHandleScreenPositions3D?.(this.scene3dSelectedMeshId, cw, ch) ?? [];
+    for (const pt of positions) {
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 9, 0, Math.PI * 2);
+      ctx.fillStyle = this._scene3dActiveDragIndex === pt.index ? 'rgba(255,220,0,0.9)' : 'rgba(0,190,255,0.75)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(pt.index), pt.x, pt.y);
+    }
+  }
+
+  scene3dCanvasPointerDown(event: PointerEvent): void {
+    if (!this.scene3dPanelVisible) return;
+    const canvas = this.canvasRef?.nativeElement;
+    if (!canvas) return;
+    const sm = this.shapeManager as any;
+
+    // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
+    if (this.scene3dIsRibbon && this.scene3dSelectedMeshId && this.scene3dRibbonShowHandles) {
+      const cw = canvas.clientWidth || canvas.width;
+      const ch = canvas.clientHeight || canvas.height;
+      const mx = event.offsetX;
+      const my = event.offsetY;
+      const positions: { x: number; y: number; depth: number; index: number }[] =
+        sm.getRibbonHandleScreenPositions3D?.(this.scene3dSelectedMeshId, cw, ch) ?? [];
+      let hit: { x: number; y: number; depth: number; index: number } | null = null;
+      for (const pt of positions) {
+        const dx = mx - pt.x, dy = my - pt.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= 12 && (!hit || pt.depth < hit.depth)) hit = pt;
+      }
+      if (hit) {
+        event.stopPropagation();
+        canvas.setPointerCapture(event.pointerId);
+        this._scene3dActiveDragIndex = hit.index;
+        sm.beginRibbonHandleDrag3D?.(this.scene3dSelectedMeshId, hit.index, cw, ch);
+        return;
+      }
+    }
+
+    // 2. Fall through to viewport picking — click anywhere on canvas to select a mesh
+    const picked = sm.pickFromClient3D?.(event.clientX, event.clientY, canvas.getBoundingClientRect());
+    const pickedId = picked?.meshId ?? picked?.id ?? picked?.nodeId ?? null;
+    if (pickedId) {
+      this.scene3dSelectMesh(pickedId);
+    }
+  }
+
+  scene3dCanvasPointerMove(event: PointerEvent): void {
+    if (this._scene3dActiveDragIndex === null || !this.scene3dSelectedMeshId) return;
+    const canvas = this.canvasRef?.nativeElement;
+    const cw = canvas ? (canvas.clientWidth || canvas.width) : 0;
+    const ch = canvas ? (canvas.clientHeight || canvas.height) : 0;
+    const sm = this.shapeManager as any;
+    sm.moveRibbonHandle3D?.(this.scene3dSelectedMeshId, this._scene3dActiveDragIndex,
+      event.offsetX, event.offsetY, cw, ch);
+    const data = sm.getRibbonData3D?.(this.scene3dSelectedMeshId);
+    if (data?.controlPoints) {
+      this.scene3dRibbonControlPoints = data.controlPoints.map(
+        (p: any) => ({ x: p.x ?? 0, y: p.y ?? 0, z: p.z ?? 0 })
+      );
+    }
+  }
+
+  scene3dCanvasPointerUp(_event: PointerEvent): void {
+    if (this._scene3dActiveDragIndex === null) return;
+    (this.shapeManager as any).endRibbonHandleDrag3D?.(this.scene3dSelectedMeshId!, this._scene3dActiveDragIndex);
+    this._scene3dActiveDragIndex = null;
+    this.scene3dMarkDirty();
+  }
+
+  // ── Path presets ─────────────────────────────────────────────────────────────
+  scene3dApplyPreset(): void {
+    let pts = this._scene3dComputePreset();
+    if (this.scene3dPresetReverse) pts = pts.reverse();
+    this.scene3dRibbonControlPoints = pts;
+    this.scene3dUpdateRibbonPath();
+    this.scene3dMarkDirty();
+  }
+
+  private _scene3dComputePreset(): { x: number; y: number; z: number }[] {
+    const r = this.scene3dPresetDiameter / 2;
+    switch (this.scene3dPresetType) {
+      case 'spiral': {
+        const n = Math.max(4, Math.round(this.scene3dPresetTurns * 8));
+        return Array.from({ length: n + 1 }, (_, i) => {
+          const t = (i / n) * this.scene3dPresetTurns * 2 * Math.PI;
+          return { x: r * Math.cos(t), y: (i / n) * this.scene3dPresetHeight, z: r * Math.sin(t) };
+        });
+      }
+      case 'circle': {
+        const n = 12;
+        return Array.from({ length: n + 1 }, (_, i) => {
+          const t = (i / n) * 2 * Math.PI;
+          return { x: r * Math.cos(t), y: 0, z: r * Math.sin(t) };
+        });
+      }
+      case 'arc': {
+        const n = Math.max(4, Math.round(Math.abs(this.scene3dPresetAngle) / 15));
+        const total = (this.scene3dPresetAngle * Math.PI) / 180;
+        return Array.from({ length: n + 1 }, (_, i) => {
+          const t = (i / n) * total - total / 2;
+          return { x: r * Math.cos(t), y: 0, z: r * Math.sin(t) };
+        });
+      }
+      case 'wave': {
+        const n = Math.max(4, this.scene3dPresetFrequency * 6);
+        const w = this.scene3dPresetDiameter;
+        return Array.from({ length: n + 1 }, (_, i) => {
+          const t = i / n;
+          return { x: t * w - w / 2, y: Math.sin(t * this.scene3dPresetFrequency * 2 * Math.PI) * this.scene3dPresetAmplitude, z: 0 };
+        });
+      }
+      case 'scurve': {
+        const n = 8;
+        const w = this.scene3dPresetDiameter;
+        const a = this.scene3dPresetAmplitude;
+        return Array.from({ length: n + 1 }, (_, i) => {
+          const t = (i / n) * 4 - 2;
+          return { x: (i / n) * w - w / 2, y: a * Math.tanh(t), z: 0 };
+        });
+      }
+      case 'zigzag': {
+        const n = Math.max(2, this.scene3dPresetFrequency * 2);
+        const w = this.scene3dPresetDiameter;
+        const a = this.scene3dPresetAmplitude;
+        return Array.from({ length: n + 1 }, (_, i) => ({
+          x: (i / n) * w - w / 2, y: (i % 2 === 0 ? -a : a), z: 0,
+        }));
+      }
+      default:
+        return [{ x: -1, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }];
+    }
+  }
+
+  scene3dAddRibbonControlPoint(): void {
+    const last = this.scene3dRibbonControlPoints[this.scene3dRibbonControlPoints.length - 1];
+    this.scene3dRibbonControlPoints = [
+      ...this.scene3dRibbonControlPoints,
+      { x: (last?.x ?? 0) + 0.5, y: last?.y ?? 0, z: last?.z ?? 0 },
+    ];
+    this.scene3dUpdateRibbonPath();
+  }
+
+  scene3dRemoveRibbonControlPoint(index: number): void {
+    if (this.scene3dRibbonControlPoints.length <= 2) return;
+    this.scene3dRibbonControlPoints = this.scene3dRibbonControlPoints.filter((_, i) => i !== index);
+    this.scene3dUpdateRibbonPath();
+  }
+
+  async scene3dApplyHtmlTexture(): Promise<void> {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    if (this.scene3dHtmlEnabled) {
+      await sm.updateHtmlTexture3D?.(this.scene3dSelectedMeshId, this.scene3dHtmlContent, { backgroundColor: this.scene3dEffectiveTexBg, stretchToFit: true });
+    } else {
+      let w = this.scene3dHtmlTexWidth;
+      let h = this.scene3dHtmlTexHeight;
+      if (this.scene3dIsRibbon) {
+        const computed = sm.computeRibbonTextureSize3D?.(
+          this.scene3dSelectedMeshId, this.scene3dHtmlTexQuality
+        ) ?? { width: 512, height: 128, fontSize: 128 };
+        w = computed.width;
+        h = computed.height;
+        this.scene3dHtmlTexWidth = w;
+        this.scene3dHtmlTexHeight = h;
+        // fontSize is ignored — stretchToFit overrides it
+      }
+      await sm.setHtmlTexture3D?.(
+        this.scene3dSelectedMeshId,
+        this.scene3dHtmlContent,
+        w, h,
+        { backgroundColor: this.scene3dHtmlTexBg, stretchToFit: true },
+      );
+      this.scene3dHtmlEnabled = true;
+    }
+    this.scene3dMarkTexLibDirty();
+  }
+
+  scene3dOnHtmlContentChange(): void {
+    clearTimeout(this._scene3dHtmlDebounce);
+    if (!this.scene3dHtmlEnabled) return;
+    this._scene3dHtmlDebounce = setTimeout(() => {
+      const sm = this.shapeManager as any;
+      sm.updateHtmlTexture3D?.(this.scene3dSelectedMeshId, this.scene3dHtmlContent, { backgroundColor: this.scene3dEffectiveTexBg, stretchToFit: true });
+      this.scene3dMarkTexLibDirty();
+    }, 300);
+  }
+
+  async scene3dSetHtmlTexQuality(quality: 64 | 128 | 256): Promise<void> {
+    this.scene3dHtmlTexQuality = quality;
+    if (!this.scene3dHtmlEnabled || !this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    sm.removeHtmlTexture3D?.(this.scene3dSelectedMeshId);
+    this.scene3dHtmlEnabled = false;
+    await this.scene3dApplyHtmlTexture();
+    this.scene3dMarkTexLibDirty();
+  }
+
+  scene3dRemoveHtmlTexture(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).removeHtmlTexture3D?.(this.scene3dSelectedMeshId);
+    this.scene3dHtmlEnabled = false;
+    this.scene3dHtmlContent = '';
+    this.scene3dMarkTexLibDirty();
+  }
+
+  get scene3dHtmlPlaceholder(): string {
+    return this.scene3dIsRibbon
+      ? `<div style="font:bold 1px sans-serif;color:white;letter-spacing:0.1em">★ HELLO 3D ★ &nbsp;&nbsp; ★ HELLO 3D ★ &nbsp;&nbsp;</div>`
+      : `<div style="font:bold 1px sans-serif;color:white">Hello 3D!</div>`;
+  }
+
+  scene3dGetScrollSecondsPerLoop(): number {
+    const fps = (this.shapeManager as any).getAnimationPlayer3D?.()?.fps ?? 24;
+    return this.scene3dFrameLinkFramesPerCycle / fps;
+  }
+
+  scene3dSetScrollSecondsPerLoop(seconds: number): void {
+    const fps = (this.shapeManager as any).getAnimationPlayer3D?.()?.fps ?? 24;
+    this.scene3dFrameLinkFramesPerCycle = Math.max(1, Math.round(seconds * fps));
+    this.scene3dApplyFrameLink();
+  }
+
+  scene3dSetHovered(id: string | null): void {
+    (this.shapeManager as any).setHoveredMesh3D?.(id);
+  }
+
+  scene3dApplyFrameLink(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setFrameLinkAnimation3D?.(this.scene3dSelectedMeshId, {
+      enabled: this.scene3dFrameLinkEnabled,
+      type: this.scene3dFrameLinkType,
+      axis: this.scene3dFrameLinkAxis,
+      amplitude: this.scene3dFrameLinkAmplitude,
+      framesPerCycle: this.scene3dFrameLinkFramesPerCycle,
+    });
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshPosition(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).scene3d?.setPosition(
+      this.scene3dSelectedMeshId, +this.scene3dMeshPosX, +this.scene3dMeshPosY, +this.scene3dMeshPosZ);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshRotation(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const d2r = Math.PI / 180;
+    (this.shapeManager as any).scene3d?.setRotation(
+      this.scene3dSelectedMeshId, +this.scene3dMeshRotX * d2r, +this.scene3dMeshRotY * d2r, +this.scene3dMeshRotZ * d2r);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshScale(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).scene3d?.setScale(
+      this.scene3dSelectedMeshId, +this.scene3dMeshScaleX, +this.scene3dMeshScaleY, +this.scene3dMeshScaleZ);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshColor(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const c = this._hexToRgba01(this.scene3dMeshColor);
+    (this.shapeManager as any).scene3d?.setDiffuseColor(
+      this.scene3dSelectedMeshId, c.r, c.g, c.b);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshOpacity(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).scene3d?.setOpacity(this.scene3dSelectedMeshId, +this.scene3dMeshOpacity);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dDeleteMesh(id: string): void {
+    (this.shapeManager as any).scene3d?.deleteMesh?.(id);
+    this.scene3dRefreshMeshes();
+    if (this.scene3dSelectedMeshId === id) {
+      this.scene3dSelectedMeshId = this.scene3dMeshes[0]?.id ?? this.scene3dMeshes[0]?.nodeId ?? null;
+      this.scene3dDiffuseTextureSet = false;
+      this.scene3dNormalMapSet = false;
+    }
+    this.scene3dMarkDirty();
+  }
+
+  scene3dDuplicateMesh(id: string): void {
+    const sm = this.shapeManager as any;
+    const copy = sm.duplicateMesh3D?.(id);
+    if (copy) {
+      this.scene3dRefreshMeshes();
+      this.scene3dSelectMesh(copy.id ?? copy.nodeId);
+      this.scene3dMarkDirty();
+    }
+  }
+
+  scene3dRecordCameraKeyframe(): void {
+    const sm = this.shapeManager as any;
+    const frame = this.animationService.getCurrentFrame?.() ?? 1;
+    sm.recordCameraKeyframe3D?.(frame);
+    this.scene3dRefreshKeyframeTracks();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dMoveMesh(id: string, direction: 'up' | 'down'): void {
+    const sm = this.shapeManager as any;
+    if (direction === 'up') {
+      sm.moveLayerUp3D?.(id);
+    } else {
+      sm.moveLayerDown3D?.(id);
+    }
+    setTimeout(() => this.scene3dRefreshHierarchy(), 50);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleGroupCollapse(id: string): void {
+    if (this.scene3dCollapsedGroups.has(id)) this.scene3dCollapsedGroups.delete(id);
+    else this.scene3dCollapsedGroups.add(id);
+  }
+
+  scene3dToggleVisibility(node: any): void {
+    const sm = this.shapeManager as any;
+    const nowVisible = !(node.visible !== false);
+    if (node.type === '3DMeshGroup') {
+      sm.setGroupVisible3D?.(node.id, nowVisible);
+    } else {
+      sm.setMeshVisible3D?.(node.id, nowVisible);
+    }
+    this.scene3dRefreshHierarchy();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dStartRename(node: any, event: Event): void {
+    event.stopPropagation();
+    this.scene3dRenamingId = node.id;
+    this.scene3dRenamingName = node.name;
+  }
+
+  scene3dCommitRename(node: any): void {
+    if (!this.scene3dRenamingId) return;
+    const name = this.scene3dRenamingName.trim();
+    if (name) {
+      const sm = this.shapeManager as any;
+      if (node.type === '3DMeshGroup') {
+        sm.setGroupName3D?.(node.id, name);
+      } else {
+        sm.setMeshName3D?.(node.id, name);
+      }
+      this.scene3dRefreshHierarchy();
+      this.scene3dMarkDirty();
+    }
+    this.scene3dRenamingId = null;
+  }
+
+  scene3dCancelRename(): void {
+    this.scene3dRenamingId = null;
+  }
+
+  scene3dDeleteGroup(groupId: string): void {
+    (this.shapeManager as any).deleteMeshGroup3D?.(groupId);
+    this.scene3dRefreshMeshes();
+  }
+
+  scene3dAddGroup(): void {
+    (this.shapeManager as any).scene3d?.createMeshGroup?.('Group');
+    this.scene3dRefreshMeshes();
+  }
+
+  async scene3dImportModelFromPicker(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    await this.scene3dImportModelFile(file);
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  // ── Render style ──────────────────────────────────────────────────────────
+  scene3dRenderStyle: 'default' | 'cel' | 'sketch' | 'ink' = 'default';
+
+  scene3dSetRenderStyle(style: 'default' | 'cel' | 'sketch' | 'ink'): void {
+    if (!this.scene3dSelectedMeshId) return;
+    this.scene3dRenderStyle = style;
+    (this.shapeManager as any).setRenderStyle3D?.(this.scene3dSelectedMeshId, style);
+    this.scene3dMarkDirty();
+  }
+
+  // ── Multi-material submesh slots ─────────────────────────────
+
+  private _scene3dReloadSubmeshes(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dSelectedMeshId;
+    if (!id) { this.scene3dSubmeshes = []; return; }
+    const rawSubs: any[] = sm.getMeshSubmeshes3D?.(id) ?? [];
+    this.scene3dSubmeshes = rawSubs.map((s: any, i: number) => {
+      const d = s.material?.diffuse ?? s.material?.diffuseColor;
+      const color = d
+        ? '#' + [d[0], d[1], d[2]].map((v: number) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+        : '#ffffff';
+      return {
+        label: s.label ?? `Slot ${i}`,
+        color,
+        opacity: s.material?.opacity ?? 1,
+        renderStyle: s.material?.renderStyle ?? 'default',
+      };
+    });
+  }
+
+  scene3dUpdateSubmeshColor(slotIndex: number): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    const sm = this.shapeManager as any;
+    const c = this._hexToRgba01(this.scene3dSubmeshes[slotIndex].color);
+    const rawSubs: any[] = sm.getMeshSubmeshes3D?.(id) ?? [];
+    const s = rawSubs[slotIndex]; if (!s) return;
+    sm.setMeshSubmesh3D?.(id, slotIndex, { material: { ...s.material, diffuseColor: [c.r, c.g, c.b, s.material?.opacity ?? 1] } });
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateSubmeshOpacity(slotIndex: number): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    const sm = this.shapeManager as any;
+    const rawSubs: any[] = sm.getMeshSubmeshes3D?.(id) ?? [];
+    const s = rawSubs[slotIndex]; if (!s) return;
+    sm.setMeshSubmesh3D?.(id, slotIndex, { material: { ...s.material, opacity: this.scene3dSubmeshes[slotIndex].opacity } });
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateSubmeshRenderStyle(slotIndex: number, style: string): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    const sm = this.shapeManager as any;
+    const rawSubs: any[] = sm.getMeshSubmeshes3D?.(id) ?? [];
+    const s = rawSubs[slotIndex]; if (!s) return;
+    sm.setMeshSubmesh3D?.(id, slotIndex, { material: { ...s.material, renderStyle: style } });
+    this.scene3dSubmeshes[slotIndex].renderStyle = style;
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateSubmeshLabel(slotIndex: number): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    (this.shapeManager as any).setMeshSubmesh3D?.(id, slotIndex, { label: this.scene3dSubmeshes[slotIndex].label });
+    this.scene3dMarkDirty();
+  }
+
+  scene3dRemoveSubmesh(slotIndex: number): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    (this.shapeManager as any).removeMeshSubmesh3D?.(id, slotIndex);
+    this._scene3dReloadSubmeshes();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dClearSubmeshes(): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    (this.shapeManager as any).clearMeshSubmeshes3D?.(id);
+    this.scene3dSubmeshes = [];
+    this.scene3dMarkDirty();
+  }
+
+  // ── Snap settings ────────────────────────────────────────────
+
+  private _scene3dLoadSnapSettings(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dSnapGridSize = sm.snapGridSize3D ?? 1.0;
+    this.scene3dSnapAngleDeg = Math.round(((sm.snapAngle3D ?? (Math.PI / 12)) * 180 / Math.PI) * 10) / 10;
+    this.scene3dSnapScaleStep = sm.snapScaleStep3D ?? 0.25;
+  }
+
+  scene3dUpdateSnapSettings(): void {
+    const sm = this.shapeManager as any;
+    sm.snapGridSize3D   = this.scene3dSnapGridSize;
+    sm.snapAngle3D      = this.scene3dSnapAngleDeg * Math.PI / 180;
+    sm.snapScaleStep3D  = this.scene3dSnapScaleStep;
+  }
+
+  async scene3dUploadDiffuseTexture(event: Event): Promise<void> {
+    if (!this.scene3dSelectedMeshId) return;
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    await (this.shapeManager as any).scene3d?.setMeshTexture?.(this.scene3dSelectedMeshId, file);
+    this.scene3dDiffuseTextureSet = true;
+    this.scene3dMarkTexLibDirty();
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  scene3dClearDiffuseTexture(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).scene3d?.clearMeshTexture?.(this.scene3dSelectedMeshId);
+    this.scene3dDiffuseTextureSet = false;
+    this.scene3dMarkTexLibDirty();
+  }
+
+  async scene3dUploadNormalMap(event: Event): Promise<void> {
+    if (!this.scene3dSelectedMeshId) return;
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const sm = this.shapeManager as any;
+    const result = await sm.uploadAndApplyNormalMap3D?.(this.scene3dSelectedMeshId, file);
+    if (result != null) {
+      this.scene3dNormalMapSet = true;
+      this.scene3dMarkTexLibDirty();
+    }
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  scene3dClearNormalMap(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).clearMeshNormalMap3D?.(this.scene3dSelectedMeshId);
+    this.scene3dNormalMapSet = false;
+    this.scene3dMarkTexLibDirty();
+  }
+
+  scene3dFrameAllMeshes(): void {
+    (this.shapeManager as any).scene3d?.frameAllMeshes?.();
+  }
+
+  scene3dSetGizmoMode(mode: 'move' | 'rotate' | 'scale'): void {
+    this.scene3dGizmoMode = mode;
+    const sm = this.shapeManager as any;
+    sm.scene3d?.setGizmoMode?.(mode);
+    sm.setGizmoMode3D?.(mode);
+  }
+
+  scene3dResetCamera(): void {
+    (this.shapeManager as any).scene3d?.resetCamera?.();
+  }
+
+  scene3dSetCameraMode(mode: 'perspective' | 'orthographic'): void {
+    this.scene3dCameraMode = mode;
+    (this.shapeManager as any).scene3d?.setCameraMode?.(mode);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetFOV(v: number): void {
+    this.scene3dFOV = +v;
+    (this.shapeManager as any).scene3d?.setFOV?.(+v);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleOrbit(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    this.scene3dOrbitEnabled = !this.scene3dOrbitEnabled;
+    if (s3d.toggleOrbitControls) {
+      s3d.toggleOrbitControls(this.scene3dOrbitEnabled);
+    } else if (this.scene3dOrbitEnabled) {
+      s3d.enableOrbitControls({ radius: 5, elevation: 0.4, azimuth: 0, enableDamping: true, dampingFactor: 0.08 });
+    } else {
+      s3d.disableOrbitControls();
+    }
+  }
+
+  scene3dUndo(): void {
+    const sm = this.shapeManager as any;
+    if (sm.canUndo3D) {
+      sm.undo3D?.();
+      this.scene3dRefreshMeshes();
+    }
+  }
+
+  scene3dRedo(): void {
+    const sm = this.shapeManager as any;
+    if (sm.canRedo3D) {
+      sm.redo3D?.();
+      this.scene3dRefreshMeshes();
+    }
+  }
+
+  scene3dToggleShadows(enabled: boolean): void {
+    this.scene3dShadowsEnabled = enabled;
+    const sm = this.shapeManager as any;
+    if (enabled) {
+      sm.scene3d?.enableShadows?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias)
+        ?? sm.enableShadows3D?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias);
+    } else {
+      sm.scene3d?.disableShadows?.() ?? sm.disableShadows3D?.();
+    }
+    this.scene3dMarkDirty();
+  }
+
+  scene3dApplyShadowsSettings(): void {
+    if (!this.scene3dShadowsEnabled) return;
+    const sm = this.shapeManager as any;
+    sm.scene3d?.enableShadows?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias)
+      ?? sm.enableShadows3D?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetFrustumCulling(enabled: boolean): void {
+    this.scene3dFrustumCulling = enabled;
+    const sm = this.shapeManager as any;
+    if (sm.scene3d) sm.scene3d.frustumCulling = enabled;
+    if ('frustumCulling3D' in sm) sm.frustumCulling3D = enabled;
+    this.scene3dMarkDirty();
+  }
+
+  scene3dApplyPS1(): void {
+    (this.shapeManager as any).scene3d?.setPS1Config({
+      vertexJitter: +this.scene3dPS1Jitter,
+      snapGridSize: +this.scene3dPS1Snap,
+      affineWarp: +this.scene3dPS1Affine,
+      colorDepth: +this.scene3dPS1ColorDepth,
+    });
+    this.scene3dMarkDirty();
+  }
+
+  scene3dApplyLighting(): void {
+    const s3d = (this.shapeManager as any).scene3d;
+    if (!s3d) return;
+    s3d.setDirectionalLight(
+      +this.scene3dLightDirX, +this.scene3dLightDirY, +this.scene3dLightDirZ,
+      1, 1, 1, +this.scene3dLightIntensity);
+    s3d.setAmbientLight(
+      +this.scene3dAmbientR, +this.scene3dAmbientG, +this.scene3dAmbientB,
+      +this.scene3dAmbientIntensity);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dEnsureAnimationPlayer(): void {
+    const sm = this.shapeManager as any;
+    if (!sm.getAnimationPlayer3D?.()) {
+      sm.createAnimationPlayer3D?.({
+        startFrame: this.scene3dAnimStartFrame,
+        endFrame: this.scene3dAnimEndFrame,
+        fps: this.scene3dAnimFps,
+        loop: this.scene3dAnimLoop,
+      });
+    }
+  }
+
+  scene3dApplyAnimationConfig(): void {
+    this.scene3dEnsureAnimationPlayer();
+    const player = (this.shapeManager as any).getAnimationPlayer3D?.();
+    if (!player) return;
+    player.startFrame = +this.scene3dAnimStartFrame;
+    player.endFrame = +this.scene3dAnimEndFrame;
+    player.fps = +this.scene3dAnimFps;
+    player.loop = !!this.scene3dAnimLoop;
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleAnimationSync(sync: boolean): void {
+    this.scene3dAnimSyncWithTimeline = sync;
+    if (sync) {
+      (this.shapeManager as any).scene3d?.stopSyncedPlayback?.();
+    }
+    this.scene3dMarkDirty();
+  }
+
+  scene3dAnimationPlay(): void {
+    this.scene3dEnsureAnimationPlayer();
+    const sm = this.shapeManager as any;
+    if (this.scene3dAnimSyncWithTimeline) {
+      sm.scene3d?.startSyncedPlayback?.();
+      return;
+    }
+    sm.getAnimationPlayer3D?.()?.play?.();
+  }
+
+  scene3dAnimationPause(): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dAnimSyncWithTimeline) {
+      sm.scene3d?.pauseSyncedPlayback?.();
+      return;
+    }
+    sm.getAnimationPlayer3D?.()?.pause?.();
+  }
+
+  scene3dAnimationStop(): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dAnimSyncWithTimeline) {
+      sm.scene3d?.stopSyncedPlayback?.();
+      return;
+    }
+    sm.getAnimationPlayer3D?.()?.stop?.();
+  }
+
+  scene3dRecordKeyframe(): void {
+    const sm = this.shapeManager as any;
+    const frame = this.animationService.getCurrentFrame?.() ?? 1;
+    const count = sm.recordKeyframesForSelectedMeshes3D?.(frame);
+    if (!count && this.scene3dSelectedMeshId) {
+      sm.recordKeyframeForMesh3D?.(this.scene3dSelectedMeshId, frame);
+    }
+    this.scene3dRefreshKeyframeTracks();
+    this.scene3dKeyframeFlash = true;
+    clearTimeout(this._scene3dFlashTimer);
+    this._scene3dFlashTimer = setTimeout(() => { this.scene3dKeyframeFlash = false; }, 600);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dRefreshKeyframeTracks(): void {
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+
+    // Always fetch fresh mesh objects so keyframeTracks reflects the latest recorded data.
+    const freshMeshes: any[] = s3d?.getAllMeshes?.() ?? this.scene3dMeshes;
+
+    // Build one row per mesh. Priority order for track data:
+    //   1. mesh.keyframeTracks  — live property on the mesh object, always up to date
+    //   2. getMeshKeyframeTracks3D(id) — Salsa public API
+    //   3. getAllMeshKeyframeTracks3D() entry — batch API
+    //   4. {} — empty (mesh exists, no keyframes yet)
+    const fromSalsa: { meshId: string; name: string; tracks: any }[] =
+      sm.getAllMeshKeyframeTracks3D?.() ?? [];
+    const salsaknownTracks = new Map(fromSalsa.map(e => [e.meshId, e.tracks]));
+
+    const allRows: { meshId: string; name: string; tracks: any }[] = freshMeshes
+      .filter((m: any) => m.id ?? m.nodeId)
+      .map((m: any) => {
+        const id = m.id ?? m.nodeId;
+        const tracks =
+          (m.keyframeTracks && Object.keys(m.keyframeTracks).length ? m.keyframeTracks : null)
+          ?? sm.getMeshKeyframeTracks3D?.(id)
+          ?? salsaknownTracks.get(id)
+          ?? {};
+        return { meshId: id, name: m.name ?? m.meshPrimitive ?? 'Mesh3D', tracks };
+      });
+
+    // Prepend a synthetic camera row if camera tracks exist
+    const camTracks = sm.getCameraKeyframeTracks3D?.() ?? {};
+    if (Object.keys(camTracks).some(k => (camTracks[k]?.length ?? 0) > 0)) {
+      allRows.unshift({ meshId: '__camera__', name: '📷 Camera', tracks: camTracks, isCamera: true } as any);
+    }
+
+    this.scene3dAllMeshTracks = allRows;
+
+    // Keep single-selected-mesh state in sync for anything that still reads it.
+    if (this.scene3dSelectedMeshId) {
+      const entry = allRows.find(e => e.meshId === this.scene3dSelectedMeshId);
+      this.scene3dSelectedMeshTracks = entry?.tracks ?? null;
+      if (!this.scene3dSelectedMeshName && entry) {
+        this.scene3dSelectedMeshName = entry.name;
+      }
+    } else {
+      this.scene3dSelectedMeshTracks = null;
+      this.scene3dSelectedMeshName = '';
+    }
+  }
+
+  get scene3dAutoKey(): boolean {
+    return !!(this.shapeManager as any).autoKey3D;
+  }
+
+  scene3dSetAutoKey(enabled: boolean): void {
+    (this.shapeManager as any).autoKey3D = enabled;
   }
 
   // ── Arrowheads ──────────────────────────────────────────
@@ -1172,12 +3086,14 @@ export class IllustrationComponent implements OnInit {
     this.bgHexInputDraft = color.replace('#', '');
     const { r, g, b, a } = this.parseAnyColor(color);
     this.shapeManager?.setBackgroundColor(r / 255, g / 255, b / 255, a);
+    this._markStateDirty();
   }
   onDotColorSelected(color: string) {
     this.dotColor = color;
     this.dotHexInputDraft = color.replace('#', '');
     const { r, g, b, a } = this.parseAnyColor(color);
     this.shapeManager?.setDotColor(r / 255, g / 255, b / 255, a);
+    this._markStateDirty();
   }
   onNodeFillColorSelected(layerId: string, color: string) {
     this.shapeColor = color;
@@ -1247,6 +3163,20 @@ export class IllustrationComponent implements OnInit {
   private onPaste!: (e: ClipboardEvent) => void;
 
   private sceneChanged$ = new Subject<string>();
+  private _metaFlush$ = new Subject<void>();
+  private _metaFlushSub?: Subscription;
+
+  // Sync mode for current illustration: 0=CloudSync, 1=NoCloud, 2=LocalOnly
+  syncMode = 0;
+  isLocalMode = false;
+  isViewerMode = false;
+  viewerTitle = '';
+  isPublishing = false;
+  noCloudEmptyState = false;
+  showSyncModePanel = false;
+  syncModePanelSelection = 0;
+  syncModePanelStep: 'select' | 'confirm' = 'select';
+  showExportReminder = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -1259,7 +3189,9 @@ export class IllustrationComponent implements OnInit {
     public animationService: RasterAnimationService,
     public autoSaveService: RasterAutoSaveService,
     public frogFileService: FrogFileService,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private opfsMetadataService: OpfsMetadataService,
+    private localIllustrationService: LocalIllustrationService,
   ) { }
 
   ngOnInit() {
@@ -1278,12 +3210,16 @@ export class IllustrationComponent implements OnInit {
   private async initForIllustration(illustrationUid: string) {
     this.isLoading = true;
     this.illustrationUid = illustrationUid;
+    this.isLocalMode  = this.route.snapshot.data?.['local']   === true;
+    this.isViewerMode = this.route.snapshot.data?.['viewer']  === true;
+    this.syncMode = this.isLocalMode ? 2 : 0;
 
     // cleanup
     this.autoSaveSubscription?.unsubscribe();
+    this._metaFlushSub?.unsubscribe();
     this.thumbnailSaveSubscription?.unsubscribe();
     this.selectionChangedSubscription?.unsubscribe();
-  this.rasterStrokeSubscription?.unsubscribe();
+    this.rasterStrokeSubscription?.unsubscribe();
     this.resetSceneState();
     this.lastSavedThumbnailJSON = '';
     this.lastThumbnailTime = 0;
@@ -1301,50 +3237,36 @@ export class IllustrationComponent implements OnInit {
     this.illustrationUid = this.route.snapshot.paramMap.get('id');
 
     if (this.illustrationUid) {
-      this.illustrationService.getIllustrationByUid(this.illustrationUid).subscribe(async (res: any) => {
-        if (res.resultType === ResultType.Success) {
-          this.illustration = res.resultObject;
-          this.illustrationTitle = res.resultObject.name;
+      const navState = (window.history.state as any);
+      const stateIllustration = navState?.illustration;
+      if (navState?.isNew) this._focusTitleOnLoad = true;
+      if (navState?.startAnimation) this._startAnimationOnLoad = true;
 
-          this.resetSceneState();
-
-          // ── V2 State Load (with v1 legacy fallback) ──
-          await this.loadIllustrationV2();
-
-          // autosave: use v2 state save
-          this.autoSaveSubscription = this.sceneChanged$
-            .pipe(auditTime(2000), distinctUntilChanged())
-            .subscribe(async () => {
-              if (!this.illustration) return;
-              try {
-                await this.saveIllustrationV2();
-              } catch (e) {
-                console.warn('[V2 Save] autosave failed', e);
-              }
-            });
-
-          // ── OPFS auto-save (engine-side, covers crash recovery) ──
-          if (this.illustration?.id) {
-            this.autoSaveService.enable(
-              this.illustration.id.toString(),
-              this.illustration.name ?? 'Untitled',
-              { intervalMs: this.selectedAutoSaveInterval, strokeDebounceMs: 5000 }
-            );
-            this.autoSaveService.state$.subscribe(s => this.autoSaveState = s);
-          }
-
-          // thumbnail saver (debounced)
-          this.thumbnailSaveSubscription = this.sceneChanged$
-            .pipe(auditTime(5000))
-            .subscribe(() => {
-              if (!this.illustration?.isCustomThumbnail) {
-                this.saveThumbnailIfChanged();
-              }
-            });
-
+      if (this.isViewerMode) {
+        await this._initViewerMode(this.illustrationUid);
+      } else if (this.isLocalMode) {
+        // Local-only: resolve from IndexedDB, not the API
+        const fromState = stateIllustration?.syncMode === 2 && stateIllustration?.uuid === this.illustrationUid
+          ? stateIllustration
+          : await this.localIllustrationService.getByUuid(this.illustrationUid);
+        if (fromState) {
+          await this.initWithIllustration(fromState as any);
+        } else {
+          this.notifyService.error('Local illustration not found');
           this.markLoaded('illustration');
+          requestAnimationFrame(() => this.markLoaded('sceneApplied'));
         }
-      });
+      } else if (stateIllustration?.id && stateIllustration?.uuid === this.illustrationUid) {
+        // If we navigated here from the dashboard the illustration object is already in
+        // router state — use it directly and skip the API round-trip.
+        await this.initWithIllustration(stateIllustration);
+      } else {
+        this.illustrationService.getIllustrationByUid(this.illustrationUid).subscribe(async (res: any) => {
+          if (res.resultType === ResultType.Success) {
+            await this.initWithIllustration(res.resultObject);
+          }
+        });
+      }
 
       // Initialize SDF & stamp defaults
       if (this.shapeManager) {
@@ -1480,11 +3402,15 @@ export class IllustrationComponent implements OnInit {
     this.loadPolygonPresets();
     this.markLoaded('renderer');
 
+    // Must run before any render frame — enables the preRenderCallback that syncs
+    // the 2D illustration camera to the 3D orthographic projection each frame.
+    (this.shapeManager as any).enableAutoSyncIllustrationCamera3D?.();
+
     const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
       .subscribe(() => {
         this.markLoaded('sceneApplied');
         sceneAppliedOnce.unsubscribe();
-        if (!this.illustration?.isCustomThumbnail) {
+        if (!this.isViewerMode && !this.illustration?.isCustomThumbnail) {
           this.saveThumbnail();
         }
       });
@@ -1535,6 +3461,14 @@ export class IllustrationComponent implements OnInit {
       this.sceneChanged$.next(currentSceneJSON);
     });
 
+    this.rasterBrushService.layers$.subscribe(layers => {
+      this.rasterLayers = Array.isArray(layers) ? layers : [];
+      const selectedIsRaster = this.rasterLayers.some((layer: any) => layer.id === this.selectedRasterLayerId && layer.type === 'layer');
+      if (!selectedIsRaster) {
+        this.selectedRasterLayerId = this.rasterLayers.find((layer: any) => layer.type === 'layer')?.id ?? null;
+      }
+    });
+
     // Keep selectedRasterLayerId in sync with the raster-layers panel
     this.rasterBrushService.activeLayerId$.subscribe(id => {
       this.selectedRasterLayerId = id;
@@ -1549,6 +3483,10 @@ export class IllustrationComponent implements OnInit {
     try {
       const rasterSub = (this.shapeManager as any).onRasterStrokeEnd?.(async () => {
         if (!this.illustration) return;
+        // Mark the painted layer dirty so uploadPixelData re-uploads only it
+        if (this.selectedRasterLayerId) {
+          this._dirtyLayerIds.add(this.selectedRasterLayerId);
+        }
         // Notify OPFS auto-save service of stroke end
         this.autoSaveService.notifyStrokeEnd();
         try {
@@ -1569,7 +3507,22 @@ export class IllustrationComponent implements OnInit {
     this.onBgColorSelected('#191919');
 
     this.shapeManager.setIllustrationMode(true);
-    this.shapeManager.setIllustrationBounds(1,1.417); // Aspect ratio of B4 paper
+
+    // Apply document size from query params (set by the New Illustration dialog).
+    // For brand-new illustrations there is no saved state yet, so query params are
+    // the only source. For existing illustrations, loadIllustrationV2 will call
+    // _applyDocumentSize again with the persisted value — that's fine, it's idempotent.
+    const qp = this.route.snapshot.queryParamMap;
+    const docW = Number(qp.get('docW'));
+    const docH = Number(qp.get('docH'));
+    this._setupArtboardOverlay();
+    if (docW > 0 && docH > 0) {
+      this._applyDocumentSize({ w: docW, h: docH });
+    } else {
+      (this.shapeManager as any).clearDocumentSize?.();
+      this.shapeManager.setIllustrationBounds(1, 1.417);
+    }
+
     this.shapeManager.setBackgroundPatternFixed(true);
     // Force renderer into raster mode for illustration workflows, but keep the raster tool disabled until the Pen is selected.
     try {
@@ -1595,12 +3548,11 @@ export class IllustrationComponent implements OnInit {
     const doRefresh = () => {
       try {
         const layers = this.shapeManager?.getRasterLayers?.() ?? [];
-        console.log('Loaded raster layers from ShapeManager:', layers);
         this.rasterLayers = Array.isArray(layers) ? layers : [];
-        // Only reset selection if the current layer no longer exists
-        const stillExists = this.rasterLayers.some(l => l.id === this.selectedRasterLayerId);
+        // Only keep paintable raster layers selected.
+        const stillExists = this.rasterLayers.some((l: any) => l.id === this.selectedRasterLayerId && l.type === 'layer');
         if (!stillExists) {
-          this.selectedRasterLayerId = this.rasterLayers[0]?.id ?? null;
+          this.selectedRasterLayerId = this.rasterLayers.find((l: any) => l.type === 'layer')?.id ?? null;
         }
         // Push to the raster-layers panel component (subscribes to rasterBrushService.layers$)
         this.rasterBrushService.refreshLayers();
@@ -1656,13 +3608,21 @@ export class IllustrationComponent implements OnInit {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
 
-    // Global undo/redo: prefer raster undo/redo for illustrations
+    // Global undo/redo routing by active context.
     if (ctrlKey && (event.key === 'z' || event.key === 'Z')) {
-      // Ctrl+Z or Cmd+Z -> undo; if Shift pressed, do redo
-      if (event.shiftKey) {
-        this.rasterRedo();
+      // Ctrl+Z or Cmd+Z -> undo; if Shift pressed, do redo.
+      if (this.is3DContextActive) {
+        if (event.shiftKey) {
+          this.scene3dRedo();
+        } else {
+          this.scene3dUndo();
+        }
       } else {
-        this.rasterUndo();
+        if (event.shiftKey) {
+          this.rasterRedo();
+        } else {
+          this.rasterUndo();
+        }
       }
       event.preventDefault();
       return;
@@ -1670,7 +3630,11 @@ export class IllustrationComponent implements OnInit {
 
     if (ctrlKey && (event.key === 'y' || event.key === 'Y')) {
       // Ctrl+Y or Cmd+Y -> redo
-      this.rasterRedo();
+      if (this.is3DContextActive) {
+        this.scene3dRedo();
+      } else {
+        this.rasterRedo();
+      }
       event.preventDefault();
       return;
     }
@@ -1709,7 +3673,15 @@ export class IllustrationComponent implements OnInit {
       this.rasterSelectionService.selectAll(); event.preventDefault(); return;
     }
     if (ctrlKey && (event.key === 'd' || event.key === 'D') && !event.shiftKey) {
-      this.rasterSelectionService.deselectAll(); event.preventDefault(); return;
+      if (this.scene3dPanelVisible && this.scene3dSelectedMeshId) {
+        this.scene3dDuplicateMesh(this.scene3dSelectedMeshId);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      } else {
+        this.rasterSelectionService.deselectAll();
+        event.preventDefault();
+      }
+      return;
     }
     if (ctrlKey && event.shiftKey && (event.key === 'i' || event.key === 'I')) {
       this.rasterSelectionService.invertSelection(); event.preventDefault(); return;
@@ -1778,6 +3750,22 @@ export class IllustrationComponent implements OnInit {
       case 'w': this.setActiveTool('select:magic-wand'); break;
       case 'W': if (event.shiftKey) { this.setActiveTool('select:magic-wand'); } else { this.setActiveTool('select:magic-wand'); } break;
       case 'q': this.setActiveTool('raster:move'); break;
+      case '5':
+        if (this.scene3dPanelVisible) {
+          this.scene3dSetIllustrationProjection(
+            this.scene3dIllustrationProjection === 'orthographic' ? 'perspective' : 'orthographic'
+          );
+          event.preventDefault();
+          break;
+        }
+        return;
+      case 'k':
+      case 'K':
+        if (this.scene3dPanelVisible) {
+          this.scene3dRecordKeyframe();
+          break;
+        }
+        return;
       default: return;
     }
     event.preventDefault();
@@ -2919,6 +4907,7 @@ export class IllustrationComponent implements OnInit {
     this.showFileMenu = false;
     this.showEditMenu = false;
     this.showAnimationMenu = false;
+    this.scene3dShowAddMeshMenu = false;
     this.closeContextMenu();
   }
 
@@ -2955,6 +4944,60 @@ export class IllustrationComponent implements OnInit {
 
   zoomIn() { this.worldManager.zoomIn(); }
   zoomOut() { this.worldManager.zoomOut(); }
+
+  // ── Artboard overlay ────────────────────────────────────────
+
+  private _applyDocumentSize(docSize: { w: number; h: number } | null): void {
+    const sm = this.shapeManager as any;
+    if (docSize?.w > 0 && docSize?.h > 0) {
+      sm.setDocumentSize?.(docSize.w, docSize.h);
+      sm.fitArtboard?.();
+    } else {
+      sm.clearDocumentSize?.();
+    }
+    this._updateArtboardOverlay();
+  }
+
+  private _setupArtboardOverlay(): void {
+    this._artboardViewportSub?.unsubscribe?.();
+    const is = (this.shapeManager as any).interactionService;
+    if (is?.onViewportChanged) {
+      this._artboardViewportSub = is.onViewportChanged.subscribe(() => {
+        this._updateArtboardOverlay();
+      });
+    }
+    this._updateArtboardOverlay();
+  }
+
+  _updateArtboardOverlay(): void {
+    const sm = this.shapeManager as any;
+    const scissor = sm.webgpuRenderer?.getArtboardScissor?.();
+    if (!scissor) {
+      this.artboardShadowStyle = {};
+      this.artboardLabelStyle = {};
+      this.artboardLabelText = '';
+      return;
+    }
+    const cv = this.canvas;
+    const scaleX = (cv && cv.width) ? cv.clientWidth / cv.width : 1 / (window.devicePixelRatio || 1);
+    const scaleY = (cv && cv.height) ? cv.clientHeight / cv.height : 1 / (window.devicePixelRatio || 1);
+    const x = scissor.x * scaleX;
+    const y = scissor.y * scaleY;
+    const w = scissor.w * scaleX;
+    const h = scissor.h * scaleY;
+    this.artboardShadowStyle = { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' };
+    const docSize = sm.getDocumentSize?.();
+    if (docSize) {
+      this.artboardLabelText = `${docSize.w} × ${docSize.h} px`;
+      this.artboardLabelStyle = { left: x + 'px', top: Math.max(0, y - 22) + 'px' };
+    }
+  }
+
+  fitArtboard(): void {
+    const sm = this.shapeManager as any;
+    if (!sm.getDocumentSize?.()) return;
+    sm.fitArtboard?.();
+  }
 
   spawnShape(shape: string) {
     switch (shape) {
@@ -3016,23 +5059,148 @@ export class IllustrationComponent implements OnInit {
   /** Build the full v2 state payload from current engine + animation state, save it, then upload dirty pixel data. */
   async saveIllustrationV2(): Promise<void> {
     if (!this.illustration?.id) return;
+    if (this.isLoading) return; // suppress saves triggered by the load/restore sequence
+
+    // Fix 1: concurrent save guard — queue at most one pending save
+    if (this._saveRunning) { this._saveQueued = true; return; }
+    this._saveRunning = true;
+
+    try {
+      await this._doSaveIllustrationV2();
+    } finally {
+      this._saveRunning = false;
+      if (this._saveQueued) {
+        this._saveQueued = false;
+        void this.saveIllustrationV2();
+      }
+    }
+  }
+
+  private async _doSaveIllustrationV2(): Promise<void> {
+    // Local-only: save full scene state to OPFS, update IndexedDB metadata
+    if (this.syncMode === 2) {
+      const { state } = await this.frogFileService.buildStatePayload(this.illustrationTitle);
+      state.ditherConfig = { ...this.ditherConfig };
+      state.documentSize = (this.shapeManager as any).getDocumentSize?.() ?? null;
+      state.bgColor = this.bgColor;
+      state.dotColor = this.dotColor;
+      state.paperGrain = { type: this.paperGrainType, scale: this.paperGrainScale, strength: this.paperGrainStrength };
+      state.savedAt = Date.now();
+      const opfsKey = 'local-' + (this.illustration?.uuid ?? '');
+      void this.opfsMetadataService.write(opfsKey, state);
+      if (this.illustration?.uuid) {
+        await this.localIllustrationService.update({ uuid: this.illustration.uuid, name: this.illustrationTitle ?? this.illustration.name ?? 'Untitled' }).catch(() => {});
+      }
+      return;
+    }
 
     const { state } = await this.frogFileService.buildStatePayload(this.illustrationTitle);
 
     // Attach dither config (held locally on the component)
     state.ditherConfig = { ...this.ditherConfig };
 
-    // Step 1: Save state metadata
+    // Override per-layer dither from the component's authoritative map.
+    // buildStatePayload reads from the engine, but the engine getter may return undefined
+    // for layers whose dither was set via the optional-chaining set path. The component
+    // map is always kept in sync by the handlers and is the ground truth.
+    for (const layer of state.layers) {
+      const cfg = this.layerDitherConfigs.get(layer.layerId);
+      if (cfg !== undefined) layer.ditherConfig = { ...cfg } as any;
+    }
+    console.log('[V2 Save] ditherConfig:', this.ditherConfig.enabled,
+      'layers with dither:', state.layers.filter(l => (l.ditherConfig as any)?.enabled).length);
+
+    // Attach document size (null = infinite canvas)
+    state.documentSize = (this.shapeManager as any).getDocumentSize?.() ?? null;
+
+    // Attach canvas and global UI settings not covered by the Salsa scene graph
+    state.bgColor = this.bgColor;
+    state.dotColor = this.dotColor;
+    state.paperGrain = { type: this.paperGrainType, scale: this.paperGrainScale, strength: this.paperGrainStrength };
+    state.scene3dGlobalSettings = {
+      cameraMode: this.scene3dCameraMode,
+      illustrationProjection: this.scene3dIllustrationProjection,
+      fov: this.scene3dFOV,
+      shadowsEnabled: this.scene3dShadowsEnabled,
+      shadowMapSize: this.scene3dShadowMapSize,
+      shadowExtent: this.scene3dShadowExtent,
+      shadowBias: this.scene3dShadowBias,
+      lightDirX: this.scene3dLightDirX, lightDirY: this.scene3dLightDirY, lightDirZ: this.scene3dLightDirZ,
+      lightIntensity: this.scene3dLightIntensity,
+      ambientR: this.scene3dAmbientR, ambientG: this.scene3dAmbientG, ambientB: this.scene3dAmbientB,
+      ambientIntensity: this.scene3dAmbientIntensity,
+      ps1Jitter: this.scene3dPS1Jitter, ps1Snap: this.scene3dPS1Snap,
+      ps1Affine: this.scene3dPS1Affine, ps1ColorDepth: this.scene3dPS1ColorDepth,
+      frustumCulling: this.scene3dFrustumCulling,
+      animSyncWithTimeline: this.scene3dAnimSyncWithTimeline,
+      animStartFrame: this.scene3dAnimStartFrame,
+      animEndFrame: this.scene3dAnimEndFrame,
+      animFps: this.scene3dAnimFps,
+      animLoop: this.scene3dAnimLoop,
+    };
+
+    const sm3d = this.shapeManager as any;
+    const illId = this.illustration!.id;
+
+    if (this.syncMode === 0) {
+      // Cloud-sync only: upload blobs to Azure
+
+      // Opt 2+3: per-mesh dirty upload using getMeshState3D — avoids serializing the full scene
+      const dirtyMeshIds: string[] = sm3d.getDirtyMeshIds3D?.() ?? [];
+
+      // Always keep the full mesh ID list in state so the load path knows which blobs exist
+      const allNodes: any[] = sm3d.getScene3DNodeStates?.() ?? [];
+      const allMeshIds = allNodes.map((n: any) => n.id ?? n.nodeId).filter(Boolean) as string[];
+      state.meshIds = allMeshIds.length > 0 ? allMeshIds : undefined;
+
+      if (dirtyMeshIds.length > 0) {
+        // getMeshState3D(id) serializes only that mesh — O(1 mesh) instead of O(all meshes)
+        const meshUploadTasks = dirtyMeshIds.map(async (id) => {
+          try {
+            const meshState = sm3d.getMeshState3D?.(id);
+            if (!meshState) return;
+            const blob = await gzipToBlob(meshState);
+            await firstValueFrom(this.illustrationService.uploadMeshBlob(illId, id, blob));
+          } catch (e) { console.warn(`[V2 Save] mesh upload failed for ${id}`, e); }
+        });
+        await Promise.all(meshUploadTasks);
+        sm3d.clearDirtyMeshState3D?.(dirtyMeshIds);
+      }
+
+      // Opt 1: only re-upload texture library when textures changed
+      if (this._texLibDirty) {
+        this._texLibDirty = false;
+        try {
+          const texLib = sm3d.getTextureLibrarySnapshot?.();
+          if (texLib) {
+            const blob = await gzipToBlob(texLib);
+            await firstValueFrom(this.illustrationService.uploadTextureLibraryBlob(illId, blob));
+          }
+        } catch (e) { console.warn('[V2 Save] texture library upload failed', e); }
+      }
+    }
+    // No-cloud: meshIds stays undefined so the load path never tries to fetch blobs
+
+    // Stamp savedAt so OPFS and DB share the same timestamp for freshness comparison
+    state.savedAt = Date.now();
+
+    // Step 1: Save state metadata to DB (no pixel/blob URLs in no-cloud mode)
     try {
-      await firstValueFrom(this.illustrationService.saveState(this.illustration.id, state));
+      await firstValueFrom(this.illustrationService.saveState(illId, state));
       console.log('[V2 Save] state saved successfully');
     } catch (e) {
       console.error('[V2 Save] state save failed', e);
       return;
     }
 
-    // Step 2: Upload pixel data for each layer/cel
-    await this.uploadPixelData(state.layers);
+    // Step 2: Write metadata to OPFS — scene graph, animation config, canvas settings
+    (state as any).backendSynced = true;
+    void this.opfsMetadataService.write(illId.toString(), state);
+
+    // Step 3: Upload pixel data for dirty layers only (cloud-sync only)
+    if (this.syncMode === 0) {
+      await this.uploadPixelData(state.layers);
+    }
   }
 
   // ── .frog File Export / Import ─────────────────────────────
@@ -3069,7 +5237,7 @@ export class IllustrationComponent implements OnInit {
 
     // 1. Apply scene graph
     if (sceneGraph) {
-      await this.setIllustrationSceneGraph(sceneGraph);
+      await this.shapeManager.setSceneGraphJSON(sceneGraph);
       try {
         const raw = JSON.parse(sceneGraph);
         this.layerTree = this.buildLayerTree(raw.root);
@@ -3139,7 +5307,10 @@ export class IllustrationComponent implements OnInit {
       this.animationService.refreshTimeline();
     }
 
-    // 5. Update UI
+    // 5. Restore document size
+    this._applyDocumentSize(manifest.documentSize ?? null);
+
+    // 6. Update UI
     this.illustrationTitle = manifest.name;
     this.refreshRasterLayers();
 
@@ -3147,18 +5318,29 @@ export class IllustrationComponent implements OnInit {
     if (result.ditherConfig) {
       this._applyDitherConfig(result.ditherConfig);
     }
+
+    // After a full restore, treat all layers as needing re-upload
+    this._invalidateUploadedLayers();
   }
 
-  /** Upload pixel data for dirty layers and cels. */
+  /** Upload pixel data for layers that have been painted since the last successful upload. */
   private async uploadPixelData(layers: LayerStateDto[]): Promise<void> {
     if (!this.illustration?.id) return;
     const sm = this.shapeManager as any;
-    let uploaded = 0;
+    const illId = this.illustration.id;
+    const texSize = sm?.getRasterTextureSize?.() ?? { w: this.canvas?.width ?? 1024, h: this.canvas?.height ?? 768 };
 
-    for (const layer of layers) {
+    // Fix 3: snapshot dirty set before upload so concurrent strokes during upload are preserved
+    const dirtySnapshot = new Set(this._dirtyLayerIds);
+
+    const uploadLayer = async (layer: LayerStateDto): Promise<number> => {
+      // Skip layers that have already been uploaded and haven't been painted since
+      const alreadyUploaded = this._uploadedLayerIds.has(layer.layerId);
+      const isDirty = dirtySnapshot.has(layer.layerId);
+      if (alreadyUploaded && !isDirty) return 0;
+
       if (layer.animated) {
-        // Upload each cel's pixel data
-        for (const cel of layer.cels) {
+        const counts = await Promise.all(layer.cels.map(async (cel) => {
           try {
             let blob: Blob | null = null;
             if (sm?.getCelPixelDataBlob) {
@@ -3166,49 +5348,93 @@ export class IllustrationComponent implements OnInit {
             } else if (sm?.exportRasterLayerToBlob) {
               blob = await sm.exportRasterLayerToBlob(layer.layerId, 'image/webp');
             }
-            if (blob) {
-              const texSize = sm?.getRasterTextureSize?.() ?? { w: this.canvas?.width ?? 1024, h: this.canvas?.height ?? 768 };
-              await firstValueFrom(this.illustrationService.uploadCelPixelData(
-                this.illustration.id, cel.celId, blob,
-                texSize.w, texSize.h, 'webp'
-              ));
-              uploaded++;
-            } else {
-              console.warn(`[V2 Save] no blob for cel ${cel.celId} (getCelPixelDataBlob and exportRasterLayerToBlob unavailable or returned null)`);
-            }
-          } catch (e) {
-            console.warn(`[V2 Save] cel upload failed for ${cel.celId}`, e);
-          }
-        }
+            if (!blob) { console.warn(`[V2 Save] no blob for cel ${cel.celId}`); return 0; }
+            await firstValueFrom(this.illustrationService.uploadCelPixelData(illId, cel.celId, blob, texSize.w, texSize.h, 'webp'));
+            return 1;
+          } catch (e) { console.warn(`[V2 Save] cel upload failed for ${cel.celId}`, e); return 0; }
+        }));
+        return counts.reduce((a, b) => a + b, 0);
       } else {
-        // Static layer — full-resolution export via exportRasterLayerToBlob
         try {
-          let blob: Blob | null = null;
-          if (sm?.exportRasterLayerToBlob) {
-            blob = await sm.exportRasterLayerToBlob(layer.layerId, 'image/webp');
-          }
-          if (!blob) {
-            console.warn(`[V2 Save] exportRasterLayerToBlob returned null for ${layer.layerId}, skipping pixel upload`);
-            continue;
-          }
-          const texSize = sm?.getRasterTextureSize?.() ?? { w: this.canvas?.width ?? 1024, h: this.canvas?.height ?? 768 };
-          await firstValueFrom(this.illustrationService.uploadLayerPixelData(
-            this.illustration.id, layer.layerId, blob,
-            texSize.w, texSize.h, 'webp'
-          ));
-          uploaded++;
-        } catch (e) {
-          console.warn(`[V2 Save] layer upload failed for ${layer.layerId}`, e);
-        }
+          const blob: Blob | null = sm?.exportRasterLayerToBlob
+            ? await sm.exportRasterLayerToBlob(layer.layerId, 'image/webp')
+            : null;
+          if (!blob) { console.warn(`[V2 Save] exportRasterLayerToBlob returned null for ${layer.layerId}`); return 0; }
+          await firstValueFrom(this.illustrationService.uploadLayerPixelData(illId, layer.layerId, blob, texSize.w, texSize.h, 'webp'));
+          return 1;
+        } catch (e) { console.warn(`[V2 Save] layer upload failed for ${layer.layerId}`, e); return 0; }
       }
+    };
+
+    const counts = await Promise.all(layers.map(uploadLayer));
+    const uploaded = counts.reduce((a, b) => a + b, 0);
+
+    // Mark uploaded layers clean (only remove IDs from the snapshot, preserving any added during upload)
+    for (const id of dirtySnapshot) {
+      this._dirtyLayerIds.delete(id);
+      this._uploadedLayerIds.add(id);
     }
+    // Register any newly seen layers as uploaded (first save after load, all layers are clean)
+    for (const layer of layers) {
+      this._uploadedLayerIds.add(layer.layerId);
+    }
+
     console.log(`[V2 Save] pixel data uploads complete: ${uploaded}/${layers.length} layer(s)`);
+  }
+
+  /** Call after a restore/import to mark all layers as needing re-upload. */
+  private _invalidateUploadedLayers(): void {
+    this._uploadedLayerIds.clear();
+    this._dirtyLayerIds.clear();
   }
 
   // ── V2 Load ──────────────────────────────────────────────────
 
-  /** Load illustration using v2 state API, with fallback to v1 canvasData. */
   private async loadIllustrationV2(): Promise<void> {
+    // Local-only: OPFS is the only source — no SQL state, no blob downloads
+    if (this.syncMode === 2) {
+      const opfsDocId = 'local-' + (this.illustration?.uuid ?? '');
+      try {
+        this.animationService.beginBulkRestore();
+        const result = await this.autoSaveService.loadDocument(opfsDocId).finally(() => {
+          this.animationService.endBulkRestore();
+        });
+        if (result?.success) {
+          this.refreshRasterLayers();
+          const stillExists = this.rasterLayers.some(l => l.id === this.selectedRasterLayerId);
+          if (!stillExists) this.selectedRasterLayerId = this.rasterLayers[0]?.id ?? null;
+          this._syncLayerDitherConfigsFromEngine();
+          const opfsMeta = await this.opfsMetadataService.read(opfsDocId);
+          if (opfsMeta?.sceneGraph) {
+            try {
+              await this.shapeManager.setSceneGraphJSON(opfsMeta.sceneGraph);
+              const raw = JSON.parse(opfsMeta.sceneGraph);
+              this.layerTree = this.buildLayerTree(raw.root);
+            } catch (e) {
+              console.warn('[V2 Load] local-only sceneGraph restore failed', e);
+            }
+          }
+          if (opfsMeta) {
+            await this._syncAnimationStateFromBackend(opfsMeta);
+            this._applyDocumentSize(opfsMeta.documentSize ?? null);
+            this._updateArtboardOverlay();
+            if (opfsMeta.bgColor) this.onBgColorSelected(opfsMeta.bgColor);
+            if (opfsMeta.dotColor) this.onDotColorSelected(opfsMeta.dotColor);
+            if (opfsMeta.paperGrain) {
+              this.paperGrainType = (opfsMeta.paperGrain.type as any) ?? 'none';
+              this.paperGrainScale = opfsMeta.paperGrain.scale ?? 1.0;
+              this.paperGrainStrength = opfsMeta.paperGrain.strength ?? 0.3;
+              this._applyPaperGrain();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[V2 Load] local-only OPFS load failed', e);
+      }
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+      return;
+    }
+
     if (!this.illustration?.id) {
       requestAnimationFrame(() => this.markLoaded('sceneApplied'));
       return;
@@ -3224,69 +5450,169 @@ export class IllustrationComponent implements OnInit {
       return;
     }
 
+    console.time('[V2 Load] total');
+
     // ══════════════════════════════════════════════════════════
     //  Determine freshest source: OPFS (local) vs Backend (remote)
-    //  Compare timestamps to avoid loading stale data.
+    //  Three probes run in parallel; the lightweight savedAt endpoint
+    //  lets us skip a full loadState() when both OPFS caches are fresh.
     // ══════════════════════════════════════════════════════════
     const docId = this.illustration.id.toString();
 
-    // 1. Probe OPFS for saved timestamp (cheap — no full load yet)
+    const [opfsDocs, opfsMeta, savedAtRes] = await Promise.all([
+      this.autoSaveService.listDocuments().catch(() => [] as any[]),
+      this.opfsMetadataService.read(docId),
+      firstValueFrom(this.illustrationService.getStateSavedAt(this.illustration.id)).catch(() => null),
+    ]);
+
+    const opfsDoc = opfsDocs.find((d: any) => d.docId === docId);
     let opfsSavedAt = 0;
-    try {
-      const docs = await this.autoSaveService.listDocuments();
-      const match = docs.find(d => d.docId === docId);
-      if (match) {
-        // savedAt may be epoch ms (number) or ISO string — normalize to epoch ms
-        opfsSavedAt = typeof match.savedAt === 'number' ? match.savedAt : new Date(match.savedAt).getTime();
-        if (isNaN(opfsSavedAt)) opfsSavedAt = 0;
-        console.log('[V2 Load] OPFS doc found, savedAt:', opfsSavedAt, opfsSavedAt ? new Date(opfsSavedAt).toISOString() : '(invalid)');
-      } else {
-        console.log('[V2 Load] No OPFS doc for docId:', docId);
-      }
-    } catch (e) {
-      console.warn('[V2 Load] listDocuments() failed', e);
+    if (opfsDoc) {
+      const raw = opfsDoc.savedAt;
+      opfsSavedAt = typeof raw === 'number' ? raw : (raw ? new Date(raw).getTime() : 0);
+      if (isNaN(opfsSavedAt)) opfsSavedAt = 0;
     }
+    const opfsMetaSavedAt = opfsMeta?.savedAt ?? 0;
+    const backendSavedAt = savedAtRes?.savedAt ?? 0;
+    console.log(`[V2 Load] OPFS pixels savedAt=${opfsSavedAt}, OPFS meta savedAt=${opfsMetaSavedAt}, Backend savedAt=${backendSavedAt}`);
 
-    // 2. Fetch backend state metadata (needed for timestamp + fallback data)
-    let stateRes: any = null;
-    let backendSavedAt = 0;
-    try {
-      stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
-      const raw = stateRes?.resultObject?.savedAt;
-      backendSavedAt = typeof raw === 'number' ? raw : (raw ? new Date(raw).getTime() : 0);
-      if (isNaN(backendSavedAt)) backendSavedAt = 0;
-      console.log('[V2 Load] Backend state fetched, savedAt:', backendSavedAt,
-        backendSavedAt ? new Date(backendSavedAt).toISOString() : '(not set)');
-    } catch (e) {
-      console.warn('[V2 Load] loadState failed', e);
-    }
-
-    // 3. Decide: use OPFS if it exists AND is at least as fresh as backend
+    // Use OPFS pixels when they exist and are at least as fresh as the server.
+    // The metadata file is a bonus — if it's missing (e.g. first load after migration)
+    // we still take the OPFS pixel path and just skip restoring extended settings until
+    // the user does a save, which will populate both the DB and the metadata file.
     const useOpfs = opfsSavedAt > 0 && opfsSavedAt >= backendSavedAt;
-    console.log(`[V2 Load] Decision: OPFS=${opfsSavedAt}, Backend=${backendSavedAt} → ${useOpfs ? 'OPFS' : 'Backend'}`);
+
+    // If the OPFS path won't be used, we need the full backend state — fetch it now
+    let stateRes: any = null;
+    if (!useOpfs) {
+      try {
+        stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
+        console.log('[V2 Load] Backend state fetched');
+      } catch (e) {
+        console.warn('[V2 Load] loadState failed', e);
+      }
+    }
+
+    console.log(`[V2 Load] Decision: ${useOpfs ? 'OPFS (fully local)' : 'Backend'}`);
 
     if (useOpfs) {
       try {
-        const result = await this.autoSaveService.loadDocument(docId);
+        // Suppress timeline refreshes fired by Salsa's internal sceneGraphChanged events
+        // during restore — each layer add fires an event, causing redundant full-layer scans.
+        // endBulkRestore() fires exactly one refreshTimeline() after loadDocument() returns.
+        this.animationService.beginBulkRestore();
+        const result = await this.autoSaveService.loadDocument(docId).finally(() => {
+          this.animationService.endBulkRestore();
+        });
         if (result.success) {
           console.log('[V2 Load] ✅ loadDocument() restored from OPFS, layers:', result.layers.length);
 
-          // Salsa fires a single onSceneGraphChanged after restore completes,
-          // which triggers refreshRasterLayers(). Use the return value as well
-          // in case it arrives before the event.
-          if (result.layers.length > 0) {
-            this.rasterLayers = result.layers;
-          } else {
-            this.refreshRasterLayers();
-          }
+          this.refreshRasterLayers();
 
           const stillExists = this.rasterLayers.some(l => l.id === this.selectedRasterLayerId);
           if (!stillExists) {
             this.selectedRasterLayerId = this.rasterLayers[0]?.id ?? null;
           }
           this._syncLayerDitherConfigsFromEngine();
-          this.animationService.refreshTimeline();
-          await this._syncAnimationStateFromBackend();
+
+          // If OPFS metadata file exists use it directly; otherwise fall back to backend
+          // state for extended metadata (bgColor, ditherConfig, 3D nodes, etc.).
+          // This handles pre-migration illustrations that have OPFS pixels but no meta file.
+          let effectiveMeta: IllustrationStateDto | null = opfsMeta;
+          if (!effectiveMeta) {
+            try {
+              const r = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
+              effectiveMeta = r?.resultObject ?? null;
+              if (effectiveMeta) console.log('[V2 Load] No OPFS meta — using backend state for extended metadata');
+            } catch (e) {
+              console.warn('[V2 Load] Could not fetch backend state for extended metadata', e);
+            }
+          }
+
+          await this._syncAnimationStateFromBackend(effectiveMeta);
+          const sm = this.shapeManager as any;
+          const opfsDocSize = sm.getDocumentSize?.() as { w: number; h: number } | null | undefined;
+          this._applyDocumentSize(effectiveMeta?.documentSize ?? opfsDocSize ?? null);
+          this._updateArtboardOverlay();
+          if (effectiveMeta) {
+            if (effectiveMeta.bgColor) this.onBgColorSelected(effectiveMeta.bgColor);
+            if (effectiveMeta.dotColor) this.onDotColorSelected(effectiveMeta.dotColor);
+            if (effectiveMeta.paperGrain) {
+              this.paperGrainType = (effectiveMeta.paperGrain.type as any) ?? 'none';
+              this.paperGrainScale = effectiveMeta.paperGrain.scale ?? 1.0;
+              this.paperGrainStrength = effectiveMeta.paperGrain.strength ?? 0.3;
+              this._applyPaperGrain();
+            }
+            if (effectiveMeta.ditherConfig) this._applyDitherConfig(effectiveMeta.ditherConfig);
+            if (effectiveMeta.scene3dGlobalSettings) {
+              this._applyScene3dGlobalSettings(effectiveMeta.scene3dGlobalSettings);
+            }
+            // Per-layer metadata — dither config and frame link animation are not stored
+            // in Salsa OPFS pixels, so apply them from the saved state.
+            if (effectiveMeta.layers?.length) {
+              for (const layer of effectiveMeta.layers) {
+                if (layer.ditherConfig && sm?.setLayerDitherConfig) {
+                  sm.setLayerDitherConfig(layer.layerId, layer.ditherConfig);
+                  this.layerDitherConfigs.set(layer.layerId, { ...layer.ditherConfig } as any);
+                }
+                if (layer.frameLinkAnimation && sm?.setLayerFrameLinkAnimation) {
+                  sm.setLayerFrameLinkAnimation(layer.layerId, layer.frameLinkAnimation);
+                }
+              }
+            }
+          } else {
+            // No metadata at all — read bgColor from the engine to keep UI in sync.
+            this.getBackgroundColor();
+          }
+          console.timeLog('[V2 Load] total', 'raster-layers-restored (OPFS)');
+          if ((result as any).scene3dRestored) {
+            // Salsa's loadDocument() already restored 3D from OPFS — just refresh the hierarchy UI
+            console.timeLog('[V2 Load] total', 'scene3d-restored-by-salsa');
+            this.scene3dRefreshMeshes?.();
+          } else if (effectiveMeta?.meshIds?.length) {
+            // New path: per-mesh blobs — fetch fresh SAS URLs then download in parallel
+            try {
+              console.timeLog('[V2 Load] total', 'scene3d-restore-start');
+              const urlRes = await firstValueFrom(
+                this.illustrationService.getMeshReadUrls(this.illustration!.id, effectiveMeta.meshIds)
+              );
+              const sasMap: Record<string, string> = urlRes?.resultObject ?? {};
+              const nodeBlobs = await Promise.all(
+                effectiveMeta.meshIds.map(async (id: string) => {
+                  if (!sasMap[id]) return null;
+                  const buf = await fetch(sasMap[id]).then(r => r.arrayBuffer());
+                  return gunzipFromBinary(buf);
+                })
+              );
+              const nodes3d = nodeBlobs.filter(Boolean);
+              if (nodes3d.length) await sm.restoreScene3DNodes?.(nodes3d, {});
+              if (effectiveMeta.texLibSasUrl) {
+                const buf = await fetch(effectiveMeta.texLibSasUrl).then(r => r.arrayBuffer());
+                sm.restoreTextureLibrary3D?.(await gunzipFromBinary(buf));
+                console.timeLog('[V2 Load] total', 'texture-lib-restored');
+              }
+              this.scene3dRefreshMeshes?.();
+              console.timeLog('[V2 Load] total', 'scene3d-restore-done');
+            } catch (e) {
+              console.warn('[V2 Load] Failed to restore 3D node state from OPFS meta (per-mesh)', e);
+            }
+          } else if (effectiveMeta?.scene3dNodesGzip) {
+            // Legacy path: monolithic base64 blob
+            try {
+              console.timeLog('[V2 Load] total', 'scene3d-restore-start');
+              const nodes3d = await gunzipFromBase64(effectiveMeta.scene3dNodesGzip) as any[];
+              await sm.restoreScene3DNodes?.(nodes3d, {});
+              if (effectiveMeta.textureLibrary3dGzip) {
+                sm.restoreTextureLibrary3D?.(await gunzipFromBase64(effectiveMeta.textureLibrary3dGzip));
+                console.timeLog('[V2 Load] total', 'texture-lib-restored');
+              }
+              this.scene3dRefreshMeshes?.();
+              console.timeLog('[V2 Load] total', 'scene3d-restore-done');
+            } catch (e) {
+              console.warn('[V2 Load] Failed to restore 3D node state from OPFS meta', e);
+            }
+          }
+          console.timeEnd('[V2 Load] total');
           requestAnimationFrame(() => this.markLoaded('sceneApplied'));
           return;
         }
@@ -3300,6 +5626,26 @@ export class IllustrationComponent implements OnInit {
     //  Backend Path — fetch state + pixel data from server
     // ══════════════════════════════════════════════════════════
 
+    // No-cloud: OPFS is the only source — no blob downloads exist on the server.
+    // If OPFS had no data on this device, surface an empty-state prompt so the
+    // user knows they need to import a .frogmarks file to restore their work.
+    if (this.syncMode === 1) {
+      console.log('[V2 Load] no-cloud mode — no OPFS data on this device');
+      this.noCloudEmptyState = true;
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+      return;
+    }
+
+    // OPFS was chosen but loadDocument() failed — need the full state now
+    if (useOpfs && !stateRes) {
+      try {
+        stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
+        console.log('[V2 Load] OPFS failed — fetched full backend state as fallback');
+      } catch (e) {
+        console.warn('[V2 Load] loadState fallback failed', e);
+      }
+    }
+
     const state: IllustrationStateDto | null = stateRes?.resultObject ?? null;
 
     // ── V2 path ──
@@ -3310,72 +5656,55 @@ export class IllustrationComponent implements OnInit {
 
       // 1. Apply scene graph
       if (state.sceneGraph) {
-        await this.setIllustrationSceneGraph(state.sceneGraph);
+        await this.shapeManager.setSceneGraphJSON(state.sceneGraph);
         try {
           const raw = JSON.parse(state.sceneGraph);
           this.layerTree = this.buildLayerTree(raw.root);
         } catch { /* scene graph may not have root for layer tree */ }
       }
 
-      // 2. Download & import pixel data for each layer
-      const importPayload: any[] = [];
-      for (const layer of state.layers) {
+      // 2. Download pixel data for all layers/cels in parallel
+      console.timeLog('[V2 Load] total', 'scene-graph-applied');
+      const illId = this.illustration!.id;
+      const downloadLayer = async (layer: LayerStateDto): Promise<any[]> => {
         if (layer.animated && layer.cels.length > 0) {
-          // For animated layers, download each cel
-          for (const cel of layer.cels) {
-            // Use server-provided URL, or construct one from the known upload endpoint
-            const celUrl = cel.pixelDataUrl
-              || `/api/illustration/${this.illustration!.id}/cel/${cel.celId}`;
+          const celResults = await Promise.all(layer.cels.map(async (cel) => {
+            const celUrl = cel.pixelDataUrl || `/api/illustration/${illId}/cel/${cel.celId}`;
             try {
               const resp = await fetch(this.resolvePixelDataUrl(celUrl));
-              if (!resp.ok) { console.warn(`[V2 Load] cel ${cel.celId} fetch returned ${resp.status}`); continue; }
+              if (!resp.ok) { console.warn(`[V2 Load] cel ${cel.celId} fetch returned ${resp.status}`); return null; }
               const blob = await resp.blob();
-              if (blob.size === 0) { console.warn(`[V2 Load] cel ${cel.celId} returned empty blob`); continue; }
-              const dataUrl = await this.blobToDataUrl(blob);
-              importPayload.push({
-                id: layer.layerId,
-                celId: cel.celId,
-                name: layer.name,
-                imageData: dataUrl,
-                width: cel.width,
-                height: cel.height,
-                blendMode: layer.blendMode,
-                opacity: layer.opacity,
-                visible: layer.visible,
-                locked: layer.locked,
-                clipped: layer.clipped,
-                lockTransparency: layer.lockTransparency,
-              });
-            } catch (e) {
-              console.warn(`[V2 Load] failed to download cel ${cel.celId}`, e);
-            }
-          }
+              if (!blob.size) { console.warn(`[V2 Load] cel ${cel.celId} returned empty blob`); return null; }
+              return {
+                id: layer.layerId, celId: cel.celId, name: layer.name,
+                imageData: await this.blobToDataUrl(blob),
+                width: cel.width, height: cel.height,
+                blendMode: layer.blendMode, opacity: layer.opacity,
+                visible: layer.visible, locked: layer.locked,
+                clipped: layer.clipped, lockTransparency: layer.lockTransparency,
+              };
+            } catch (e) { console.warn(`[V2 Load] failed to download cel ${cel.celId}`, e); return null; }
+          }));
+          return celResults.filter(Boolean);
         } else {
-          // Static layer — use server URL or construct one
-          const layerUrl = layer.pixelDataUrl
-            || `/api/illustration/${this.illustration!.id}/layer/${layer.layerId}`;
+          const layerUrl = layer.pixelDataUrl || `/api/illustration/${illId}/layer/${layer.layerId}`;
           try {
             const resp = await fetch(this.resolvePixelDataUrl(layerUrl));
-            if (!resp.ok) { console.warn(`[V2 Load] layer ${layer.layerId} fetch returned ${resp.status}`); continue; }
+            if (!resp.ok) { console.warn(`[V2 Load] layer ${layer.layerId} fetch returned ${resp.status}`); return []; }
             const blob = await resp.blob();
-            if (blob.size === 0) { console.warn(`[V2 Load] layer ${layer.layerId} returned empty blob`); continue; }
-            const dataUrl = await this.blobToDataUrl(blob);
-            importPayload.push({
-              id: layer.layerId,
-              name: layer.name,
-              imageData: dataUrl,
-              blendMode: layer.blendMode,
-              opacity: layer.opacity,
-              visible: layer.visible,
-              locked: layer.locked,
-              clipped: layer.clipped,
-              lockTransparency: layer.lockTransparency,
-            });
-          } catch (e) {
-            console.warn(`[V2 Load] failed to download layer ${layer.layerId}`, e);
-          }
+            if (!blob.size) { console.warn(`[V2 Load] layer ${layer.layerId} returned empty blob`); return []; }
+            return [{
+              id: layer.layerId, name: layer.name,
+              imageData: await this.blobToDataUrl(blob),
+              blendMode: layer.blendMode, opacity: layer.opacity,
+              visible: layer.visible, locked: layer.locked,
+              clipped: layer.clipped, lockTransparency: layer.lockTransparency,
+            }];
+          } catch (e) { console.warn(`[V2 Load] failed to download layer ${layer.layerId}`, e); return []; }
         }
-      }
+      };
+      const importPayload = (await Promise.all(state.layers.map(downloadLayer))).flat();
+      console.timeLog('[V2 Load] total', 'raster-layers-fetched');
 
       // 3. Import raster layers into engine
       console.log(`[V2 Load] importPayload: ${importPayload.length} layer(s) to import`, importPayload.map(p => p.id));
@@ -3434,68 +5763,111 @@ export class IllustrationComponent implements OnInit {
       }
 
       this.refreshRasterLayers();
+      console.timeLog('[V2 Load] total', 'raster-layers-restored');
 
-      // 6. Restore dither config
-      if (state.ditherConfig) {
-        this._applyDitherConfig(state.ditherConfig);
+      // If OPFS metadata has local changes not yet synced to backend (backendSynced === false),
+      // prefer it for non-pixel settings so a quick refresh doesn't lose them.
+      const settingsMeta: any = ((opfsMeta as any)?.backendSynced === false) ? opfsMeta : state;
+
+      // Per-layer settings override when OPFS meta is ahead of backend state
+      if (settingsMeta !== state && settingsMeta?.layers?.length) {
+        for (const sl of settingsMeta.layers) {
+          if (sl.ditherConfig && sm?.setLayerDitherConfig) {
+            sm.setLayerDitherConfig(sl.layerId, sl.ditherConfig);
+            this.layerDitherConfigs.set(sl.layerId, { ...sl.ditherConfig } as DitherConfig);
+          }
+          if (sl.frameLinkAnimation && sm?.setLayerFrameLinkAnimation) {
+            sm.setLayerFrameLinkAnimation(sl.layerId, sl.frameLinkAnimation);
+          }
+        }
       }
 
+      // 6. Restore dither config
+      if (settingsMeta.ditherConfig) {
+        this._applyDitherConfig(settingsMeta.ditherConfig);
+      }
+
+      // 7. Restore document size (bounded artboard vs infinite canvas)
+      this._applyDocumentSize(settingsMeta.documentSize ?? state.documentSize ?? null);
+
+      // 7b. Restore canvas / global UI settings
+      if (settingsMeta.bgColor) this.onBgColorSelected(settingsMeta.bgColor);
+      if (settingsMeta.dotColor) this.onDotColorSelected(settingsMeta.dotColor);
+      if (settingsMeta.paperGrain) {
+        this.paperGrainType = (settingsMeta.paperGrain.type as any) ?? 'none';
+        this.paperGrainScale = settingsMeta.paperGrain.scale ?? 1.0;
+        this.paperGrainStrength = settingsMeta.paperGrain.strength ?? 0.3;
+        this._applyPaperGrain();
+      }
+      if (settingsMeta.scene3dGlobalSettings) {
+        this._applyScene3dGlobalSettings(settingsMeta.scene3dGlobalSettings);
+      }
+
+      // 8. Restore 3D mesh state
+      const smAny = this.shapeManager as any;
+      if (state.meshSasUrls && Object.keys(state.meshSasUrls).length > 0) {
+        // New path: per-mesh blobs downloaded directly from blob storage
+        try {
+          console.timeLog('[V2 Load] total', 'scene3d-restore-start');
+          const nodeBlobs = await Promise.all(
+            Object.entries(state.meshSasUrls).map(async ([, url]) => {
+              const buf = await fetch(url).then(r => r.arrayBuffer());
+              return gunzipFromBinary(buf);
+            })
+          );
+          await smAny.restoreScene3DNodes?.(nodeBlobs, {});
+          if (state.texLibSasUrl) {
+            const buf = await fetch(state.texLibSasUrl).then(r => r.arrayBuffer());
+            smAny.restoreTextureLibrary3D?.(await gunzipFromBinary(buf));
+            console.timeLog('[V2 Load] total', 'texture-lib-restored');
+          }
+          this.scene3dRefreshMeshes?.();
+          console.timeLog('[V2 Load] total', 'scene3d-restore-done');
+        } catch (e) {
+          console.warn('[V2 Load] Failed to restore 3D node state (per-mesh)', e);
+        }
+      } else if (state.scene3dNodesGzip) {
+        // Legacy path: monolithic base64 blob
+        try {
+          console.timeLog('[V2 Load] total', 'scene3d-restore-start');
+          const nodes3d = await gunzipFromBase64(state.scene3dNodesGzip) as any[];
+          await smAny.restoreScene3DNodes?.(nodes3d, {});
+          if (state.textureLibrary3dGzip) {
+            smAny.restoreTextureLibrary3D?.(await gunzipFromBase64(state.textureLibrary3dGzip));
+            console.timeLog('[V2 Load] total', 'texture-lib-restored');
+          }
+          this.scene3dRefreshMeshes?.();
+          console.timeLog('[V2 Load] total', 'scene3d-restore-done');
+        } catch (e) {
+          console.warn('[V2 Load] Failed to restore 3D node state', e);
+        }
+      }
+
+      console.timeEnd('[V2 Load] total');
       requestAnimationFrame(() => this.markLoaded('sceneApplied'));
       return;
     }
 
-    // ── V1 Legacy Fallback ──
-    console.log('[V2 Load] no v2 state found, using v1 canvasData fallback');
-    const legacyData = this.illustration.sceneGraphData || this.illustration.canvasData;
-    if (legacyData?.length) {
-      await this.setIllustrationSceneGraph(legacyData);
-      try {
-        const raw = JSON.parse(legacyData);
-        this.layerTree = this.buildLayerTree(raw.root);
-
-        if (raw.rasterLayers && Array.isArray(raw.rasterLayers) && raw.rasterLayers.length > 0) {
-          if ((this.shapeManager as any)?.importRasterLayersFromDataURLs) {
-            try {
-              // Clear the auto-created "Background" layer before importing saved layers
-              (this.shapeManager as any)?.rasterLayerManager?.clearAllLayers?.();
-              await (this.shapeManager as any).importRasterLayersFromDataURLs(raw.rasterLayers);
-            } catch (e) {
-              console.warn('shapeManager.importRasterLayersFromDataURLs failed', e);
-            }
-          }
-        } else if (raw.embeddedRaster && raw.embeddedRaster.imageData) {
-          if ((this.shapeManager as any)?.importRasterLayersFromDataURLs) {
-            try {
-              // Clear the auto-created "Background" layer before importing saved layers
-              (this.shapeManager as any)?.rasterLayerManager?.clearAllLayers?.();
-              await (this.shapeManager as any).importRasterLayersFromDataURLs([{
-                name: 'Raster',
-                imageData: raw.embeddedRaster.imageData,
-                width: raw.embeddedRaster.width,
-                height: raw.embeddedRaster.height
-              }]);
-            } catch (e) {
-              console.warn('Failed to import legacy embeddedRaster', e);
-            }
-          }
-        }
-        this.refreshRasterLayers();
-      } catch (e) {
-        console.warn('Failed to parse canvasData when importing rasters', e);
-      }
-    }
+    // V2 block was skipped (new illustration with no layers yet).
+    // resetSceneState() cleared the engine background; re-apply the component's current
+    // bgColor so the engine matches and getBackgroundColor() doesn't overwrite it with white.
+    this.onBgColorSelected(state?.bgColor ?? this.bgColor);
     requestAnimationFrame(() => this.markLoaded('sceneApplied'));
   }
 
   /**
    * After loadDocument() restores from OPFS, sync the animation/timeline UI state
    * from the backend metadata so the UI reflects the saved settings.
+   * Pass the already-fetched state to avoid a redundant loadState() HTTP call.
    */
-  private async _syncAnimationStateFromBackend(): Promise<void> {
+  private async _syncAnimationStateFromBackend(preloadedState?: IllustrationStateDto | null): Promise<void> {
     if (!this.illustration?.id) return;
     try {
-      const stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
-      const state: IllustrationStateDto | null = stateRes?.resultObject ?? null;
+      let state: IllustrationStateDto | null = preloadedState ?? null;
+      if (!state) {
+        const stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
+        state = stateRes?.resultObject ?? null;
+      }
       if (!state?.animation) return;
 
       const anim = state.animation;
@@ -3520,13 +5892,64 @@ export class IllustrationComponent implements OnInit {
         } catch { /* scene graph may not have root */ }
       }
 
-      // Restore dither config
-      if (state.ditherConfig) {
-        this._applyDitherConfig(state.ditherConfig);
-      }
     } catch (e) {
       console.warn('[V2 Load] _syncAnimationStateFromBackend failed (non-fatal)', e);
     }
+  }
+
+  private _applyScene3dGlobalSettings(s: NonNullable<IllustrationStateDto['scene3dGlobalSettings']>): void {
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
+    if (s.cameraMode !== undefined) { this.scene3dCameraMode = s.cameraMode as any; s3d?.setCameraMode?.(s.cameraMode); }
+    if (s.illustrationProjection !== undefined) {
+      this.scene3dIllustrationProjection = s.illustrationProjection as any;
+      sm.setIllustrationProjection3D?.(s.illustrationProjection);
+    }
+    if (s.fov !== undefined) { this.scene3dFOV = s.fov; s3d?.setFOV?.(s.fov); }
+    if (s.shadowsEnabled !== undefined) {
+      this.scene3dShadowsEnabled = s.shadowsEnabled;
+      this.scene3dShadowMapSize = s.shadowMapSize ?? this.scene3dShadowMapSize;
+      this.scene3dShadowExtent = s.shadowExtent ?? this.scene3dShadowExtent;
+      this.scene3dShadowBias = s.shadowBias ?? this.scene3dShadowBias;
+      if (s.shadowsEnabled) {
+        s3d?.enableShadows?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias)
+          ?? sm.enableShadows3D?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias);
+      } else {
+        s3d?.disableShadows?.() ?? sm.disableShadows3D?.();
+      }
+    }
+    if (s.lightDirX !== undefined || s.lightIntensity !== undefined) {
+      this.scene3dLightDirX = s.lightDirX ?? this.scene3dLightDirX;
+      this.scene3dLightDirY = s.lightDirY ?? this.scene3dLightDirY;
+      this.scene3dLightDirZ = s.lightDirZ ?? this.scene3dLightDirZ;
+      this.scene3dLightIntensity = s.lightIntensity ?? this.scene3dLightIntensity;
+      this.scene3dAmbientR = s.ambientR ?? this.scene3dAmbientR;
+      this.scene3dAmbientG = s.ambientG ?? this.scene3dAmbientG;
+      this.scene3dAmbientB = s.ambientB ?? this.scene3dAmbientB;
+      this.scene3dAmbientIntensity = s.ambientIntensity ?? this.scene3dAmbientIntensity;
+      s3d?.setDirectionalLight?.(
+        this.scene3dLightDirX, this.scene3dLightDirY, this.scene3dLightDirZ,
+        1, 1, 1, this.scene3dLightIntensity);
+      s3d?.setAmbientLight?.(
+        this.scene3dAmbientR, this.scene3dAmbientG, this.scene3dAmbientB, this.scene3dAmbientIntensity);
+    }
+    if (s.ps1Jitter !== undefined || s.ps1Snap !== undefined) {
+      this.scene3dPS1Jitter = s.ps1Jitter ?? this.scene3dPS1Jitter;
+      this.scene3dPS1Snap = s.ps1Snap ?? this.scene3dPS1Snap;
+      this.scene3dPS1Affine = s.ps1Affine ?? this.scene3dPS1Affine;
+      this.scene3dPS1ColorDepth = s.ps1ColorDepth ?? this.scene3dPS1ColorDepth;
+      s3d?.setPS1Config?.({
+        vertexJitter: this.scene3dPS1Jitter, snapGridSize: this.scene3dPS1Snap,
+        affineWarp: this.scene3dPS1Affine, colorDepth: this.scene3dPS1ColorDepth,
+      });
+    }
+    if (s.frustumCulling !== undefined) this.scene3dSetFrustumCulling(s.frustumCulling);
+    if (s.animSyncWithTimeline !== undefined) this.scene3dAnimSyncWithTimeline = s.animSyncWithTimeline;
+    if (s.animStartFrame !== undefined) this.scene3dAnimStartFrame = s.animStartFrame;
+    if (s.animEndFrame !== undefined) this.scene3dAnimEndFrame = s.animEndFrame;
+    if (s.animFps !== undefined) this.scene3dAnimFps = s.animFps;
+    if (s.animLoop !== undefined) this.scene3dAnimLoop = s.animLoop;
+    this.scene3dApplyAnimationConfig();
   }
 
   /**
@@ -3572,72 +5995,6 @@ export class IllustrationComponent implements OnInit {
     console.log('[V2 Load] dither config restored:', this.ditherConfig.enabled ? 'ENABLED' : 'disabled', this.ditherConfig.algorithm);
   }
 
-  /** @deprecated Kept for v1 compat only */
-  private async saveIllustrationWithRaster(sceneJson: string) {
-    if (!this.illustration) return;
-    try {
-      // Try to capture a high-res raster snapshot. Use shapeManager.captureThumbnailBlob which wraps renderer snapshot.
-      // Pass 0 or undefined to request native canvas size if supported; fallback to 1024px if not.
-      let blob: Blob | null = null;
-      try {
-        // Use the raster texture size if available to request similar resolution
-        const texSize = (this.shapeManager as any)?.getRasterTextureSize?.() ?? { w: this.canvas.width, h: this.canvas.height };
-        const maxDim = Math.max(texSize.w || this.canvas.width, texSize.h || this.canvas.height) || 1024;
-        // limit to a reasonable size to avoid massive payloads
-        const reqSize = Math.min(Math.max(512, Math.round(maxDim)), 2048);
-        blob = await this.shapeManager.captureThumbnailBlob?.(reqSize);
-      } catch (e) {
-        console.warn('captureThumbnailBlob failed for save; attempting fallback snapshotToBlob', e);
-        try {
-          // last resort: call renderer snapshot directly if exposed
-          const renderer = (this.shapeManager as any)?.webgpuRenderer;
-          if (renderer?.snapshotToBlob) blob = await renderer.snapshotToBlob(1024);
-        } catch (e2) {
-          console.warn('renderer.snapshotToBlob fallback failed', e2);
-        }
-      }
-
-      let enriched = null;
-      try {
-        enriched = JSON.parse(sceneJson);
-      } catch (e) {
-        // if scene JSON is not valid, bail
-        console.error('Invalid scene JSON; aborting enriched save');
-        return;
-      }
-
-      if (blob) {
-        try {
-          const dataUrl = await this.blobToDataUrl(blob);
-          // Attach top-level embeddedRaster (migration-friendly key)
-          (enriched as any).embeddedRaster = {
-            imageData: dataUrl,
-            mime: blob.type,
-            timestamp: Date.now()
-          };
-        } catch (e) {
-          console.warn('Failed to convert snapshot blob to data URL', e);
-        }
-      }
-
-      const payload = JSON.stringify(enriched);
-      this.illustrationService.saveIllustration(this.illustration.id, payload).subscribe(() => {
-        // no-op
-      }, err => console.warn('Failed to save enriched illustration', err));
-    } catch (e) {
-      console.error('saveIllustrationWithRaster failed', e);
-    }
-  }
-
-  loadIllustrationSceneGraph() {
-    this.illustrationService.loadIllustrationSceneGraph(this.illustration!.id).subscribe(res => {
-      this.shapeManager.setSceneGraphJSON(res);
-    });
-  }
-
-  async setIllustrationSceneGraph(sceneGraphJSON: string) {
-    await this.shapeManager.setSceneGraphJSON(sceneGraphJSON);
-  }
 
   // Helper: convert Blob -> HTMLCanvasElement by drawing the image into a canvas
   private async blobToCanvas(blob: Blob): Promise<HTMLCanvasElement> {
@@ -3666,8 +6023,26 @@ export class IllustrationComponent implements OnInit {
 
   async saveThumbnail() {
     if (!this.illustrationUid) return;
-    const blob = await this.shapeManager.captureThumbnailBlob(300);
-    this.illustrationService.uploadThumbnail(this.illustrationUid, blob).subscribe();
+    const sm = this.shapeManager as any;
+    let blob: Blob;
+    if (sm.captureDocumentBoundsToBlob) {
+      blob = await sm.captureDocumentBoundsToBlob('jpeg', 512);
+    } else {
+      blob = await this.shapeManager.captureThumbnailBlob(300);
+    }
+
+    if (this.syncMode === 2) {
+      // Local-only: store thumbnail as a data URL in IndexedDB
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (this.illustration?.uuid) {
+          this.localIllustrationService.updateThumbnail(this.illustration.uuid, reader.result as string).catch(() => {});
+        }
+      };
+      reader.readAsDataURL(blob);
+    } else {
+      this.illustrationService.uploadThumbnail(this.illustrationUid, blob).subscribe();
+    }
   }
 
   returnToDashboard() { this.router.navigate(['/dashboard']); }
@@ -3691,14 +6066,154 @@ export class IllustrationComponent implements OnInit {
 
   illustrationTitle = '';
   updateIllustrationTitle() {
-    this.illustrationService.renameIllustration(this.illustration!.id, this.illustrationTitle).subscribe(() => {});
+    if (this.syncMode === 2) {
+      if (this.illustration?.uuid) {
+        this.localIllustrationService.rename(this.illustration.uuid, this.illustrationTitle).catch(() => {});
+      }
+    } else {
+      this.illustrationService.renameIllustration(this.illustration!.id, this.illustrationTitle).subscribe(() => {});
+    }
   }
 
   trackById(index: number, item: LayerTreeNode): string { return item.id; }
 
+  private async initWithIllustration(illustration: Illustration): Promise<void> {
+    this.illustration = illustration;
+    this.illustrationTitle = illustration.name ?? 'Untitled';
+    this.syncMode = illustration.syncMode ?? (this.isLocalMode ? 2 : 0);
+
+    this.resetSceneState();
+    await this.loadIllustrationV2();
+
+    this.autoSaveSubscription = this.sceneChanged$
+      .pipe(auditTime(2000), distinctUntilChanged())
+      .subscribe(async () => {
+        if (!this.illustration) return;
+        try {
+          await this.saveIllustrationV2();
+        } catch (e) {
+          console.warn('[V2 Save] autosave failed', e);
+        }
+      });
+
+    // Fast OPFS metadata flush — persists non-pixel settings (dither, bgColor, etc.)
+    // within ~400ms so a quick refresh doesn't lose them before the 2s cloud save fires.
+    this._metaFlushSub = this._metaFlush$
+      .pipe(debounceTime(100))
+      .subscribe(() => void this._quickFlushOpfsMeta());
+
+    // For local-only use the UUID as the OPFS doc key (no numeric SQL id)
+    const opfsDocId = this.syncMode === 2
+      ? 'local-' + (this.illustration.uuid ?? '')
+      : this.illustration.id?.toString() ?? '';
+
+    if (opfsDocId) {
+      this.autoSaveService.enable(
+        opfsDocId,
+        this.illustration.name ?? 'Untitled',
+        { intervalMs: this.selectedAutoSaveInterval, strokeDebounceMs: 100 }
+      );
+      this.autoSaveService.state$.subscribe(s => this.autoSaveState = s);
+    }
+
+    this.thumbnailSaveSubscription = this.sceneChanged$
+      .pipe(auditTime(5000))
+      .subscribe(() => {
+        if (!this.illustration?.isCustomThumbnail) {
+          this.saveThumbnailIfChanged();
+        }
+      });
+
+    this.markLoaded('illustration');
+  }
+
+  private async _initViewerMode(uid: string): Promise<void> {
+    try {
+      const viewDto = await firstValueFrom(this.illustrationService.getPublicView(uid));
+      this.viewerTitle = viewDto.name;
+
+      const response = await fetch(viewDto.bundleUrl);
+      if (!response.ok) throw new Error(`Bundle fetch failed: ${response.status}`);
+      const bundle = await response.blob();
+
+      await (this.shapeManager as any).unpackProject(bundle);
+      this._disableAllViewerTools();
+    } catch (e) {
+      console.error('[Viewer] failed to load bundle', e);
+      this.notifyService.error('Could not load this illustration.');
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+    }
+    this.markLoaded('illustration');
+  }
+
+  private _disableAllViewerTools(): void {
+    const sm = this.shapeManager as any;
+    sm.disableLineDrawing?.();
+    sm.disablePolygonDrawing?.();
+    sm.disableRasterDrawing?.();
+    sm.disableRasterTool?.();
+    sm.disableRasterEraserTool?.();
+    sm.disableStampDrawing?.();
+    sm.disableSectionDrawing?.();
+    sm.disableHighlightDrawing?.();
+    sm.disablePatternDrawing?.();
+    sm.disableEraserTool?.();
+    sm.disableSDFTextDrawing?.();
+    sm.disableRasterSelection?.();
+    sm.disableRasterMove?.();
+    sm.disableRasterText?.();
+    sm.disableScribbleDrawing?.();
+    sm.disableTextDrawing?.();
+  }
+
+  publishIllustration(): void {
+    if (!this.illustration?.id || this.isPublishing) return;
+    this.isPublishing = true;
+    const sm = this.shapeManager as any;
+    sm.packProject().then((bundle: Blob) => {
+      this.illustrationService.publishIllustration(
+        this.illustration!.id!,
+        bundle,
+        this.illustrationTitle || this.illustration!.name
+      ).subscribe({
+        next: (res: any) => {
+          this.isPublishing = false;
+          const updated = res?.resultObject ?? res;
+          if (updated?.isPublic !== undefined) {
+            this.illustration!.isPublic = updated.isPublic;
+            this.illustration!.publishedVersion = updated.publishedVersion;
+            this.illustration!.publishedAt = updated.publishedAt;
+          }
+          this.notifyService.success('Published! Share the link from the address bar.');
+        },
+        error: () => {
+          this.isPublishing = false;
+          this.notifyService.error('Publish failed. Please try again.');
+        }
+      });
+    }).catch(() => {
+      this.isPublishing = false;
+      this.notifyService.error('Could not pack illustration for publishing.');
+    });
+    this.closeContextMenu();
+  }
+
+  unpublishIllustration(): void {
+    if (!this.illustration?.id) return;
+    this.illustrationService.unpublishIllustration(this.illustration.id).subscribe({
+      next: () => {
+        this.illustration!.isPublic = false;
+        this.notifyService.success('Illustration is now private.');
+      },
+      error: () => this.notifyService.error('Unpublish failed.')
+    });
+    this.closeContextMenu();
+  }
+
   ngOnDestroy(): void {
     this.routeSub?.unsubscribe();
     this.autoSaveSubscription?.unsubscribe();
+    this._metaFlushSub?.unsubscribe();
     this.thumbnailSaveSubscription?.unsubscribe();
     this.selectionChangedSubscription?.unsubscribe();
     this.selectionToolSubscription?.unsubscribe();
@@ -3711,6 +6226,7 @@ export class IllustrationComponent implements OnInit {
     if (this.onDocMousedown) document.removeEventListener('mousedown', this.onDocMousedown);
     if (this.onPaste) document.removeEventListener('paste', this.onPaste);
 
+    this._clearExportReminder();
     this.resetSceneState();
   }
 
@@ -3743,6 +6259,8 @@ export class IllustrationComponent implements OnInit {
   }
 
   isLoading = true;
+  private _focusTitleOnLoad = false;
+  private _startAnimationOnLoad = false;
   private loadingState = {
     renderer: false,
     illustration: false,
@@ -3750,7 +6268,22 @@ export class IllustrationComponent implements OnInit {
   };
   private markLoaded(key: keyof typeof this.loadingState) {
     this.loadingState[key] = true;
-    if (Object.values(this.loadingState).every(Boolean)) this.isLoading = false;
+    if (Object.values(this.loadingState).every(Boolean)) {
+      this.isLoading = false;
+      this._startExportReminder();
+      if (this._startAnimationOnLoad) {
+        this._startAnimationOnLoad = false;
+        this.animationService.setAnimationEnabled(true);
+        this.animationEnabled = true;
+      }
+      if (this._focusTitleOnLoad) {
+        this._focusTitleOnLoad = false;
+        setTimeout(() => {
+          this.titleInputRef?.nativeElement?.select();
+          this.titleInputRef?.nativeElement?.focus();
+        }, 150);
+      }
+    }
   }
 
   onTextChange(val: string) {
@@ -3818,7 +6351,19 @@ export class IllustrationComponent implements OnInit {
     if (!this.illustrationUid || !this.illustration || !this.shapeManager) return;
     try {
       const blob = await this.shapeManager.captureThumbnailBlob(300);
-      await firstValueFrom(this.illustrationService.uploadThumbnail(this.illustrationUid, blob, true));
+      if (this.syncMode === 2) {
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.localIllustrationService.updateThumbnail(this.illustration!.uuid!, reader.result as string)
+              .then(() => resolve()).catch(reject);
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        await firstValueFrom(this.illustrationService.uploadThumbnail(this.illustrationUid, blob, true));
+      }
       this.lastSavedThumbnailJSON = this.shapeManager.getSceneGraphJSON();
       this.notifyService.success('Thumbnail updated to the current view.');
     } catch (e) {
@@ -3826,6 +6371,209 @@ export class IllustrationComponent implements OnInit {
       this.notifyService.error('Could not set the thumbnail. Try again.');
     } finally {
       this.closeContextMenu();
+    }
+  }
+
+  // ── .frogmarks project file ────────────────────────────────────────────────
+
+  frogmarksSaving = false;
+  frogmarksRestoreModal: {
+    currentThumbnailUrl: string;
+    currentDate: string;
+    fileThumbnailUrl: string;
+    fileDate: string;
+  } | null = null;
+  private _pendingRestoreFile: File | null = null;
+  private _pendingRestoreFileUuid: string | null = null;
+
+  async frogmarksSave(): Promise<void> {
+    if (this.frogmarksSaving) return;
+    this.frogmarksSaving = true;
+    try {
+      const sm = this.shapeManager as any;
+
+      const salsaBlob: Blob = await sm.packProject();
+      const zip = await JSZip.loadAsync(salsaBlob);
+
+      zip.file('frogmarks-state.json', JSON.stringify({
+        formatVersion: 1,
+        packedAt: new Date().toISOString(),
+        name: this.illustration?.name ?? 'Untitled',
+        uuid: this.illustrationUid,
+        illustrationId: this.illustration?.id ?? null,
+        teamId: this.illustration?.teamId ?? null,
+        deviceName: localStorage.getItem('frogmarks-device-name') ?? null,
+      }, null, 2));
+
+      try {
+        const thumbBlob = await this.shapeManager.captureThumbnailBlob(300);
+        if (thumbBlob) zip.file('thumbnail.png', thumbBlob);
+      } catch { /* non-fatal */ }
+
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const safeName = (this.illustration?.name ?? 'untitled').replace(/[^a-z0-9_\-]/gi, '_');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeName}.frogmarks`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this._startExportReminder();
+    } catch (e) {
+      console.error('[frogmarksSave]', e);
+      this.notifyService.error('Could not save project. Please try again.');
+    } finally {
+      this.frogmarksSaving = false;
+    }
+  }
+
+  async frogmarksLoad(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    (event.target as HTMLInputElement).value = '';
+    if (!file) return;
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const frogmarksRaw = await zip.file('frogmarks-state.json')?.async('string');
+      const meta = frogmarksRaw ? JSON.parse(frogmarksRaw) : null;
+
+      if (meta?.formatVersion > 1)
+        throw new Error('This .frogmarks file requires a newer version of Frogmarks.');
+
+      const fileUuid: string | null = meta?.uuid ?? null;
+      const fileName: string = meta?.name ?? file.name;
+
+      if (fileUuid && fileUuid !== this.illustrationUid) {
+        // Different illustration — simple confirm
+        const ok = window.confirm(
+          `"${fileName}" is from a different illustration.\n\nThis will replace the current content of "${this.illustration?.name ?? 'this illustration'}". Continue?`
+        );
+        if (!ok) return;
+        await this._doFrogmarksRestore(file, fileUuid);
+      } else {
+        // Same illustration (or no UUID in file) — show thumbnail comparison modal
+        const thumbEntry = zip.file('thumbnail.png');
+        const fileThumbBlob = thumbEntry ? await thumbEntry.async('blob') : null;
+        const fileThumbnailUrl = fileThumbBlob ? URL.createObjectURL(fileThumbBlob) : '';
+        const fileDate = meta?.packedAt
+          ? new Date(meta.packedAt).toLocaleString()
+          : 'Unknown date';
+
+        const currentThumbBlob = await this.shapeManager.captureThumbnailBlob(300).catch(() => null);
+        const currentThumbnailUrl = currentThumbBlob ? URL.createObjectURL(currentThumbBlob) : '';
+        const currentDate = new Date().toLocaleString();
+
+        this._pendingRestoreFile = file;
+        this._pendingRestoreFileUuid = fileUuid;
+        this.frogmarksRestoreModal = { currentThumbnailUrl, currentDate, fileThumbnailUrl, fileDate };
+      }
+    } catch (e) {
+      console.error('[frogmarksLoad]', e);
+      this.notifyService.error('Could not load project. The file may be corrupted or from a newer version of Frogmarks.');
+    }
+  }
+
+  async confirmFrogmarksRestore(): Promise<void> {
+    const file = this._pendingRestoreFile;
+    const uuid = this._pendingRestoreFileUuid;
+    this._closeFrogmarksRestoreModal();
+    if (file) await this._doFrogmarksRestore(file, uuid);
+  }
+
+  cancelFrogmarksRestore(): void {
+    this._closeFrogmarksRestoreModal();
+  }
+
+  private _closeFrogmarksRestoreModal(): void {
+    if (this.frogmarksRestoreModal) {
+      URL.revokeObjectURL(this.frogmarksRestoreModal.currentThumbnailUrl);
+      URL.revokeObjectURL(this.frogmarksRestoreModal.fileThumbnailUrl);
+    }
+    this.frogmarksRestoreModal = null;
+    this._pendingRestoreFile = null;
+    this._pendingRestoreFileUuid = null;
+  }
+
+  private _exportReminderTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly _exportReminderIntervalMs = 20 * 60 * 1000; // 20 min
+
+  private _startExportReminder(): void {
+    if (this.syncMode === 0) return;
+    this._clearExportReminder();
+    this._exportReminderTimer = setTimeout(() => {
+      this.showExportReminder = true;
+    }, this._exportReminderIntervalMs);
+  }
+
+  private _clearExportReminder(): void {
+    if (this._exportReminderTimer !== null) {
+      clearTimeout(this._exportReminderTimer);
+      this._exportReminderTimer = null;
+    }
+  }
+
+  dismissExportReminder(): void {
+    this.showExportReminder = false;
+    this._startExportReminder();
+  }
+
+  exportNowFromReminder(): void {
+    this.showExportReminder = false;
+    this._clearExportReminder();
+    void this.frogmarksSave().then(() => this._startExportReminder());
+  }
+
+  openSyncModeDialog(): void {
+    this.syncModePanelSelection = this.syncMode;
+    this.syncModePanelStep = 'select';
+    this.showSyncModePanel = true;
+  }
+
+  closeSyncModeDialog(): void {
+    this.showSyncModePanel = false;
+    this.syncModePanelStep = 'select';
+  }
+
+  requestSyncModeChange(): void {
+    const newMode = this.syncModePanelSelection;
+    if (newMode === this.syncMode) { this.closeSyncModeDialog(); return; }
+    if (newMode > this.syncMode) {
+      this.syncModePanelStep = 'confirm';
+    } else {
+      this._applySyncModeChange();
+    }
+  }
+
+  async _applySyncModeChange(): Promise<void> {
+    const newMode = this.syncModePanelSelection;
+    this.syncMode = newMode;
+    this.closeSyncModeDialog();
+
+    if (this.illustration?.id && newMode < 2) {
+      firstValueFrom(
+        this.illustrationService.updateIllustration({ ...this.illustration, syncMode: newMode })
+      ).catch(e => console.warn('[SyncMode] update failed', e));
+    }
+
+    this.saveNow();
+  }
+
+  private async _doFrogmarksRestore(file: File, fileUuid: string | null): Promise<void> {
+    try {
+      const sm = this.shapeManager as any;
+      this.animationService.beginBulkRestore();
+      await sm.unpackProject(file).finally(() => this.animationService.endBulkRestore());
+      if (fileUuid && fileUuid !== this.illustrationUid) {
+        sm.setCurrentDocId(this.illustrationUid, this.illustration?.name);
+        await sm.persist?.saveNow();
+      }
+      this.noCloudEmptyState = false;
+      this.animationService.refreshTimeline();
+      this.scene3dRefreshMeshes();
+      this._invalidateUploadedLayers();
+      this.notifyService.success('Project loaded successfully.');
+    } catch (e) {
+      console.error('[frogmarksLoad]', e);
+      this.notifyService.error('Could not load project. The file may be corrupted or from a newer version of Frogmarks.');
     }
   }
 }

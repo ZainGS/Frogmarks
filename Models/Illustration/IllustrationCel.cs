@@ -31,6 +31,7 @@ namespace Frogmarks.Models.Illustration
 
         [MaxLength(64)]
         public string? ContentHash { get; set; }
+        public long BlobSizeBytes { get; set; } = 0;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

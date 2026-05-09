@@ -2,7 +2,7 @@
      Animation Timeline — bottom panel
      ═══════════════════════════════════════════════════════════ -->
 
-<div class="timeline-panel" (click)="closeContextMenu()">
+<div class="timeline-panel" (click)="closeContextMenu(); closeEasingMenu()">
 
   <!-- ── Layer labels (left column) ──────────────────────── -->
   <div class="timeline-layers" #timelineLayers (wheel)="onLayersWheel($event)">
@@ -18,6 +18,21 @@
       <span class="layer-type-icon">{{ layer.animated ? '✏️' : '🔒' }}</span>
       <span class="layer-name">{{ layer.name }}</span>
     </div>
+    <!-- 3D Dope Sheet tracks — one block per mesh -->
+    <ng-container *ngFor="let entry of mesh3dAllTracks">
+      <div class="tl-3d-header-label" [title]="'3D keyframes: ' + entry.name"
+           (click)="toggleMesh3dCollapse(entry.meshId)" style="cursor:pointer">
+        <span class="layer-type-icon" style="font-size:9px">{{ isMesh3dCollapsed(entry.meshId) ? '▶' : '▼' }}</span>
+        <span class="layer-name">{{ entry.name || 'mesh' }}</span>
+      </div>
+      <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
+        <div *ngFor="let def of getTrackDefsForEntry(entry)" class="tl-3d-track-label"
+             [style.border-left-color]="def.color"
+             [title]="def.label + ' keyframe track'">
+          {{ def.label }}
+        </div>
+      </ng-container>
+    </ng-container>
   </div>
 
   <!-- ── Timeline grid (scrollable) ──────────────────────── -->
@@ -82,6 +97,36 @@
         </div>
       </ng-container>
     </div>
+
+    <!-- 3D Dope Sheet rows — one block per mesh -->
+    <ng-container *ngFor="let entry of mesh3dAllTracks">
+      <!-- Summary row (always visible): dot if any track has a keyframe at this frame -->
+      <div class="tl-3d-header-row" [style.width.px]="frameCount * frameWidth">
+        <div *ngFor="let f of frameNumbers"
+             class="tl-3d-header-cell"
+             [class.current]="f === currentFrame"
+             [style.width.px]="frameWidth"
+             (click)="onFrameClick(f)">
+          <span *ngIf="hasAnyKeyframeAt(entry.tracks, f, entry.isCamera)" class="kf-any">&#x25E6;</span>
+        </div>
+      </div>
+      <!-- Per-property track rows (hidden when mesh is collapsed) -->
+      <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
+        <div *ngFor="let def of getTrackDefsForEntry(entry)" class="tl-3d-track-row">
+          <div *ngFor="let f of frameNumbers"
+               class="tl-3d-cell"
+               [class.current]="f === currentFrame"
+               [style.width.px]="frameWidth"
+               (click)="onFrameClick(f)"
+               [title]="getTrackFrameSet(entry.tracks, def.key).has(f) ? def.label + ' keyframe at frame ' + f + ' — right-click to change easing' : ''">
+            <span *ngIf="getTrackFrameSet(entry.tracks, def.key).has(f)"
+                  class="kf-diamond"
+                  [style.color]="def.color"
+                  (contextmenu)="onKfDiamondContextMenu($event, entry.meshId, def.key, f, !!entry.isCamera)">&#x25C6;</span>
+          </div>
+        </div>
+      </ng-container>
+    </ng-container>
 
     <!-- Current frame indicator line -->
     <div class="tl-playhead"
@@ -293,6 +338,24 @@
     </ng-container>
   </div>
 
+  <!-- ── Keyframe easing picker ─────────────────────────── -->
+  <div *ngIf="showEasingMenu" class="ctx-menu"
+       [style.left.px]="contextMenuX"
+       [style.top]="contextMenuFlipUp ? 'auto' : contextMenuY + 'px'"
+       [style.bottom]="contextMenuFlipUp ? (windowHeight - contextMenuY) + 'px' : 'auto'"
+       (click)="$event.stopPropagation()">
+    <div class="ctx-item" style="opacity:.5; pointer-events:none; font-size:10px; padding:4px 14px;">
+      Easing — {{ kfContextTrackKey }} F{{ kfContextFrame }}
+    </div>
+    <div class="ctx-divider"></div>
+    <div *ngFor="let opt of easingOptions"
+         class="ctx-item"
+         [class.ctx-item-active]="kfContextCurrentEasing === opt.value"
+         (click)="setKfEasing(opt.value)">
+      {{ opt.icon }}&nbsp;&nbsp;{{ opt.label }}
+    </div>
+  </div>
+
   <!-- ── Duplicate cel prompt dialog ────────────────────── -->
   <div *ngIf="showDuplicatePrompt" class="floating-panel duplicate-panel">
     <div class="fp-header">
@@ -313,6 +376,11 @@
   </div>
 
   <!-- ── Export dialog ───────────────────────────────────── -->
-  <app-animation-export *ngIf="showExportDialog" (close)="closeExportDialog()"></app-animation-export>
+  <app-animation-export *ngIf="showExportDialog"
+    [shapeManager]="shapeManager"
+    [frameCount]="frameCount"
+    [fps]="fps"
+    (close)="closeExportDialog()">
+  </app-animation-export>
 
 </div>

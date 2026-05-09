@@ -16,6 +16,7 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { AppComponent } from './app.component';
 import { ApiAuthorizationModule } from '../../src/api-authorization/api-authorization.module';
@@ -42,6 +43,9 @@ import { RasterLayersComponent } from './boards/components/raster-layers/raster-
 import { SelectionToolbarComponent } from './boards/components/selection-toolbar/selection-toolbar.component';
 import { AnimationTimelineComponent } from './illustrate/components/animation-timeline/animation-timeline.component';
 import { AnimationExportComponent } from './illustrate/components/animation-export/animation-export.component';
+import { NewIllustrationDialogComponent } from './shared/components/new-illustration-dialog/new-illustration-dialog.component';
+import { ClothBuilderComponent } from './illustrate/components/cloth-builder/cloth-builder.component';
+import { ParticleEmittersComponent } from './illustrate/components/particle-emitters/particle-emitters.component';
 
 // Define MSAL configuration
 /*
@@ -77,7 +81,10 @@ export function MSALInstanceFactory(): PublicClientApplication {
     RasterLayersComponent,
     SelectionToolbarComponent,
     AnimationTimelineComponent,
-    AnimationExportComponent
+    AnimationExportComponent,
+    NewIllustrationDialogComponent,
+    ClothBuilderComponent,
+    ParticleEmittersComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
@@ -99,6 +106,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     FormsModule,
     ReactiveFormsModule,
     MatAutocompleteModule,
+    MatTooltipModule,
     ApiAuthorizationModule,
     RouterModule.forRoot([
       { path: '', component: HomeComponent, pathMatch: 'full' },
@@ -106,7 +114,9 @@ export function MSALInstanceFactory(): PublicClientApplication {
       { path: 'signin', component: SignInComponent},
       { path: 'dashboard', component: DashboardComponent},
       { path: 'board/:id', component: BoardComponent},
+      { path: 'illustration/local/:id', component: IllustrationComponent, data: { local: true } },
       { path: 'illustration/:id', component: IllustrationComponent},
+      { path: 'view/:id', component: IllustrationComponent, data: { viewer: true } },
     ])
   ],
   exports: [RouterModule],

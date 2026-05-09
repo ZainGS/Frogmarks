@@ -23,4 +23,13 @@ export class Illustration {
   sceneGraphData?: string;
   isArchived?: boolean;
   type?: string = 'illustration';
+  documentAspect?: number;  // w/h ratio for bounded illustrations; null = infinite canvas
+  dateModified?: string;
+  syncMode?: number;  // 0=CloudSync, 1=NoCloud, 2=LocalOnly
+
+  // Publishing
+  isPublic?: boolean;
+  publishedTitle?: string;
+  publishedAt?: string;
+  publishedVersion?: number;
 }

@@ -235,6 +235,99 @@ $play-range: rgba($accent, 0.08);
   box-shadow: 0 0 4px rgba($accent, 0.5);
 }
 
+/* ── 3D Dope Sheet rows ───────────────────────────────────────── */
+
+.tl-3d-header-label {
+  height: 22px;
+  min-height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  background: rgba(#4a3060, 0.45);
+  border-top: 1px solid #5a4080;
+  border-bottom: 1px dashed #5a4080;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ce93d8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-3d-track-label {
+  height: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 12px;
+  border-left: 3px solid currentColor;
+  background: rgba(#1a1a2e, 0.6);
+  font-size: 9px;
+  color: #aaa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Grid-side 3D rows
+.tl-3d-header-row {
+  display: flex;
+  background: rgba(#4a3060, 0.35);
+  border-top: 1px solid #5a4080;
+  border-bottom: 1px dashed #5a4080;
+  position: relative;
+}
+
+.tl-3d-header-cell {
+  height: 22px;
+  min-height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(#5a4080, 0.4);
+  cursor: pointer;
+
+  &.current { background: $current-frame; }
+
+  .kf-any {
+    font-size: 8px;
+    color: #ce93d8;
+    line-height: 1;
+  }
+}
+
+.tl-3d-track-row {
+  display: flex;
+  position: relative;
+  background: rgba(#1a1a2e, 0.5);
+}
+
+.tl-3d-cell {
+  height: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba($border, 0.3);
+  cursor: pointer;
+
+  &.current { background: $current-frame; }
+
+  .kf-diamond {
+    font-size: 9px;
+    line-height: 1;
+    display: block;
+    transition: transform 0.1s;
+  }
+
+  &:hover .kf-diamond { transform: scale(1.4); }
+}
+
 /* ── Transport bar (bottom) ──────────────────────────────────── */
 
 .transport-bar {
@@ -509,6 +602,11 @@ $play-range: rgba($accent, 0.08);
   transition: background 0.1s;
 
   &:hover { background: rgba($accent, 0.2); }
+
+  &.ctx-item-active {
+    color: $accent;
+    font-weight: 600;
+  }
 }
 
 .ctx-divider {

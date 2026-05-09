@@ -138,6 +138,9 @@ namespace Frogmarks.Migrations
                     b.Property<string>("AzureUserIdentifier")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<long>("BlobStorageBytes")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ConcurrencyStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -150,6 +153,9 @@ namespace Frogmarks.Migrations
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsPro")
+                        .HasColumnType("bit");
 
                     b.Property<string>("LastName")
                         .IsRequired()
@@ -650,6 +656,9 @@ namespace Frogmarks.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ExtendedStateJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Fps")
                         .HasColumnType("int");
 
@@ -663,6 +672,9 @@ namespace Frogmarks.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsCustomThumbnail")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
                     b.Property<string>("LoopMode")
@@ -695,7 +707,28 @@ namespace Frogmarks.Migrations
                     b.Property<long?>("ProjectId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PublishedBundleBlobName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublishedThumbnailBlobName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublishedTitle")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PublishedVersion")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SavedAt")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("SceneVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SyncMode")
                         .HasColumnType("int");
 
                     b.Property<long?>("TeamId")
@@ -748,6 +781,9 @@ namespace Frogmarks.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BlobSizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("CelId")
                         .IsRequired()
@@ -842,11 +878,20 @@ namespace Frogmarks.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<long>("BlobSizeBytes")
+                        .HasColumnType("bigint");
+
                     b.Property<bool>("Clipped")
                         .HasColumnType("bit");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DitherConfigJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FrameLinkAnimationJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("IllustrationId")
                         .HasColumnType("bigint");

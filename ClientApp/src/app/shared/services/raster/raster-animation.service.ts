@@ -98,6 +98,15 @@ export class RasterAnimationService {
   playRangeEnd$: Observable<number> = this._playRangeEnd$.asObservable();
 
   private _unsubscribeEvent: (() => void) | null = null;
+  private _suppressRefresh = false;
+
+  /** Suppress refreshTimeline reactions to Salsa events. Call beginBulkRestore() before
+   *  loadDocument() and endBulkRestore() after — events fired during restore are batched
+   *  into a single refreshTimeline() call on end. */
+  beginBulkRestore(): void { this._suppressRefresh = true; }
+  /** Re-enable refreshTimeline reactions. The caller is responsible for calling
+   *  refreshTimeline() (or refreshRasterLayers()) once after this returns. */
+  endBulkRestore(): void { this._suppressRefresh = false; }
 
   private get sm(): ShapeManager | null {
     return ShapeManager.getInstance?.() ?? null;
@@ -342,9 +351,12 @@ export class RasterAnimationService {
    * Our CelInfo:    { id, frame, duration, isKey, celType }
    */
   refreshTimeline(): void {
+    if (this._suppressRefresh) return;
     const sm = this.sm;
     if (!sm) { console.warn('[AnimService] refreshTimeline: no ShapeManager instance'); return; }
-    const layers: any[] = sm.getRasterLayers?.() ?? [];
+    const layers: any[] = (sm.getRasterLayers?.() ?? []).filter(
+      (l: any) => l.type !== '3d-scene' && l.type !== '3d-mesh' && l.type !== '3DMesh' && l.name !== 'Mesh3D'
+    );
     console.log(`[AnimService] refreshTimeline: ${layers.length} layers`);
     const timelineLayers: TimelineLayerInfo[] = layers.map((l: any) => {
       const animated = sm.isLayerAnimated?.(l.id) ?? false;

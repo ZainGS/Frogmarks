@@ -292,7 +292,13 @@ export class RasterBrushService {
   refreshLayers(): void {
     // Use microtask delay so the engine has time to process GPU changes
     Promise.resolve().then(() => {
-      const layers: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+      const raw: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+      // Normalize: ensure type defaults to 'layer', map engine '3d-divider' → '3d-scene'
+      const layers = raw.map(l => ({
+        ...l,
+        type: (l.type === '3d-divider' as any ? '3d-scene' : l.type ?? 'layer') as any,
+        parentId: l.parentId ?? null,
+      }));
       this._layers$.next(layers);
 
       // Auto-select a layer if none is selected or the active one was removed
@@ -310,11 +316,17 @@ export class RasterBrushService {
     this.sm?.addRasterLayer(name);
     // refreshLayers is async (microtask) — select the new layer once it arrives
     Promise.resolve().then(() => {
-      const layers: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+      const raw: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+      const layers = raw.map(l => ({
+        ...l,
+        type: (l.type === '3d-divider' as any ? '3d-scene' : l.type ?? 'layer') as any,
+        parentId: l.parentId ?? null,
+      }));
       this._layers$.next(layers);
       if (layers.length > 0) {
-        // New layer is appended at the end
-        this.selectLayer(layers[layers.length - 1].id);
+        // New layer is appended at the end — find last actual layer (not folder/divider)
+        const lastLayer = [...layers].reverse().find(l => l.type === 'layer') ?? layers[layers.length - 1];
+        this.selectLayer(lastLayer.id);
       }
     });
   }
@@ -347,6 +359,11 @@ export class RasterBrushService {
     this.refreshLayers();
   }
 
+  setLayerName(id: string, name: string): void {
+    this.sm?.setNodeName?.(id, name);
+    this.refreshLayers();
+  }
+
   // ── Layer compositor properties (Phase 2) ───────────────────
 
   setLayerBlendMode(id: string, mode: LayerBlendMode): void {
@@ -372,6 +389,41 @@ export class RasterBrushService {
   reorderLayers(orderedIds: string[]): void {
     this.sm?.reorderRasterLayers(orderedIds);
     this.refreshLayers();
+  }
+
+  // ── Layer folders & 3D scene ────────────────────────────────
+
+  addFolder(name?: string): void {
+    (this.sm as any)?.addRasterFolder?.(name ?? 'Folder');
+    this.refreshLayers();
+  }
+
+  setFolderCollapsed(id: string, collapsed: boolean): void {
+    (this.sm as any)?.setRasterFolderCollapsed?.(id, collapsed);
+    this.refreshLayers();
+  }
+
+  setLayerParent(layerId: string, parentId: string | null): void {
+    (this.sm as any)?.setRasterLayerParent?.(layerId, parentId);
+    this.refreshLayers();
+  }
+
+  add3DScene(name?: string): void {
+    (this.sm as any)?.addRaster3DScene?.(name) ?? (this.sm as any)?.addRaster3DDivider?.(name);
+    this.refreshLayers();
+  }
+
+  remove3DScene(): void {
+    (this.sm as any)?.removeRaster3DScene?.() ?? (this.sm as any)?.removeRaster3DDivider?.();
+    this.refreshLayers();
+  }
+
+  has3DScene(): boolean {
+    const sm: any = this.sm as any;
+    if (typeof sm?.hasRaster3DScene === 'function') {
+      return !!sm.hasRaster3DScene();
+    }
+    return !!sm?.hasRaster3DDivider?.();
   }
 
   // ── Undo / Redo ─────────────────────────────────────────────

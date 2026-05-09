@@ -186,5 +186,94 @@ namespace Frogmarks.Services
             }
         }
 
+        public async Task<ResultModel<string>> SendReauthCode(string email)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(email))
+                    return new ResultModel<string>(ResultType.Failure, "Email is required.");
+
+                var code = Random.Shared.Next(100_000, 1_000_000).ToString();
+                var stored = $"reauth:{code}";
+
+                var existing = await _context.EmailTokens.FirstOrDefaultAsync(t => t.Email!.ToLower() == email.ToLower());
+                if (existing != null)
+                {
+                    existing.Token = stored;
+                    existing.Expiration = DateTime.UtcNow.AddMinutes(15);
+                }
+                else
+                {
+                    _context.EmailTokens.Add(new EmailToken { Email = email, Token = stored, Expiration = DateTime.UtcNow.AddMinutes(15) });
+                }
+                await _context.SaveChangesAsync();
+
+                var emailClient = new EmailClient(_acsSettings.ConnectionString);
+                var content = new EmailContent("Your Frogmarks login code")
+                {
+                    PlainText = $"Your Frogmarks login code is: {code}\n\nThis code expires in 15 minutes. Do not share it with anyone.",
+                    Html = $@"<p style=""font-family:sans-serif"">Your Frogmarks login code is:</p>
+                              <p style=""font-family:monospace;font-size:32px;font-weight:bold;letter-spacing:6px"">{code}</p>
+                              <p style=""font-family:sans-serif;color:#888"">This code expires in 15 minutes. Do not share it with anyone.</p>"
+                };
+                var message = new EmailMessage("donotreply@frogmarks.com", email, content);
+                await emailClient.SendAsync(WaitUntil.Started, message);
+
+                return new ResultModel<string>(ResultType.Success, resultObject: email);
+            }
+            catch (RequestFailedException)
+            {
+                return new ResultModel<string>(ResultType.Failure, "Failed to send email.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("SendReauthCode error: {Message}", ex.Message);
+                return new ResultModel<string>(ResultType.Failure, "An error occurred.");
+            }
+        }
+
+        public async Task<ResultModel<string>> VerifyReauthCode(string email, string code)
+        {
+            try
+            {
+                var stored = $"reauth:{code}";
+                var emailToken = await _context.EmailTokens.SingleOrDefaultAsync(t =>
+                    t.Email!.ToLower() == email.ToLower() &&
+                    t.Token == stored &&
+                    t.Expiration > DateTime.UtcNow);
+
+                if (emailToken == null)
+                    return new ResultModel<string>(ResultType.Failure, "Invalid or expired code.");
+
+                var user = await _userManager.FindByEmailAsync(email);
+                if (user == null)
+                    return new ResultModel<string>(ResultType.NotFound, "Account not found.");
+
+                // Invalidate the used code immediately
+                _context.EmailTokens.Remove(emailToken);
+
+                var accessToken = _tokenGenerator.GenerateAuthToken(user.Id, user.UserName, DateTime.UtcNow.AddMinutes(15));
+                var refreshToken = _tokenGenerator.GenerateRefreshToken();
+
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                await _userManager.UpdateAsync(user);
+                await _context.SaveChangesAsync();
+
+                var accessOpts = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = DateTime.UtcNow.AddMinutes(15) };
+                var refreshOpts = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = DateTime.UtcNow.AddDays(7) };
+                _httpContextAccessor.HttpContext!.Response.Cookies.Append("accessToken", accessToken, accessOpts);
+                _httpContextAccessor.HttpContext!.Response.Cookies.Append("refreshToken", refreshToken, refreshOpts);
+
+                _logger.LogInformation("Reauth code verified for {Email}", email);
+                return new ResultModel<string>(ResultType.Success, resultObject: user.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("VerifyReauthCode error: {Message}", ex.Message);
+                return new ResultModel<string>(ResultType.Failure, "An error occurred.");
+            }
+        }
+
     }
 }

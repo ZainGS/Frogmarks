@@ -18,5 +18,18 @@ namespace Frogmarks.Models
         public virtual List<TeamUser> TeamUserScopes { get; set; } = new List<TeamUser>();
         public string? RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
+
+        public bool IsPro { get; set; } = false;
+        public long BlobStorageBytes { get; set; } = 0;
+
+        public long StorageQuotaBytes => IsPro
+            ? StorageQuotas.ProBytes
+            : StorageQuotas.FreeBytes;
+    }
+
+    public static class StorageQuotas
+    {
+        public const long FreeBytes = 1L * 1024 * 1024 * 1024;  // 1 GB
+        public const long ProBytes  = 20L * 1024 * 1024 * 1024; // 20 GB
     }
 }

@@ -1,24 +1,28 @@
 import { Injectable } from '@angular/core';
 import { HttpEvent, HttpInterceptor, HttpHandler, HttpRequest, HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
 import { Observable, throwError, BehaviorSubject } from 'rxjs';
-import { catchError, switchMap, filter, take } from 'rxjs/operators';
+import { catchError, switchMap, take, skip } from 'rxjs/operators';
 import { AuthService } from '../services/auth/auth.service';
+import { SyncStatusService } from '../services/auth/sync-status.service';
+
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthInterceptor implements HttpInterceptor {
   private isRefreshing = false;
-  private refreshTokenSubject: BehaviorSubject<any> = new BehaviorSubject<any>(null);
+  private refreshTokenSubject: BehaviorSubject<string | null> = new BehaviorSubject<string | null>(null);
 
-  constructor(private authService: AuthService, private router: Router) { }
+  constructor(
+    private authService: AuthService,
+    private syncStatusService: SyncStatusService,
+  ) { }
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
 
     console.log(req);
 
-    // Skip token handling for certain endpoints
+    // Skip token handling for auth/email endpoints
     if (req.url.includes("signin") || req.url.includes("email")) {
       return next.handle(req);
     }
@@ -28,7 +32,8 @@ export class AuthInterceptor implements HttpInterceptor {
         if (error.status === 401 && !req.url.includes('auth/refresh-token')) {
           return this.handle401Error(req, next);
         } else if (error.status === 403) {
-          this.router.navigateByUrl('/login');
+          // 403 means authenticated but forbidden — always show reauth
+          this.authService.triggerSessionExpired();
         }
         return throwError(error);
       })
@@ -42,23 +47,29 @@ export class AuthInterceptor implements HttpInterceptor {
 
       return this.authService.refreshAuthToken().pipe(
         switchMap((response: any) => {
-          console.log(response);
+          // console.log(response);
           this.isRefreshing = false;
           this.refreshTokenSubject.next(response.body.accessToken);
           return next.handle(this.addTokenHeader(request, response.body.accessToken));
         }),
         catchError((err) => {
-          console.log(err);
           this.isRefreshing = false;
-          this.router.navigateByUrl('/login');
+          // Unblock all queued requests so they fail cleanly (not hang forever)
+          this.refreshTokenSubject.next(null);
+          // Silently drop to local mode — user can sign in via the header button
+          this.syncStatusService.pause();
           return throwError(err);
         })
       );
     } else {
+      // Skip the current null, then take the next emission (token or null=failed)
       return this.refreshTokenSubject.pipe(
-        filter(token => token != null),
+        skip(1),
         take(1),
-        switchMap(jwt => next.handle(this.addTokenHeader(request, jwt)))
+        switchMap(jwt => {
+          if (!jwt) return throwError(() => new Error('Session expired'));
+          return next.handle(this.addTokenHeader(request, jwt));
+        })
       );
     }
   }

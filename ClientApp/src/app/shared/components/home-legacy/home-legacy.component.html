@@ -1,0 +1,77 @@
+<div class="fm-home">
+
+  <!-- ── Hero ─────────────────────────────────────────────────── -->
+  <section class="fm-hero">
+    <div class="fm-vignette"></div>
+    <div class="fm-hero-inner">
+      <span class="fm-badge">Beta — Open to early creators</span>
+      <h1 class="fm-headline">
+        Render graphics on the web.<br/>
+      </h1>
+      <p class="fm-sub">
+        Frogmarks is a WebGPU graphics engine that runs entirely in your browser.
+        No installs, no paywalls, no subscriptions... just build.
+      </p>
+      <form [formGroup]="emailForm" (ngSubmit)="onSubmit()" class="fm-form">
+        <input
+          type="email"
+          formControlName="email"
+          placeholder="Enter your email"
+          class="fm-input"
+        />
+        <button type="submit" [disabled]="emailForm.invalid" class="fm-cta">
+          Get early access
+        </button>
+      </form>
+      <span class="fm-hint">Your sign-in link lands straight in your inbox — no password needed!</span>
+    </div>
+  </section>
+
+  <!-- ── Feature blocks ───────────────────────────────────────── -->
+  <section class="fm-blocks" id="features">
+
+    <div class="fm-block fm-block--gpu">
+      <div class="fm-block-grid-bg"></div>
+      <div class="fm-block-inner">
+        <div class="fm-block-tag">Renderer</div>
+        <div class="fm-block-title">WebGPU<br/>under the hood.</div>
+        <div class="fm-block-body">Every brush stroke runs on raw GPU compute — no canvas2D fallbacks, no compositing hacks. Near-native throughput, directly in your browser tab.</div>
+      </div>
+    </div>
+
+    <div class="fm-block fm-block--opfs">
+      <div class="fm-block-grid-bg"></div>
+      <div class="fm-block-inner">
+        <div class="fm-block-tag">Storage</div>
+        <div class="fm-block-title">Your files<br/>stay on your machine.</div>
+        <div class="fm-block-body">Projects live in the browser's Origin Private File System — fast local reads, no cloud upload required, no file size anxiety.</div>
+      </div>
+    </div>
+
+    <div class="fm-block fm-block--html">
+      <div class="fm-block-grid-bg"></div>
+      <div class="fm-block-inner">
+        <div class="fm-block-tag">Compositing</div>
+        <div class="fm-block-title">HTML<br/>on the canvas.</div>
+        <div class="fm-block-body">Drop real DOM nodes — text, video, iframes — directly into your illustration layer. No flattening. No baking. It just renders.</div>
+      </div>
+    </div>
+
+    <div class="fm-block fm-block--collab">
+      <div class="fm-block-grid-bg"></div>
+      <div class="fm-block-inner">
+        <div class="fm-block-tag">Multiplayer</div>
+        <div class="fm-block-title">Real-time<br/>collaboration.</div>
+        <div class="fm-block-body">See teammates' cursors and strokes the moment they happen. Built on the Salsa scene graph — vector, raster, and 3D in one unified doc.</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Footer strip ──────────────────────────────────────────── -->
+  <footer class="fm-footer">
+    <span class="fm-footer-logo">FROGMARKS</span>
+    <span class="fm-footer-copy">© 2025 · Built on WebGPU · Powered by Salsa</span>
+  </footer>
+
+</div>

@@ -13,7 +13,6 @@ export class AuthorizeInterceptor implements HttpInterceptor {
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     
     // Check if the request URL is for the SendSignInEmail endpoint
-    console.log(req.url);
     if (req.url.includes("signin") || req.url.includes("email") || req.url.includes("check-your-email")
       || req.url.includes("refresh-token") ) {
       return next.handle(req);

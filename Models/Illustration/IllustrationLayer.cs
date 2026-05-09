@@ -38,6 +38,10 @@ namespace Frogmarks.Models.Illustration
         [MaxLength(10)]
         public string? PixelFormat { get; set; } = "webp";
 
+        public string? DitherConfigJson { get; set; }      // JSON blob
+        public string? FrameLinkAnimationJson { get; set; } // JSON blob
+        public long BlobSizeBytes { get; set; } = 0;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

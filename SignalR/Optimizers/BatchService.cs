@@ -11,22 +11,26 @@ namespace Frogmarks.SignalR.Optimizers
             _boardHub = boardHub;
         }
 
-        Dictionary<BatchTypes, HashSet<long>> CurrentBatch { get; set; }
+        Dictionary<BatchTypes, HashSet<long>> CurrentBatch { get; set; } = new();
 
         public async Task Batch(BatchTypes batchType, long batchItemId)
         {
-            if(CurrentBatch.Count() == 0)
+            if (CurrentBatch.Count == 0)
             {
                 await StartBatchBuffer(batchType, batchItemId);
             }
             else
             {
+                if (!CurrentBatch.ContainsKey(batchType))
+                    CurrentBatch[batchType] = new HashSet<long>();
                 CurrentBatch[batchType].Add(batchItemId);
             }
         }
 
         public async Task StartBatchBuffer(BatchTypes batchType, long firstItemToBatch)
         {
+            if (!CurrentBatch.ContainsKey(batchType))
+                CurrentBatch[batchType] = new HashSet<long>();
             CurrentBatch[batchType].Add(firstItemToBatch);
 
             // Collect updates for 3 seconds before SignalR notification

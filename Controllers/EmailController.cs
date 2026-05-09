@@ -1,5 +1,6 @@
 ﻿using Frogmarks.Services;
 using Frogmarks.Services.Interfaces;
+using Frogmarks.Utilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -56,5 +57,47 @@ namespace Frogmarks.Controllers
                 return HandleErrorActionResult(ex);
             }
         }
+
+        // POST api/email/send-reauth-code
+        [HttpPost("send-reauth-code")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SendReauthCode([FromBody] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return BadRequest("Email is required.");
+            try
+            {
+                var result = await _emailService.SendReauthCode(email);
+                if (result.ResultType != ResultType.Success)
+                    return BadRequest(result.ExtendedMessage);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        // POST api/email/verify-reauth-code
+        [HttpPost("verify-reauth-code")]
+        [AllowAnonymous]
+        public async Task<IActionResult> VerifyReauthCode([FromBody] VerifyReauthCodeRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Email) || string.IsNullOrWhiteSpace(request.Code))
+                return BadRequest("Email and code are required.");
+            try
+            {
+                var result = await _emailService.VerifyReauthCode(request.Email, request.Code);
+                if (result.ResultType != ResultType.Success)
+                    return BadRequest(result.ExtendedMessage);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
     }
+
+    public record VerifyReauthCodeRequest(string Email, string Code);
 }

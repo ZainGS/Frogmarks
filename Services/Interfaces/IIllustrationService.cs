@@ -28,9 +28,23 @@ namespace Frogmarks.Services
         // V2 state endpoints
         Task<ResultModel<IllustrationStateDto>> SaveIllustrationState(long illustrationId, IllustrationStateDto stateDto);
         Task<ResultModel<IllustrationStateDto>> LoadIllustrationState(long illustrationId);
+        Task<long?> GetStateSavedAt(long illustrationId);
         Task<ResultModel<string>> UploadCelPixelData(long illustrationId, string celId, IFormFile pixelData, int? width, int? height, string? format);
         Task<ResultModel<string>> UploadLayerPixelData(long illustrationId, string layerId, IFormFile pixelData, int? width, int? height, string? format);
         Task<ResultModel<string>> DeleteCel(long illustrationId, string celId);
         Task<ResultModel<Dictionary<string, CelStatusItemDto>>> GetCelStatus(long illustrationId, List<string> celIds);
+
+        // Per-mesh + texture-library binary blob endpoints (v3 save path)
+        Task<ResultModel<string>> UploadMeshBlob(long illustrationId, string meshId, IFormFile meshData);
+        Task<ResultModel<string>> UploadTextureLibraryBlob(long illustrationId, IFormFile texLibData);
+        Task<ResultModel<Dictionary<string, string>>> GetMeshReadUrls(long illustrationId, List<string> meshIds);
+
+        // Publishing
+        Task<ResultModel<IllustrationDto>> PublishIllustration(long illustrationId, IFormFile bundle, string? publishedTitle);
+        Task<ResultModel<string>> UnpublishIllustration(long illustrationId);
+        Task<ResultModel<IllustrationViewDto>> GetPublicView(Guid uid);
+
+        // Storage quota
+        Task<ResultModel<StorageQuotaDto>> GetStorageQuota();
     }
 }

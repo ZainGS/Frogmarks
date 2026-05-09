@@ -1,0 +1,533 @@
+$accent: #9B59B6;
+$bg:     #1e1e1e;
+$border: rgba(255,255,255,0.1);
+$text:   rgba(255,255,255,0.82);
+$muted:  rgba(255,255,255,0.45);
+
+// ── Emitter list ─────────────────────────────────────────────���───
+
+.pe-list-section {
+  padding: 4px 0 6px;
+}
+
+.pe-emitter-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 2px;
+  border-radius: 3px;
+
+  &:hover { background: rgba(255,255,255,0.04); }
+}
+
+.pe-vis-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.7; }
+}
+
+.pe-name {
+  flex: 1;
+  font-size: 11px;
+  color: $text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.pe-name-input {
+  flex: 1;
+  font-size: 11px;
+  background: #333;
+  border: 1px solid $accent;
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  min-width: 0;
+}
+
+.pe-edit-btn,
+.pe-del-btn {
+  background: none;
+  border: none;
+  color: $muted;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 1px 4px;
+  line-height: 1;
+  border-radius: 3px;
+
+  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+}
+
+.pe-del-btn:hover { color: #f77; }
+
+.pe-empty {
+  font-size: 10px;
+  color: $muted;
+  padding: 4px 2px;
+}
+
+// ── Add button / preset picker ───────────────────────────────────
+
+.pe-add-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+.pe-add-btn {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+
+  &:hover { background: #333; }
+}
+
+.pe-preset-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #252525;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.pe-preset-title {
+  font-size: 10px;
+  color: $muted;
+  margin-bottom: 6px;
+}
+
+.pe-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.pe-preset-btn {
+  background: #333;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+
+  &:hover { background: rgba($accent, 0.3); border-color: $accent; color: #fff; }
+}
+
+.pe-preset-custom {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+// ── Bloom ────────────────────────────────────────────────────────
+
+.pe-bloom-section {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid $border;
+}
+
+.pe-bloom-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+
+  label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #bbb;
+  }
+
+  input[type="checkbox"] {
+    accent-color: $accent;
+  }
+}
+
+// ── Shared form primitives ────────────────────────────────��──────
+
+.pe-label {
+  font-size: 10px;
+  color: $muted;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.pe-val {
+  font-size: 9px;
+  color: $muted;
+  min-width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.pe-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+
+  input[type="range"] {
+    flex: 1;
+    accent-color: $accent;
+    height: 14px;
+  }
+}
+
+.pe-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+
+  label { font-size: 10px; color: $muted; }
+  input[type="checkbox"] { accent-color: $accent; }
+}
+
+.pe-hint {
+  font-size: 9px;
+  color: rgba(255,255,255,0.3);
+  margin-bottom: 5px;
+}
+
+.pe-warn {
+  font-size: 9px;
+  color: #f0a040;
+  margin-bottom: 5px;
+}
+
+.pe-num {
+  width: 52px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 10px;
+  text-align: right;
+  -moz-appearance: textfield;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button { opacity: 0; }
+}
+
+.pe-num-sm {
+  @extend .pe-num;
+  width: 44px;
+}
+
+.pe-xyz-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: $muted;
+    flex: 1;
+
+    input { flex: 1; min-width: 0; }
+  }
+}
+
+// ── Edit overlay ────────────────────────────────────────────���────
+
+.pe-edit-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  background: $bg;
+  border-left: 1px solid $border;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 10052;
+  font-size: 12px;
+  color: $text;
+}
+
+.pe-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+}
+
+.pe-edit-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #eee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe-close-btn {
+  background: none;
+  border: none;
+  color: $muted;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+
+  &:hover { color: #fff; }
+}
+
+.pe-edit-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+}
+
+// ── Sections ─────────────────────────────────────────────────────
+
+.pe-section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+
+  &:last-child { border-bottom: none; }
+}
+
+.pe-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #bbb;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pe-section-subtitle {
+  font-size: 10px;
+  color: $muted;
+  margin: 6px 0 4px;
+}
+
+// ── Direction preset chips ───────────────────────────────────────
+
+.pe-dir-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.pe-chip {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #aaa;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:hover { background: rgba($accent, 0.25); border-color: $accent; color: #ddd; }
+}
+
+// ── Color section ────────────────────────────────────────────────
+
+.pe-color-row {
+  display: flex;
+  gap: 10px;
+}
+
+.pe-color-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pe-color-label {
+  font-size: 10px;
+  color: $muted;
+}
+
+.pe-color-block input[type="color"] {
+  width: 100%;
+  height: 28px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 1px;
+  background: #2a2a2a;
+  cursor: pointer;
+}
+
+.pe-alpha-row {
+  margin-bottom: 0;
+}
+
+// ── Details collapsible ──────────────────────────────────────────
+
+.pe-details {
+  margin-top: 6px;
+
+  summary {
+    font-size: 10px;
+    color: $muted;
+    cursor: pointer;
+    padding: 2px 0;
+    user-select: none;
+
+    &:hover { color: #ccc; }
+  }
+
+  > :not(summary) {
+    margin-top: 4px;
+  }
+}
+
+// ── Flipbook ─────────────────────────────────────────────────────
+
+.pe-flipbook-frames {
+  margin-bottom: 6px;
+}
+
+.pe-frame-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  padding: 2px 0;
+}
+
+.pe-frame-label {
+  font-size: 10px;
+  color: $muted;
+  min-width: 44px;
+  flex-shrink: 0;
+}
+
+.pe-frame-id {
+  flex: 1;
+  font-size: 10px;
+  color: #ddd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe-add-frame-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pe-add-frame-input {
+  flex: 1;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 10px;
+
+  &::placeholder { color: rgba(255,255,255,0.2); }
+}
+
+.pe-add-frame-btn {
+  background: #333;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:hover { background: #444; }
+}
+
+// ── Action bar ───────────────────────────────────────────────────
+
+.pe-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid $border;
+  flex-shrink: 0;
+}
+
+.pe-action-btn {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { background: #3a3a3a; color: #fff; }
+}
+
+.pe-action-danger {
+  color: #f77;
+  border-color: #844;
+  margin-left: auto;
+
+  &:hover { background: rgba(255,100,100,0.15); }
+}
+
+.pe-reset-wrap {
+  position: relative;
+}
+
+.pe-reset-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: #252525;
+  border: 1px solid #555;
+  border-radius: 5px;
+  overflow: hidden;
+  z-index: 10;
+  min-width: 80px;
+}
+
+.pe-reset-item {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  text-transform: capitalize;
+
+  &:hover { background: rgba($accent, 0.25); color: #fff; }
+}

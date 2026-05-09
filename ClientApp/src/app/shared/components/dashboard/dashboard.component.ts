@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, HostListener, OnInit, ViewChild, ViewChildren, ElementRef, QueryList } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, ChangeDetectorRef, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { Board } from '../../../boards/models/board.model';
 import { CdkDragDrop, CdkDragRelease, CdkDragStart, CdkDragMove, CdkDragEnd, moveItemInArray } from '@angular/cdk/drag-drop';
 import { BoardService } from '../../services/boards/board.service';
@@ -20,10 +20,24 @@ import { ConfigurationService } from 'app/shared/services/api/configuration.serv
 import { Illustration } from 'app/illustrate/models/illustration.model';
 import { IllustrationService } from 'app/shared/services/illustrate/illustration.service';
 import { FrogFileService } from 'app/shared/services/illustrate/frog-file.service';
-import { forkJoin, of } from 'rxjs';
+import { LocalIllustrationService, LocalIllustration } from 'app/shared/services/illustrate/local-illustration.service';
+import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import JSZip from 'jszip';
+import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-illustration-dialog.component';
 
 type DashboardItem = Board | Illustration;
+
+interface GridRowItem {
+  item: DashboardItem;
+  globalIndex: number;
+  aspect: number;
+}
+
+interface GridRow {
+  items: GridRowItem[];
+  height: number;
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -63,11 +77,19 @@ type DashboardItem = Board | Illustration;
   ]
 })
 
-export class DashboardComponent implements OnInit, AfterViewInit {
+export class DashboardComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
 
   editingId: string | null = null;
   nameControl = new FormControl<string>('');
   @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef<HTMLInputElement>>;
+  @ViewChild('gridContainer') gridContainerEl?: ElementRef;
+
+  // Justified grid (NSO-style variable aspect ratios)
+  gridRows: GridRow[] = [];
+  private _gridDirty = false;
+  private _resizeObserver?: ResizeObserver;
+  private readonly GRID_TARGET_ROW_HEIGHT = 200;
+  _exitingIds = new Set<string>(); // public so template can bind
   startInlineRename(item: DashboardItem) {
     this.closeContextMenu();
     this.editingId = item.uuid;
@@ -79,12 +101,14 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   commitInlineRename(item: DashboardItem) {
     const newName = (this.nameControl.value ?? '').trim();
     if (!newName || newName === item.name) { this.cancelInlineRename(); return; }
-    
+
     item.name = newName;
     this.editingId = null;
-    
+
     if (this.isBoard(item)) {
       this.boardService.renameBoard(item.id, newName).subscribe(() => {});
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.rename(item.uuid!, newName).catch(() => {});
     } else if (this.isIllustration(item)) {
       this.illustrationService.renameIllustration(item.id, newName).subscribe(() => {});
     }
@@ -121,7 +145,8 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   scrollListener!: () => void;
 
   // Application State
-  isLoading: boolean = true;
+  initialLoad: boolean = true;
+  isLoading: boolean = false;
   isLoadingItems: boolean = false;
   isDragging: boolean = false;
   draggedTemplateId: string | null = null;
@@ -167,37 +192,81 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   onArchiveItem(item: DashboardItem | null) {
     if (!item) return;
-    // Optimistic UI update
-    const id = item.id;        // or use const uuid = item.uuid;
-    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
-    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
-    this.boards            = this.boards.filter((b: any) => b.id !== id);
-
     this.closeContextMenu();
+    this._animateArchive(item);
+  }
 
-    // Persist
+  private _animateArchive(item: DashboardItem): void {
+    const id = item.uuid!;
+    const container = this.gridContainerEl?.nativeElement as HTMLElement | undefined;
+
+    // Fire-and-forget the backend call immediately
     item.isArchived = true;
     if (this.isBoard(item)) {
       this.boardService.updateBoard(item).subscribe(() => {});
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.archive(id, true).catch(() => {});
     } else if (this.isIllustration(item)) {
       this.illustrationService.updateIllustration(item).subscribe(() => {});
     }
+
+    // List view or grid not mounted — remove immediately
+    if (!container || this.viewType !== 'grid') {
+      this._removeFromLists(item);
+      return;
+    }
+
+    // 1. Apply exit class so the tile fades/scales out
+    this._exitingIds.add(id);
+    this.cdr.detectChanges();
+
+    // 2. After exit animation, snapshot survivors and FLIP them into new positions
+    setTimeout(() => {
+      const snapshots = new Map<string, DOMRect>();
+      container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+        const uuid = el.dataset['itemId']!;
+        if (uuid !== id) snapshots.set(uuid, el.getBoundingClientRect());
+      });
+
+      this._exitingIds.delete(id);
+      this._removeFromLists(item);
+      this._gridDirty = false; // prevent ngAfterViewChecked from re-running mid-FLIP
+      this.recomputeGrid();
+      this.cdr.detectChanges();
+
+      requestAnimationFrame(() => {
+        container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+          const uuid = el.dataset['itemId']!;
+          const before = snapshots.get(uuid);
+          if (!before) return;
+          const after = el.getBoundingClientRect();
+          const dx = before.left - after.left;
+          const dy = before.top - after.top;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+
+          // Snap back to old position instantly, then transition to natural position
+          el.style.transition = 'none';
+          el.style.transform = `translate(${dx}px, ${dy}px)`;
+
+          requestAnimationFrame(() => {
+            el.style.transition = 'transform 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            el.style.transform = '';
+            el.addEventListener('transitionend', () => { el.style.transition = ''; }, { once: true });
+          });
+        });
+      });
+    }, 180); // match CSS exit animation duration
   }
 
   onUnarchiveBoard(item: DashboardItem | null) {
     if (!item) return;
-    // Optimistic UI update
-    const id = item.id;        // or use const uuid = item.uuid;
-    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
-    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
-    this.boards            = this.boards.filter((b: any) => b.id !== id);
-
+    this._removeFromLists(item);
     this.closeContextMenu();
-
-    // Persist
     item.isArchived = false;
     if (this.isBoard(item)) {
       this.boardService.updateBoard(item).subscribe(() => {});
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.archive(item.uuid!, false).catch(() => {});
     } else if (this.isIllustration(item)) {
       this.illustrationService.updateIllustration(item).subscribe(() => {});
     }
@@ -205,20 +274,43 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   onDeleteBoard(item: DashboardItem | null) {
     if (!item) return;
-    // Optimistic UI update
-    const id = item.id;        // or use const uuid = item.uuid;
-    this.listItems         = this.listItems.filter((b: any) => b.id !== id);
-    this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== id);
-    this.boards            = this.boards.filter((b: any) => b.id !== id);
-
+    this._removeFromLists(item);
     this.closeContextMenu();
-
-    // Persist
     if (this.isBoard(item)) {
       this.boardService.deleteBoard(item.id).subscribe(() => {});
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.delete(item.uuid!).catch(() => {});
     } else if (this.isIllustration(item)) {
       this.illustrationService.deleteIllustration(item.id).subscribe(() => {});
     }
+  }
+
+  isLocalIllustration(item: DashboardItem): boolean {
+    return this.isIllustration(item) && (item as Illustration).syncMode === 2;
+  }
+
+  private _removeFromLists(item: DashboardItem): void {
+    // Local items have no numeric id — filter by uuid
+    const isLocal = this.isLocalIllustration(item);
+    if (isLocal) {
+      this.listItems         = this.listItems.filter((b: any) => b.uuid !== item.uuid);
+      this.filteredListItems = this.filteredListItems.filter((b: any) => b.uuid !== item.uuid);
+    } else {
+      this.listItems         = this.listItems.filter((b: any) => b.id !== item.id);
+      this.filteredListItems = this.filteredListItems.filter((b: any) => b.id !== item.id);
+      this.boards            = this.boards.filter((b: any) => b.id !== item.id);
+    }
+    this._gridDirty = true;
+  }
+
+  private _illustrationRoute(ill: Illustration): any[] {
+    return ill.syncMode === 2
+      ? ['/illustration/local', ill.uuid]
+      : ['/illustration', ill.uuid];
+  }
+
+  private _navigateToIllustration(ill: Illustration): void {
+    this.router.navigate(this._illustrationRoute(ill), { state: { illustration: ill } });
   }
 
   openItemInNewTab(item: DashboardItem | null) {
@@ -229,9 +321,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     if (this.isBoard(item)) {
       url = this.router.serializeUrl(this.router.createUrlTree(['/board', item.uuid]));
     } else if (this.isIllustration(item)) {
-      url = this.router.serializeUrl(this.router.createUrlTree(['/illustration', item.uuid]));
+      url = this.router.serializeUrl(this.router.createUrlTree(this._illustrationRoute(item as Illustration)));
     }
-    
+
     window.open(url, '_blank');
   } 
 
@@ -250,10 +342,18 @@ onDocClick() { this.closeContextMenu(); }
 onWinScroll() { this.closeContextMenu(); }
 
 @HostListener('window:resize')
-onWinResize() { this.closeContextMenu(); }
+onWinResize() { this.closeContextMenu(); this._gridDirty = true; }
 
 @HostListener('document:keydown.escape')
 onEsc() { this.closeContextMenu(); }
+
+@HostListener('document:keydown', ['$event'])
+onKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+    e.preventDefault();
+    this.showDevPanel = !this.showDevPanel;
+  }
+}
 
   // Dashboard Data
   uid: string = "";
@@ -289,6 +389,48 @@ onEsc() { this.closeContextMenu(); }
   fileTypeDropdownText: any = ["All files", "Design files", "Boards", "Slide decks"]
   viewType: string = "grid";
   teamInviteLink: string = 'https://www.frogmarks.com/team_invite/redeem/...';
+
+  // Grid item overlay (Explore-style)
+  overlayOpen = false;
+  overlayItem: DashboardItem | null = null;
+  overlayIndex: number | null = null;
+  menuStyle: { [key: string]: any } = {};
+  menuSide: 'left' | 'right' | null = null;
+  menuTailStyle: { [key: string]: any } | null = null;
+  pressedIndex: number | null = null;
+  releasedIndex: number | null = null;
+
+  // OPFS storage stats
+  opfsSupported = false;
+  opfsUsageMb = 0;
+  opfsQuotaGb = 0;
+  opfsUsagePct = 0;
+  isBackingUp = false;
+
+  // Cloud storage stats
+  cloudUsedMb = 0;
+  cloudQuotaGb = 0;
+  cloudUsagePct = 0;
+  cloudIsPro = false;
+
+  // Auth / login state
+  isLoggedIn = false;
+
+  // Post-login backup prompt
+  showBackupPrompt = false;
+  backupLocalItems: LocalIllustration[] = [];
+  backupProgress: { uuid: string; name: string; status: 'pending' | 'uploading' | 'done' | 'error' }[] = [];
+  isBackingUpLocal = false;
+
+  // Session-expired login modal
+  showLoginModal = false;
+  loginEmail = '';
+  loginCodeSent = false;
+  loginCode = '';
+  loginSending = false;
+  loginVerifying = false;
+  loginError = '';
+  private _sessionExpiredSub?: Subscription;
   searchControl = new FormControl('');
   isDarkMode: boolean = false;
 
@@ -336,14 +478,15 @@ onEsc() { this.closeContextMenu(); }
     private teamService: TeamService,
     private boardService: BoardService,
     private illustrationService: IllustrationService,
-    private authService: AuthService,    
+    private authService: AuthService,
     private notifyService: NotifyService,
     private namingHelper: NamingHelperService,
     private router: Router,
     private dialog: MatDialog,
     public themeService: ThemeService,
     public configurationService: ConfigurationService,
-    private frogFileService: FrogFileService) {
+    private frogFileService: FrogFileService,
+    private localIllustrationService: LocalIllustrationService) {
       this._boardService = boardService;
       this._illustrationService = illustrationService;
       this._teamService = teamService;
@@ -399,6 +542,7 @@ onEsc() { this.closeContextMenu(); }
 
   // Templating Containers, MouseEvent setup
   ngAfterViewInit(): void {
+    this._gridDirty = true;
     const templates = this.templates;
     const self = this; // reference to the component instance
 
@@ -503,66 +647,142 @@ onEsc() { this.closeContextMenu(); }
     return item.uuid;
   }
 
+  trackByRowItem(_: number, ri: GridRowItem): string {
+    return ri.item.uuid ?? ri.globalIndex.toString();
+  }
+
+  // ── Justified grid ────────────────────────────────────────────
+
+  getItemAspect(item: DashboardItem): number {
+    if (this.isIllustration(item) && (item as Illustration).documentAspect) {
+      return (item as Illustration).documentAspect!;
+    }
+    return 16 / 10;
+  }
+
+  private recomputeGrid(): void {
+    const el = this.gridContainerEl?.nativeElement;
+    const containerWidth: number = el ? el.getBoundingClientRect().width : 0;
+    const items: DashboardItem[] = this.filteredListItems;
+
+    if (!containerWidth || !items.length) {
+      this.gridRows = [];
+      return;
+    }
+
+    const TARGET = this.GRID_TARGET_ROW_HEIGHT;
+    const rows: GridRow[] = [];
+    let rowItems: GridRowItem[] = [];
+    let rowAspectSum = 0;
+
+    items.forEach((item: DashboardItem, idx: number) => {
+      const aspect = this.getItemAspect(item);
+
+      if (rowItems.length > 0 && (rowAspectSum + aspect) * TARGET > containerWidth) {
+        rows.push({ items: rowItems, height: containerWidth / rowAspectSum });
+        rowItems = [];
+        rowAspectSum = 0;
+      }
+
+      rowItems.push({ item, globalIndex: idx, aspect });
+      rowAspectSum += aspect;
+    });
+
+    if (rowItems.length > 0) {
+      rows.push({ items: rowItems, height: Math.min(containerWidth / rowAspectSum, TARGET) });
+    }
+
+    this.gridRows = rows;
+  }
+
+  ngAfterViewChecked(): void {
+    if (this._gridDirty && this.gridContainerEl?.nativeElement?.clientWidth) {
+      this._gridDirty = false;
+
+      if (!this._resizeObserver) {
+        this._resizeObserver = new ResizeObserver(() => {
+          if (this.overlayOpen) return;
+          this.recomputeGrid();
+        });
+        this._resizeObserver.observe(this.gridContainerEl.nativeElement);
+      }
+
+      setTimeout(() => this.recomputeGrid(), 0);
+    }
+  }
+
   ngOnDestroy() {
     window.removeEventListener('scroll', this.scrollListener, true);
     window.removeEventListener('resize', this.onResize);
+    this._resizeObserver?.disconnect();
+    this._sessionExpiredSub?.unsubscribe();
   }
 
   private onScroll() {
-    if (this.autocompleteTrigger.panelOpen) {
+    if (this.autocompleteTrigger?.panelOpen) {
       this.autocompleteTrigger.closePanel();
     }
   }
 
   private resizeTimeout: any;
   ngOnInit(): void {
+    setTimeout(() => this.initialLoad = false, 1200);
 
     this.scrollListener = this.onScroll.bind(this);
     window.addEventListener('scroll', this.scrollListener, true); // 'true' for capturing phase
     window.addEventListener('resize', this.onResize);
 
-    // Grab teams for user by uid
-    this._authService.getUserId().subscribe(uid => {
-      this.uid = uid ?? '';
-      this._teamService.getTeamsByUserId(this.uid).subscribe((res: any) => {
-        this.teams = res.resultObject;
-        this.currentTeam = this.teams[0];
+    // 1. Load local items immediately — no auth needed
+    this._loadLocalItemsOnly();
 
-        if (!this.currentTeam?.id) {
-          // no teams — still stop the global loader
+    // 2. Try to load cloud items in parallel — fails gracefully if not logged in
+    // Verify the session is live against a protected endpoint before trusting the cached uid
+    this._authService.verifySession().pipe(
+      catchError(() => of(null))
+    ).subscribe(uid => {
+      if (!uid) {
+        this.isLoggedIn = false;
+        this.isLoading = false;
+        return;
+      }
+
+      this.uid = uid;
+      this.isLoggedIn = true;
+
+      this._teamService.getTeamsByUserId(this.uid).subscribe({
+        next: (res: any) => {
+          this.teams = res.resultObject;
+          this.currentTeam = this.teams[0];
+
+          if (!this.currentTeam?.id) {
+            this.isLoading = false;
+            return;
+          }
+
+          this.loadAllItems();
+        },
+        error: () => {
           this.isLoading = false;
-          return;
         }
-
-        // Fetch items for the user by current team
-        // this._boardService.getBoardsByTeamId(this.currentTeam.id!).subscribe((res: any) => {
-          
-        //   if (res && res.resultObject && Array.isArray(res.resultObject)) {
-        //     this.clearData();
-        //     (res.resultObject as Board[]).forEach(board => {
-        //       // Push board objects to lists
-        //       this.boards.push(board);
-        //       this.listItems.push(board);
-        //       if (board.isFavorite && board.uuid != undefined) {
-        //         this.favorites.add(board.uuid);
-        //       }
-        //     });
-        //   }
-        //   this.changeFileType(0);
-        //   this.isLoading = false;
-        // });
-        this.loadAllItems();
-
-        // ...
-
       });
-
     });
     
     // Sum design item count
     this.totalCreations = this.boards.length + this.designs.length + this.slides.length;
 
     this.themeService.toggleDarkMode(true);
+    this._loadOpfsStats();
+    this._loadCloudStorageQuota();
+
+    this._sessionExpiredSub = this._authService.sessionExpired$.subscribe(() => {
+      if (!this.showLoginModal) {
+        this.showLoginModal = true;
+        this.loginCodeSent = false;
+        this.loginEmail = '';
+        this.loginCode = '';
+        this.loginError = '';
+      }
+    });
   }
 
   // Replace default Templating Containers' icons OnDrag with numbered icons
@@ -766,16 +986,17 @@ onEsc() { this.closeContextMenu(); }
     this.filteredListItems = this.listItems;
     this.fileType = option;
     switch(option) {
-      case 0: // All files
+      case 0:
         this.filteredListItems = this.listItems;
         break;
-      case 1: // Boards
+      case 1:
         this.filteredListItems = this.listItems.filter((item: any) => this.isBoard(item));
         break;
-      case 2: // Illustrations
+      case 2:
         this.filteredListItems = this.listItems.filter((item: any) => this.isIllustration(item));
         break;
     }
+    this._gridDirty = true;
   }
 
   sort(option: number) {
@@ -837,56 +1058,178 @@ onEsc() { this.closeContextMenu(); }
   }
 
   newIllustrationButtonClicked(): void {
-    if (!this.currentTeam || !this.currentTeam.id) {
-      this._notifyService.error('No current team selected');
-      return;
-    }
-
-    let newIllustration: Illustration = {
-      id: 0, // Assuming you need an initial id
-      name: `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Illustration`, // Default name or handle name input
-      description: '', // Default description or handle description input
-      teamId: this.currentTeam.id
-    };
-
-    this._illustrationService.createIllustration(newIllustration).subscribe((res: any) => {
-      if (res.resultType === ResultType.Success) {
-        this.router.navigate(['/illustration', res.resultObject.uuid]);
-      } else {
-        this._notifyService.error('There was an error creating a new board :(');
-      }
-    }, (error) => {
-      this._notifyService.error('There was an error creating a new board :(');
-      console.error(error);
+    const ref = this.dialog.open(NewIllustrationDialogComponent, {
+      width: '420px',
+      panelClass: 'new-illustration-dialog',
+      disableClose: false,
+      data: { isLoggedIn: this.isLoggedIn },
     });
-  }
 
-  /** Import a .frog file: pick file → parse it → create a new illustration → navigate to it with pending import data. */
-  async importFrogFile(): Promise<void> {
-    try {
-      // 1. Pick and parse the .frog file
-      const result = await this.frogFileService.importFrogFile();
+    ref.afterClosed().subscribe(async (result: { name: string; docW: number | null; docH: number | null; bounded: boolean; syncMode: number } | null) => {
+      if (!result) return;
+
+      const generatedName = `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Illustration`;
+      const docAspect = result.bounded && result.docW && result.docH ? result.docW / result.docH : undefined;
+
+      // Local-only: skip API, create in IndexedDB, navigate to local route
+      if (result.syncMode === 2) {
+        try {
+          const local = await this.localIllustrationService.create(generatedName, docAspect);
+          const queryParams = result.bounded && result.docW && result.docH
+            ? { docW: result.docW, docH: result.docH } : {};
+          this.router.navigate(['/illustration/local', local.uuid], {
+            queryParams,
+            state: { illustration: local, isNew: true }
+          });
+        } catch (e) {
+          this._notifyService.error('There was an error creating a local illustration :(');
+        }
+        return;
+      }
 
       if (!this.currentTeam || !this.currentTeam.id) {
         this._notifyService.error('No current team selected');
         return;
       }
 
-      // 2. Create a new illustration with the imported name
       const newIllustration: Illustration = {
         id: 0,
-        name: result.manifest.name || 'Imported Illustration',
+        name: generatedName,
         description: '',
-        teamId: this.currentTeam.id
+        teamId: this.currentTeam.id,
+        documentAspect: docAspect,
+        syncMode: result.syncMode,
       };
 
       this._illustrationService.createIllustration(newIllustration).subscribe({
         next: (res: any) => {
           if (res.resultType === ResultType.Success) {
-            // 3. Stash the parsed data so the illustration editor can pick it up
+            const uuid = res.resultObject.uuid;
+            if (result.bounded && result.docW && result.docH) {
+              this.router.navigate(['/illustration', uuid], {
+                queryParams: { docW: result.docW, docH: result.docH },
+                state: { illustration: res.resultObject, isNew: true }
+              });
+            } else {
+              this.router.navigate(['/illustration', uuid], { state: { illustration: res.resultObject, isNew: true } });
+            }
+          } else {
+            this._notifyService.error('There was an error creating a new illustration :(');
+          }
+        },
+        error: () => this._notifyService.error('There was an error creating a new illustration :('),
+      });
+    });
+  }
+
+  newAnimationButtonClicked(): void {
+    const ref = this.dialog.open(NewIllustrationDialogComponent, {
+      width: '420px',
+      panelClass: 'new-illustration-dialog',
+      disableClose: false,
+      data: { isLoggedIn: this.isLoggedIn },
+    });
+
+    ref.afterClosed().subscribe(async (result: { name: string; docW: number | null; docH: number | null; bounded: boolean; syncMode: number } | null) => {
+      if (!result) return;
+
+      const generatedName = `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Animation`;
+      const docAspect = result.bounded && result.docW && result.docH ? result.docW / result.docH : undefined;
+
+      if (result.syncMode === 2) {
+        try {
+          const local = await this.localIllustrationService.create(generatedName, docAspect);
+          const queryParams = result.bounded && result.docW && result.docH
+            ? { docW: result.docW, docH: result.docH } : {};
+          this.router.navigate(['/illustration/local', local.uuid], {
+            queryParams,
+            state: { illustration: local, isNew: true, startAnimation: true },
+          });
+        } catch (e) {
+          this._notifyService.error('There was an error creating a local animation :(');
+        }
+        return;
+      }
+
+      if (!this.currentTeam?.id) {
+        this._notifyService.error('No current team selected');
+        return;
+      }
+
+      const newIllustration: Illustration = {
+        id: 0,
+        name: generatedName,
+        description: '',
+        teamId: this.currentTeam.id,
+        documentAspect: docAspect,
+        syncMode: result.syncMode,
+      };
+
+      this._illustrationService.createIllustration(newIllustration).subscribe({
+        next: (res: any) => {
+          if (res.resultType === ResultType.Success) {
+            const uuid = res.resultObject.uuid;
+            const queryParams = result.bounded && result.docW && result.docH
+              ? { docW: result.docW, docH: result.docH } : {};
+            this.router.navigate(['/illustration', uuid], {
+              queryParams,
+              state: { illustration: res.resultObject, isNew: true, startAnimation: true },
+            });
+          } else {
+            this._notifyService.error('There was an error creating a new animation :(');
+          }
+        },
+        error: () => this._notifyService.error('There was an error creating a new animation :('),
+      });
+    });
+  }
+
+  /** Import a .frog file: pick file → ask for sync mode → create illustration → navigate. */
+  async importFrogFile(): Promise<void> {
+    try {
+      // 1. Pick and parse the .frog file
+      const result = await this.frogFileService.importFrogFile();
+
+      // 2. Ask the user which storage mode to use
+      const modeRef = this.dialog.open(NewIllustrationDialogComponent, {
+        width: '420px',
+        panelClass: 'new-illustration-dialog',
+        disableClose: false,
+        data: { importMode: true, defaultName: result.manifest.name || 'Imported Illustration', isLoggedIn: this.isLoggedIn }
+      });
+
+      const modeResult: { syncMode: number } | null = await firstValueFrom(modeRef.afterClosed());
+      if (!modeResult) return; // user cancelled
+
+      const importName = result.manifest.name || 'Imported Illustration';
+
+      // 3a. Local-only: create in IndexedDB
+      if (modeResult.syncMode === 2) {
+        const local = await this.localIllustrationService.create(importName);
+        this.frogFileService.pendingImport = result;
+        this.router.navigate(['/illustration/local', local.uuid], { state: { illustration: local } });
+        return;
+      }
+
+      // 3b. Cloud / No-cloud: create via API
+      if (!this.currentTeam || !this.currentTeam.id) {
+        this._notifyService.error('No current team selected');
+        return;
+      }
+
+      const newIllustration: Illustration = {
+        id: 0,
+        name: importName,
+        description: '',
+        teamId: this.currentTeam.id,
+        syncMode: modeResult.syncMode,
+      };
+
+      this._illustrationService.createIllustration(newIllustration).subscribe({
+        next: (res: any) => {
+          if (res.resultType === ResultType.Success) {
             this.frogFileService.pendingImport = result;
-            // 4. Navigate to the new illustration
-            this.router.navigate(['/illustration', res.resultObject.uuid]);
+            this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject } });
           } else {
             this._notifyService.error('Failed to create illustration for import');
           }
@@ -922,43 +1265,45 @@ onEsc() { this.closeContextMenu(); }
     }
   }
 
-  listItemDoubleClicked(event: MouseEvent, listItem: DashboardItem) { 
-  console.log(listItem);
-    if(!listItem.isArchived) {
+  listItemDoubleClicked(event: MouseEvent, listItem: DashboardItem) {
+    if (!listItem.isArchived) {
       if (this.isBoard(listItem)) {
         this.router.navigate(['/board', listItem.uuid]);
       } else if (this.isIllustration(listItem)) {
-        this.router.navigate(['/illustration', listItem.uuid]);
+        this._navigateToIllustration(listItem as Illustration);
       }
     }
   }
 
   toggleFavorite(uuid: string, item: DashboardItem) {
-    item.teamId = this.currentTeam.id;
-    if (this.favorites.has(uuid)) {
-      item.isFavorite = false;
-      if (this.isBoard(item)) {
-        this.boardService.favoritedBoard(item).subscribe((res: any) => {
-          if (res.resultType == 0) this.favorites.delete(uuid);
-        });
-      } else if (this.isIllustration(item)) {
-        this.illustrationService.favoriteIllustration(item).subscribe((res: any) => {
-          if (res.resultType == 0) this.favorites.delete(uuid);
-        });
-      }
-    } else {
-      item.isFavorite = true;
+    const nowFavorite = !this.favorites.has(uuid);
+    item.isFavorite = nowFavorite;
+    if (nowFavorite) {
       this.favorites.add(uuid);
-      if (this.isBoard(item)) {
-        this.boardService.favoritedBoard(item).subscribe(() => {});
-      } else if (this.isIllustration(item)) {
-        this.illustrationService.favoriteIllustration(item).subscribe(() => {});
-      }
+    } else {
+      this.favorites.delete(uuid);
+    }
+
+    if (this.isBoard(item)) {
+      item.teamId = this.currentTeam.id;
+      this.boardService.favoritedBoard(item).subscribe(() => {});
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.favorite(uuid, nowFavorite).catch(() => {});
+    } else if (this.isIllustration(item)) {
+      item.teamId = this.currentTeam.id;
+      this.illustrationService.favoriteIllustration(item).subscribe(() => {});
     }
   }
 
   isFavorite(uuid: string): boolean {
     return this.favorites.has(uuid);
+  }
+
+  getThumbnailSrc(item: DashboardItem): string {
+    const local = (item as any).thumbnailDataUrl;
+    if (local) return local;
+    const url = (item as any).thumbnailUrl;
+    return url && url !== '' ? url : 'https://placehold.jp/ffffff/ffffff/150x150.png';
   }
 
   gridViewClicked() {
@@ -1039,16 +1384,20 @@ onEsc() { this.closeContextMenu(); }
 
   copyItemLink(item: DashboardItem | null) {
     if (!item || !item.uuid) return;
-    
+    if (this.isLocalIllustration(item)) {
+      this.closeContextMenu();
+      this.notifyService.error('Local-only illustrations do not have a shareable link.');
+      return;
+    }
+
     const baseUrl = this.configurationService.loadConfigurations().clientUrl;
     let url: string;
-    
     if (this.isBoard(item)) {
       url = `${baseUrl}/board/${item.uuid}`;
-    } else if (this.isIllustration(item)) {
+    } else {
       url = `${baseUrl}/illustration/${item.uuid}`;
     }
-    
+
     navigator.clipboard.writeText(url);
     this.closeContextMenu();
     this.notifyService.success('Copied link to clipboard');
@@ -1087,83 +1436,471 @@ onEsc() { this.closeContextMenu(); }
           this.notifyService.error('There was an error duplicating the board :(');
         }
       });
+    } else if (this.isLocalIllustration(item)) {
+      this.localIllustrationService.create(`Copy of ${item.name}`, (item as Illustration).documentAspect).then(copy => {
+        this.listItems.unshift(copy as any);
+        this.filteredListItems.unshift(copy as any);
+      }).catch(() => this.notifyService.error('There was an error duplicating the illustration :('));
     } else if (this.isIllustration(item)) {
-      const payload = {
-        name: `Copy of ${item.name}`,
-        teamId: item.teamId,
-        copyThumbnail: true // let the new board generate its own thumbnail after first render
-      };
-
+      const payload = { name: `Copy of ${item.name}`, teamId: item.teamId, copyThumbnail: true };
       this.illustrationService.duplicateIllustration(item.id, payload).subscribe({
         next: (res: any) => {
           if (res.resultType === ResultType.Success) {
-            const newUuid = res.resultObject.uuid;
-            //this.router.navigate(['/board', newUuid]);
             this.listItems.unshift(res.resultObject);
             this.filteredListItems.unshift(res.resultObject);
-            this.boards.unshift(res.resultObject);
           } else {
             this.notifyService.error('There was an error duplicating the illustration :(');
           }
         },
-        error: (err) => {
-          console.error(err);
-          this.notifyService.error('There was an error duplicating the illustration :(');
-        }
+        error: () => this.notifyService.error('There was an error duplicating the illustration :('),
       });
     }
   }
 
-  private loadAllItems() {
-    const promises = [];
-    
-    promises.push(
-      this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
-        .pipe(catchError(err => { console.error('[Dashboard] boards fetch failed:', err); return of(null); }))
-    );
-    
-    promises.push(
-      this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
-        .pipe(catchError(err => { console.error('[Dashboard] illustrations fetch failed:', err); return of(null); }))
-    );
+  isLeftHalf(index: number): boolean {
+    const approxCols = Math.max(1, Math.floor(window.innerWidth / 280));
+    return (index % approxCols) < approxCols / 2;
+  }
 
-    forkJoin(promises).subscribe({
-      next: ([boardsRes, illustrationsRes] : any) => {
+  onGridItemMouseDown(_item: DashboardItem, index: number, ev: MouseEvent) {
+    ev.stopPropagation();
+    this.pressedIndex = index;
+    this.releasedIndex = null;
+  }
+
+  onGridItemMouseUp(item: DashboardItem, index: number, ev: MouseEvent) {
+    ev.stopPropagation();
+    this.pressedIndex = null;
+    this.releasedIndex = index;
+    if (ev.ctrlKey) {
+      this.listItemSelected(ev, item.uuid!);
+    } else {
+      this.openItemOverlay(item, index);
+    }
+  }
+
+  onGridItemMouseLeave(index: number) {
+    if (this.pressedIndex === index) this.pressedIndex = null;
+  }
+
+  openItemOverlay(item: DashboardItem, index: number) {
+    this.overlayItem = item;
+    this.overlayIndex = index;
+    this.overlayOpen = true;
+    setTimeout(() => {
+      const el = document.querySelector(`[data-item-id="${item.uuid}"]`) as HTMLElement | null;
+      const menuWidth = Math.min(460, Math.round(window.innerWidth * 0.40));
+      const rect = el?.getBoundingClientRect();
+      if (rect) {
+        const vc = rect.top + rect.height / 2;
+        const menuHalf = 170;
+        const top = Math.max(12, Math.min(vc - menuHalf, window.innerHeight - 24 - menuHalf * 2));
+        if (rect.left < window.innerWidth / 2) {
+          const left = Math.max(8, Math.min(rect.right + 16, window.innerWidth - menuWidth - 8));
+          this.menuStyle = { position: 'fixed', left: `${left}px`, top: `${top}px`, width: `${menuWidth}px` };
+          this.menuSide = 'right';
+          this.menuTailStyle = { position: 'fixed', left: `${left - 9}px`, top: `${Math.max(8, Math.min(vc - 12, window.innerHeight - 24))}px` };
+        } else {
+          const left = Math.max(8, Math.min(rect.left - 24 - menuWidth, window.innerWidth - menuWidth - 8));
+          this.menuStyle = { position: 'fixed', left: `${left}px`, top: `${top}px`, width: `${menuWidth}px` };
+          this.menuSide = 'left';
+          this.menuTailStyle = { position: 'fixed', left: `${left + menuWidth + 8}px`, top: `${Math.max(8, Math.min(vc - 12, window.innerHeight - 24))}px` };
+        }
+      } else {
+        this.menuStyle = {}; this.menuSide = null; this.menuTailStyle = null;
+      }
+    }, 8);
+  }
+
+  closeItemOverlay(ev?: Event) {
+    ev?.stopPropagation();
+    this.overlayOpen = false;
+    this.overlayItem = null;
+    this.overlayIndex = null;
+    this.releasedIndex = null;
+    this.menuStyle = {};
+    this.menuSide = null;
+    this.menuTailStyle = null;
+  }
+
+  navigateToItem(item: DashboardItem | null) {
+    if (!item || item.isArchived) return;
+    this.closeItemOverlay();
+    if (this.isBoard(item)) {
+      this.router.navigate(['/board', item.uuid]);
+    } else if (this.isIllustration(item)) {
+      this._navigateToIllustration(item as Illustration);
+    }
+  }
+
+  private async _loadLocalItemsOnly(): Promise<void> {
+    try {
+      const localItems = await this.localIllustrationService.getAll(this.isArchivedFilterActive);
+      const filtered = this.isFavoritesFilterActive ? localItems.filter(i => i.isFavorite) : localItems;
+      filtered.forEach(local => {
+        this.listItems.push(local as any);
+        if (local.isFavorite && local.uuid) this.favorites.add(local.uuid);
+      });
+      this.filteredListItems = [...this.listItems];
+      this._gridDirty = true;
+      this.cdr.detectChanges();
+    } catch (e) {
+      console.warn('[Dashboard] local illustrations load failed:', e);
+    }
+  }
+
+  getSyncStatusIcon(status: string): string {
+    switch (status) {
+      case 'syncing':              return 'sync';
+      case 'cloud-record-created': return 'cloud_upload';
+      case 'cloud-metadata-only':  return 'cloud_download';
+      case 'synced':               return 'cloud_done';
+      case 'sync-paused':          return 'cloud_off';
+      case 'sync-error':           return 'sync_problem';
+      case 'conflict':             return 'warning';
+      default:                     return 'cloud_off'; // local-only
+    }
+  }
+
+  isSyncingCloud = false;
+  showDevPanel = false;
+
+  async syncCloudToLocal(): Promise<void> {
+    if (!this.currentTeam?.id || this.isSyncingCloud) return;
+    this.isSyncingCloud = true;
+
+    try {
+      const illustrationsRes: any = await firstValueFrom(
+        this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id, '', false, false)
+          .pipe(catchError(() => of(null)))
+      );
+
+      const cloudIlls: Illustration[] = illustrationsRes?.resultObject ?? [];
+      const localIlls = await this.localIllustrationService.getAll(true);
+
+      this._downloadJson('cloud-metadata.txt', cloudIlls);
+      this._downloadJson('local-indexeddb.txt', localIlls);
+
+      this._notifyService.success('Downloaded cloud + local metadata for inspection');
+    } catch (e) {
+      console.error('[Dashboard] metadata export failed', e);
+      this._notifyService.error('Failed to export metadata');
+    } finally {
+      this.isSyncingCloud = false;
+    }
+  }
+
+  async backfillCloudToLocal(): Promise<void> {
+    if (!this.currentTeam?.id || this.isSyncingCloud) return;
+    this.isSyncingCloud = true;
+    try {
+      const illustrationsRes: any = await firstValueFrom(
+        this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id, '', false, false)
+          .pipe(catchError(() => of(null)))
+      );
+      const cloudIlls: Illustration[] = illustrationsRes?.resultObject ?? [];
+      const existing = await this.localIllustrationService.getAll(true);
+      const existingCloudIds = new Set(existing.map(i => i.cloudIllustrationId).filter(Boolean));
+      let created = 0;
+      const libraryId = (this.localIllustrationService as any)._profileService?.getLocalLibraryId?.() ?? '';
+      for (const ill of cloudIlls) {
+        if (!ill.id || existingCloudIds.has(ill.id)) continue;
+        await this.localIllustrationService.createFromCloudMetadata({
+          uuid: ill.uuid ?? crypto.randomUUID(),
+          name: ill.name ?? 'Untitled',
+          syncMode: 2,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          documentAspect: ill.documentAspect,
+          isFavorite: ill.isFavorite ?? false,
+          isArchived: ill.isArchived ?? false,
+          type: 'illustration',
+          syncStatus: 'cloud-metadata-only',
+          localLibraryId: libraryId,
+          cloudIllustrationId: ill.id,
+          cloudOwnerUserId: this.uid,
+          thumbnailUrl: ill.thumbnailUrl,
+        });
+        created++;
+      }
+      this._notifyService.success(
+        created > 0
+          ? `Backfilled ${created} cloud project${created > 1 ? 's' : ''} to IndexedDB`
+          : 'All cloud projects already in IndexedDB'
+      );
+      this.loadAllItems();
+    } catch (e) {
+      console.error('[Dashboard] backfill failed', e);
+      this._notifyService.error('Backfill failed');
+    } finally {
+      this.isSyncingCloud = false;
+    }
+  }
+
+  private _downloadJson(filename: string, data: any): void {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private async _loadOpfsStats(): Promise<void> {
+    if (!navigator?.storage?.estimate) return;
+    try {
+      const { quota = 0, usage = 0 } = await navigator.storage.estimate();
+      this.opfsQuotaGb = quota / (1024 ** 3);
+      this.opfsUsageMb = usage / (1024 ** 2);
+      this.opfsUsagePct = quota > 0 ? Math.min(100, (usage / quota) * 100) : 0;
+      this.opfsSupported = true;
+    } catch {
+      this.opfsSupported = false;
+    }
+  }
+
+  sendReauthCode(): void {
+    if (!this.loginEmail.trim()) return;
+    this.loginSending = true;
+    this.loginError = '';
+    this._authService.sendReauthCode(this.loginEmail.trim()).subscribe({
+      next: () => {
+        this.loginSending = false;
+        this.loginCodeSent = true;
+      },
+      error: () => {
+        this.loginSending = false;
+        this.loginError = 'Could not send a code to that email. Please check the address and try again.';
+      }
+    });
+  }
+
+  verifyReauthCode(): void {
+    const code = this.loginCode.trim();
+    if (!code) return;
+    this.loginVerifying = true;
+    this.loginError = '';
+    this._authService.verifyReauthCode(this.loginEmail.trim(), code).subscribe({
+      next: (res) => {
+        if (res?.resultObject) {
+          this.uid = res.resultObject;
+          this.isLoggedIn = true;
+          this.showLoginModal = false;
+          this.loginVerifying = false;
+          // Load teams and cloud content in the background
+          this._teamService.getTeamsByUserId(this.uid).subscribe((teamsRes: any) => {
+            this.teams = teamsRes.resultObject ?? [];
+            this.currentTeam = this.teams[0];
+            if (this.currentTeam?.id) {
+              this.loadAllItems();
+            }
+          });
+          // Check for un-backed-up local projects and offer to sync them
+          this.localIllustrationService.getAll().then(items => {
+            const localOnly = items.filter(i => i.syncStatus === 'local-only');
+            if (localOnly.length > 0) {
+              this.backupLocalItems = localOnly;
+              this.backupProgress = localOnly.map(i => ({
+                uuid: i.uuid,
+                name: i.name,
+                status: 'pending' as const,
+              }));
+              this.showBackupPrompt = true;
+            }
+          });
+        } else {
+          this.loginVerifying = false;
+          this.loginError = 'Invalid or expired code. Please try again.';
+        }
+      },
+      error: () => {
+        this.loginVerifying = false;
+        this.loginError = 'Invalid or expired code. Please try again.';
+      }
+    });
+  }
+
+  reloadPage(): void {
+    window.location.reload();
+  }
+
+  onLogout(): void {
+    this._authService.logout().subscribe({
+      next: () => {
+        this.isLoggedIn = false;
+        this.uid = '';
+        this.loadAllItems();
+      },
+      error: () => {
+        this.isLoggedIn = false;
+        this.uid = '';
+        this.loadAllItems();
+      }
+    });
+  }
+
+  onPersonButtonClicked(): void {
+    console.log(this.isLoggedIn);
+    if (!this.isLoggedIn) {
+      this.showLoginModal = true;
+      this.loginCodeSent = false;
+      this.loginEmail = '';
+      this.loginCode = '';
+      this.loginError = '';
+    } else {
+      this.showProfilePanel = !this.showProfilePanel;
+    }
+  }
+
+  get backupProgressStarted(): boolean {
+    return this.backupProgress.some(p => p.status !== 'pending');
+  }
+
+  skipLocalBackup(): void {
+    this.showBackupPrompt = false;
+  }
+
+  async startLocalBackup(): Promise<void> {
+    if (!this.currentTeam?.id) {
+      this._notifyService.error('Team not loaded yet — please try again in a moment.');
+      return;
+    }
+    this.isBackingUpLocal = true;
+
+    for (const item of this.backupLocalItems) {
+      const prog = this.backupProgress.find(p => p.uuid === item.uuid)!;
+      prog.status = 'uploading';
+      try {
+        await this.localIllustrationService.updateSyncStatus(item.uuid, 'syncing');
+        const res: any = await firstValueFrom(
+          this.illustrationService.createIllustration({
+            id: 0,
+            name: item.name,
+            description: '',
+            teamId: this.currentTeam.id!,
+            documentAspect: item.documentAspect,
+            syncMode: 0,
+          })
+        );
+        if (res?.resultType === ResultType.Success && res?.resultObject?.id) {
+          await this.localIllustrationService.updateSyncStatus(
+            item.uuid, 'cloud-record-created', res.resultObject.id, this.uid
+          );
+          prog.status = 'done';
+        } else {
+          throw new Error('create failed');
+        }
+      } catch {
+        await this.localIllustrationService.updateSyncStatus(item.uuid, 'sync-error');
+        prog.status = 'error';
+      }
+    }
+
+    this.isBackingUpLocal = false;
+    setTimeout(() => {
+      this.showBackupPrompt = false;
+      this.loadAllItems();
+    }, 1400);
+  }
+
+  private _loadCloudStorageQuota(): void {
+    this.illustrationService.getStorageQuota().subscribe({
+      next: (res) => {
+        const q = res?.resultObject;
+        if (!q) return;
+        this.cloudUsedMb = q.usedBytes / (1024 ** 2);
+        this.cloudQuotaGb = q.quotaBytes / (1024 ** 3);
+        this.cloudUsagePct = q.quotaBytes > 0 ? Math.min(100, (q.usedBytes / q.quotaBytes) * 100) : 0;
+        this.cloudIsPro = q.isPro;
+      },
+      error: () => {}
+    });
+  }
+
+  private async _addDirToZip(dir: FileSystemDirectoryHandle, zip: JSZip, path: string): Promise<void> {
+    for await (const [name, handle] of (dir as any).entries()) {
+      const entryPath = path ? `${path}/${name}` : name;
+      if ((handle as any).kind === 'file') {
+        const file = await (handle as FileSystemFileHandle).getFile();
+        zip.file(entryPath, file);
+      } else {
+        await this._addDirToZip(handle as FileSystemDirectoryHandle, zip, entryPath);
+      }
+    }
+  }
+
+  async downloadLocalBackup(): Promise<void> {
+    this.isBackingUp = true;
+    try {
+      const root = await navigator.storage.getDirectory();
+      const zip = new JSZip();
+      await this._addDirToZip(root, zip, '');
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `frogmarks-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[Dashboard] backup failed', e);
+      this.notifyService.error('Backup failed');
+    } finally {
+      this.isBackingUp = false;
+    }
+  }
+
+  private loadAllItems() {
+    const cloudPromises = [
+      this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
+        .pipe(catchError(err => { console.error('[Dashboard] boards fetch failed:', err); return of(null); })),
+      this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
+        .pipe(catchError(err => { console.error('[Dashboard] illustrations fetch failed:', err); return of(null); })),
+    ];
+
+    forkJoin(cloudPromises).subscribe({
+      next: async ([boardsRes, illustrationsRes]: any) => {
         this.clearData();
-        
-        console.log('[Dashboard] boardsRes:', boardsRes);
-        console.log('[Dashboard] illustrationsRes:', illustrationsRes);
-        
-        // Handle boards
+
         if (boardsRes?.resultObject) {
           boardsRes.resultObject.forEach((board: Board) => {
-            const item: DashboardItem = { ...board, type: 'board' };
             this.boards.push(board);
-            this.listItems.push(item);
-            if (board.isFavorite && board.uuid) {
-              this.favorites.add(board.uuid);
-            }
+            this.listItems.push({ ...board, type: 'board' });
+            if (board.isFavorite && board.uuid) this.favorites.add(board.uuid);
           });
         }
-        
-        // Handle illustrations
+
         if (illustrationsRes?.resultObject) {
           illustrationsRes.resultObject.forEach((illustration: Illustration) => {
-            const item: DashboardItem = { ...illustration, type: 'illustration' };
-            this.listItems.push(item);
-            if (illustration.isFavorite && illustration.uuid) {
-              this.favorites.add(illustration.uuid);
-            }
+            this.listItems.push({ ...illustration, type: 'illustration' });
+            if (illustration.isFavorite && illustration.uuid) this.favorites.add(illustration.uuid);
           });
         }
-        
-        console.log('[Dashboard] total listItems:', this.listItems.length,
-                    'boards:', this.boards.length,
-                    'illustrations:', this.listItems.length - this.boards.length);
-        
+
+        // Merge local IndexedDB items, skipping any already represented by a cloud record
+        try {
+          const cloudIds = new Set<number>(
+            (illustrationsRes?.resultObject ?? []).map((i: Illustration) => i.id).filter(Boolean)
+          );
+          const localItems: LocalIllustration[] = await this.localIllustrationService.getAll(this.isArchivedFilterActive);
+          const filtered = this.isFavoritesFilterActive ? localItems.filter(i => i.isFavorite) : localItems;
+          filtered.forEach(local => {
+            // If this local item has been backed up and the cloud copy is present, skip it
+            if (local.cloudIllustrationId && cloudIds.has(local.cloudIllustrationId)) return;
+            this.listItems.push(local as any);
+            if (local.isFavorite && local.uuid) this.favorites.add(local.uuid);
+          });
+        } catch (e) {
+          console.warn('[Dashboard] local illustrations load failed:', e);
+        }
+
         this.filteredListItems = this.listItems;
         this.isLoadingItems = false;
         this.isLoading = false;
+        this._gridDirty = true;
       },
       error: (err) => {
         console.error('[Dashboard] forkJoin error:', err);

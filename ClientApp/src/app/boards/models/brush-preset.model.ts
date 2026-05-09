@@ -68,16 +68,22 @@ export interface BrushPreset {
   version: number; // always 1
 }
 
+/** Raster layer entry type */
+export type RasterLayerType = 'layer' | 'folder' | '3d-scene';
+
 /** Raster layer descriptor */
 export interface RasterLayer {
   id: string;
   name: string;
+  type: RasterLayerType;      // defaults to 'layer'
+  parentId: string | null;    // null = root level
   visible: boolean;
   locked: boolean;
   blendMode: LayerBlendMode;
   opacity: number;           // 0-1
   clipped: boolean;
   lockTransparency: boolean;
+  collapsed?: boolean;        // only meaningful for folders
 }
 
 // ── Enums ──────────────────────────────────────────────────────

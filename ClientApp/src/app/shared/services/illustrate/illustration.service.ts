@@ -100,11 +100,56 @@ export interface IllustrationStateDto {
   layers: LayerStateDto[];
   savedAt?: number;  // epoch ms — used for OPFS-vs-backend freshness comparison
   ditherConfig?: DitherConfigDto | null;
+  documentSize?: { w: number; h: number } | null;
+  scene3dNodesGzip?: string | null;       // legacy gzip+base64 — only present on old saves
+  textureLibrary3dGzip?: string | null;   // legacy gzip+base64 — only present on old saves
+  meshIds?: string[] | null;             // per-mesh blob IDs (v3+)
+  meshSasUrls?: Record<string, string> | null;  // load response only — read SAS URLs per mesh
+  texLibSasUrl?: string | null;           // load response only — read SAS URL for texture library
+  bgColor?: string | null;
+  dotColor?: string | null;
+  paperGrain?: { type: string; scale: number; strength: number } | null;
+  scene3dGlobalSettings?: {
+    // Camera
+    cameraMode?: string;
+    illustrationProjection?: string;
+    fov?: number;
+    // Shadows
+    shadowsEnabled?: boolean;
+    shadowMapSize?: number;
+    shadowExtent?: number;
+    shadowBias?: number;
+    // Lighting
+    lightDirX?: number; lightDirY?: number; lightDirZ?: number; lightIntensity?: number;
+    ambientR?: number; ambientG?: number; ambientB?: number; ambientIntensity?: number;
+    // PS1 renderer
+    ps1Jitter?: number; ps1Snap?: number; ps1Affine?: number; ps1ColorDepth?: number;
+    // Frustum / animation player
+    frustumCulling?: boolean;
+    animSyncWithTimeline?: boolean;
+    animStartFrame?: number;
+    animEndFrame?: number;
+    animFps?: number;
+    animLoop?: boolean;
+  } | null;
 }
 
 export interface CelStatusItem {
   exists: boolean;
   hash: string | null;
+}
+
+export interface IllustrationPublishViewDto {
+  bundleUrl: string;
+  name: string;
+  publishedAt: string | null;
+  publishedVersion: number;
+}
+
+export interface StorageQuotaDto {
+  usedBytes: number;
+  quotaBytes: number;
+  isPro: boolean;
 }
 
 @Injectable({
@@ -275,6 +320,10 @@ export class IllustrationService extends ApiService {
     return this.http.get<any>(`${this.base}/${id}/state`, { withCredentials: true });
   }
 
+  getStateSavedAt(id: number): Observable<{ savedAt: number }> {
+    return this.http.get<{ savedAt: number }>(`${this.base}/${id}/state/savedAt`, { withCredentials: true });
+  }
+
   uploadCelPixelData(illustrationId: number, celId: string, blob: Blob, width?: number, height?: number, format: string = 'webp'): Observable<any> {
     const formData = new FormData();
     formData.append('pixelData', blob, `${celId}.${format}`);
@@ -291,6 +340,22 @@ export class IllustrationService extends ApiService {
     if (width != null) url += `&width=${width}`;
     if (height != null) url += `&height=${height}`;
     return this.http.put<any>(url, formData, { withCredentials: true });
+  }
+
+  uploadMeshBlob(illustrationId: number, meshId: string, blob: Blob): Observable<any> {
+    const formData = new FormData();
+    formData.append('meshData', blob, `${meshId}.gz`);
+    return this.http.put<any>(`${this.base}/${illustrationId}/mesh/${meshId}`, formData, { withCredentials: true });
+  }
+
+  uploadTextureLibraryBlob(illustrationId: number, blob: Blob): Observable<any> {
+    const formData = new FormData();
+    formData.append('texLibData', blob, 'texture-library.gz');
+    return this.http.put<any>(`${this.base}/${illustrationId}/texture-library`, formData, { withCredentials: true });
+  }
+
+  getMeshReadUrls(illustrationId: number, meshIds: string[]): Observable<any> {
+    return this.http.get<any>(`${this.base}/${illustrationId}/mesh-read-urls?meshIds=${meshIds.join(',')}`, { withCredentials: true });
   }
 
   deleteCel(illustrationId: number, celId: string): Observable<any> {
@@ -366,5 +431,26 @@ export class IllustrationService extends ApiService {
   // ---- Templates (stub preserved for parity; flesh out whenever ready) ----
   getTemplates(): Observable<void> {
     return undefined as unknown as Observable<void>;
+  }
+
+  // ---- Publishing ----
+
+  publishIllustration(illustrationId: number, bundle: Blob, publishedTitle?: string): Observable<Illustration> {
+    const formData = new FormData();
+    formData.append('bundle', bundle, 'project.frogmarks');
+    if (publishedTitle) formData.append('publishedTitle', publishedTitle);
+    return this.http.post<Illustration>(`${this.base}/${illustrationId}/publish`, formData, { withCredentials: true });
+  }
+
+  unpublishIllustration(illustrationId: number): Observable<any> {
+    return this.http.post(`${this.base}/${illustrationId}/unpublish`, {}, { withCredentials: true });
+  }
+
+  getPublicView(uid: string): Observable<IllustrationPublishViewDto> {
+    return this.http.get<IllustrationPublishViewDto>(`${this.base}/view/${uid}`);
+  }
+
+  getStorageQuota(): Observable<{ resultObject: StorageQuotaDto }> {
+    return this.http.get<{ resultObject: StorageQuotaDto }>(`${this.base}/quota`, { withCredentials: true });
   }
 }

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"sceneChanged\\\\$\\\\.next\\\\|\\\\.next\\(\" \"c:\\\\Users\\\\szain\\\\source\\\\repos\\\\Frogmarks\\\\Frogmarks\\\\ClientApp\\\\src\\\\app\\\\illustrate\\\\components\\\\illustration\\\\illustration.component.ts\")"
+    ]
+  }
+}

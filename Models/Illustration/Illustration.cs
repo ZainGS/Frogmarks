@@ -38,6 +38,7 @@ namespace Frogmarks.Models.Illustration
 
         // V2 scene architecture
         public int SceneVersion { get; set; } = 1;
+        public long SavedAt { get; set; } = 0;         // epoch ms — for OPFS freshness comparison
         public bool AnimationEnabled { get; set; } = false;
         public int FrameCount { get; set; } = 24;
         public int Fps { get; set; } = 12;
@@ -47,6 +48,20 @@ namespace Frogmarks.Models.Illustration
         public int PlayRangeStart { get; set; } = 1;
         public int PlayRangeEnd { get; set; } = 24;
         public string? OnionSkinConfig { get; set; } // JSON blob
+
+        // Extended V2 state — canvas settings, 3D scene, dither, document size
+        public string? ExtendedStateJson { get; set; }  // JSON blob
+
+        // Sync mode: 0=CloudSync (default), 1=NoCloud, 2=LocalOnly
+        public int SyncMode { get; set; } = 0;
+
+        // Publishing
+        public bool IsPublic { get; set; } = false;
+        public string? PublishedBundleBlobName { get; set; }
+        public string? PublishedTitle { get; set; }
+        public string? PublishedThumbnailBlobName { get; set; }
+        public DateTime? PublishedAt { get; set; }
+        public int PublishedVersion { get; set; } = 0;
 
         public virtual List<IllustrationLayer> Layers { get; set; } = new();
     }

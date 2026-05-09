@@ -4,6 +4,22 @@ a.navbar-brand {
   word-break: break-all;
 }
 
+.sticky-navbar {
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+.sticky-navbar .navbar {
+  background-color: #000 !important;
+}
+
+.sticky-navbar .nav-link {
+  color: rgba(255,255,255,0.6) !important;
+}
+
+.sticky-navbar .nav-link:hover {
+  color: #fff !important;
+}
+
 html {
   font-size: 14px;
 }

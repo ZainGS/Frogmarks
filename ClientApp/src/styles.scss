@@ -71,7 +71,6 @@ body, .navbar {
 .grid-item img {
   width: 100%;
   height: 130px;
-  max-height: max-content !important;
   object-fit: cover !important;
   // border: 1px solid #d6d6d6;
   // border: 1px solid var(--grid-item-img-border-color);
@@ -467,7 +466,6 @@ mark::before {
   top: 0;
   width: 100%;
   z-index: 100;
-  border-bottom: 1px solid rgb(228, 228, 228);
 }
 
 .placeholder-item {
@@ -929,4 +927,17 @@ mat-error {
 
 .mat-mdc-snack-bar-action .mat-mdc-focus-indicator {
   background-color: var(--primary-color) !important;
+}
+
+// New Illustration dialog — strip Material's white surface so custom .nid card shows
+.new-illustration-dialog .mdc-dialog__surface,
+.new-illustration-dialog .mat-mdc-dialog-surface {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  position: absolute !important;
+  z-index: 99999 !important;
+  max-width: 700px !important;
+  align-self: center !important;
+  top: 9% !important;
 }

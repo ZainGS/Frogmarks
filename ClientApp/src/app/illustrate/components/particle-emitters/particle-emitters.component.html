@@ -1,0 +1,350 @@
+<!-- ── Emitters List (inline in 3D panel) ─────────────��────────── -->
+
+<div class="pe-list-section">
+
+  <!-- Emitter rows -->
+  <div class="pe-emitter-row" *ngFor="let rec of emitters">
+    <button class="pe-vis-dot"
+            [style.background]="rec.visible ? dotColor(rec) : 'transparent'"
+            [style.borderColor]="dotColor(rec)"
+            [title]="rec.visible ? 'Hide' : 'Show'"
+            (click)="toggleVisibility(rec, $event)"></button>
+
+    <span *ngIf="!rec.isRenaming"
+          class="pe-name"
+          (dblclick)="startRename(rec, $event)"
+          [title]="'Double-click to rename'">{{ rec.name }}</span>
+
+    <input *ngIf="rec.isRenaming"
+           class="pe-name-input"
+           [(ngModel)]="rec.nameDraft"
+           (blur)="commitRename(rec)"
+           (keydown.enter)="commitRename(rec)"
+           (keydown.escape)="rec.isRenaming=false"
+           (click)="$event.stopPropagation()"
+           autofocus>
+
+    <button class="pe-edit-btn" (click)="openEdit(rec.id)" title="Edit">✏</button>
+    <button class="pe-del-btn" (click)="deleteEmitter(rec.id, $event)" title="Delete">✕</button>
+  </div>
+
+  <!-- Empty state -->
+  <div *ngIf="emitters.length === 0" class="pe-empty">No particle emitters</div>
+
+  <!-- Add button + preset picker -->
+  <div class="pe-add-wrap" (click)="$event.stopPropagation()">
+    <button class="pe-add-btn" (click)="showPresetPicker = !showPresetPicker">+ Add Emitter ▾</button>
+    <div *ngIf="showPresetPicker" class="pe-preset-picker">
+      <div class="pe-preset-title">Choose a starting preset</div>
+      <div class="pe-preset-grid">
+        <button class="pe-preset-btn" (click)="addEmitter('dust')">Dust</button>
+        <button class="pe-preset-btn" (click)="addEmitter('sparks')">Sparks</button>
+        <button class="pe-preset-btn" (click)="addEmitter('snow')">Snow</button>
+        <button class="pe-preset-btn" (click)="addEmitter('magic')">Magic</button>
+      </div>
+      <button class="pe-preset-btn pe-preset-custom" (click)="addEmitter()">Custom (empty)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bloom (scene-level) ─────────────────────────────────────── -->
+<div class="pe-bloom-section">
+  <div class="pe-bloom-header">
+    <label>Bloom Glow</label>
+    <input type="checkbox" [checked]="bloomEnabled" (change)="toggleBloom()">
+  </div>
+  <ng-container *ngIf="bloomEnabled">
+    <div class="pe-slider-row">
+      <span class="pe-label">Threshold</span>
+      <input type="range" min="0" max="1" step="0.01" [(ngModel)]="bloomThreshold"
+             (input)="onBloomThresholdChange()">
+      <span class="pe-val">{{ bloomThreshold | number:'1.2-2' }}</span>
+    </div>
+    <div class="pe-slider-row">
+      <span class="pe-label">Intensity</span>
+      <input type="range" min="0.1" max="3" step="0.05" [(ngModel)]="bloomIntensity"
+             (input)="onBloomIntensityChange()">
+      <span class="pe-val">{{ bloomIntensity | number:'1.2-2' }}</span>
+    </div>
+    <div class="pe-hint">Lower threshold = more particles glow</div>
+  </ng-container>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- Edit Panel Overlay                                            -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pe-edit-overlay" *ngIf="editingRecord" (click)="$event.stopPropagation()">
+
+  <div class="pe-edit-header">
+    <span class="pe-edit-title">{{ editingRecord.name }}</span>
+    <button class="pe-close-btn" (click)="closeEdit()">✕</button>
+  </div>
+
+  <div class="pe-edit-body">
+
+    <!-- ── Section 1: Position ────────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Position</div>
+      <div class="pe-xyz-row">
+        <label>X<input type="number" class="pe-num" step="0.1"
+               [(ngModel)]="editingRecord.posX" (change)="onPositionChange(editingRecord)"></label>
+        <label>Y<input type="number" class="pe-num" step="0.1"
+               [(ngModel)]="editingRecord.posY" (change)="onPositionChange(editingRecord)"></label>
+        <label>Z<input type="number" class="pe-num" step="0.1"
+               [(ngModel)]="editingRecord.posZ" (change)="onPositionChange(editingRecord)"></label>
+      </div>
+    </div>
+
+    <!-- ── Section 2: Emission ───────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Emission</div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Emit Rate</span>
+        <input type="range" min="1" max="500" step="1" [(ngModel)]="editingRecord.emitRate"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="1" max="500"
+               [(ngModel)]="editingRecord.emitRate" (change)="onConfigChange(editingRecord)">
+      </div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Max Particles</span>
+        <input type="range" min="10" max="2000" step="10" [(ngModel)]="editingRecord.maxParticles"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="10" max="2000"
+               [(ngModel)]="editingRecord.maxParticles" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div *ngIf="editingRecord.maxParticles > 1000" class="pe-warn">⚠ High particle count may impact performance</div>
+
+      <div class="pe-toggle-row">
+        <label>Loop</label>
+        <input type="checkbox" [(ngModel)]="editingRecord.loop" (change)="onConfigChange(editingRecord)">
+      </div>
+
+      <div class="pe-section-subtitle">Direction</div>
+      <div class="pe-dir-presets">
+        <button class="pe-chip" *ngFor="let p of DIRECTION_PRESETS"
+                (click)="applyDirectionPreset(editingRecord, p.dir)">{{ p.label }}</button>
+      </div>
+      <div class="pe-xyz-row">
+        <label>X<input type="number" class="pe-num" step="0.1" min="-1" max="1"
+               [(ngModel)]="editingRecord.dirX" (change)="onDirectionChange(editingRecord)"></label>
+        <label>Y<input type="number" class="pe-num" step="0.1" min="-1" max="1"
+               [(ngModel)]="editingRecord.dirY" (change)="onDirectionChange(editingRecord)"></label>
+        <label>Z<input type="number" class="pe-num" step="0.1" min="-1" max="1"
+               [(ngModel)]="editingRecord.dirZ" (change)="onDirectionChange(editingRecord)"></label>
+      </div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Spread</span>
+        <input type="range" min="0" max="180" step="1" [(ngModel)]="editingRecord.spreadDeg"
+               (input)="onConfigChange(editingRecord)">
+        <span class="pe-val">{{ editingRecord.spreadDeg }}°</span>
+      </div>
+      <div class="pe-hint">0° = stream · 180° = sphere</div>
+    </div>
+
+    <!-- ── Section 3: Lifetime & Speed ──────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Lifetime &amp; Speed</div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Life Min</span>
+        <input type="range" min="0.1" max="20" step="0.1" [(ngModel)]="editingRecord.lifetimeMin"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0.1" max="20" step="0.1"
+               [(ngModel)]="editingRecord.lifetimeMin" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">Life Max</span>
+        <input type="range" min="0.1" max="20" step="0.1" [(ngModel)]="editingRecord.lifetimeMax"
+               (input)="clampLifetimeMax(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0.1" max="20" step="0.1"
+               [(ngModel)]="editingRecord.lifetimeMax" (change)="clampLifetimeMax(editingRecord)">
+      </div>
+      <div *ngIf="editingRecord.lifetimeMax === editingRecord.lifetimeMin" class="pe-warn">⚠ Fixed lifetime</div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Speed Min</span>
+        <input type="range" min="0" max="10" step="0.05" [(ngModel)]="editingRecord.speedMin"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0" max="10" step="0.05"
+               [(ngModel)]="editingRecord.speedMin" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">Speed Max</span>
+        <input type="range" min="0" max="10" step="0.05" [(ngModel)]="editingRecord.speedMax"
+               (input)="clampSpeedMax(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0" max="10" step="0.05"
+               [(ngModel)]="editingRecord.speedMax" (change)="clampSpeedMax(editingRecord)">
+      </div>
+    </div>
+
+    <!-- ── Section 4: Size ──────────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Size</div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Start Min</span>
+        <input type="range" min="0.01" max="5" step="0.01" [(ngModel)]="editingRecord.startSizeMin"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0.01" max="5" step="0.01"
+               [(ngModel)]="editingRecord.startSizeMin" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">Start Max</span>
+        <input type="range" min="0.01" max="5" step="0.01" [(ngModel)]="editingRecord.startSizeMax"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0.01" max="5" step="0.01"
+               [(ngModel)]="editingRecord.startSizeMax" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">End Min</span>
+        <input type="range" min="0" max="5" step="0.01" [(ngModel)]="editingRecord.endSizeMin"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0" max="5" step="0.01"
+               [(ngModel)]="editingRecord.endSizeMin" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">End Max</span>
+        <input type="range" min="0" max="5" step="0.01" [(ngModel)]="editingRecord.endSizeMax"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0" max="5" step="0.01"
+               [(ngModel)]="editingRecord.endSizeMax" (change)="onConfigChange(editingRecord)">
+      </div>
+    </div>
+
+    <!-- ── Section 5: Color ─────────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Color</div>
+      <div class="pe-color-row">
+
+        <div class="pe-color-block">
+          <div class="pe-color-label">Birth</div>
+          <input type="color" [(ngModel)]="editingRecord.startColorHex"
+                 (input)="onConfigChange(editingRecord)">
+          <div class="pe-slider-row pe-alpha-row">
+            <span class="pe-label">Alpha</span>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="editingRecord.startAlpha"
+                   (input)="onConfigChange(editingRecord)">
+            <span class="pe-val">{{ editingRecord.startAlpha | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="pe-color-block">
+          <div class="pe-color-label">Death</div>
+          <input type="color" [(ngModel)]="editingRecord.endColorHex"
+                 (input)="onConfigChange(editingRecord)">
+          <div class="pe-slider-row pe-alpha-row">
+            <span class="pe-label">Alpha</span>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="editingRecord.endAlpha"
+                   (input)="onConfigChange(editingRecord)">
+            <span class="pe-val">{{ editingRecord.endAlpha | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Section 6: Physics ───────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Physics</div>
+
+      <div class="pe-slider-row">
+        <span class="pe-label">Gravity Y</span>
+        <input type="range" min="-10" max="10" step="0.05" [(ngModel)]="editingRecord.gravY"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="-10" max="10" step="0.05"
+               [(ngModel)]="editingRecord.gravY" (change)="onConfigChange(editingRecord)">
+      </div>
+      <div class="pe-slider-row">
+        <span class="pe-label">Turbulence</span>
+        <input type="range" min="0" max="2" step="0.01" [(ngModel)]="editingRecord.turbulence"
+               (input)="onConfigChange(editingRecord)">
+        <input type="number" class="pe-num-sm" min="0" max="2" step="0.01"
+               [(ngModel)]="editingRecord.turbulence" (change)="onConfigChange(editingRecord)">
+      </div>
+
+      <details class="pe-details">
+        <summary>Advanced Gravity (X/Z)</summary>
+        <div class="pe-slider-row">
+          <span class="pe-label">Gravity X</span>
+          <input type="range" min="-10" max="10" step="0.05" [(ngModel)]="editingRecord.gravX"
+                 (input)="onConfigChange(editingRecord)">
+          <input type="number" class="pe-num-sm" min="-10" max="10" step="0.05"
+                 [(ngModel)]="editingRecord.gravX" (change)="onConfigChange(editingRecord)">
+        </div>
+        <div class="pe-slider-row">
+          <span class="pe-label">Gravity Z</span>
+          <input type="range" min="-10" max="10" step="0.05" [(ngModel)]="editingRecord.gravZ"
+                 (input)="onConfigChange(editingRecord)">
+          <input type="number" class="pe-num-sm" min="-10" max="10" step="0.05"
+                 [(ngModel)]="editingRecord.gravZ" (change)="onConfigChange(editingRecord)">
+        </div>
+      </details>
+    </div>
+
+    <!-- ── Section 7: Texture ───────────────────────────────── -->
+    <div class="pe-section">
+      <div class="pe-section-title">Texture</div>
+
+      <div class="pe-toggle-row">
+        <label>Flipbook Animation</label>
+        <input type="checkbox" [(ngModel)]="editingRecord.useFlipbook"
+               (change)="onConfigChange(editingRecord)">
+      </div>
+
+      <ng-container *ngIf="!editingRecord.useFlipbook">
+        <div class="pe-slider-row">
+          <span class="pe-label">Atlas Layer</span>
+          <input type="number" class="pe-num-sm" min="0"
+                 [(ngModel)]="editingRecord.textureIndex" (change)="onConfigChange(editingRecord)">
+        </div>
+        <div class="pe-hint">0 = white default</div>
+      </ng-container>
+
+      <ng-container *ngIf="editingRecord.useFlipbook">
+        <div class="pe-flipbook-frames">
+          <div class="pe-frame-row" *ngFor="let frame of editingRecord.animTextures; let i = index">
+            <span class="pe-frame-label">Frame {{ i + 1 }}</span>
+            <span class="pe-frame-id" [title]="frame">{{ frame }}</span>
+            <button class="pe-del-btn" (click)="removeFlipbookFrame(editingRecord, i)">✕</button>
+          </div>
+          <div *ngIf="editingRecord.animTextures.length === 0" class="pe-hint">No frames added</div>
+        </div>
+        <div class="pe-add-frame-row">
+          <input class="pe-add-frame-input" placeholder="Texture library ID"
+                 [(ngModel)]="editingRecord.addFrameDraft"
+                 (keydown.enter)="addFlipbookFrame(editingRecord)">
+          <button class="pe-add-frame-btn" (click)="addFlipbookFrame(editingRecord)">+ Add</button>
+        </div>
+        <div class="pe-slider-row" style="margin-top:6px">
+          <span class="pe-label">Frame time</span>
+          <input type="range" min="0.033" max="1" step="0.033" [(ngModel)]="editingRecord.animFrameTime"
+                 (input)="onConfigChange(editingRecord)">
+          <span class="pe-val">{{ editingRecord.animFrameTime | number:'1.2-2' }}s
+            (≈{{ (1 / editingRecord.animFrameTime) | number:'1.0-0' }} fps)</span>
+        </div>
+      </ng-container>
+    </div>
+
+  </div><!-- /pe-edit-body -->
+
+  <!-- ── Action Bar ───────────────────────────────────────────── -->
+  <div class="pe-action-bar" (click)="$event.stopPropagation()">
+
+    <div class="pe-reset-wrap">
+      <button class="pe-action-btn" (click)="showResetMenu = !showResetMenu">Reset ▾</button>
+      <div *ngIf="showResetMenu" class="pe-reset-menu">
+        <button *ngFor="let p of PRESET_NAMES" class="pe-reset-item"
+                (click)="resetToPreset(editingRecord, p)">{{ p | titlecase }}</button>
+      </div>
+    </div>
+
+    <button class="pe-action-btn" (click)="duplicateEmitter(editingRecord)">Duplicate</button>
+    <button class="pe-action-btn pe-action-danger" (click)="deleteEditingEmitter(editingRecord)">Delete</button>
+
+  </div>
+
+</div><!-- /pe-edit-overlay -->

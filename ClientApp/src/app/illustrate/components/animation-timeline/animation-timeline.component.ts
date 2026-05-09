@@ -5,6 +5,7 @@ import {
   HostListener,
   ElementRef,
   ViewChild,
+  Input,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -102,6 +103,117 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   @ViewChild('timelineGrid') timelineGridRef!: ElementRef<HTMLDivElement>;
   @ViewChild('timelineLayers') timelineLayersRef!: ElementRef<HTMLDivElement>;
+
+  /** All 3D mesh keyframe tracks — one entry per mesh in the scene (camera row has isCamera: true). */
+  @Input() mesh3dAllTracks: { meshId: string; name: string; tracks: any; isCamera?: boolean }[] = [];
+
+  /** Salsa ShapeManager — passed through to the export dialog. */
+  @Input() shapeManager: any;
+
+  private _collapsedMesh3dIds = new Set<string>();
+
+  toggleMesh3dCollapse(meshId: string): void {
+    if (this._collapsedMesh3dIds.has(meshId)) {
+      this._collapsedMesh3dIds.delete(meshId);
+    } else {
+      this._collapsedMesh3dIds.add(meshId);
+    }
+  }
+
+  isMesh3dCollapsed(meshId: string): boolean {
+    return this._collapsedMesh3dIds.has(meshId);
+  }
+
+  /** The property tracks we expose in the Dope Sheet, in order. */
+  readonly mesh3dTrackDefs: { key: string; label: string; color: string }[] = [
+    { key: 'position', label: 'Position',  color: '#4fc3f7' },
+    { key: 'rotation', label: 'Rotation',  color: '#aed581' },
+    { key: 'scale',    label: 'Scale',     color: '#ffb74d' },
+    { key: 'opacity',  label: 'Opacity',   color: '#f48fb1' },
+    { key: 'visible',  label: 'Visible',   color: '#ce93d8' },
+  ];
+
+  readonly camera3dTrackDefs: { key: string; label: string; color: string }[] = [
+    { key: 'position', label: 'Position', color: '#4fc3f7' },
+    { key: 'target',   label: 'Target',   color: '#aed581' },
+    { key: 'fov',      label: 'FOV',      color: '#ffb74d' },
+  ];
+
+  getTrackDefsForEntry(entry: { isCamera?: boolean }): { key: string; label: string; color: string }[] {
+    return entry.isCamera ? this.camera3dTrackDefs : this.mesh3dTrackDefs;
+  }
+
+  // 3D keyframe easing context menu
+  kfContextMeshId = '';
+  kfContextTrackKey = '';
+  kfContextFrame = 0;
+  kfContextCurrentEasing = 'ease-in-out';
+  kfContextIsCamera = false;
+  showEasingMenu = false;
+
+  readonly easingOptions = [
+    { value: 'step',        label: 'Step',         icon: '◆' },
+    { value: 'linear',      label: 'Linear',       icon: '╱' },
+    { value: 'ease-in',     label: 'Ease In',      icon: '⌒' },
+    { value: 'ease-out',    label: 'Ease Out',      icon: '⌣' },
+    { value: 'ease-in-out', label: 'Ease In-Out',  icon: '∫' },
+  ];
+
+  /** Returns the set of 1-based frame numbers that have a keyframe on the given track. */
+  getTrackFrameSet(tracks: any, trackKey: string): Set<number> {
+    if (!tracks) return new Set();
+    const track: Array<{ frame: number }> | undefined = tracks[trackKey];
+    if (!track?.length) return new Set();
+    return new Set(track.map((kf: any) => kf.frame)); // kf.frame is already 1-based
+  }
+
+  /** True if the given 1-based frame has a keyframe on any track for a given entry. */
+  hasAnyKeyframeAt(tracks: any, frame: number, isCamera = false): boolean {
+    const defs = isCamera ? this.camera3dTrackDefs : this.mesh3dTrackDefs;
+    for (const def of defs) {
+      if (this.getTrackFrameSet(tracks, def.key).has(frame)) return true;
+    }
+    return false;
+  }
+
+  onKfDiamondContextMenu(event: MouseEvent, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+    this.contextMenuFlipUp = event.clientY > window.innerHeight / 2;
+    this.kfContextMeshId = meshId;
+    this.kfContextTrackKey = trackKey;
+    this.kfContextFrame = frame;
+    this.kfContextIsCamera = isCamera;
+    // Read current easing from the track
+    const entry = this.mesh3dAllTracks.find(e => e.meshId === meshId);
+    const track: any[] = entry?.tracks?.[trackKey] ?? [];
+    const kf = track.find((k: any) => k.frame === frame);
+    this.kfContextCurrentEasing = kf?.easing ?? 'ease-in-out';
+    this.showEasingMenu = true;
+    this.contextMenuVisible = false; // easing menu replaces the cel context menu
+  }
+
+  setKfEasing(easing: string): void {
+    if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
+    const sm = this.shapeManager as any;
+    const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
+    const track: any[] = entry?.tracks?.[this.kfContextTrackKey] ?? [];
+    const kf = track.find((k: any) => k.frame === this.kfContextFrame);
+    if (!kf) { this.showEasingMenu = false; return; }
+    if (this.kfContextIsCamera) {
+      sm.setCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame, kf.value, easing);
+    } else {
+      sm.setMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame, kf.value, easing);
+    }
+    this.kfContextCurrentEasing = easing;
+    this.showEasingMenu = false;
+  }
+
+  closeEasingMenu(): void {
+    this.showEasingMenu = false;
+  }
 
   /** Sync vertical scroll from the grid to the layers column */
   onGridVerticalScroll(): void {
@@ -274,6 +386,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   closeContextMenu(): void {
     this.contextMenuVisible = false;
+    this.showEasingMenu = false;
   }
 
   ctxNewCel(): void {

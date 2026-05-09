@@ -21,7 +21,7 @@ export class SignInComponent implements OnInit {
               next: (response) => {
                 console.log('Response headers:', response.headers.keys());
                 // console.log('Token validated');
-                console.log(response);
+                // console.log(response);
                 this.router.navigate(['dashboard']);
               },
               error: (error) => {

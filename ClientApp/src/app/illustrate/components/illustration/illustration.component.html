@@ -9,21 +9,171 @@
 
     <!-- Loading overlay -->
     <div class="loading-overlay" *ngIf="isLoading">
-        <div class="loading-card">
-            <div class="spinner"></div>
-            <div>Loading your board…</div>
-        </div>
+        <div class="loading-label">Loading…</div>
     </div>
 
-    <div #boardShell class="board-shell" [class.ui-hidden]="uiHidden">
+    <!-- Viewer bar (shown only in viewer / public mode) -->
+    <div *ngIf="isViewerMode" class="viewer-bar">
+        <span class="viewer-title">{{ viewerTitle }}</span>
+        <a class="viewer-cta" href="/dashboard">Edit in Frogmarks</a>
+    </div>
+
+    <div #boardShell class="board-shell" [class.ui-hidden]="uiHidden" [class.viewer-mode]="isViewerMode">
         <canvas #webgpuCanvas id="webgpuCanvas"
                 (dragover)="onCanvasDragOver($event)"
-                (drop)="onCanvasDrop($event)"></canvas>
-        <!-- Hidden file input for image import -->
+                (drop)="onCanvasDrop($event)"
+                (pointerdown)="scene3dCanvasPointerDown($event)"
+                (pointermove)="scene3dCanvasPointerMove($event)"
+                (pointerup)="scene3dCanvasPointerUp($event)"></canvas>
+        <canvas #handleCanvas style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
+
+        <!-- 3D rotation drag degree readout -->
+        <div *ngIf="scene3dDragAngleDeg !== null && scene3dDragLabelPos"
+             class="scene3d-angle-label"
+             [style.left.px]="scene3dDragLabelPos.x + 20"
+             [style.top.px]="scene3dDragLabelPos.y - 12">
+          {{ scene3dDragAngleDeg | number:'1.1-1' }}°
+        </div>
+
+        <!-- Snap indicator — shown while Ctrl is held during a drag -->
+        <div *ngIf="scene3dSnapActive" class="scene3d-snap-badge">🔲 SNAP</div>
+
+        <!-- Artboard bounded-mode overlay: shadow vignette + dimension label -->
+        <div *ngIf="artboardShadowStyle && artboardShadowStyle['width']"
+             class="artboard-shadow"
+             [ngStyle]="artboardShadowStyle"></div>
+        <div *ngIf="artboardLabelText"
+             class="artboard-label"
+             [ngStyle]="artboardLabelStyle">{{ artboardLabelText }}</div>
+
+        <!-- No-cloud empty-state: no OPFS data on this device -->
+        <div *ngIf="noCloudEmptyState" class="nc-empty-state">
+          <div class="nc-empty-card">
+            <div class="nc-empty-icon">⬡</div>
+            <div class="nc-empty-title">No local data on this device</div>
+            <div class="nc-empty-body">
+              This illustration uses <strong>No-cloud</strong> storage — its pixel data lives only in the browser
+              where it was created. Import a <strong>.frogmarks</strong> file to restore your work here.
+            </div>
+            <button class="nc-empty-btn" (click)="frogmarksLoadInput.click()">Import .frogmarks file</button>
+          </div>
+        </div>
+
+        <!-- Export reminder banner (no-cloud / local-only) -->
+        <div *ngIf="showExportReminder" class="export-reminder">
+          <span class="export-reminder-icon">💾</span>
+          <span class="export-reminder-text">
+            Back up your work — export a <strong>.frogmarks</strong> file to keep a portable copy.
+          </span>
+          <button class="export-reminder-btn" (click)="exportNowFromReminder()">Export now</button>
+          <button class="export-reminder-dismiss" (click)="dismissExportReminder()" title="Remind me later">✕</button>
+        </div>
+
+        <!-- Sync mode change panel -->
+        <div *ngIf="showSyncModePanel" class="smp-backdrop" (click)="closeSyncModeDialog()">
+          <div class="smp-card" (click)="$event.stopPropagation()">
+
+            <!-- Step 1: selection -->
+            <ng-container *ngIf="syncModePanelStep === 'select'">
+              <div class="smp-header">
+                <span class="smp-title">Storage mode</span>
+                <button class="smp-close" (click)="closeSyncModeDialog()">✕</button>
+              </div>
+              <div class="smp-body">
+
+                <!-- Cloud -->
+                <div class="smp-btn" role="button" tabindex="0"
+                     [class.on]="syncModePanelSelection === 0"
+                     (click)="syncModePanelSelection = 0"
+                     (keydown.enter)="syncModePanelSelection = 0"
+                     (keydown.space)="syncModePanelSelection = 0">
+                  <div class="smp-btn-header">
+                    <span class="smp-btn-icon">☁</span>
+                    <span class="smp-btn-label">Cloud</span>
+                    <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+                      <span class="smp-hint-tip">Your artwork is securely backed up and synced across your devices. Cloud projects are stored online to enable syncing, sharing, and collaboration. Prefer to keep projects only on your device? Choose Local only mode instead.</span>
+                    </span>
+                  </div>
+                  <span class="smp-btn-desc">Syncs to cloud — accessible from any device.</span>
+                </div>
+
+                <!-- No-cloud -->
+                <div class="smp-btn" role="button" tabindex="0"
+                     [class.on]="syncModePanelSelection === 1"
+                     (click)="syncModePanelSelection = 1"
+                     (keydown.enter)="syncModePanelSelection = 1"
+                     (keydown.space)="syncModePanelSelection = 1">
+                  <div class="smp-btn-header">
+                    <span class="smp-btn-icon">⬡</span>
+                    <span class="smp-btn-label">No-cloud</span>
+                    <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+                      <span class="smp-hint-tip">Illustration settings are saved to the server so you can find this file from any device, but your actual pixel data never leaves this browser. It is stored in OPFS — a private, sandboxed area of your local storage that no other site or service can access. Export a .frogmarks file to move your work to another device.</span>
+                    </span>
+                  </div>
+                  <span class="smp-btn-desc">Metadata saved to server. Pixel data stays on this device — never uploaded to Azure.</span>
+                </div>
+
+                <!-- Local only -->
+                <div class="smp-btn" role="button" tabindex="0"
+                     [class.on]="syncModePanelSelection === 2"
+                     (click)="syncModePanelSelection = 2"
+                     (keydown.enter)="syncModePanelSelection = 2"
+                     (keydown.space)="syncModePanelSelection = 2">
+                  <div class="smp-btn-header">
+                    <span class="smp-btn-icon">⬡</span>
+                    <span class="smp-btn-label">Local only</span>
+                    <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+                      <span class="smp-hint-tip">Nothing about this illustration is sent to any server. All data — settings, layers, and pixel data — lives entirely in this browser via OPFS and IndexedDB. Maximum privacy. The trade-off: this device is the only copy. Clearing browser storage permanently deletes it, so export a .frogmarks file regularly.</span>
+                    </span>
+                  </div>
+                  <span class="smp-btn-desc">Zero cloud. Everything stored locally in this browser only.</span>
+                </div>
+
+              </div>
+              <div class="smp-footer">
+                <button class="smp-footer-btn smp-cancel" (click)="closeSyncModeDialog()">Cancel</button>
+                <button class="smp-footer-btn smp-apply"
+                        [disabled]="syncModePanelSelection === syncMode"
+                        (click)="requestSyncModeChange()">Apply</button>
+              </div>
+            </ng-container>
+
+            <!-- Step 2: confirmation (downgrade warning) -->
+            <ng-container *ngIf="syncModePanelStep === 'confirm'">
+              <div class="smp-header">
+                <span class="smp-title">Confirm storage change</span>
+                <button class="smp-close" (click)="closeSyncModeDialog()">✕</button>
+              </div>
+              <div class="smp-confirm-body">
+                <div class="smp-confirm-icon">⚠</div>
+                <div class="smp-confirm-msg" *ngIf="syncModePanelSelection === 2">
+                  Switching to <strong>Local only</strong> will stop all cloud syncing for this illustration.
+                  Your pixel data will exist <strong>only in this browser</strong> — if you clear your browser storage it will be gone permanently.
+                  <br><br>
+                  Export a <strong>.frogmarks</strong> file regularly to keep a backup.
+                </div>
+                <div class="smp-confirm-msg" *ngIf="syncModePanelSelection === 1">
+                  Switching to <strong>No-cloud</strong> will stop pixel data uploads to Azure.
+                  Your artwork will be stored locally via OPFS on this device only —
+                  it will not be accessible from other devices unless you export a <strong>.frogmarks</strong> file.
+                </div>
+              </div>
+              <div class="smp-footer">
+                <button class="smp-footer-btn smp-cancel" (click)="syncModePanelStep = 'select'">← Back</button>
+                <button class="smp-footer-btn smp-apply" (click)="_applySyncModeChange()">Confirm</button>
+              </div>
+            </ng-container>
+
+          </div>
+        </div>
+
+        <!-- Hidden file inputs -->
         <input #imageFileInput type="file" accept="image/*" style="display:none"
                (change)="onImageFileSelected($event)">
         <input #imageFileInputLayer type="file" accept="image/*" style="display:none"
                (change)="onImageFileSelectedToLayer($event)">
+        <input #frogmarksLoadInput type="file" accept=".frogmarks" style="display:none"
+               (change)="frogmarksLoad($event)">
         <!-- Vite will automatically replace the script with the correct entry point -->
         <script type="module" src="/src/main.ts"></script>
 
@@ -34,9 +184,6 @@
             </span>
             <span class="frog-svg">
                 <svg width="20px" height="20px" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--noto" preserveAspectRatio="xMidYMid meet"><path d="M14.16 48.37c-.43 4.5-10 10.84-9.57 26.89s13.09 44.06 57.72 44.77c44.63.7 60.96-27.31 61.1-46.6c.13-17.88-8.58-21.43-9.57-26.04c-.84-3.94 6.76-21.96-10.28-28.44c-20.11-7.65-27.6 11.68-28.16 12.1c-.56.42-6.05.7-10.84.7s-10 0-10.56-.56c-.56-.56-12.81-19.99-30.55-11.83c-16.64 7.67-9.01 26.05-9.29 29.01z" fill="#b7d019"></path><path d="M103.08 42.36c0 5.29-3 9.76-8.02 9.57c-4.33-.16-7.84-4.29-7.84-9.57s3.51-9.49 7.84-9.57c5.11-.1 8.02 4.28 8.02 9.57z" fill="#2f2f2f"></path><path d="M41.89 41.61c.28 6.76-3 10.14-8.02 10.04c-4.22-.08-7.56-3.19-7.65-9.67c-.08-5.34 1.97-9.48 7.65-9.67c4.22-.13 7.8 3.97 8.02 9.3z" fill="#2f2f2f"></path><path d="M53.29 63.5c-.81 1.79-3.06 2.35-4.57 1.48c-1.5-.87-1.91-3.23-.93-4.93c.98-1.7 2.65-1.96 3.87-1.48c1.63.64 2.83 2.28 1.63 4.93z" fill="#2f2f2f"></path><path d="M80.33 60.55c.77 1.86-.16 4.04-1.94 4.57c-1.78.53-3.69-.61-4.26-2.54c-.57-1.93.14-3.61 1.87-4.3c1.13-.44 3.19-.48 4.33 2.27z" fill="#2f2f2f"></path><path d="M27.44 78.31l.38 2.72s10.51 10.98 35.85 11.36c26 .39 37.26-12.29 37.26-12.29l-11.64-5.63s-11.07 4.69-25.34 4.41c-14.27-.28-28.34-4.41-28.34-4.41l-8.17 3.84z" fill="#ff6011"></path><path d="M104.59 71.92c-3.28-4.79-7.23-.43-13.42 1.88c-3.43 1.28-5.7 2.02-5.7 2.02s5.09.99 7.34 2.21s6.17 3.89 6.17 3.89s8.37-5.96 5.61-10z" fill="#865b51"></path><path d="M24.81 71.36c-3.94 2.63 3.02 9.68 3.02 9.68s2.15-1.98 5.06-3.2s7.78-2.1 7.78-2.1s-5.63-1.27-8.9-3.16c-1.69-.96-4.71-2.72-6.96-1.22z" fill="#865b51"></path></svg>
-            </span>
-            <span class="control-panel-header">
-                <!-- text here -->
             </span>
             <div class="col-1 cursor-column">
                 <div *ngIf="cursorSelected" class="top-cursor-item-selected">
@@ -540,13 +687,16 @@
                               [class.saved]="autoSaveState === 'saved'"
                               [class.error]="autoSaveState === 'error'"
                               [class.unavailable]="autoSaveState === 'unavailable'"
-                              [title]="autoSaveState === 'saving' ? 'Saving…'
-                                     : autoSaveState === 'saved' ? 'Saved ✓'
-                                     : autoSaveState === 'error' ? 'Save failed — click to retry'
-                                     : autoSaveState === 'unavailable' ? 'Auto-save unavailable in this browser mode'
-                                     : 'Auto-save is active. Your work is saved automatically.'"
+                              [title]="autoSaveState === 'saving'
+                                       ? (syncMode > 0 ? 'Saving locally…' : 'Saving…')
+                                       : autoSaveState === 'saved'
+                                         ? (syncMode > 0 ? 'Saved locally ✓' : 'Saved ✓')
+                                         : autoSaveState === 'error' ? 'Save failed — click to retry'
+                                         : autoSaveState === 'unavailable' ? 'Auto-save unavailable in this browser mode'
+                                         : syncMode > 0 ? 'Saves to local storage on this device.'
+                                         : 'Auto-save is active. Your work is saved automatically.'"
                               (click)="autoSaveState === 'error' ? saveNow() : null">
-                          <span *ngIf="autoSaveState === 'idle'">☁️</span>
+                          <span *ngIf="autoSaveState === 'idle'">{{ syncMode > 0 ? '⬡' : '☁️' }}</span>
                           <span *ngIf="autoSaveState === 'saving'" class="spin">⟳</span>
                           <span *ngIf="autoSaveState === 'saved'" style="color: #6f6;">✓</span>
                           <span *ngIf="autoSaveState === 'error'" style="color: #fa0;">⚠️</span>
@@ -558,141 +708,162 @@
                 <!-- Right group: Menu bar + Share -->
                 <div class="top-toolbar-right">
                     <div class="menubar-group">
-                        <div class="menubar-btn" [class.active]="showFileMenu"
-                             (click)="toggleFileMenu(); $event.stopPropagation()">File</div>
-                        <div class="menubar-btn" [class.active]="showEditMenu"
-                             (click)="toggleEditMenu(); $event.stopPropagation()">Edit</div>
-                        <div class="menubar-btn" [class.active]="showAnimationMenu"
-                             (click)="toggleAnimationMenu(); $event.stopPropagation()">Animation</div>
+                        <div class="menubar-item">
+                            <div class="menubar-btn" [class.active]="showFileMenu"
+                                 (click)="toggleFileMenu(); $event.stopPropagation()">File</div>
+                            <div *ngIf="showFileMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+                                <div class="edit-menu-item" (click)="saveNow(); closeAllMenus()">
+                                    <span>Save</span><span class="shortcut">Ctrl+S</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" [class.disabled]="frogmarksSaving" (click)="frogmarksSave(); closeAllMenus()">
+                                    <span>{{ frogmarksSaving ? 'Saving…' : 'Save .frogmarks…' }}</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="frogmarksLoadInput.click(); closeAllMenus()">
+                                    <span>Open .frogmarks…</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="importImageAsNewLayer(); closeAllMenus()">
+                                    <span>Import Image as Layer</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="importImageToCurrentLayer(); closeAllMenus()">
+                                    <span>Import Image to Layer</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="downloadCanvasViewAsPng(); closeAllMenus()">
+                                    <span>Export as PNG</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="newIllustrationButtonClicked(); closeAllMenus()">
+                                    <span>New Board</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="duplicateIllustrationButtonClicked(); closeAllMenus()">
+                                    <span>Duplicate Board</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="setCurrentViewAsThumbnail(); closeAllMenus()">
+                                    <span>Capture Thumbnail</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="toggleFullscreen(); closeAllMenus()">
+                                    <span>Toggle Full Screen</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="toggleUI(true); closeAllMenus()">
+                                    <span>Toggle UI</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="toggleLayerTree(); closeAllMenus()">
+                                    <span>Toggle Layer Tree</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="openSyncModeDialog(); closeAllMenus()">
+                                    <span>Storage mode…</span>
+                                    <span class="shortcut" style="font-size:10px; opacity:.6">
+                                      {{ syncMode === 0 ? 'Cloud' : syncMode === 1 ? 'No-cloud' : 'Local' }}
+                                    </span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" [class.disabled]="isPublishing" (click)="publishIllustration()">
+                                    <span>{{ isPublishing ? 'Publishing…' : (illustration?.isPublic ? 'Republish' : 'Publish…') }}</span>
+                                </div>
+                                <div *ngIf="illustration?.isPublic" class="edit-menu-item" (click)="unpublishIllustration()">
+                                    <span>Unpublish</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="returnToDashboard(); closeAllMenus()">
+                                    <span>Back to Dashboard</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="menubar-item">
+                            <div class="menubar-btn" [class.active]="showEditMenu"
+                                 (click)="toggleEditMenu(); $event.stopPropagation()">Edit</div>
+                            <div *ngIf="showEditMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+                                <div class="edit-menu-item" (click)="rasterUndo(); closeAllMenus()">
+                                    <span>Undo</span><span class="shortcut">Ctrl+Z</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterRedo(); closeAllMenus()">
+                                    <span>Redo</span><span class="shortcut">Ctrl+Y</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.cut(); closeAllMenus()">
+                                    <span>Cut</span><span class="shortcut">Ctrl+X</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.copy(); closeAllMenus()">
+                                    <span>Copy</span><span class="shortcut">Ctrl+C</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.paste(); closeAllMenus()">
+                                    <span>Paste</span><span class="shortcut">Ctrl+V</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="pasteImageFromClipboard(); closeAllMenus()">
+                                    <span>Paste Image</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.deleteSelection(); closeAllMenus()">
+                                    <span>Delete</span><span class="shortcut">Del</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.selectAll(); closeAllMenus()">
+                                    <span>Select All</span><span class="shortcut">Ctrl+A</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.deselectAll(); closeAllMenus()">
+                                    <span>Deselect</span><span class="shortcut">Ctrl+D</span>
+                                </div>
+                                <div class="edit-menu-item" (click)="rasterSelectionService.invertSelection(); closeAllMenus()">
+                                    <span>Invert Selection</span><span class="shortcut">Ctrl+Shift+I</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterSelectionService.info.hasSelection && rasterSelectionService.beginTransform(); closeAllMenus()">
+                                    <span>Free Transform</span><span class="shortcut">Ctrl+T</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterFlipHorizontal(); closeAllMenus()">
+                                    <span>Flip Horizontal</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterFlipVertical(); closeAllMenus()">
+                                    <span>Flip Vertical</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterRotate(90); closeAllMenus()">
+                                    <span>Rotate 90° CW</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterRotate(-90); closeAllMenus()">
+                                    <span>Rotate 90° CCW</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
+                                     (click)="rasterRotate(180); closeAllMenus()">
+                                    <span>Rotate 180°</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="menubar-item">
+                            <div class="menubar-btn" [class.active]="showAnimationMenu"
+                                 (click)="toggleAnimationMenu(); $event.stopPropagation()">Animation</div>
+                            <div *ngIf="showAnimationMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+                                <div class="edit-menu-item" (click)="toggleAnimationMode(); closeAllMenus()">
+                                    <span>{{ animationEnabled ? '✓ Animation Enabled' : 'Enable Animation' }}</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
+                                     (click)="menuInsertFrame(); closeAllMenus()">
+                                    <span>Insert Frame</span><span class="shortcut">F7</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
+                                     (click)="menuDeleteFrame(); closeAllMenus()">
+                                    <span>Delete Frame</span>
+                                </div>
+                                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
+                                     (click)="menuAddFrames(); closeAllMenus()">
+                                    <span>Add 12 Frames</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
+                                     (click)="menuAddCel(); closeAllMenus()">
+                                    <span>Add Cel</span><span class="shortcut">F5</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="top-toolbar-btn share-btn" (click)="downloadCanvasViewAsPng()" title="Share">Share</div>
-                </div>
-            </div>
-
-            <!-- ── File Menu Dropdown ── -->
-            <div *ngIf="showFileMenu" class="edit-menu-dropdown menubar-dropdown file-dropdown" (click)="$event.stopPropagation()">
-                <div class="edit-menu-item" (click)="saveNow(); closeAllMenus()">
-                    <span>Save</span><span class="shortcut">Ctrl+S</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="importImageAsNewLayer(); closeAllMenus()">
-                    <span>Import Image as Layer</span>
-                </div>
-                <div class="edit-menu-item" (click)="importImageToCurrentLayer(); closeAllMenus()">
-                    <span>Import Image to Layer</span>
-                </div>
-                <div class="edit-menu-item" (click)="downloadCanvasViewAsPng(); closeAllMenus()">
-                    <span>Export as PNG</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="newIllustrationButtonClicked(); closeAllMenus()">
-                    <span>New Board</span>
-                </div>
-                <div class="edit-menu-item" (click)="duplicateIllustrationButtonClicked(); closeAllMenus()">
-                    <span>Duplicate Board</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="setCurrentViewAsThumbnail(); closeAllMenus()">
-                    <span>Capture Thumbnail</span>
-                </div>
-                <div class="edit-menu-item" (click)="toggleFullscreen(); closeAllMenus()">
-                    <span>Toggle Full Screen</span>
-                </div>
-                <div class="edit-menu-item" (click)="toggleUI(true); closeAllMenus()">
-                    <span>Toggle UI</span>
-                </div>
-                <div class="edit-menu-item" (click)="toggleLayerTree(); closeAllMenus()">
-                    <span>Toggle Layer Tree</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="returnToDashboard(); closeAllMenus()">
-                    <span>Back to Dashboard</span>
-                </div>
-            </div>
-
-            <!-- ── Edit Menu Dropdown ── -->
-            <div *ngIf="showEditMenu" class="edit-menu-dropdown menubar-dropdown edit-dropdown" (click)="$event.stopPropagation()">
-                <div class="edit-menu-item" (click)="rasterUndo(); closeAllMenus()">
-                    <span>Undo</span><span class="shortcut">Ctrl+Z</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterRedo(); closeAllMenus()">
-                    <span>Redo</span><span class="shortcut">Ctrl+Y</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.cut(); closeAllMenus()">
-                    <span>Cut</span><span class="shortcut">Ctrl+X</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.copy(); closeAllMenus()">
-                    <span>Copy</span><span class="shortcut">Ctrl+C</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.paste(); closeAllMenus()">
-                    <span>Paste</span><span class="shortcut">Ctrl+V</span>
-                </div>
-                <div class="edit-menu-item" (click)="pasteImageFromClipboard(); closeAllMenus()">
-                    <span>Paste Image</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.deleteSelection(); closeAllMenus()">
-                    <span>Delete</span><span class="shortcut">Del</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.selectAll(); closeAllMenus()">
-                    <span>Select All</span><span class="shortcut">Ctrl+A</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.deselectAll(); closeAllMenus()">
-                    <span>Deselect</span><span class="shortcut">Ctrl+D</span>
-                </div>
-                <div class="edit-menu-item" (click)="rasterSelectionService.invertSelection(); closeAllMenus()">
-                    <span>Invert Selection</span><span class="shortcut">Ctrl+Shift+I</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterSelectionService.info.hasSelection && rasterSelectionService.beginTransform(); closeAllMenus()">
-                    <span>Free Transform</span><span class="shortcut">Ctrl+T</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterFlipHorizontal(); closeAllMenus()">
-                    <span>Flip Horizontal</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterFlipVertical(); closeAllMenus()">
-                    <span>Flip Vertical</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterRotate(90); closeAllMenus()">
-                    <span>Rotate 90° CW</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterRotate(-90); closeAllMenus()">
-                    <span>Rotate 90° CCW</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!rasterSelectionService.info.hasSelection"
-                     (click)="rasterRotate(180); closeAllMenus()">
-                    <span>Rotate 180°</span>
-                </div>
-            </div>
-
-            <!-- ── Animation Menu Dropdown ── -->
-            <div *ngIf="showAnimationMenu" class="edit-menu-dropdown menubar-dropdown anim-dropdown" (click)="$event.stopPropagation()">
-                <div class="edit-menu-item" (click)="toggleAnimationMode(); closeAllMenus()">
-                    <span>{{ animationEnabled ? '✓ Animation Enabled' : 'Enable Animation' }}</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
-                     (click)="menuInsertFrame(); closeAllMenus()">
-                    <span>Insert Frame</span><span class="shortcut">F7</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
-                     (click)="menuDeleteFrame(); closeAllMenus()">
-                    <span>Delete Frame</span>
-                </div>
-                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
-                     (click)="menuAddFrames(); closeAllMenus()">
-                    <span>Add 12 Frames</span>
-                </div>
-                <div class="edit-menu-divider"></div>
-                <div class="edit-menu-item" [class.disabled]="!animationEnabled"
-                     (click)="menuAddCel(); closeAllMenus()">
-                    <span>Add Cel</span><span class="shortcut">F5</span>
                 </div>
             </div>
         </div>
@@ -767,63 +938,826 @@
 
         <!-- Layer Panel (inside right-column wrapper) -->
         <div *ngIf="!layerTreeHidden" class="layer-panel">
-            
-            <!-- ── root call ───────────────────────────────────────────── -->
-            <ng-container 
-            *ngTemplateOutlet="recursiveList; context:{ $implicit: filteredLayers, level: 0 }">
-            </ng-container>
-            <!-- ── recursive template for layers ─────────────────────────────────── -->
-            <ng-template #recursiveList let-nodes let-level="level">
-                <ul class="list-unstyled mt-2 layer-item-list" [class.ms-3]="level === 0">
-                    <li class="layer-item"
-                        *ngFor="let layer of nodes; trackBy: trackById"
-                        [ngClass]="{ 
-                            'layer-item-selected': selectedLayerIds.has(layer.id),
-                            'layer-item-hovered': hoveredLayerId === layer.id && !selectedLayerIds.has(layer.id)
-                        }"
-                        (click)="selectLayer(layer, $event); $event.stopPropagation()"
-                        (mouseover)="hoverLayer($event, layer); $event.stopPropagation()"
-                        (mouseout)="unhoverLayer($event, layer); $event.stopPropagation()">
-                        
-                        <div style="
-                            position: absolute;
-                            top: 50%;
-                            left: 0;
-                            width: 16px;
-                            height: 1px;
-                            background: white;
-                            transform: translateY(-50%);"
-                            ></div>
-
-                        <mat-icon class="layer-raster-icon" style="transform-origin: bottom; transform: scale(0.75);">polyline</mat-icon>
-                        <input #layerInput 
-                            style="background-color: transparent; border: none; color: white; max-width: 150px; vertical-align: text-bottom;" 
-                            [(ngModel)]="layer.name" 
-                            (blur)="onNameBlur(layer)" 
-                            (keydown.enter)="onEnter(layerInput, layer)" />
-
-                        <mat-icon [ngClass]="!layer.locked ? 'layer-lock-icon' : 'fixed-layer-lock-icon'" (click)="toggleLock(layer); $event.stopPropagation()">
-                            {{ layer.locked ? 'lock' : 'lock_open' }}
-                        </mat-icon>
-
-                        <mat-icon [ngClass]="layer.visible ? 'layer-visibility-icon' : 'fixed-layer-visibility-icon'" (click)="toggleVisibility(layer); $event.stopPropagation()">
-                            {{ layer.visible ? 'visibility' : 'visibility_off' }}
-                        </mat-icon>
-                        
-                        <!-- Recursive call if children exist -->
-                        <ng-container *ngIf="layer.children?.length > 0">
-                            <ng-container *ngTemplateOutlet="recursiveList; context: { $implicit: layer.children, level: level + 1 }"></ng-container>
-                        </ng-container>
-                    </li>
-                </ul>
-            </ng-template>
 
             <!-- Raster layers — Phase 2 compositor panel -->
             <div *ngIf="rasterLayers?.length > 0" class="raster-layers-inline">
-                <app-raster-layers></app-raster-layers>
+                <app-raster-layers (scene3dSelected)="onScene3dSelected($event)"></app-raster-layers>
 
-                <!-- Per-Layer Dither Settings (shown when a raster layer is selected) -->
-                <div *ngIf="selectedRasterLayerId" class="layer-dither-section">
+                <!-- ═══ 3D Scene Panel (shown when 3D scene entry is selected) ═══ -->
+                <div *ngIf="scene3dPanelVisible && has3DScene" class="scene3d-section">
+                    <div class="scene3d-header scene3d-header-row">
+                        <span>3D Scene</span>
+                        <div class="scene3d-undo-btns">
+                            <button class="scene3d-icon-btn scene3d-undo-icon" [disabled]="!canUndo3D" [title]="undoDescription3D" (click)="scene3dUndo()">↩</button>
+                            <button class="scene3d-icon-btn scene3d-undo-icon" [disabled]="!canRedo3D" [title]="redoDescription3D" (click)="scene3dRedo()">↪</button>
+                        </div>
+                    </div>
+
+                    <details class="scene3d-details" open>
+                        <summary>Outliner</summary>
+                        <!-- Action row: Add Mesh dropdown + Import -->
+                        <div class="scene3d-outliner-actions">
+                            <div class="scene3d-add-mesh-wrap" (click)="$event.stopPropagation()">
+                                <button class="scene3d-btn scene3d-add-mesh-btn"
+                                        (click)="scene3dShowAddMeshMenu = !scene3dShowAddMeshMenu">+ Add Mesh ▾</button>
+                                <div *ngIf="scene3dShowAddMeshMenu" class="scene3d-add-mesh-dropdown">
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('box'); scene3dShowAddMeshMenu=false">Box</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('sphere'); scene3dShowAddMeshMenu=false">Sphere</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('plane'); scene3dShowAddMeshMenu=false">Plane</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('cylinder'); scene3dShowAddMeshMenu=false">Cylinder</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('torus'); scene3dShowAddMeshMenu=false">Torus</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddGroup(); scene3dShowAddMeshMenu=false">Group</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddRibbon(); scene3dShowAddMeshMenu=false"
+                                         title="Ribbon — flat strip for banners/scrolling text">Ribbon</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dOpenClothBuilder(); scene3dShowAddMeshMenu=false"
+                                         title="Cloth — GPU-simulated fabric mesh">Cloth…</div>
+                                </div>
+                            </div>
+                            <button class="scene3d-btn" (click)="modelFileInput.click()" title="Import .glb, .gltf, or .obj file" style="margin-left:auto">↑ Import</button>
+                            <input #modelFileInput type="file" accept=".glb,.gltf,.obj" style="display:none" (change)="scene3dImportModelFromPicker($event)">
+                        </div>
+                        <div class="scene3d-mesh-list" *ngIf="scene3dHierarchy.length > 0">
+                            <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: scene3dHierarchy, depth: 0 }"></ng-container>
+                        </div>
+                    </details>
+
+                    <ng-template #outlinerNodes let-nodes="nodes" let-depth="depth">
+                        <ng-container *ngFor="let node of nodes">
+                            <div class="scene3d-mesh-item"
+                                 [class.active]="scene3dSelectedMeshId === node.id"
+                                 [class.scene3d-node-hidden]="!node.visible"
+                                 [style.paddingLeft.px]="8 + depth * 16"
+                                 (click)="node.type !== '3DMeshGroup' ? scene3dSelectMesh(node.id) : null"
+                                 (mouseenter)="node.type !== '3DMeshGroup' ? scene3dSetHovered(node.id) : null"
+                                 (mouseleave)="node.type !== '3DMeshGroup' ? scene3dSetHovered(null) : null">
+                                <button class="scene3d-eye-btn"
+                                        [class.scene3d-eye-hidden]="!node.visible"
+                                        (click)="scene3dToggleVisibility(node); $event.stopPropagation()"
+                                        [title]="node.visible ? 'Hide' : 'Show'">👁</button>
+                                <span *ngIf="node.type === '3DMeshGroup'" class="scene3d-node-icon"
+                                      (click)="scene3dToggleGroupCollapse(node.id); $event.stopPropagation()">
+                                    {{ scene3dCollapsedGroups.has(node.id) ? '▶' : '▼' }} 📁
+                                </span>
+                                <span *ngIf="node.type !== '3DMeshGroup'" class="scene3d-node-icon">⬡</span>
+                                <span *ngIf="scene3dRenamingId !== node.id" class="scene3d-mesh-name"
+                                      (dblclick)="scene3dStartRename(node, $event)">{{ node.name }}</span>
+                                <input *ngIf="scene3dRenamingId === node.id" class="scene3d-rename-input"
+                                       [(ngModel)]="scene3dRenamingName"
+                                       (blur)="scene3dCommitRename(node)"
+                                       (keydown.enter)="scene3dCommitRename(node)"
+                                       (keydown.escape)="scene3dCancelRename()"
+                                       (click)="$event.stopPropagation()"
+                                       autofocus>
+                                <button *ngIf="scene3dClothIds.has(node.id)" class="scene3d-move-btn scene3d-cloth-edit-btn"
+                                        (click)="scene3dOpenClothBuilder(node.id); $event.stopPropagation()"
+                                        title="Edit cloth mesh">✎</button>
+                                <button class="scene3d-move-btn" (click)="scene3dMoveMesh(node.id, 'up'); $event.stopPropagation()" title="Move up">↑</button>
+                                <button class="scene3d-move-btn" (click)="scene3dMoveMesh(node.id, 'down'); $event.stopPropagation()" title="Move down">↓</button>
+                                <button *ngIf="node.type !== '3DMeshGroup'" class="scene3d-move-btn"
+                                        (click)="scene3dDuplicateMesh(node.id); $event.stopPropagation()"
+                                        title="Duplicate mesh (Ctrl+D)">⧉</button>
+                                <button class="scene3d-mesh-delete"
+                                        (click)="node.type === '3DMeshGroup' ? scene3dDeleteGroup(node.id) : scene3dDeleteMesh(node.id); $event.stopPropagation()"
+                                        [title]="node.type === '3DMeshGroup' ? 'Delete group (children promoted to root)' : 'Delete mesh'">🗑</button>
+                            </div>
+                            <ng-container *ngIf="node.type === '3DMeshGroup' && node.children?.length && !scene3dCollapsedGroups.has(node.id)">
+                                <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: node.children, depth: depth + 1 }"></ng-container>
+                            </ng-container>
+                        </ng-container>
+                    </ng-template>
+
+                    <details *ngIf="scene3dSelectedMeshId" class="scene3d-section-group" open>
+                    <summary class="scene3d-major-header">SELECTED MESH</summary>
+
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId" open>
+                        <summary>Transform</summary>
+                        <div class="scene3d-vec3-row">
+                            <span class="scene3d-vec3-label">Pos</span>
+                            <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosX" (input)="scene3dUpdateMeshPosition()" title="X">
+                            <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosY" (input)="scene3dUpdateMeshPosition()" title="Y">
+                            <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosZ" (input)="scene3dUpdateMeshPosition()" title="Z">
+                        </div>
+                        <div class="scene3d-vec3-row">
+                            <span class="scene3d-vec3-label">Rot</span>
+                            <input type="number" step="5" [(ngModel)]="scene3dMeshRotX" (input)="scene3dUpdateMeshRotation()" title="X°">
+                            <input type="number" step="5" [(ngModel)]="scene3dMeshRotY" (input)="scene3dUpdateMeshRotation()" title="Y°">
+                            <input type="number" step="5" [(ngModel)]="scene3dMeshRotZ" (input)="scene3dUpdateMeshRotation()" title="Z°">
+                        </div>
+                        <div class="scene3d-vec3-row">
+                            <span class="scene3d-vec3-label">Scale</span>
+                            <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleX" (input)="scene3dUpdateMeshScale()" title="X">
+                            <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleY" (input)="scene3dUpdateMeshScale()" title="Y">
+                            <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleZ" (input)="scene3dUpdateMeshScale()" title="Z">
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
+                        <summary>Material</summary>
+
+                        <!-- Single-material mode (no submesh slots) -->
+                        <ng-container *ngIf="scene3dSubmeshes.length === 0">
+                            <div class="scene3d-material-row">
+                                <label>Color</label>
+                                <input type="color" [(ngModel)]="scene3dMeshColor" (input)="scene3dUpdateMeshColor()">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Opacity</label>
+                                <input type="range" min="0" max="100" step="1" [value]="scene3dMeshOpacity * 100" (input)="scene3dMeshOpacity = +$any($event.target).value / 100; scene3dUpdateMeshOpacity()">
+                                <span class="scene3d-val">{{ mathRound(scene3dMeshOpacity * 100) }}%</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Style</label>
+                                <select class="scene3d-select" [ngModel]="scene3dRenderStyle" (ngModelChange)="scene3dSetRenderStyle($event)">
+                                    <option value="default">Default</option>
+                                    <option value="cel">Cel / Toon</option>
+                                    <option value="sketch">Sketch</option>
+                                    <option value="ink">Ink / Manga</option>
+                                </select>
+                            </div>
+                        </ng-container>
+
+                        <!-- Multi-material slots mode -->
+                        <ng-container *ngIf="scene3dSubmeshes.length > 0">
+                            <div class="scene3d-submesh-list">
+                                <div *ngFor="let slot of scene3dSubmeshes; let i = index" class="scene3d-submesh-slot">
+                                    <div class="scene3d-submesh-header">
+                                        <input class="scene3d-submesh-label-input" [(ngModel)]="slot.label"
+                                               (change)="scene3dUpdateSubmeshLabel(i)"
+                                               [title]="'Slot ' + i + ' label'">
+                                        <button class="scene3d-move-btn" (click)="scene3dRemoveSubmesh(i)" title="Remove slot">🗑</button>
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Color</label>
+                                        <input type="color" [(ngModel)]="slot.color" (input)="scene3dUpdateSubmeshColor(i)">
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Opacity</label>
+                                        <input type="range" min="0" max="100" step="1" [value]="slot.opacity * 100"
+                                               (input)="slot.opacity = +$any($event.target).value / 100; scene3dUpdateSubmeshOpacity(i)">
+                                        <span class="scene3d-val">{{ mathRound(slot.opacity * 100) }}%</span>
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Style</label>
+                                        <select class="scene3d-select" [(ngModel)]="slot.renderStyle"
+                                                (ngModelChange)="scene3dUpdateSubmeshRenderStyle(i, $event)">
+                                            <option value="default">Default</option>
+                                            <option value="cel">Cel / Toon</option>
+                                            <option value="sketch">Sketch</option>
+                                            <option value="ink">Ink / Manga</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="scene3d-btn" style="margin-top:4px;width:100%"
+                                    (click)="scene3dClearSubmeshes()"
+                                    title="Revert to single-material mode">↩ Use Single Material</button>
+                        </ng-container>
+                    </details>
+
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
+                        <summary>Texture</summary>
+                        <div class="scene3d-texture-row">
+                            <label class="scene3d-texture-label">Diffuse</label>
+                            <span class="scene3d-texture-state">{{ scene3dDiffuseTextureSet ? 'Set' : 'None' }}</span>
+                            <button class="scene3d-btn scene3d-btn-sm" (click)="diffuseFileInput.click()">Upload</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [disabled]="!scene3dDiffuseTextureSet" (click)="scene3dClearDiffuseTexture()">Clear</button>
+                            <input #diffuseFileInput type="file" accept="image/*" style="display:none" (change)="scene3dUploadDiffuseTexture($event)">
+                        </div>
+                        <div class="scene3d-texture-row">
+                            <label class="scene3d-texture-label">Normal Map</label>
+                            <span class="scene3d-texture-state">{{ scene3dNormalMapSet ? 'Set' : 'None' }}</span>
+                            <button class="scene3d-btn scene3d-btn-sm" (click)="normalMapFileInput.click()">Upload</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [disabled]="!scene3dNormalMapSet" (click)="scene3dClearNormalMap()">Clear</button>
+                            <input #normalMapFileInput type="file" accept="image/*" style="display:none" (change)="scene3dUploadNormalMap($event)">
+                        </div>
+                        <div *ngIf="scene3dNormalMapSet" class="scene3d-normal-badge">Per-pixel lighting active</div>
+                    </details>
+
+
+                    <!-- Cloth inspector — only visible when selected mesh is ClothMesh3D -->
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId && scene3dIsCloth" open>
+                        <summary>Cloth</summary>
+                        <div class="scene3d-material-row" *ngIf="clothInfoGrid">
+                            <label>Grid</label>
+                            <span class="scene3d-val">{{ clothInfoGrid.cols }} × {{ clothInfoGrid.rows }}</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="clothInfoGrid">
+                            <label>Cell size</label>
+                            <span class="scene3d-val">{{ clothInfoGrid.cellSize }}</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="clothInfoVertexCount != null">
+                            <label>Vertices</label>
+                            <span class="scene3d-val">{{ clothInfoVertexCount }}</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="clothInfoTriCount != null">
+                            <label>Triangles</label>
+                            <span class="scene3d-val">{{ clothInfoTriCount }}</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="clothInfoSim">
+                            <label>Simulated</label>
+                            <span class="scene3d-val">
+                                {{ clothInfoSim.isSimulated ? (clothInfoSim.simulationMode | titlecase) : 'No' }}
+                            </span>
+                        </div>
+                        <div class="scene3d-outliner-actions" style="margin-top:8px;gap:6px">
+                            <button class="scene3d-btn" (click)="scene3dOpenClothBuilder(scene3dSelectedMeshId!)">✎ Edit Cloth…</button>
+                            <button class="scene3d-btn" (click)="scene3dReSimulateCloth()">▶ Re-Simulate</button>
+                        </div>
+
+                        <div class="scene3d-major-header" style="margin-top:12px">Live Physics</div>
+                        <div class="scene3d-toggle-row">
+                            <label>Enable</label>
+                            <input type="checkbox" [checked]="clothLiveEnabled" (change)="setLiveCloth($any($event.target).checked)">
+                        </div>
+
+                        <ng-container *ngIf="clothLiveEnabled">
+                            <div class="scene3d-major-header" style="margin-top:10px">Wind Animation</div>
+                            <div class="scene3d-toggle-row">
+                                <label>Enable</label>
+                                <input type="checkbox" [checked]="clothWindEnabled" (change)="clothWindEnabled=$any($event.target).checked; applyWindAnimation()">
+                            </div>
+                            <ng-container *ngIf="clothWindEnabled">
+                                <div class="scene3d-material-row">
+                                    <label>Direction</label>
+                                    <select class="scene3d-select" [(ngModel)]="clothWindAxis" (ngModelChange)="applyWindAnimation()">
+                                        <option value="x">X (Sideways)</option>
+                                        <option value="y">Y (Updraft)</option>
+                                        <option value="z">Z (Depth)</option>
+                                    </select>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Peak Force</label>
+                                    <input type="range" min="0" max="20" step="0.1" [(ngModel)]="clothWindAmplitude" (input)="applyWindAnimation()">
+                                    <span class="scene3d-val">{{ clothWindAmplitude | number:'1.1-1' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Gust Speed</label>
+                                    <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="clothWindFramesPerCycle" (change)="applyWindAnimation()">
+                                    <span class="scene3d-val" style="font-size:10px">fr</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Phase</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="clothWindPhase" (input)="applyWindAnimation()">
+                                    <span class="scene3d-val">{{ clothWindPhase | number:'1.2-2' }}</span>
+                                </div>
+                            </ng-container>
+
+                            <!-- Wind Zones -->
+                            <div class="scene3d-major-header" style="margin-top:12px">Wind Zones</div>
+                            <div class="scene3d-wind-zone-list" *ngIf="windZones.length">
+                                <div class="scene3d-wind-zone-row"
+                                     *ngFor="let z of windZones; let i = index"
+                                     [class.active]="windZoneSelectedIdx === i"
+                                     (click)="selectWindZone(i)">
+                                    <span class="scene3d-wind-zone-label">
+                                        Zone {{ i + 1 }} <span style="opacity:0.45">({{ z.shape }})</span>
+                                    </span>
+                                    <button class="scene3d-icon-btn" (click)="removeWindZone(i); $event.stopPropagation()" title="Remove zone">✕</button>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap">
+                                <button class="scene3d-btn" (click)="addWindZone()">+ Add Zone</button>
+                                <button class="scene3d-btn" *ngIf="windZones.length > 1" (click)="clearAllWindZones()">Clear All</button>
+                            </div>
+
+                            <ng-container *ngIf="windZoneSelectedIdx !== null">
+                                <div class="scene3d-material-row" style="margin-top:6px">
+                                    <label>Shape</label>
+                                    <select class="scene3d-select" [(ngModel)]="windZoneShape" (ngModelChange)="updateSelectedWindZone()">
+                                        <option value="sphere">Sphere</option>
+                                        <option value="box">Box</option>
+                                    </select>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Center</label>
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[0]" (change)="updateSelectedWindZone()">
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[1]" (change)="updateSelectedWindZone()">
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[2]" (change)="updateSelectedWindZone()">
+                                </div>
+                                <ng-container *ngIf="windZoneShape === 'sphere'">
+                                    <div class="scene3d-material-row">
+                                        <label>Radius</label>
+                                        <input type="number" min="0.01" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneRadius" (change)="updateSelectedWindZone()">
+                                    </div>
+                                </ng-container>
+                                <ng-container *ngIf="windZoneShape === 'box'">
+                                    <div class="scene3d-material-row">
+                                        <label>Box Min</label>
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[0]" (change)="updateSelectedWindZone()">
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[1]" (change)="updateSelectedWindZone()">
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[2]" (change)="updateSelectedWindZone()">
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Box Max</label>
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[0]" (change)="updateSelectedWindZone()">
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[1]" (change)="updateSelectedWindZone()">
+                                        <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[2]" (change)="updateSelectedWindZone()">
+                                    </div>
+                                </ng-container>
+                                <div class="scene3d-material-row">
+                                    <label>Wind</label>
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindX" (change)="updateSelectedWindZone()" placeholder="X">
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindY" (change)="updateSelectedWindZone()" placeholder="Y">
+                                    <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindZ" (change)="updateSelectedWindZone()" placeholder="Z">
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Falloff</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZoneFalloff" (input)="updateSelectedWindZone()">
+                                    <span class="scene3d-val">{{ windZoneFalloff | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-toggle-row">
+                                    <label>Pulse</label>
+                                    <input type="checkbox" [(ngModel)]="windZonePulseEnabled" (ngModelChange)="updateSelectedWindZone()">
+                                </div>
+                                <ng-container *ngIf="windZonePulseEnabled">
+                                    <div class="scene3d-material-row">
+                                        <label>Period</label>
+                                        <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="windZonePulsePeriod" (change)="updateSelectedWindZone()">
+                                        <span class="scene3d-val" style="font-size:10px">fr</span>
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Phase</label>
+                                        <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZonePulsePhase" (input)="updateSelectedWindZone()">
+                                        <span class="scene3d-val">{{ windZonePulsePhase | number:'1.2-2' }}</span>
+                                    </div>
+                                </ng-container>
+                            </ng-container>
+                        </ng-container>
+                    </details>
+
+                    <!-- Ribbon Path editor — only visible when selected mesh is a ribbon -->
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId && scene3dIsRibbon">
+                        <summary>Ribbon Path</summary>
+                        <div class="scene3d-material-row">
+                            <label>Width</label>
+                            <input type="range" min="0.01" max="2" step="0.01" [(ngModel)]="scene3dRibbonWidth" (input)="scene3dUpdateRibbonWidth()">
+                            <span class="scene3d-val">{{ scene3dRibbonWidth | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Segments</label>
+                            <div class="segment-row">
+                                <button class="segment-btn" [class.active]="scene3dRibbonSegments === 8"  (click)="scene3dSetRibbonSegments(8)">8</button>
+                                <button class="segment-btn" [class.active]="scene3dRibbonSegments === 16" (click)="scene3dSetRibbonSegments(16)">16</button>
+                                <button class="segment-btn" [class.active]="scene3dRibbonSegments === 32" (click)="scene3dSetRibbonSegments(32)">32</button>
+                                <button class="segment-btn" [class.active]="scene3dRibbonSegments === 64" (click)="scene3dSetRibbonSegments(64)">64</button>
+                            </div>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Sides</label>
+                            <div class="segment-row">
+                                <button class="segment-btn" [class.active]="scene3dRibbonDoubleSided === 'double'" (click)="scene3dSetRibbonDoubleSided('double')" title="Both sides rendered">Double</button>
+                                <button class="segment-btn" [class.active]="scene3dRibbonDoubleSided === 'front'"  (click)="scene3dSetRibbonDoubleSided('front')"  title="Front face only">Front only</button>
+                                <button class="segment-btn" [class.active]="scene3dRibbonDoubleSided === 'back'"   (click)="scene3dSetRibbonDoubleSided('back')"   title="Back face only">Back only</button>
+                            </div>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dRibbonDoubleSided === 'double'">
+                            <label style="font-size:10px">Flip rear U</label>
+                            <input type="checkbox" [(ngModel)]="scene3dRibbonFlipRearU" (change)="scene3dSetRibbonFlipRearU(scene3dRibbonFlipRearU)" style="accent-color:#9B59B6"
+                                   title="Mirror U coordinates on the back face so text reads correctly from both sides">
+                        </div>
+                        <div class="scene3d-material-row" style="align-items:flex-start">
+                            <label style="padding-top:4px">Orientation</label>
+                            <div style="display:flex;flex-direction:column;gap:3px">
+                                <div class="segment-row">
+                                    <button class="segment-btn" [class.active]="scene3dRibbonPathMode === 'normal'"   (click)="scene3dSetRibbonPathMode('normal')">Normal</button>
+                                    <button class="segment-btn" [class.active]="scene3dRibbonPathMode === 'world-up'" (click)="scene3dSetRibbonPathMode('world-up')">Upright</button>
+                                </div>
+                                <div class="scene3d-path-mode-hint">
+                                    <ng-container *ngIf="scene3dRibbonPathMode === 'normal'">Ribbon follows the path plane naturally.</ng-container>
+                                    <ng-container *ngIf="scene3dRibbonPathMode === 'world-up'">Ribbon stands vertical, like a wall sign.</ng-container>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Path Presets -->
+                        <div class="scene3d-sub-header" style="margin-top:8px">Path Presets</div>
+                        <div class="scene3d-material-row">
+                            <label>Shape</label>
+                            <select class="scene3d-select" [(ngModel)]="scene3dPresetType" (ngModelChange)="scene3dApplyPreset()">
+                                <option value="spiral">Spiral (3D)</option>
+                                <option value="circle">Circle</option>
+                                <option value="arc">Arc</option>
+                                <option value="wave">Wave</option>
+                                <option value="scurve">S-Curve</option>
+                                <option value="zigzag">Zigzag</option>
+                            </select>
+                        </div>
+                        <!-- Spiral params -->
+                        <ng-container *ngIf="scene3dPresetType === 'spiral'">
+                            <div class="scene3d-material-row">
+                                <label>Diameter</label>
+                                <input type="range" min="0.05" max="4" step="0.05" [(ngModel)]="scene3dPresetDiameter" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetDiameter | number:'1.2-2' }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Height</label>
+                                <input type="range" min="0.05" max="4" step="0.05" [(ngModel)]="scene3dPresetHeight" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetHeight | number:'1.2-2' }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Turns</label>
+                                <input type="range" min="1" max="12" step="0.1" [(ngModel)]="scene3dPresetTurns" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetTurns | number:'1.1-1' }}</span>
+                            </div>
+                        </ng-container>
+                        <!-- Circle params -->
+                        <ng-container *ngIf="scene3dPresetType === 'circle'">
+                            <div class="scene3d-material-row">
+                                <label>Diameter</label>
+                                <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="scene3dPresetDiameter" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetDiameter }}</span>
+                            </div>
+                        </ng-container>
+                        <!-- Arc params -->
+                        <ng-container *ngIf="scene3dPresetType === 'arc'">
+                            <div class="scene3d-material-row">
+                                <label>Diameter</label>
+                                <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="scene3dPresetDiameter" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetDiameter }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Angle °</label>
+                                <input type="range" min="30" max="350" step="10" [(ngModel)]="scene3dPresetAngle" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetAngle }}°</span>
+                            </div>
+                        </ng-container>
+                        <!-- Wave/S-Curve/Zigzag params -->
+                        <ng-container *ngIf="scene3dPresetType === 'wave' || scene3dPresetType === 'scurve' || scene3dPresetType === 'zigzag'">
+                            <div class="scene3d-material-row">
+                                <label>Width</label>
+                                <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="scene3dPresetDiameter" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetDiameter }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Amplitude</label>
+                                <input type="range" min="0.1" max="2" step="0.1" [(ngModel)]="scene3dPresetAmplitude" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetAmplitude | number:'1.1-1' }}</span>
+                            </div>
+                            <div class="scene3d-material-row" *ngIf="scene3dPresetType === 'wave' || scene3dPresetType === 'zigzag'">
+                                <label>Cycles</label>
+                                <input type="range" min="1" max="8" step="1" [(ngModel)]="scene3dPresetFrequency" (input)="scene3dApplyPreset()">
+                                <span class="scene3d-val">{{ scene3dPresetFrequency }}</span>
+                            </div>
+                        </ng-container>
+                        <div class="scene3d-material-row" style="margin-top:4px">
+                            <label>Reverse</label>
+                            <input type="checkbox" [(ngModel)]="scene3dPresetReverse" (change)="scene3dApplyPreset()" style="accent-color:#9B59B6">
+                        </div>
+
+                        <!-- Control Points (collapsible) -->
+                        <details class="scene3d-inner-details" style="margin-top:6px">
+                            <summary class="scene3d-sub-header" style="cursor:pointer;list-style:none;margin-top:0">▸ Control Points</summary>
+                            <label class="scene3d-check-row" style="padding: 4px 0 2px">
+                                <input type="checkbox" [checked]="scene3dRibbonShowHandles" (change)="scene3dSetRibbonShowHandles($any($event.target).checked)" style="accent-color:#9B59B6">
+                                Show handles
+                            </label>
+                            <div *ngFor="let pt of scene3dRibbonControlPoints; let i = index" class="scene3d-ribbon-point-row">
+                                <span class="scene3d-ribbon-pt-idx">{{ i }}</span>
+                                <input type="number" step="0.1" [ngModel]="pt.x" (ngModelChange)="pt.x = +$event; scene3dSetRibbonControlPoint(i)" title="X">
+                                <input type="number" step="0.1" [ngModel]="pt.y" (ngModelChange)="pt.y = +$event; scene3dSetRibbonControlPoint(i)" title="Y">
+                                <input type="number" step="0.1" [ngModel]="pt.z" (ngModelChange)="pt.z = +$event; scene3dSetRibbonControlPoint(i)" title="Z">
+                                <button class="scene3d-btn scene3d-del-pt" (click)="scene3dRemoveRibbonControlPoint(i)"
+                                        [disabled]="scene3dRibbonControlPoints.length <= 2" title="Remove point">×</button>
+                            </div>
+                            <div style="padding: 4px 0 2px">
+                                <button class="scene3d-btn" (click)="scene3dAddRibbonControlPoint()">+ Add Point</button>
+                            </div>
+                        </details>
+                    </details>
+
+                    <!-- HTML Texture — any mesh can have an HTML/CSS texture applied -->
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
+                        <summary>HTML Texture</summary>
+                        <div class="scene3d-toggle-row" *ngIf="scene3dHtmlEnabled">
+                            <label style="color:#6c6">Active</label>
+                            <button class="scene3d-btn scene3d-btn-danger" (click)="scene3dRemoveHtmlTexture()" style="margin-left:auto">Remove</button>
+                        </div>
+                        <!-- Ribbon: auto-size from geometry; expose quality instead of raw pixels -->
+                        <ng-container *ngIf="scene3dIsRibbon">
+                            <div class="scene3d-material-row">
+                                <label>Quality</label>
+                                <div class="segment-row">
+                                    <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 64"  (click)="scene3dSetHtmlTexQuality(64)"  title="Low — 64px tall">Low</button>
+                                    <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 128" (click)="scene3dSetHtmlTexQuality(128)" title="Medium — 128px tall (default)">Med</button>
+                                    <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 256" (click)="scene3dSetHtmlTexQuality(256)" title="High — 256px tall">High</button>
+                                </div>
+                            </div>
+                            <div class="scene3d-keyframe-hint" *ngIf="scene3dHtmlEnabled">
+                                Texture: {{ scene3dHtmlTexWidth }} × {{ scene3dHtmlTexHeight }} px
+                            </div>
+                        </ng-container>
+                        <!-- Non-ribbon: manual size control -->
+                        <ng-container *ngIf="!scene3dIsRibbon">
+                            <div class="scene3d-material-row">
+                                <label>Width px</label>
+                                <input type="number" step="64" min="64" max="4096" class="scene3d-input-small" [(ngModel)]="scene3dHtmlTexWidth">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Height px</label>
+                                <input type="number" step="32" min="32" max="2048" class="scene3d-input-small" [(ngModel)]="scene3dHtmlTexHeight">
+                            </div>
+                        </ng-container>
+                        <div class="scene3d-material-row">
+                            <label>Background</label>
+                            <input type="color" [(ngModel)]="scene3dHtmlTexBg"
+                                   [disabled]="scene3dHtmlTexBgTransparent"
+                                   (input)="scene3dHtmlEnabled && scene3dApplyHtmlTexture()"
+                                   style="width:36px; height:22px; padding:1px; border:none; background:none; cursor:pointer">
+                            <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#aaa;cursor:pointer">
+                                <input type="checkbox" [(ngModel)]="scene3dHtmlTexBgTransparent"
+                                       (change)="scene3dHtmlEnabled && scene3dApplyHtmlTexture()"
+                                       style="accent-color:#9B59B6">
+                                transparent
+                            </label>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dIsRibbon">
+                            <label title="GPU-tiles the texture N times along the ribbon length — use a single copy of the text and increase this for higher effective DPI">UV Tiles</label>
+                            <input type="number" min="1" max="64" step="1" class="scene3d-input-small"
+                                   [ngModel]="scene3dRibbonUvTileCount"
+                                   (ngModelChange)="scene3dSetRibbonUvTileCount(+$event)">
+                        </div>
+                        <textarea class="scene3d-html-editor"
+                                  [(ngModel)]="scene3dHtmlContent"
+                                  (input)="scene3dOnHtmlContentChange()"
+                                  [placeholder]="scene3dHtmlPlaceholder"
+                                  rows="5"></textarea>
+                        <div style="padding: 4px 0 2px; display:flex; gap:6px">
+                            <button class="scene3d-btn" style="flex:1" (click)="scene3dApplyHtmlTexture()">
+                                {{ scene3dHtmlEnabled ? '↻ Update' : '✓ Apply HTML' }}
+                            </button>
+                        </div>
+                        <div class="scene3d-keyframe-hint" *ngIf="!scene3dHtmlEnabled">
+                            Tip: repeat the text with spacing for seamless scrolling.
+                            Use <code>white-space:nowrap</code> to prevent wrapping.
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
+                        <summary>Frame Link Animation</summary>
+                        <div class="scene3d-keyframe-hint" style="margin:4px 8px 8px">
+                            Plays continuously regardless of the keyframe timeline — no Play button needed.
+                        </div>
+                        <div class="scene3d-toggle-row">
+                            <label>Enabled</label>
+                            <input type="checkbox" [checked]="scene3dFrameLinkEnabled" (change)="scene3dFrameLinkEnabled = $any($event.target).checked; scene3dApplyFrameLink()">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Type</label>
+                            <select class="scene3d-select" [(ngModel)]="scene3dFrameLinkType" (ngModelChange)="scene3dApplyFrameLink()">
+                                <option value="scroll">Scroll (UV)</option>
+                                <option value="bounce">Bounce</option>
+                                <option value="sway">Sway</option>
+                                <option value="spin">Spin</option>
+                                <option value="pulse">Pulse</option>
+                                <option value="shake">Shake</option>
+                            </select>
+                        </div>
+                        <!-- Axis: hidden for shake/spin; scroll gets direction labels -->
+                        <div class="scene3d-material-row" *ngIf="scene3dFrameLinkType !== 'shake' && scene3dFrameLinkType !== 'spin'">
+                            <label>{{ scene3dFrameLinkType === 'scroll' ? 'Direction' : 'Axis' }}</label>
+                            <select class="scene3d-select" [(ngModel)]="scene3dFrameLinkAxis" (ngModelChange)="scene3dApplyFrameLink()">
+                                <ng-container *ngIf="scene3dFrameLinkType === 'scroll'">
+                                    <option value="x">Horizontal (U)</option>
+                                    <option value="y">Vertical (V)</option>
+                                </ng-container>
+                                <ng-container *ngIf="scene3dFrameLinkType !== 'scroll'">
+                                    <option value="x">X</option>
+                                    <option value="y">Y</option>
+                                    <option value="z">Z</option>
+                                </ng-container>
+                            </select>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>{{ scene3dFrameLinkType === 'scroll' ? 'UV/loop' : 'Amplitude' }}</label>
+                            <input type="range" min="0" max="2" step="0.01" [(ngModel)]="scene3dFrameLinkAmplitude" (input)="scene3dApplyFrameLink()">
+                            <span class="scene3d-val">{{ scene3dFrameLinkAmplitude | number:'1.2-2' }}</span>
+                        </div>
+                        <!-- Scroll: show seconds-per-loop; others: show raw frame count -->
+                        <ng-container *ngIf="scene3dFrameLinkType === 'scroll'">
+                            <div class="scene3d-material-row">
+                                <label>Speed (sec/loop)</label>
+                                <input type="number" step="0.1" min="0.1" class="scene3d-input-small"
+                                       [ngModel]="scene3dGetScrollSecondsPerLoop() | number:'1.1-1'"
+                                       (ngModelChange)="scene3dSetScrollSecondsPerLoop(+$event)"
+                                       title="Seconds for one full UV scroll cycle">
+                            </div>
+                        </ng-container>
+                        <ng-container *ngIf="scene3dFrameLinkType !== 'scroll'">
+                            <div class="scene3d-material-row">
+                                <label>Cycle (frames)</label>
+                                <input type="number" step="1" min="1" class="scene3d-input-small" [(ngModel)]="scene3dFrameLinkFramesPerCycle" (input)="scene3dApplyFrameLink()">
+                            </div>
+                        </ng-container>
+                    </details>
+
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
+                        <summary>Keyframe Animation</summary>
+                        <div class="scene3d-row scene3d-keyframe-row">
+                            <button class="scene3d-help-icon"
+                                    (mouseenter)="scene3dShowKeyframeHint = true"
+                                    (mouseleave)="scene3dShowKeyframeHint = false"
+                                    title="How to use keyframe animation">?</button>
+                            <button class="scene3d-btn scene3d-btn-keyframe"
+                                    [class.scene3d-btn-autokey]="scene3dAutoKey"
+                                    [class.scene3d-btn-flash]="scene3dKeyframeFlash"
+                                    [disabled]="!animationEnabled"
+                                    (click)="scene3dRecordKeyframe()"
+                                    [title]="animationEnabled ? 'Snapshot this mesh\'s position/rotation/scale at the current timeline frame (K)' : 'Enable Animation first (Animation menu)'">
+                                ◆ Record Keyframe
+                            </button>
+                            <span class="scene3d-frame-badge" [class.flash]="scene3dKeyframeFlash"
+                                  title="Current timeline frame">F{{ scene3dTimelineFrame }}</span>
+                        </div>
+                        <div class="scene3d-keyframe-hint" *ngIf="scene3dShowKeyframeHint">
+                            1. Position mesh → Record Keyframe&nbsp;&nbsp;
+                            2. Click a later frame in timeline&nbsp;&nbsp;
+                            3. Move mesh to new position → Record Keyframe&nbsp;&nbsp;
+                            4. Press Play ▶
+                        </div>
+                    </details>
+
+                    </details><!-- /SELECTED MESH section-group -->
+
+                    <details class="scene3d-section-group" open>
+                    <summary class="scene3d-major-header">GLOBAL SCENE</summary>
+
+                    <details class="scene3d-details" open>
+                        <summary>Camera</summary>
+                        <div class="scene3d-row scene3d-keyframe-row">
+                            <button class="scene3d-btn scene3d-btn-keyframe"
+                                    [disabled]="!animationEnabled"
+                                    (click)="scene3dRecordCameraKeyframe()"
+                                    [title]="animationEnabled ? 'Snapshot camera position, target, and FOV at the current frame' : 'Enable Animation first'">
+                                📷 Record Camera Keyframe
+                            </button>
+                            <span class="scene3d-frame-badge" title="Current timeline frame">F{{ scene3dTimelineFrame }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Projection</label>
+                            <div class="scene3d-seg-btn-group">
+                                <button class="scene3d-seg-btn"
+                                        [class.active]="scene3dIllustrationProjection === 'orthographic'"
+                                        (click)="scene3dSetIllustrationProjection('orthographic')">Ortho</button>
+                                <button class="scene3d-seg-btn"
+                                        [class.active]="scene3dIllustrationProjection === 'perspective'"
+                                        (click)="scene3dSetIllustrationProjection('perspective')">Persp</button>
+                            </div>
+                            <span class="scene3d-shortcut-hint">5</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dIllustrationProjection === 'perspective'">
+                            <label>FOV</label>
+                            <input type="range" min="10" max="120" step="1" [(ngModel)]="scene3dFOV" (input)="scene3dSetFOV(scene3dFOV)">
+                            <span class="scene3d-val">{{ scene3dFOV }}°</span>
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>PS1 Retro Style</summary>
+                        <div class="scene3d-material-row">
+                            <label>Vertex Jitter</label>
+                            <input type="range" min="0" max="200" step="1" [value]="scene3dPS1Jitter * 100" (input)="scene3dPS1Jitter = +$any($event.target).value / 100; scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ mathRound(scene3dPS1Jitter * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Snap Grid</label>
+                            <input type="range" min="64" max="512" step="8" [(ngModel)]="scene3dPS1Snap" (input)="scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ scene3dPS1Snap }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Affine Warp</label>
+                            <input type="range" min="0" max="100" step="1" [value]="scene3dPS1Affine * 100" (input)="scene3dPS1Affine = +$any($event.target).value / 100; scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ mathRound(scene3dPS1Affine * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Color Depth</label>
+                            <input type="range" min="8" max="256" step="8" [(ngModel)]="scene3dPS1ColorDepth" (input)="scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ scene3dPS1ColorDepth }}</span>
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Lighting</summary>
+                        <div class="scene3d-sub-header">Directional</div>
+                        <div class="scene3d-vec3-row">
+                            <span class="scene3d-vec3-label">Dir</span>
+                            <input type="number" step="0.1" [(ngModel)]="scene3dLightDirX" (input)="scene3dApplyLighting()" title="X">
+                            <input type="number" step="0.1" [(ngModel)]="scene3dLightDirY" (input)="scene3dApplyLighting()" title="Y">
+                            <input type="number" step="0.1" [(ngModel)]="scene3dLightDirZ" (input)="scene3dApplyLighting()" title="Z">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Intensity</label>
+                            <input type="range" min="0" max="200" step="5" [value]="scene3dLightIntensity * 100" (input)="scene3dLightIntensity = +$any($event.target).value / 100; scene3dApplyLighting()">
+                            <span class="scene3d-val">{{ mathRound(scene3dLightIntensity * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-sub-header">Ambient</div>
+                        <div class="scene3d-material-row">
+                            <label>Intensity</label>
+                            <input type="range" min="0" max="200" step="5" [value]="scene3dAmbientIntensity * 100" (input)="scene3dAmbientIntensity = +$any($event.target).value / 100; scene3dApplyLighting()">
+                            <span class="scene3d-val">{{ mathRound(scene3dAmbientIntensity * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-sub-header">Shadows</div>
+                        <div class="scene3d-toggle-row">
+                            <label>Cast Shadows</label>
+                            <input type="checkbox" [checked]="scene3dShadowsEnabled" (change)="scene3dToggleShadows($any($event.target).checked)">
+                        </div>
+                        <div *ngIf="scene3dShadowsEnabled">
+                            <div class="scene3d-material-row">
+                                <label>Map Size</label>
+                                <select class="scene3d-select" [(ngModel)]="scene3dShadowMapSize" (ngModelChange)="scene3dApplyShadowsSettings()" [title]="scene3dShadowMapSize === 4096 ? 'High VRAM usage — use on powerful hardware only.' : ''">
+                                    <option [ngValue]="512">512</option>
+                                    <option [ngValue]="1024">1024</option>
+                                    <option [ngValue]="2048">2048</option>
+                                    <option [ngValue]="4096">4096</option>
+                                </select>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Extent</label>
+                                <input type="range" min="5" max="50" step="1" [(ngModel)]="scene3dShadowExtent" (input)="scene3dApplyShadowsSettings()">
+                                <span class="scene3d-val">{{ scene3dShadowExtent }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Bias</label>
+                                <input type="range" min="0.0001" max="0.02" step="0.0001" [(ngModel)]="scene3dShadowBias" (input)="scene3dApplyShadowsSettings()">
+                                <span class="scene3d-val">{{ scene3dShadowBias | number:'1.4-4' }}</span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>3D Animation</summary>
+                        <div class="scene3d-toggle-row">
+                            <label>Auto-Key</label>
+                            <input type="checkbox" [checked]="scene3dAutoKey" (change)="scene3dSetAutoKey($any($event.target).checked)" title="Automatically record a keyframe for selected meshes on every gizmo drag">
+                        </div>
+                        <div class="scene3d-toggle-row">
+                            <label>Sync with Timeline</label>
+                            <input type="checkbox" [checked]="scene3dAnimSyncWithTimeline" (change)="scene3dToggleAnimationSync($any($event.target).checked)">
+                        </div>
+                        <div class="scene3d-vec3-row scene3d-anim-grid">
+                            <span class="scene3d-vec3-label">Start</span>
+                            <input type="number" step="1" [(ngModel)]="scene3dAnimStartFrame" (input)="scene3dApplyAnimationConfig()">
+                            <span class="scene3d-vec3-label">End</span>
+                            <input type="number" step="1" [(ngModel)]="scene3dAnimEndFrame" (input)="scene3dApplyAnimationConfig()">
+                        </div>
+                        <div class="scene3d-vec3-row scene3d-anim-grid">
+                            <span class="scene3d-vec3-label">FPS</span>
+                            <input type="number" step="1" min="1" [(ngModel)]="scene3dAnimFps" (input)="scene3dApplyAnimationConfig()">
+                            <span class="scene3d-vec3-label">Loop</span>
+                            <input type="checkbox" [checked]="scene3dAnimLoop" (change)="scene3dAnimLoop = $any($event.target).checked; scene3dApplyAnimationConfig()">
+                        </div>
+                        <div class="scene3d-row">
+                            <button class="scene3d-btn" [disabled]="scene3dAnimSyncWithTimeline" (click)="scene3dAnimationPlay()">▶ Play</button>
+                            <button class="scene3d-btn" [disabled]="scene3dAnimSyncWithTimeline" (click)="scene3dAnimationPause()">⏸ Pause</button>
+                            <button class="scene3d-btn" [disabled]="scene3dAnimSyncWithTimeline" (click)="scene3dAnimationStop()">⏹ Stop</button>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Frame</label>
+                            <input type="range" [min]="scene3dAnimStartFrame" [max]="scene3dAnimEndFrame" step="1" [value]="scene3dAnimCurrentFrame" disabled>
+                            <span class="scene3d-val">{{ scene3dAnimCurrentFrame }} / {{ scene3dAnimEndFrame }}</span>
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Advanced</summary>
+                        <div class="scene3d-toggle-row">
+                            <label>Frustum Culling</label>
+                            <input type="checkbox" [checked]="scene3dFrustumCulling" (change)="scene3dSetFrustumCulling($any($event.target).checked)">
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details" #particlesDetails>
+                        <summary>Particles</summary>
+                        <app-particle-emitters
+                            #particleEmitters
+                            [shapeManager]="$any(shapeManager)">
+                        </app-particle-emitters>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Snap Settings</summary>
+                        <div class="scene3d-material-row">
+                            <label>Grid size</label>
+                            <input type="number" step="0.1" min="0.01" class="scene3d-input-small"
+                                   [(ngModel)]="scene3dSnapGridSize" (input)="scene3dUpdateSnapSettings()">
+                            <span class="scene3d-val">units</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Rotate</label>
+                            <input type="number" step="1" min="1" max="180" class="scene3d-input-small"
+                                   [(ngModel)]="scene3dSnapAngleDeg" (input)="scene3dUpdateSnapSettings()">
+                            <span class="scene3d-val">°</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Scale step</label>
+                            <input type="number" step="0.05" min="0.01" class="scene3d-input-small"
+                                   [(ngModel)]="scene3dSnapScaleStep" (input)="scene3dUpdateSnapSettings()">
+                        </div>
+                    </details>
+
+                    </details><!-- /GLOBAL SCENE section-group -->
+                </div>
+
+                <!-- Per-Layer Dither Settings (shown when a raster layer is selected, hidden when 3D panel is shown) -->
+                <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible" class="layer-dither-section">
                 <div class="form-check" style="margin-bottom: 6px;">
                     <input class="form-check-input" type="checkbox"
                            [checked]="getLayerDitherEnabled(selectedRasterLayerId)"
@@ -983,7 +1917,7 @@
             </div>
 
             <!-- ── Frame Link Animation (per-layer procedural displacement) ── -->
-            <div *ngIf="selectedRasterLayerId" class="frame-link-section">
+            <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible" class="frame-link-section">
                 <div class="form-check" style="margin-bottom: 6px;">
                     <input class="form-check-input" type="checkbox"
                            [checked]="getLayerFrameLinkConfig(selectedRasterLayerId).enabled"
@@ -1185,8 +2119,11 @@
                     <span class="zoom-symbol" style="filter: brightness(10);">➖</span>
                 </div>
                 <div class="col-6 zoom-button-right" (click)="zoomIn()">
-                    <span class="zoom-symbol" style="filter: brightness(10);">➕</span>    
+                    <span class="zoom-symbol" style="filter: brightness(10);">➕</span>
                 </div>
+            </div>
+            <div *ngIf="artboardLabelText" class="fit-artboard-btn" (click)="fitArtboard()" title="Fit artboard to view">
+                Fit
             </div>
         </div>
 
@@ -1295,6 +2232,9 @@
 
     <!-- Vertical Control Panel -->
     <div class="vertical-control-panel">
+        <!-- Mode label along right edge -->
+        <div class="toolbar-mode-label">{{ scene3dPanelVisible ? '3D TOOLS' : '2D TOOLS' }}</div>
+
         <!-- Cursor Controls -->
         <div class="cursor-controls">
             <div class="vertical-tool-button" 
@@ -1320,7 +2260,13 @@
                 </svg>
             </div>
 
-            <div class="vertical-tool-button" 
+        </div>
+
+        <!-- 2D tools — animates out, then removed when 3D becomes active -->
+        <div class="tools-2d" *ngIf="tools2dVisible" [class.tools-exiting]="tools2dExiting">
+
+            <!-- Move / Grab -->
+            <div class="vertical-tool-button tool-2d-move"
                  [class.selected]="controlPanelActiveTool === 'raster:move'"
                  (click)="setActiveTool('raster:move')"
                  title="Move / Grab — click and drag to shift all pixels on the active layer. (Q)">
@@ -1332,7 +2278,6 @@
                     <polyline points="20,8 22,12 20,16"/>
                 </svg>
             </div>
-        </div>
 
         <!-- Drawing Tools Section -->
         <div class="tool-section">
@@ -1526,7 +2471,7 @@
 
         <!-- Misc Tools Section -->
         <div class="tool-section">
-            <div class="vertical-tool-button" 
+            <div class="vertical-tool-button"
                  [class.selected]="controlPanelActiveTool === 'misc'"
                  (click)="setActiveTool('misc')">
                 <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1534,9 +2479,51 @@
                 </svg>
             </div>
         </div>
+
+        </div><!-- /.tools-2d -->
+
+        <!-- 3D transform tools — rendered after 2D tools have exited -->
+        <div class="tools-3d" *ngIf="tools3dVisible" [class.tools-exiting]="tools3dExiting">
+            <!-- Move -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dGizmoMode === 'move'"
+                 (click)="scene3dSetGizmoMode('move')"
+                 title="Move mesh (W)">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v20M2 12h20"/>
+                    <polyline points="8,4 12,2 16,4"/>
+                    <polyline points="8,20 12,22 16,20"/>
+                    <polyline points="4,8 2,12 4,16"/>
+                    <polyline points="20,8 22,12 20,16"/>
+                </svg>
+            </div>
+            <!-- Rotate -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dGizmoMode === 'rotate'"
+                 (click)="scene3dSetGizmoMode('rotate')"
+                 title="Rotate mesh (E)">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23,4 23,10 17,10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+            </div>
+            <!-- Scale -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dGizmoMode === 'scale'"
+                 (click)="scene3dSetGizmoMode('scale')"
+                 title="Scale mesh (R)">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15,3 21,3 21,9"/>
+                    <polyline points="9,21 3,21 3,15"/>
+                    <line x1="21" y1="3" x2="14" y2="10"/>
+                    <line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+            </div>
+        </div><!-- /.tools-3d -->
+
     </div>
 
-    <div class="tool-subpanel" [class.visible]="controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('shape') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool.startsWith('polygon') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'arrow' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout' || controlPanelActiveTool === 'misc'">
+    <div class="tool-subpanel" [class.visible]="!scene3dPanelVisible && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('shape') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool.startsWith('polygon') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'arrow' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout' || controlPanelActiveTool === 'misc')">
         <!-- Drawing Tool Options -->
         <div *ngIf="controlPanelActiveTool.startsWith('drawing')">
             <div class="tool-label">Drawing Options</div>
@@ -2615,5 +3602,58 @@
     </div>
 
     <!-- Animation timeline — shown when animation mode is enabled (outside tool-subpanel, at board-shell level) -->
-    <app-animation-timeline *ngIf="animationEnabled" class="animation-timeline-wrapper"></app-animation-timeline>
+    <app-animation-timeline *ngIf="animationEnabled" class="animation-timeline-wrapper"
+      [mesh3dAllTracks]="scene3dAllMeshTracks"
+      [shapeManager]="shapeManager">
+    </app-animation-timeline>
+
+    <!-- Cloth Builder Modal -->
+    <app-cloth-builder
+      [visible]="clothBuilderVisible"
+      [existingMeshId]="clothBuilderExistingId"
+      [initialGrid]="clothBuilderInitialGrid"
+      [initialPhysics]="clothBuilderInitialPhysics"
+      [initialSimMode]="clothBuilderInitialSimMode"
+      [initialSimPositions]="clothBuilderInitialSimPositions"
+      [scene3dManager]="$any(shapeManager)?.scene3d"
+      [shapeManager]="$any(shapeManager)"
+      [dropPosition]="clothBuilderDropPosition"
+      (created)="onClothBuilderCreated($event)"
+      (cancelled)="onClothBuilderCancelled()"
+      (previewMeshReady)="onClothPreviewReady($event)">
+    </app-cloth-builder>
+
+    <!-- .frogmarks restore confirmation modal -->
+    <div *ngIf="frogmarksRestoreModal" class="frogmarks-restore-overlay" (click)="cancelFrogmarksRestore()">
+        <div class="frogmarks-restore-modal" (click)="$event.stopPropagation()">
+            <div class="frogmarks-restore-title">Replace current content?</div>
+            <div class="frogmarks-restore-subtitle">Choose which version to keep. This cannot be undone.</div>
+            <div class="frogmarks-restore-versions">
+                <div class="frogmarks-restore-version">
+                    <div class="frogmarks-restore-thumb-wrap">
+                        <img *ngIf="frogmarksRestoreModal.currentThumbnailUrl" [src]="frogmarksRestoreModal.currentThumbnailUrl" class="frogmarks-restore-thumb" />
+                        <div *ngIf="!frogmarksRestoreModal.currentThumbnailUrl" class="frogmarks-restore-thumb frogmarks-restore-thumb--empty"></div>
+                    </div>
+                    <div class="frogmarks-restore-version-label">Current</div>
+                    <div class="frogmarks-restore-version-date">{{ frogmarksRestoreModal.currentDate }}</div>
+                </div>
+                <div class="frogmarks-restore-arrow">→</div>
+                <div class="frogmarks-restore-version">
+                    <div class="frogmarks-restore-thumb-wrap">
+                        <img *ngIf="frogmarksRestoreModal.fileThumbnailUrl" [src]="frogmarksRestoreModal.fileThumbnailUrl" class="frogmarks-restore-thumb" />
+                        <div *ngIf="!frogmarksRestoreModal.fileThumbnailUrl" class="frogmarks-restore-thumb frogmarks-restore-thumb--empty"></div>
+                    </div>
+                    <div class="frogmarks-restore-version-label">From file</div>
+                    <div class="frogmarks-restore-version-date">{{ frogmarksRestoreModal.fileDate }}</div>
+                </div>
+            </div>
+            <div class="frogmarks-restore-hint">
+                Tip: use <strong>File → Save .frogmarks…</strong> to back up your current version before replacing.
+            </div>
+            <div class="frogmarks-restore-actions">
+                <button class="frogmarks-restore-btn frogmarks-restore-btn--cancel" (click)="cancelFrogmarksRestore()">Cancel</button>
+                <button class="frogmarks-restore-btn frogmarks-restore-btn--confirm" (click)="confirmFrogmarksRestore()">Replace with file</button>
+            </div>
+        </div>
+    </div>
 </body>

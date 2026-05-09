@@ -28,6 +28,7 @@ export interface FrogManifest {
   animation: AnimationStateDto | null;
   layers: LayerStateDto[];
   ditherConfig?: DitherConfigDto | null;
+  documentSize?: { w: number; h: number } | null;
 }
 
 export interface FrogImportResult {
@@ -101,6 +102,7 @@ export class FrogFileService {
     zip.file(SCENE_FILE, sceneGraph);
 
     // ── 3. Manifest (metadata only, no pixel data) ──
+    const documentSize = sm.getDocumentSize?.() ?? null;
     const manifest: FrogManifest = {
       version: state.version,
       name: illustrationName || 'Untitled',
@@ -108,12 +110,18 @@ export class FrogFileService {
       animation: state.animation,
       layers: state.layers,
       ditherConfig: state.ditherConfig ?? null,
+      documentSize,
     };
     zip.file(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
 
     // ── 4. Thumbnail ──
     try {
-      const thumbBlob = await sm.captureThumbnailBlob?.(512);
+      let thumbBlob: Blob | null = null;
+      if (sm.captureDocumentBoundsToBlob) {
+        thumbBlob = await sm.captureDocumentBoundsToBlob('jpeg', 512);
+      } else {
+        thumbBlob = await sm.captureThumbnailBlob?.(512);
+      }
       if (thumbBlob) zip.file(THUMBNAIL_FILE, thumbBlob);
     } catch (e) {
       console.warn('[FrogFile] thumbnail capture failed', e);

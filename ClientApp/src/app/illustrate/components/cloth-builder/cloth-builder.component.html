@@ -1,0 +1,230 @@
+<div class="cb-modal" *ngIf="visible">
+
+  <div class="cb-header">
+    <span class="cb-title">{{ existingMeshId ? 'Edit Cloth' : 'New Cloth Mesh' }}</span>
+    <button class="cb-close" (click)="onCancel()">✕</button>
+  </div>
+
+  <div class="cb-body">
+
+    <!-- ── Left: Grid Editor ──────────────────────────────── -->
+    <div class="cb-left">
+      <div class="cb-section-label">Grid</div>
+
+      <div class="cb-grid-controls">
+        <label>Cols
+          <input type="number" class="cb-num" [(ngModel)]="cols" min="1" max="200" (change)="onGridResize()">
+        </label>
+        <label>Rows
+          <input type="number" class="cb-num" [(ngModel)]="rows" min="1" max="200" (change)="onGridResize()">
+        </label>
+        <label>Cell Size
+          <input type="number" class="cb-num" [(ngModel)]="cellSize" min="0.01" max="2" step="0.01">
+        </label>
+        <label>Corner Cells
+          <input type="number" class="cb-num" [(ngModel)]="cornerRadius" min="0" [max]="(cols < rows ? cols : rows) / 2 | number:'1.0-0'" step="1" (change)="onCornerRadiusChange()">
+        </label>
+        <label title="Subdivide each cell for smoother simulation (1–4; higher = more GPU cost)">Subdivisions
+          <input type="number" class="cb-num" [(ngModel)]="subdivisions" min="1" max="4" step="1" (change)="onSubdivisionsChange()">
+        </label>
+      </div>
+
+      <div class="cb-editor-toolbar">
+        <button class="cb-tool-btn" [class.active]="editorMode === 'draw'" (click)="editorMode = 'draw'; stitchPendingA = null" title="Draw cells">✏</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'pin'" (click)="editorMode = 'pin'; stitchPendingA = null" title="Pin vertices">📌</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'stitch'" (click)="editorMode = 'stitch'; stitchPendingA = null" title="Stitch vertices">🧵</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'paint-stiffness'" (click)="editorMode = 'paint-stiffness'; stitchPendingA = null" title="Paint bend stiffness">🖌</button>
+      </div>
+
+      <div class="cb-canvas-wrap">
+        <canvas #clothGridCanvas
+                width="320" height="320"
+                (mousedown)="onCanvasMouseDown($event)"
+                (mousemove)="onCanvasMouseMove($event)"
+                (mouseup)="onCanvasMouseUp()"
+                (mouseleave)="onCanvasMouseUp()">
+        </canvas>
+      </div>
+
+      <div class="cb-legend">
+        <span class="cb-swatch" style="background:#8ab4f8"></span> Active cell &nbsp;
+        <span class="cb-swatch" style="background:#4fc3f7; border-radius:50%"></span> Pinned &nbsp;
+        <span class="cb-swatch" style="background:#ce93d8"></span> Stitch
+      </div>
+
+      <!-- Stitch controls -->
+      <ng-container *ngIf="editorMode === 'stitch'">
+        <div class="cb-section-label" style="margin-top:10px">Stitch</div>
+        <div class="cb-field">
+          <label>Type</label>
+          <select class="cb-select" [(ngModel)]="stitchType">
+            <option value="full">Full (collapse)</option>
+            <option value="gather50">Gather 50%</option>
+            <option value="custom">Custom length</option>
+          </select>
+        </div>
+        <div class="cb-field" *ngIf="stitchType === 'custom'">
+          <label>Length</label>
+          <input type="number" class="cb-num" min="0" step="0.001" [(ngModel)]="stitchCustomLength">
+        </div>
+        <div class="cb-field">
+          <label>Fold</label>
+          <select class="cb-select" [(ngModel)]="stitchSide">
+            <option value="none">None</option>
+            <option value="front">Front (+Y)</option>
+            <option value="back">Back (−Y)</option>
+          </select>
+        </div>
+        <div class="cb-stitch-hint" *ngIf="stitchPendingA === null">Click vertex A on canvas…</div>
+        <div class="cb-stitch-hint cb-stitch-hint--active" *ngIf="stitchPendingA !== null" style="display:flex;align-items:center;gap:6px">
+          <span>A = {{ stitchVertexLabel(stitchPendingA) }} — click vertex B</span>
+          <button class="cb-stitch-del" (click)="cancelStitchTool()" title="Cancel (Esc)">✕</button>
+        </div>
+
+        <div class="cb-stitch-list" *ngIf="stitches.length">
+          <div class="cb-stitch-row" *ngFor="let s of stitches; let i = index"
+               [class.selected]="selectedStitchIdx === i"
+               (click)="selectedStitchIdx = i; $event.stopPropagation()">
+            <span class="cb-stitch-label">{{ stitchVertexLabel(s.a) }} → {{ stitchVertexLabel(s.b) }}</span>
+            <span class="cb-stitch-rest" *ngIf="s.side" style="color:#ce93d8">{{ s.side }}</span>
+            <span class="cb-stitch-rest" *ngIf="!s.side">{{ s.restLength | number:'1.3-3' }}</span>
+            <button class="cb-stitch-del" (click)="deleteStitch(i); $event.stopPropagation()">✕</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:4px" *ngIf="stitches.length">
+          <button class="cb-tool-btn" (click)="clearStitches()">Clear all</button>
+        </div>
+      </ng-container>
+
+      <!-- Bend stiffness controls -->
+      <ng-container *ngIf="editorMode === 'paint-stiffness'">
+        <div class="cb-section-label" style="margin-top:10px">Bend Stiffness</div>
+        <div class="cb-field">
+          <label>Radius</label>
+          <input type="range" min="0.5" max="8" step="0.5" [(ngModel)]="brushRadius">
+          <span class="cb-val">{{ brushRadius }}</span>
+        </div>
+        <div class="cb-field">
+          <label>Value</label>
+          <input type="range" min="0" max="1" step="0.01" [(ngModel)]="brushValue">
+          <span class="cb-val">{{ brushValue | number:'1.2-2' }}</span>
+        </div>
+        <div class="cb-field">
+          <label>Mode</label>
+          <select class="cb-select" [(ngModel)]="brushBlendMode">
+            <option value="set">Set</option>
+            <option value="add">Add</option>
+            <option value="subtract">Subtract</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap">
+          <button class="cb-tool-btn" (click)="setBendStiffnessPreset(0)">Fill 0</button>
+          <button class="cb-tool-btn" (click)="setBendStiffnessPreset(0.5)">Fill 0.5</button>
+          <button class="cb-tool-btn" (click)="setBendStiffnessPreset(1)">Fill 1</button>
+          <button class="cb-tool-btn" *ngIf="bendStiffnessMap" (click)="clearBendStiffnessMap()">Clear</button>
+        </div>
+        <div class="cb-stitch-hint" style="margin-top:4px">0 = flexible · 1 = rigid</div>
+      </ng-container>
+    </div>
+
+    <!-- ── Right: Physics + Simulation ───────────────────── -->
+    <div class="cb-right">
+
+      <!-- 3D preview canvas — always in DOM for @ViewChild, hidden until live sim starts -->
+      <div class="cb-preview-wrap" [style.display]="liveSimMode !== 'off' ? 'flex' : 'none'">
+        <div class="cb-section-label">3D Preview <span style="font-size:9px;opacity:0.45;font-weight:400">(drag to orbit)</span></div>
+        <canvas #previewCanvas class="cb-preview-canvas" width="356" height="240"></canvas>
+      </div>
+
+      <div class="cb-section-label" [style.marginTop]="liveSimMode !== 'off' ? '10px' : '0'">Physics</div>
+
+      <div class="cb-field">
+        <label>Gravity</label>
+        <input type="range" min="0" max="20" step="0.1" [(ngModel)]="gravity" (input)="onPhysicsChange()">
+        <input type="number" class="cb-num" min="0" max="20" step="0.1" [(ngModel)]="gravity" (change)="onPhysicsChange()">
+      </div>
+      <div class="cb-field">
+        <label>Damping</label>
+        <input type="range" min="0.8" max="0.999" step="0.001" [(ngModel)]="damping" (input)="onPhysicsChange()">
+        <span class="cb-val">{{ damping | number:'1.3-3' }}</span>
+      </div>
+      <div class="cb-field">
+        <label>Stiffness</label>
+        <input type="range" min="10" max="80" step="1" [(ngModel)]="stiffness" (input)="onPhysicsChange()">
+        <input type="number" class="cb-num" min="10" max="80" step="1" [(ngModel)]="stiffness" (change)="onPhysicsChange()">
+      </div>
+      <div class="cb-field" [title]="thicknessDisabled ? 'Disable live simulation to adjust thickness — it is a bake-time property.' : ''">
+        <label>Thickness</label>
+        <input type="range" min="0" max="0.5" step="0.001" [(ngModel)]="thickness" [disabled]="thicknessDisabled">
+        <input type="number" class="cb-num" min="0" max="0.5" step="0.001" [(ngModel)]="thickness" [disabled]="thicknessDisabled">
+      </div>
+      <div *ngIf="thicknessDisabled" class="cb-warn">Thickness is a bake-time property — disable live simulation to adjust it.</div>
+      <div *ngIf="thicknessWarning" class="cb-warn">Thickness may cause artifacts at sharp corners.</div>
+      <div class="cb-field">
+        <label>Rounded Hem</label>
+        <input type="checkbox" [(ngModel)]="solidifyRounded" [disabled]="thicknessDisabled">
+      </div>
+
+      <div class="cb-section-label" style="margin-top:12px">Wind</div>
+      <div class="cb-field"><label>X</label><input type="number" class="cb-num cb-num-wide" min="-20" max="20" step="0.1" [(ngModel)]="windX" (change)="onPhysicsChange()"></div>
+      <div class="cb-field"><label>Y</label><input type="number" class="cb-num cb-num-wide" min="-20" max="20" step="0.1" [(ngModel)]="windY" (change)="onPhysicsChange()"></div>
+      <div class="cb-field"><label>Z</label><input type="number" class="cb-num cb-num-wide" min="-20" max="20" step="0.1" [(ngModel)]="windZ" (change)="onPhysicsChange()"></div>
+
+      <div class="cb-section-label" style="margin-top:12px">Simulation</div>
+
+      <div class="cb-sim-toggle">
+        <button class="cb-tool-btn" [class.active]="liveSimMode === 'off'" (click)="onSimModeChange('off')">Off</button>
+        <button class="cb-tool-btn" [class.active]="liveSimMode === 'hang'" (click)="onSimModeChange('hang')">▶ Hang</button>
+        <button class="cb-tool-btn" [class.active]="liveSimMode === 'drape'" (click)="onSimModeChange('drape')">▶ Drape</button>
+        <button class="cb-tool-btn" *ngIf="liveSimMode !== 'off'" (click)="resetToFlat()" title="Reset cloth to flat and re-simulate">↺ Reset</button>
+      </div>
+
+      <div class="cb-field" style="margin-top:6px" *ngIf="liveSimMode === 'drape'">
+        <label>Collision</label>
+        <select class="cb-select" [(ngModel)]="drapeProxyType" (ngModelChange)="onSimModeChange('drape')">
+          <option value="none">None</option>
+          <option value="ground">Ground</option>
+          <option value="sphere">Sphere</option>
+          <option value="box">Box</option>
+        </select>
+      </div>
+      <div *ngIf="drapeProxyType === 'ground'" class="cb-field">
+        <label>Ground Y</label>
+        <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeGroundY">
+      </div>
+      <div *ngIf="drapeProxyType === 'sphere'">
+        <div class="cb-field"><label>Center</label>
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeSphereCenter[0]" placeholder="x">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeSphereCenter[1]" placeholder="y">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeSphereCenter[2]" placeholder="z">
+        </div>
+        <div class="cb-field"><label>Radius</label><input type="number" class="cb-num" min="0.01" step="0.1" [(ngModel)]="drapeSphereRadius"></div>
+      </div>
+      <div *ngIf="drapeProxyType === 'box'">
+        <div class="cb-field"><label>Min</label>
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMin[0]">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMin[1]">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMin[2]">
+        </div>
+        <div class="cb-field"><label>Max</label>
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMax[0]">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMax[1]">
+          <input type="number" class="cb-num" step="0.1" [(ngModel)]="drapeBoxMax[2]">
+        </div>
+      </div>
+
+      <div *ngIf="liveSimMode !== 'off'" class="cb-sim-ok" style="margin-top:4px">
+        ● Live — cloth is simulating
+      </div>
+      <div *ngIf="simError" class="cb-error">{{ simError }}</div>
+    </div>
+  </div>
+
+  <div class="cb-footer">
+    <div *ngIf="validationError" class="cb-error cb-footer-err">{{ validationError }}</div>
+    <button class="cb-btn-cancel" (click)="onCancel()">Cancel</button>
+    <button class="cb-btn-create" [disabled]="!!validationError" (click)="onCreate()">
+      {{ existingMeshId ? 'Update' : 'Create' }}
+    </button>
+  </div>
+</div>

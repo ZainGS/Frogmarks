@@ -46,13 +46,10 @@ namespace Frogmarks.Services
             await blob.DeleteIfExistsAsync();
         }
 
-        public async Task<string> GetReadUrlAsync(string containerName, string blobName)
+        public Task<string> GetReadUrlAsync(string containerName, string blobName)
         {
             var container = _blobServiceClient.GetBlobContainerClient(containerName);
             var blob = container.GetBlobClient(blobName);
-
-            if (!(await blob.ExistsAsync()))
-                return "";
 
             var sasBuilder = new BlobSasBuilder
             {
@@ -63,7 +60,7 @@ namespace Frogmarks.Services
             };
             sasBuilder.SetPermissions(BlobSasPermissions.Read);
 
-            return blob.GenerateSasUri(sasBuilder).ToString();
+            return Task.FromResult(blob.GenerateSasUri(sasBuilder).ToString());
         }
     }
 }

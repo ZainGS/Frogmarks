@@ -9,6 +9,7 @@ using Frogmarks.SignalR.Optimizers;
 using Frogmarks.Utilities;
 using Frogmarks.WebSockets;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -28,15 +29,16 @@ namespace Frogmarks.Services
         private readonly BatchService _batchService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IBlobStorageProvider _blobStorage;
-        private readonly string _containerName = "board-thumbnails-dev"; // Blob Storage container, TODO: Use environment variable to determine.
+        private readonly string _containerName;
 
-        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage)
+        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage, IConfiguration configuration)
         {
             _context = context;
             _mapper = mapper;
             _batchService = batchService;
             _httpContextAccessor = httpContextAccessor;
             _blobStorage = blobStorage;
+            _containerName = configuration["BlobStorage:BoardThumbnailContainer"] ?? "board-thumbnails-dev";
         }
 
         public async Task<ResultModel<IEnumerable<Board>>> GetAllBoards()

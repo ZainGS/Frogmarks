@@ -1,6 +1,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,200" />
 <!-- Frogmarks Dashboard Template -->
-<div class="dashboard-container" [ngStyle]="isFrogmarksGalaxyActive ? { overflow: 'hidden' } : {}">
+<div class="dashboard-container" [class.dash-initial-load]="initialLoad" [ngStyle]="isFrogmarksGalaxyActive ? { overflow: 'hidden' } : {}">
     <!-- Notification Panel -->
     <div *ngIf="showNotificationPanel" class="notification-panel ps-4 pt-3 pe-4">
       <div class="row">
@@ -58,9 +58,9 @@
           [class.frogmarks-galaxy-compact]="isFrogmarksGalaxyActive"
           style="max-height: min-content;">
             <!-- Frogmarks Logo -->
-            <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png">
-            <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png">
-            <img class="compact-logo" src="../../../../assets/images/fishing_frog.png">
+            <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png" [routerLink]="['/']" style="cursor:pointer">
+            <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png" [routerLink]="['/']" style="cursor:pointer">
+            <img class="compact-logo" src="../../../../assets/images/fishing_frog.png" [routerLink]="['/']" style="cursor:pointer">
             <!-- <span style="background-color: blueviolet; 
                          color: white; 
                          padding: 2px 4px 2px 4px; 
@@ -217,17 +217,43 @@
                 </ul>
               </div>
 
-              <!-- Pinned Items Section -->
-              <!--
-              <div style="text-align: center;">
-                <ul class="sidenav-list">
-                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon material-symbols-outlined">keep</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Pinned</label>
-                  </li>
-                </ul>
+              <!-- OPFS Storage Bar -->
+              <div *ngIf="opfsSupported" class="opfs-sidenav ms-1 me-2 mt-2">
+                <div class="opfs-sidenav-header">
+                  <mat-icon class="opfs-icon">save</mat-icon>
+                  <span class="opfs-label">OPFS Local Storage</span>
+                  <mat-icon class="opfs-info-icon"
+                    matTooltip="Your work is auto-saved locally in your browser (OPFS). Browsers may evict this data if disk space runs critically low. Safari on iOS may clear it after 7 days of inactivity. Make regular backups!"
+                    matTooltipPosition="above"
+                    matTooltipClass="opfs-tooltip">info</mat-icon>
+                </div>
+                <div class="opfs-track opfs-track-full">
+                  <div class="opfs-fill" [style.width.%]="opfsUsagePct" [class.opfs-warn]="opfsUsagePct > 75"></div>
+                </div>
+                <div class="opfs-sidenav-footer">
+                  <span class="opfs-stat">~{{ opfsUsageMb | number:'1.0-0' }} MB / {{ opfsQuotaGb | number:'1.1-1' }} GB</span>
+                  <button class="opfs-backup-btn" (click)="downloadLocalBackup()" [disabled]="isBackingUp">
+                    <mat-icon style="font-size:13px;width:13px;height:13px;line-height:13px;">download</mat-icon>
+                    {{ isBackingUp ? '…' : 'Backup' }}
+                  </button>
+                </div>
               </div>
-              -->
+
+              <!-- Cloud Storage Bar -->
+              <div *ngIf="cloudQuotaGb > 0" class="opfs-sidenav ms-1 me-2 mt-2">
+                <div class="opfs-sidenav-header">
+                  <mat-icon class="opfs-icon">cloud</mat-icon>
+                  <span class="opfs-label">Cloud Storage</span>
+                  <span *ngIf="cloudIsPro" class="cloud-pro-badge">PRO</span>
+                </div>
+                <div class="opfs-track opfs-track-full">
+                  <div class="opfs-fill cloud-fill" [style.width.%]="cloudUsagePct" [class.opfs-warn]="cloudUsagePct > 85"></div>
+                </div>
+                <div class="opfs-sidenav-footer">
+                  <span class="opfs-stat">{{ cloudUsedMb | number:'1.0-0' }} MB / {{ cloudQuotaGb | number:'1.0-0' }} GB</span>
+                </div>
+              </div>
+
             </div>
         </div>
 
@@ -275,7 +301,20 @@
               </button>
               <button *ngIf="!isLoading" class="ms-2 align-top header-action-button-first" mat-icon-button (click)="showNotificationPanel=true"><mat-icon>notifications_none</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon>settings</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button><mat-icon>person</mat-icon></button>
+              <button *ngIf="!isLoading && isLoggedIn" class="align-top header-action-button" mat-icon-button
+                      [matMenuTriggerFor]="profileMenu">
+                <mat-icon>person</mat-icon>
+              </button>
+              <mat-menu #profileMenu="matMenu" xPosition="before">
+                <button mat-menu-item (click)="onLogout()">
+                  <mat-icon>logout</mat-icon>
+                  Sign out
+                </button>
+              </mat-menu>
+              <button *ngIf="!isLoading && !isLoggedIn" class="signin-header-btn" mat-stroked-button
+                      (click)="onPersonButtonClicked()">
+                Sign In
+              </button>
             </div>
 
           </div>
@@ -310,9 +349,8 @@
                 </div>
                 <div class="col-9 col-md-9 text-start">
                   <label *ngIf="!isLoading" class="new-design-item-title">New illustration</label>
-                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Draw a masterpiece together :)</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Vector, raster, and 3D layers</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -323,17 +361,16 @@
               </div>
             </div>
 
-            <!-- New Design File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" [ngClass]="{ 'loading-container': isLoading }">
+            <!-- New Animation File -->
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newAnimationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }" style="cursor: pointer;">
               <div class="row ms-0 me-0">
                 <div class="col-3 col-md-2 align-content-center">
                   <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
                   <label *ngIf="!isLoading" class="new-design-item-title">New animation</label>
-                  <label *ngIf="!isLoading" class="ms-2 ps-1 pe-1 new-design-item-title coming-soon">coming soon</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Collaborative animation!?</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Frame-by-frame animation</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -440,7 +477,7 @@
               <div class="column">
                 <h2>Breaking News</h2>
                 <p>Whiteboards are live for freeform doodling and brainstorming!</p>
-                <p>Illustrations for mixed vector+raster layers, custom brushes, and advanced tooling is coming soon!</p>
+                <p>Illustrations are live — mixed vector + raster layers, custom brushes, 3D integration, and frame-by-frame animation!</p>
               </div>
 
               <div class="column">
@@ -604,9 +641,12 @@
             </div>
           </div>
 
+
           <!-- List Items View -->
           <div *ngIf="viewType == 'grid' && !isFrogmarksGalaxyActive" class="row pe-1 ps-4 pe-1 pt-3 fw-normal">
-            <div *ngIf="filteredListItems.length == 0 && !isLoadingItems"
+
+
+            <div *ngIf="isLoggedIn && filteredListItems.length == 0 && !isLoadingItems"
                  [ngClass]="{ 'loading-container': isLoading }"
                  class="row ms-1 files-container justify-content-center align-content-center"
                  style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 22px; font-weight: 800;">
@@ -619,46 +659,70 @@
                 </div>
                 Your trash can is empty.<br/>
                 <span style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 16px; font-weight: 400;">Here you can restore or permanently delete your archived items.</span>
-                 
               </label>
             </div>
 
-            <div *ngIf="!isLoading && filteredListItems.length > 0" class="grid-container">
-              <div class="grid-item mb-2 me-2"
-                   *ngFor="let listItem of filteredListItems; trackBy: trackByUuid"
-                   (click)="listItemSelected($event, listItem.uuid)"
-                   (dblclick)="listItemDoubleClicked($event, listItem)"
-                   (contextmenu)="openBoardMenu($event, listItem)"
-                   [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
-                <div class="image-wrapper shadow-sm" style="border-radius: 10px;" [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
-                  <img [src]="listItem.thumbnailUrl && listItem.thumbnailUrl !== '' ? listItem.thumbnailUrl : 'https://placehold.jp/ffffff/ffffff/150x150.png'"
-                    class="thumbnail-img">
-                  <mat-icon class="type-icon material-symbols-outlined">draw</mat-icon> <!-- Change 'favorite' to your desired icon -->
-                  <div class="favorite-icon-wrapper">
-                    <mat-icon class="favorite-icon HeartAnimation"
-                              [ngClass]="{ 'material-symbols-outlined': !isFavorite(listItem.uuid), 'favorited-icon': isFavorite(listItem.uuid), 'heart-animate': isFavorite(listItem.uuid) }"
-                              (click)="toggleFavorite(listItem.uuid, listItem)">
-                    </mat-icon> <!-- Change 'favorite' to your desired icon -->
+            <div *ngIf="!isLoading && filteredListItems.length > 0"
+                 class="grid-container"
+                 #gridContainer
+                 [class.overlay-open]="overlayOpen">
+              <div class="grid-row" *ngFor="let row of gridRows" [style.height.px]="row.height">
+                <div class="grid-item"
+                     *ngFor="let ri of row.items; trackBy: trackByRowItem"
+                     [style.flex]="ri.aspect + ' 1 0'"
+                     [class.pressed]="pressedIndex === ri.globalIndex"
+                     [class.lift]="releasedIndex === ri.globalIndex"
+                     [class.rotate-left]="isLeftHalf(ri.globalIndex)"
+                     [class.rotate-right]="!isLeftHalf(ri.globalIndex)"
+                     [class.selected]="overlayIndex === ri.globalIndex"
+                     [class.grid-item--exit]="_exitingIds.has(ri.item.uuid)"
+                     [attr.data-item-id]="ri.item.uuid"
+                     [style.--fade-delay]="(ri.globalIndex * 12) + 'ms'"
+                     (mousedown)="onGridItemMouseDown(ri.item, ri.globalIndex, $event)"
+                     (mouseup)="onGridItemMouseUp(ri.item, ri.globalIndex, $event)"
+                     (mouseleave)="onGridItemMouseLeave(ri.globalIndex)"
+                     (click)="$event.stopPropagation()"
+                     (contextmenu)="openBoardMenu($event, ri.item)">
+                  <div class="image-wrapper">
+                    <img [src]="getThumbnailSrc(ri.item)"
+                         class="thumbnail-img">
+                    <div class="favorite-icon-wrapper">
+                      <mat-icon class="favorite-icon HeartAnimation"
+                                [ngClass]="{ 'material-symbols-outlined': !isFavorite(ri.item.uuid), 'favorited-icon': isFavorite(ri.item.uuid), 'heart-animate': isFavorite(ri.item.uuid) }"
+                                (click)="toggleFavorite(ri.item.uuid, ri.item); $event.stopPropagation()">
+                      </mat-icon>
+                    </div>
+                    <!-- Sync status badge (local illustrations only) -->
+                    <div class="sync-status-badge"
+                         *ngIf="$any(ri.item).syncStatus"
+                         [ngClass]="'sync-status-badge--' + $any(ri.item).syncStatus"
+                         [title]="$any(ri.item).syncStatus">
+                      <mat-icon class="sync-status-icon"
+                                [class.sync-spin]="$any(ri.item).syncStatus === 'syncing'">
+                        {{ getSyncStatusIcon($any(ri.item).syncStatus) }}
+                      </mat-icon>
+                    </div>
+                    <!-- Name / date overlay — hidden until hover -->
+                    <div class="item-overlay" *ngIf="editingId !== ri.item.uuid">
+                      <span class="item-overlay-name">{{ ri.item.name }}</span>
+                      <span class="item-overlay-date">Edited {{ $any(ri.item).dateModified | date:'short' }}</span>
+                    </div>
                   </div>
-                </div>
-                <!-- Normal (not editing) -->
-                <div (dblclick)="startInlineRename(listItem)" class="mt-1 flex-grow-1 text-start fw-bold" style="font-size: 12px;" *ngIf="editingId !== listItem.uuid">
-                  {{ listItem.name }}<br/>
-                  <span class="fw-bold edited-time">Edited {{ listItem.dateModified | date:'short' }}</span>
-                </div>
-
-                <!-- Editing -->
-                <div class="mt-1 flex-grow-1" *ngIf="editingId === listItem.uuid" style="max-width: 260px;">
-                  <input #renameInput
-                        class="rename-input"
-                        [formControl]="nameControl"
-                        (keydown.enter)="commitInlineRename(listItem)"
-                        (keydown.escape)="cancelInlineRename()"
-                        (blur)="commitInlineRename(listItem)" />
-                  <div style="font-size: 11px; opacity:.7; margin-top:4px; margin-left: 3px;">Enter to save • Esc to cancel</div>
+                  <!-- Rename input -->
+                  <div class="rename-area" *ngIf="editingId === ri.item.uuid">
+                    <input #renameInput
+                           class="rename-input"
+                           [formControl]="nameControl"
+                           (keydown.enter)="commitInlineRename(ri.item)"
+                           (keydown.escape)="cancelInlineRename()"
+                           (blur)="commitInlineRename(ri.item)" />
+                    <div class="rename-hint">Enter to save • Esc to cancel</div>
+                  </div>
                 </div>
               </div>
             </div>
+
+
 
           </div>
 
@@ -687,16 +751,19 @@
 
                   <!-- Image on left -->
                   <div style="flex: 0 0 80px;">
-                    <img [src]="listItem.thumbnailUrl && listItem.thumbnailUrl !== '' 
-                                ? listItem.thumbnailUrl 
-                                : 'https://placehold.jp/ffffff/ffffff/150x150.png'"
-                        class="thumbnail-img" 
+                    <img [src]="getThumbnailSrc(listItem)"
+                        class="thumbnail-img"
                         style="width: 80px; height: auto; border-radius: 6px;">
                   </div>
 
                   <!-- Text on right -->
                   <div class="ms-3 flex-grow-1 text-start fw-bold" style="font-size: 12px;">
-                    {{ listItem.name }}<br/>
+                    {{ listItem.name }}
+                    <span *ngIf="$any(listItem).syncMode === 1 || $any(listItem).syncMode === 2"
+                          class="sync-badge-inline"
+                          [title]="$any(listItem).syncMode === 2 ? 'Local only — stored in this browser' : 'No-cloud — pixel data on this device'">
+                      {{ $any(listItem).syncMode === 2 ? 'local' : 'no-cloud' }}
+                    </span><br/>
                     <span class="fw-bold" class="edited-time">Edited {{ listItem.dateModified | date:'short' }}</span>
                   </div>
 
@@ -831,11 +898,158 @@
           </mat-option>
         </mat-autocomplete>
     </div>
+    <!-- Explore-style overlay card — direct child of dashboard-container so
+         position:fixed targets the viewport cleanly, above all stacking contexts -->
+    <div *ngIf="overlayOpen" class="overlay-backdrop" (click)="closeItemOverlay($event)">
+      <div class="menu-container"
+           [ngStyle]="menuStyle"
+           [class.side-left]="menuSide === 'left'"
+           [class.side-right]="menuSide === 'right'"
+           (click)="$event.stopPropagation()">
+        <div class="menu-wrapper">
+          <div class="menu-card">
+            <button class="close-btn" (click)="closeItemOverlay()">✕</button>
+            <div class="menu-right">
+              <h3 class="menu-title">{{ overlayItem?.name }}</h3>
+              <div class="menu-actions">
+                <button class="primary-btn" (click)="navigateToItem(overlayItem)">Open</button>
+                <button class="primary-btn" (click)="openItemInNewTab(overlayItem); closeItemOverlay()">New Tab</button>
+              </div>
+              <div class="icon-actions">
+                <button class="icon-btn" title="Copy link" (click)="copyItemLink(overlayItem); closeItemOverlay()">
+                  <mat-icon>link</mat-icon>
+                </button>
+                <button class="icon-btn" title="Duplicate" (click)="duplicateItem(overlayItem); closeItemOverlay()">
+                  <mat-icon>file_copy</mat-icon>
+                </button>
+                <button class="icon-btn" title="Rename" (click)="startInlineRename(overlayItem!); closeItemOverlay()">
+                  <mat-icon>text_fields</mat-icon>
+                </button>
+                <button class="icon-btn" title="Archive" *ngIf="!isArchivedFilterActive" (click)="onArchiveItem(overlayItem); closeItemOverlay()">
+                  <mat-icon>inventory_2</mat-icon>
+                </button>
+                <button class="icon-btn" title="Restore" *ngIf="isArchivedFilterActive" (click)="onUnarchiveBoard(overlayItem); closeItemOverlay()">
+                  <mat-icon>unarchive</mat-icon>
+                </button>
+                <button class="icon-btn icon-btn-danger" title="Delete permanently" *ngIf="isArchivedFilterActive" (click)="onDeleteBoard(overlayItem); closeItemOverlay()">
+                  <mat-icon>local_fire_department</mat-icon>
+                </button>
+              </div>
+              <div class="menu-meta">
+                <span class="menu-meta-item" data-index="0">{{ overlayItem && isBoard(overlayItem) ? 'Board' : 'Illustration' }}</span>
+                <span class="menu-meta-item" data-index="1">{{ $any(overlayItem)?.dateModified | date:'mediumDate' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="menu-tail" *ngIf="menuTailStyle" [ngStyle]="menuTailStyle"></div>
+    </div>
+
     <div class="frogmarks-footer">
       <span class="ms-1 me-1 ps-3 pe-2" *ngFor="let text of frogmarksList; let i = index"
             [class.alt-bg]="i % 2 === 1">
         {{ text }}
       </span>
     </div>
+
+  <!-- Post-login backup prompt -->
+  <div *ngIf="showBackupPrompt" class="login-modal-backdrop">
+    <div class="login-modal backup-prompt">
+      <div class="login-modal-logo">
+        <img src="../../../../assets/images/fishing_frog.png" style="width:40px;height:40px;">
+        <span class="login-modal-title">Back up local projects?</span>
+      </div>
+      <p class="login-modal-subtitle">
+        Link these artworks to your account.<br>
+        Your artwork data will finish backing up automatically the next time you open it in the editor.
+      </p>
+
+      <!-- Progress list -->
+      <div class="backup-progress-list" *ngIf="isBackingUpLocal || backupProgressStarted">
+        <div class="backup-progress-item" *ngFor="let p of backupProgress">
+          <span class="backup-item-name">{{ p.name }}</span>
+          <span class="backup-item-status" [ngClass]="'backup-status--' + p.status">
+            <mat-icon *ngIf="p.status === 'pending'"   class="backup-status-icon">schedule</mat-icon>
+            <mat-icon *ngIf="p.status === 'uploading'" class="backup-status-icon sync-spin">sync</mat-icon>
+            <mat-icon *ngIf="p.status === 'done'"      class="backup-status-icon">check_circle</mat-icon>
+            <mat-icon *ngIf="p.status === 'error'"     class="backup-status-icon">error</mat-icon>
+          </span>
+        </div>
+      </div>
+
+      <div class="backup-actions" *ngIf="!isBackingUpLocal">
+        <button class="login-modal-btn" (click)="startLocalBackup()" [disabled]="isBackingUpLocal">
+          Back up all
+        </button>
+        <button class="login-modal-btn login-modal-btn-secondary" (click)="skipLocalBackup()">
+          Not now — show them anyway
+        </button>
+      </div>
+      <p class="login-modal-subtitle" *ngIf="isBackingUpLocal" style="text-align:center;">
+        Backing up…
+      </p>
+    </div>
+  </div>
+
+  <!-- Session-expired login modal -->
+  <div *ngIf="showLoginModal" class="login-modal-backdrop">
+    <div class="login-modal">
+      <div class="login-modal-logo">
+        <img src="../../../../assets/images/fishing_frog.png" style="width:40px;height:40px;">
+        <span class="login-modal-title">Session Expired</span>
+      </div>
+
+      <!-- Step 1: email -->
+      <ng-container *ngIf="!loginCodeSent">
+        <p class="login-modal-subtitle">Your session timed out. Enter your email and we'll send you a login code.</p>
+        <input
+          class="login-modal-input"
+          type="email"
+          placeholder="your@email.com"
+          [(ngModel)]="loginEmail"
+          (keydown.enter)="sendReauthCode()"
+          autofocus>
+        <p *ngIf="loginError" class="login-modal-error">{{ loginError }}</p>
+        <button class="login-modal-btn" (click)="sendReauthCode()" [disabled]="loginSending || !loginEmail.trim()">
+          {{ loginSending ? 'Sending…' : 'Send Code' }}
+        </button>
+      </ng-container>
+
+      <!-- Step 2: code entry -->
+      <ng-container *ngIf="loginCodeSent">
+        <p class="login-modal-subtitle">
+          We sent a 6-digit code to <strong>{{ loginEmail }}</strong>. Enter it below — it expires in 15 minutes.
+        </p>
+        <input
+          class="login-modal-input login-modal-input-code"
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="000000"
+          [(ngModel)]="loginCode"
+          (keydown.enter)="verifyReauthCode()"
+          autofocus>
+        <p *ngIf="loginError" class="login-modal-error">{{ loginError }}</p>
+        <button class="login-modal-btn" (click)="verifyReauthCode()" [disabled]="loginVerifying || loginCode.trim().length < 6">
+          {{ loginVerifying ? 'Verifying…' : 'Log In' }}
+        </button>
+        <button class="login-modal-btn login-modal-btn-secondary" (click)="loginCodeSent = false; loginCode = ''; loginError = ''">
+          Use a different email
+        </button>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Dev panel — toggle with Ctrl+Shift+D -->
+  <div *ngIf="showDevPanel" class="dev-panel">
+    <span class="dev-panel-title">Dev Tools <small>(Ctrl+Shift+D)</small></span>
+    <button mat-stroked-button [disabled]="isSyncingCloud" (click)="syncCloudToLocal()">
+      <mat-icon>download</mat-icon> Export metadata
+    </button>
+    <button mat-stroked-button [disabled]="isSyncingCloud" (click)="backfillCloudToLocal()">
+      <mat-icon>cloud_sync</mat-icon> Backfill cloud → IndexedDB
+    </button>
+  </div>
 </div>
 

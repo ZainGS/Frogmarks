@@ -1,79 +1,300 @@
-.home-container {
-    background-color: transparent;
+// ── Downsampling / pixelation on exit ────────────────────────────
+// @property makes --pf animatable; outer scales UP (pixelated upsampling),
+// inner scales DOWN — net visual size stays the same at 1/pf resolution.
+
+@property --pf {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
 }
 
-.header-text {
-    font-size: 82px; 
-    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+@keyframes fm-pixelate {
+  from { --pf: 1; }
+  to   { --pf: 10; }
 }
 
-.sub-header-text {
-    padding: 10px 12px 10px 12px;
-    border: 1px solid black;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-    width: fit-content;
-    background-color: #857EF9;
-    //#e9799d or #857EF9
-    color: white;
-}
+.fm-px-stage {
+  display: contents; // transparent to layout while idle
 
-/* 
-.bubble::after {
-    content: "";
+  &.fm-px-stage--active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: absolute;
-   
-    width: 15vw; 
-    height: 15vw; 
-    border-radius: 50%;
-    border: 12px solid #b1ffce; 
-    z-index: 2000;
-  }
-  
-  .bubble::before {
-    content: "";
-    position: absolute;
-    width: 14vw; 
-    height: 14vw; 
-    border-radius: 50%;
-    border: 6px solid #96BFFF; 
-    z-index: 2000;
-  }
-*/
+    inset: 0;
+    image-rendering: pixelated;
+    transform: scale(var(--pf));
+    transform-origin: center;
+    animation: fm-pixelate 0.4s ease-in forwards;
 
-.email-row {
-    width: 25%;
+    .fm-center {
+      transform: scale(calc(1 / var(--pf)));
+      transform-origin: center;
+      will-change: transform; // force GPU layer → rasterised at downscaled size
+    }
+  }
 }
 
-.email-row input {
-    pointer-events: auto;
-  }
+// ── Background grid ───────────────────────────────────────────────
 
-.demo-row {
-    padding-top: 160px;
-    margin-top: 20px;
-
-    padding-bottom: 150px;
-
-    background-image: 
-        linear-gradient(to top, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, 1) 100%),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, 1) 100%),
-        url("../../../../assets/images/icon_tile.png");
-    background-repeat: repeat;
-    background-blend-mode: normal;
+.fm-grid {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.15;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
 }
 
-.home-container:before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1000;
+// ── Base ─────────────────────────────────────────────────────────
+
+.fm-start {
+  position: fixed;
+  inset: 0;
+  overflow: hidden; // clip the upscaled stage at viewport bounds
+  background: #080808;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), auto;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+
+  &.fm-start--visible {
+    opacity: 1;
+  }
+
+  &.fm-start--exit {
     pointer-events: none;
-    background: radial-gradient(circle, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-                radial-gradient(circle, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
-    background-size: 5px 5px;
-    background-position: 0 0, 2.5px 2.5px;
+  }
 }
 
+// ── Center ────────────────────────────────────────────────────────
+
+.fm-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+}
+
+// ── Wordmark ──────────────────────────────────────────────────────
+// Axis tags for Sixtyfour Convergence (verified ranges):
+// BLED 0–100 · SCAN -53–100 · XELA -100–100 · YELA -100–100
+
+// Idle: subtle constant flicker — low amplitude, fast rate
+@keyframes fm-idle-glitch {
+  0%   { font-variation-settings: 'BLED' 0,  'SCAN' 0,   'XELA' 0,   'YELA' 0; }
+  8%   { font-variation-settings: 'BLED' 12, 'SCAN' -8,  'XELA' 6,   'YELA' -4; }
+  16%  { font-variation-settings: 'BLED' 3,  'SCAN' -15, 'XELA' -8,  'YELA' 5; }
+  25%  { font-variation-settings: 'BLED' 18, 'SCAN' -5,  'XELA' 10,  'YELA' -8; }
+  33%  { font-variation-settings: 'BLED' 0,  'SCAN' -12, 'XELA' -4,  'YELA' 3; }
+  41%  { font-variation-settings: 'BLED' 8,  'SCAN' -20, 'XELA' 12,  'YELA' -6; }
+  50%  { font-variation-settings: 'BLED' 2,  'SCAN' -3,  'XELA' -6,  'YELA' 0; }
+  58%  { font-variation-settings: 'BLED' 15, 'SCAN' -10, 'XELA' -12, 'YELA' 8; }
+  66%  { font-variation-settings: 'BLED' 5,  'SCAN' -18, 'XELA' 4,   'YELA' -5; }
+  75%  { font-variation-settings: 'BLED' 10, 'SCAN' -7,  'XELA' 8,   'YELA' -3; }
+  83%  { font-variation-settings: 'BLED' 0,  'SCAN' -14, 'XELA' -5,  'YELA' 4; }
+  91%  { font-variation-settings: 'BLED' 20, 'SCAN' -6,  'XELA' 10,  'YELA' -7; }
+  100% { font-variation-settings: 'BLED' 0,  'SCAN' 0,   'XELA' 0,   'YELA' 0; }
+}
+
+// Exit: rapid escalating crash synced with the pixelation effect
+@keyframes fm-exit-glitch {
+  0%   { font-variation-settings: 'BLED' 0,   'SCAN' 0,   'XELA' 0,    'YELA' 0; }
+  15%  { font-variation-settings: 'BLED' 80,  'SCAN' -40, 'XELA' 60,   'YELA' -50; }
+  30%  { font-variation-settings: 'BLED' 10,  'SCAN' -53, 'XELA' -80,  'YELA' 70; }
+  50%  { font-variation-settings: 'BLED' 100, 'SCAN' -28, 'XELA' 90,   'YELA' -90; }
+  70%  { font-variation-settings: 'BLED' 20,  'SCAN' -53, 'XELA' -100, 'YELA' 100; }
+  100% { font-variation-settings: 'BLED' 100, 'SCAN' -53, 'XELA' 100,  'YELA' -100; }
+}
+
+.fm-title-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-left: 64px;
+
+  .fm-center--frog & {
+    transform: translateY(-75px);
+  }
+}
+
+.fm-subtitle {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 11px;
+  margin-right: 64px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
+}
+
+.fm-wordmark {
+  font-family: 'Sixtyfour Convergence', monospace;
+  filter: hue-rotate(264deg);
+  font-weight: 400;
+  font-size: clamp(26px, 5vw, 54px);
+  // letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.92);
+  text-transform: uppercase;
+  font-variation-settings: 'BLED' 0, 'SCAN' 0, 'XELA' 0, 'YELA' 0;
+  animation: fm-idle-glitch 0.9s linear infinite;
+  text-shadow: 0 0 18px rgba(255, 94, 159, 0.4), 0 0 40px rgba(255, 0, 30, 1);
+
+  &.fm-wordmark--glitch {
+    animation: fm-exit-glitch 0.4s steps(1, end) forwards;
+  }
+}
+
+.fm-wordmark2 {
+  font-family: 'Sixtyfour Convergence', monospace;
+  filter: brightness(100);
+  font-weight: 100;
+  font-size: clamp(8px, 1vw, 10px);
+  vertical-align:text-top;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 1);
+  // text-transform: uppercase;
+  font-variation-settings: 'BLED' 0, 'SCAN' 0, 'XELA' 0, 'YELA' 0;
+  animation: fm-idle-glitch 0.9s linear infinite;
+  text-shadow: 0 0 18px rgba(255, 94, 159, 0.4), 0 0 40px rgba(255, 0, 30, 1);
+
+  &.fm-wordmark--glitch {
+    animation: fm-exit-glitch 0.4s steps(1, end) forwards;
+  }
+}
+
+// ── Brush cursor ──────────────────────────────────────────────────
+
+.fm-cursor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fm-float 2.2s ease-in-out infinite;
+  transition: opacity 0.3s, transform 0.3s;
+
+  &.fm-cursor--frozen {
+    animation-play-state: paused;
+  }
+
+  &.fm-cursor--exit {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.fm-sprite {
+  width: 64px;   // 16px × 4 — crisp integer scale
+  height: 64px;
+  image-rendering: pixelated;
+  display: block;
+  transform: translateY(-28px);
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fm-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-14px); }
+}
+
+@keyframes fm-float2 {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+
+.fm-palette {
+  width: 60px;
+  image-rendering: pixelated;
+  display: block;
+  margin-top: -130px;
+  animation: fm-float2 3.1s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+}
+
+// ── Hint ──────────────────────────────────────────────────────────
+
+.fm-hint {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  animation: fm-breathe 3s ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+  transform: translateY(140px);
+
+  .fm-center--frog & {
+    transform: translateY(160px);
+  }
+}
+
+@keyframes fm-breathe {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+// ── Copyright ─────────────────────────────────────────────────────
+
+.fm-copy {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+// ── Geometric particles ───────────────────────────────────────────
+
+.fm-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@keyframes fm-particle-fly {
+  from { transform: translateX(-300px) rotate(0deg); }
+  to   { transform: translateX(calc(100vw + 300px)) rotate(360deg); }
+}
+
+.fm-particle {
+  position: absolute;
+  fill: none;
+  stroke: white;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.2));
+  animation: fm-particle-fly var(--dur, 16s) linear infinite var(--del, 0s);
+}
+
+// ── Exit flash overlay ────────────────────────────────────────────
+
+.fm-exit-overlay {
+  position: absolute;
+  inset: 0;
+  background: #121212;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+
+  &.fm-exit-overlay--active {
+    opacity: 1;
+  }
+}

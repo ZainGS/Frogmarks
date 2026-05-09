@@ -1,13 +1,19 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Output, EventEmitter } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import {
   RasterLayer,
+  RasterLayerType,
   LayerBlendMode,
   BlendModeInfo,
   BLEND_MODE_OPTIONS,
   BLEND_MODE_CATEGORIES,
 } from '../../models/brush-preset.model';
+
+/** Flat display entry with computed depth for indentation */
+export interface LayerDisplayEntry extends RasterLayer {
+  depth: number;
+}
 
 @Component({
   selector: 'app-raster-layers',
@@ -15,11 +21,20 @@ import {
   templateUrl: './raster-layers.component.html',
   styleUrl: './raster-layers.component.scss',
 })
-export class RasterLayersComponent implements OnInit, OnDestroy {
+export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
+
+  constructor(private rasterService: RasterBrushService, private elRef: ElementRef) {}
 
   layers: RasterLayer[] = [];
   activeLayerId: string | null = null;
+  selected3DSceneId: string | null = null;
   searchTerm = '';
+
+  /** Emitted when the 3D scene entry is selected/deselected in the layer list */
+  @Output() scene3dSelected = new EventEmitter<boolean>();
+
+  /** Track layers by id for stable DOM nodes */
+  trackById = (_: number, layer: RasterLayer) => layer.id;
 
   /** Blend mode dropdown helpers */
   blendModeOptions = BLEND_MODE_OPTIONS;
@@ -32,13 +47,17 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
   /** Which layer's blend dropdown is open (null = none) */
   openBlendDropdownId: string | null = null;
 
+  /** Add-layer dropdown */
+  showAddMenu = false;
+
   /** Drag state */
   dragIndex: number | null = null;
   dragOverIndex: number | null = null;
 
   private subs: Subscription[] = [];
 
-  constructor(private rasterService: RasterBrushService) {}
+  ngAfterViewInit(): void {
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -66,11 +85,59 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
 
   // ── Computed ──────────────────────────────────────────────────
 
-  get filteredLayers(): RasterLayer[] {
+  get filteredLayers(): LayerDisplayEntry[] {
     const ordered = this.layers.slice().reverse();
-    if (!this.searchTerm.trim()) return ordered;
+    const entries = this._buildFlatTree(ordered);
+    if (!this.searchTerm.trim()) return entries;
     const term = this.searchTerm.toLowerCase();
-    return ordered.filter(l => l.name.toLowerCase().includes(term));
+    return entries.filter(l => l.name.toLowerCase().includes(term));
+  }
+
+  /** Build a depth-annotated flat list from parent/child relationships */
+  private _buildFlatTree(ordered: RasterLayer[]): LayerDisplayEntry[] {
+    const result: LayerDisplayEntry[] = [];
+    const depthMap = new Map<string, number>();
+
+    // First pass: compute depth for each entry
+    for (const l of ordered) {
+      if (!l.parentId) {
+        depthMap.set(l.id, 0);
+      }
+    }
+    // Multi-pass for nested children (handles arbitrary nesting)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const l of ordered) {
+        if (l.parentId && !depthMap.has(l.id) && depthMap.has(l.parentId)) {
+          depthMap.set(l.id, (depthMap.get(l.parentId) ?? 0) + 1);
+          changed = true;
+        }
+      }
+    }
+
+    // Build flat list, skipping children of collapsed folders
+    const collapsedIds = new Set(ordered.filter(l => l.type === 'folder' && l.collapsed).map(l => l.id));
+
+    for (const l of ordered) {
+      // Check if any ancestor is collapsed
+      let hidden = false;
+      let pid = l.parentId;
+      while (pid) {
+        if (collapsedIds.has(pid)) { hidden = true; break; }
+        const parent = ordered.find(p => p.id === pid);
+        pid = parent?.parentId ?? null;
+      }
+      if (hidden) continue;
+
+      result.push({ ...l, depth: depthMap.get(l.id) ?? 0 });
+    }
+    return result;
+  }
+
+  /** Whether a layer entry is paintable (only real layers are) */
+  isPaintable(layer: RasterLayer): boolean {
+    return !layer.type || layer.type === 'layer';
   }
 
   /** Get blend mode label for display */
@@ -88,9 +155,9 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
     return this.layers.length > 0 && this.layers[this.layers.length - 1]?.id === layer.id;
   }
 
-  /** Whether the active layer can be deleted (must have more than 1 layer) */
+  /** Whether the active layer can be deleted (must have more than 1 real layer) */
   get canDeleteLayer(): boolean {
-    return this.layers.length > 1;
+    return this.layers.filter(l => this.isPaintable(l)).length > 1;
   }
 
   /** Index of the currently active layer */
@@ -101,6 +168,21 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
   // ── Selection ─────────────────────────────────────────────────
 
   selectLayer(id: string): void {
+    const layer = this.layers.find(l => l.id === id);
+    // 3D scene: highlight in UI and emit event, but don't select in engine
+    if (layer?.type === '3d-scene') {
+      this.selected3DSceneId = layer.id;
+      this.activeLayerId = null;  // deselect raster layer visually
+      this.scene3dSelected.emit(true);
+      return;
+    }
+    // Folders are not selectable
+    if (layer?.type === 'folder') return;
+    // Deselect 3D scene when switching to a raster layer
+    if (this.selected3DSceneId) {
+      this.selected3DSceneId = null;
+      this.scene3dSelected.emit(false);
+    }
     this.rasterService.selectLayer(id);
   }
 
@@ -111,7 +193,52 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
   }
 
   deleteLayer(id: string): void {
+    const layer = this.layers.find(l => l.id === id);
+    if (layer?.type === '3d-scene') {
+      this.rasterService.remove3DScene();
+      this.selected3DSceneId = null;
+      this.scene3dSelected.emit(false);
+      return;
+    }
     this.rasterService.deleteLayer(id);
+  }
+
+  // ── Folders ───────────────────────────────────────────────────
+
+  addFolder(): void {
+    this.rasterService.addFolder('Folder');
+  }
+
+  toggleFolderCollapse(layer: RasterLayer, e: MouseEvent): void {
+    e.stopPropagation();
+    this.rasterService.setFolderCollapsed(layer.id, !layer.collapsed);
+  }
+
+  // ── 3D Scene ──────────────────────────────────────────────────
+
+  add3DScene(): void {
+    this.rasterService.add3DScene();
+    // Auto-select on the next layers$ emission (after service microtask)
+    const sub = this.rasterService.layers$.subscribe(layers => {
+      const scene = layers.find(l => l.type === '3d-scene');
+      if (scene) {
+        sub.unsubscribe();
+        // Update local layers first so selectLayer's find works
+        this.layers = layers;
+        this.selectLayer(scene.id);
+      }
+    });
+  }
+
+  remove3DScene(e: MouseEvent): void {
+    e.stopPropagation();
+    this.rasterService.remove3DScene();
+    this.selected3DSceneId = null;
+    this.scene3dSelected.emit(false);
+  }
+
+  get has3DScene(): boolean {
+    return this.layers.some(l => l.type === '3d-scene');
   }
 
   // ── Visibility ────────────────────────────────────────────────
@@ -181,6 +308,14 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
 
   /** Alt+Click on a layer row toggles clipping (Photoshop convention) */
   onLayerRowClick(layer: RasterLayer, e: MouseEvent): void {
+    if (layer.type === 'folder') {
+      this.toggleFolderCollapse(layer, e);
+      return;
+    }
+    if (layer.type === '3d-scene') {
+      this.selectLayer(layer.id);
+      return;
+    }
     if (e.altKey) {
       this.toggleClipping(layer, e);
       return;
@@ -215,7 +350,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
     const newName = this.renameValue.trim();
     if (newName && newName !== layer.name) {
       layer.name = newName;
-      // Engine rename not exposed — name is UI-only for now
+      this.rasterService.setLayerName(layer.id, newName);
     }
     this.renamingLayerId = null;
   }
@@ -261,14 +396,28 @@ export class RasterLayersComponent implements OnInit, OnDestroy {
       this.dragOverIndex = null;
       return;
     }
-    // filteredLayers is reversed — map display indices back to this.layers indices
     const displayed = this.filteredLayers;
-    const dragId = displayed[this.dragIndex]?.id;
-    const dropId = displayed[dropIndex]?.id;
-    if (!dragId || !dropId) { this.dragIndex = null; this.dragOverIndex = null; return; }
+    const dragEntry = displayed[this.dragIndex];
+    const dropEntry = displayed[dropIndex];
+    if (!dragEntry || !dropEntry) { this.dragIndex = null; this.dragOverIndex = null; return; }
+
+    // If dropped onto a folder → move layer into/out of the folder
+    if (dropEntry.type === 'folder' && dragEntry.type !== 'folder' && dragEntry.type !== '3d-scene') {
+      // If already a child of this folder, remove from folder
+      if (dragEntry.parentId === dropEntry.id) {
+        this.rasterService.setLayerParent(dragEntry.id, null);
+      } else {
+        this.rasterService.setLayerParent(dragEntry.id, dropEntry.id);
+      }
+      this.dragIndex = null;
+      this.dragOverIndex = null;
+      return;
+    }
+
+    // Otherwise reorder in the flat list
     const ids = this.layers.map(l => l.id);
-    const realDrag = ids.indexOf(dragId);
-    const realDrop = ids.indexOf(dropId);
+    const realDrag = ids.indexOf(dragEntry.id);
+    const realDrop = ids.indexOf(dropEntry.id);
     if (realDrag < 0 || realDrop < 0) { this.dragIndex = null; this.dragOverIndex = null; return; }
     const [moved] = ids.splice(realDrag, 1);
     ids.splice(realDrop, 0, moved);

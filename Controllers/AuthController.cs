@@ -156,5 +156,14 @@ namespace Frogmarks.Controllers
             return Ok(new { userId });
         }
 
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            var opts = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = DateTime.UtcNow.AddDays(-1) };
+            Response.Cookies.Append("accessToken", "", opts);
+            Response.Cookies.Append("refreshToken", "", opts);
+            return Ok();
+        }
+
     }
 }

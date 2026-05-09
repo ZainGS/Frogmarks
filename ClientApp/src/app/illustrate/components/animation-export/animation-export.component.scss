@@ -131,6 +131,43 @@ $accent-light: #b87fd9;
   font-size: 11px;
 }
 
+.range-hint {
+  font-size: 10px;
+  color: $muted;
+  white-space: nowrap;
+}
+
+.export-progress-wrap {
+  position: relative;
+  margin: 0 16px 10px;
+  height: 20px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 4px;
+  overflow: hidden;
+
+  .export-progress-bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: $accent;
+    transition: width 0.2s ease;
+  }
+
+  .export-progress-label {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 8px;
+    font-size: 10px;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .export-footer {
   display: flex;
   gap: 8px;
