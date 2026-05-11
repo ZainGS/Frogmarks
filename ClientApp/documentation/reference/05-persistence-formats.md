@@ -196,17 +196,19 @@ The `.frog` format does **not** include:
 
 ## 3. .frogmarks Portable ZIP Format
 
-A full-fidelity project archive defined and implemented in `@zaings/salsa`:
+A full-fidelity project archive. Salsa's `ShapeManager` owns the core pack/unpack logic; `IllustrationComponent` wraps it to inject Frogmarks-specific metadata and handle the restore UX.
 
-**Salsa source:** `c:\Users\szain\source\repos\salsa\src\services\persistence\project-package.ts`
+### Archive Structure
 
-Uses `fflate` (not JSZip) for synchronous ZIP packing/unpacking.
-
-### Structure
+Salsa's `sm.packProject()` produces the inner ZIP. `frogmarksSave()` opens it with JSZip, injects an additional file, recombines, and triggers a browser download:
 
 ```
 {name}.frogmarks      (ZIP archive)
-├── manifest.json     — DocumentManifest + 3D node list + package metadata
+├── frogmarks-state.json  — Frogmarks envelope (injected by frogmarksSave, not Salsa)
+├── thumbnail.png         — 300px thumbnail captured at save time (optional, non-fatal)
+│
+│   ── Contents produced by sm.packProject() ──────────────────────────────────────
+├── manifest.json     — Salsa DocumentManifest + 3D node list + package metadata
 ├── scene.json        — vector scene graph (sceneGraphJSON)
 ├── brushes.json      — all brush presets (brushPresetsJSON)
 ├── scene3d.json      — 3D mesh node states (Mesh3DNodeState[])
@@ -219,92 +221,95 @@ Uses `fflate` (not JSZip) for synchronous ZIP packing/unpacking.
     └── {meshId}.glb  — raw GLB buffer for GLTF-imported meshes
 ```
 
-### manifest.json Envelope
+### frogmarks-state.json Envelope
 
 ```json
 {
   "formatVersion": 1,
-  "packedAt": "2026-04-28T...",
-  "document": { /* DocumentManifest */ },
-  "nodes3dCount": 3,
-  "models3dIds": ["mesh_abc", "mesh_def"]
+  "packedAt": "2026-04-28T14:23:01.000Z",
+  "name": "My Illustration",
+  "uuid": "abc123-...",
+  "illustrationId": 42,
+  "teamId": 7,
+  "deviceName": "MacBook Pro"
 }
 ```
 
-`DocumentManifest` is Salsa's internal document structure (layer IDs, canvas dimensions, animation config, brush preset IDs, etc.).
+`deviceName` is read from `localStorage.getItem('frogmarks-device-name')`. All fields except `formatVersion` and `packedAt` may be `null` for local-only illustrations.
 
-### Mesh3DNodeState Schema
+### frogmarksSave() — Export Flow
+
+Source: `IllustrationComponent.frogmarksSave()` (~line 6519)
 
 ```typescript
-interface Mesh3DNodeState {
-  id: string;
-  type: '3DMesh';
-  name: string;
-  x: number; y: number; z: number;
-  rotationX: number; rotationY: number; rotation: number;
-  scaleX: number; scaleY: number; scaleZ: number;
-  primitive: string;         // 'box', 'sphere', 'plane', 'cylinder', 'torus', 'custom'
-  config: any;               // primitive geometry params
-  material: any;             // Material3D serialized
-  textureLibraryId: string | null;
-  normalMapLibraryId: string | null;
-  keyframeTracks: any;       // AnimationPlayer3D keyframe data
-  glbMeshId?: string;        // if set, re-import from models3d/{glbMeshId}.glb on load
+async frogmarksSave(): Promise<void> {
+  const salsaBlob: Blob = await sm.packProject();      // Salsa packs the full project
+  const zip = await JSZip.loadAsync(salsaBlob);        // open the ZIP
+  zip.file('frogmarks-state.json', JSON.stringify({    // inject metadata envelope
+    formatVersion: 1, packedAt, name, uuid, illustrationId, teamId, deviceName
+  }));
+  const thumbBlob = await sm.captureThumbnailBlob(300); // optional, non-fatal
+  if (thumbBlob) zip.file('thumbnail.png', thumbBlob);
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  // trigger browser download as {safeName}.frogmarks
 }
 ```
 
-### PackageInput / PackageOutput
+After a successful save, `_startExportReminder()` is called. For no-cloud and local-only illustrations this schedules a reminder toast after 20 minutes, prompting the user to export again.
+
+### frogmarksLoad() — Import Flow
+
+Source: `IllustrationComponent.frogmarksLoad()` (~line 6560)
+
+```
+1. Open ZIP with JSZip; read frogmarks-state.json
+2. If formatVersion > 1 → throw (forward-compat error)
+3. Compare file UUID vs current illustration UUID:
+
+   a. Different UUID (cross-illustration restore):
+      window.confirm("X is from a different illustration. Replace current content?")
+      → If OK: _doFrogmarksRestore(file, fileUuid)
+
+   b. Same UUID (or no UUID in file — legacy / local-only):
+      Extract thumbnail.png from ZIP and capture current thumbnail
+      → Show frogmarksRestoreModal (side-by-side thumbnail comparison)
+      → User clicks Confirm → confirmFrogmarksRestore() → _doFrogmarksRestore()
+      → User clicks Cancel  → cancelFrogmarksRestore() → dismiss
+
+4. _doFrogmarksRestore(file, fileUuid):
+   - animationService.beginBulkRestore()
+   - sm.unpackProject(file)  [Salsa handles all 2D+3D state restore]
+   - animationService.endBulkRestore()
+   - If cross-illustration: sm.setCurrentDocId(currentUid, name) + sm.persist.saveNow()
+   - Refresh: animationService.refreshTimeline(), scene3dRefreshMeshes(), _invalidateUploadedLayers()
+```
+
+### frogmarksRestoreModal State
 
 ```typescript
-interface PackageInput {
-  docPayload: DocumentSavePayload;    // from Salsa persist sub-manager
-  nodes3d: Mesh3DNodeState[];
-  models3d: Map<string, ArrayBuffer>; // meshId → raw GLB bytes
-  textureLibrary: { entries: any[] } | null;
-}
-
-interface PackageOutput {
-  docPayload: DocumentSavePayload;
-  nodes3d: Mesh3DNodeState[];
-  models3d: Map<string, ArrayBuffer>;
-  textureLibrary: { entries: any[] } | null;
-}
+frogmarksRestoreModal: {
+  currentThumbnailUrl: string;  // object URL for current editor state
+  currentDate: string;          // toLocaleString() of now
+  fileThumbnailUrl: string;     // object URL from thumbnail.png in ZIP ('' if absent)
+  fileDate: string;             // packedAt from frogmarks-state.json
+} | null
 ```
 
-### Salsa API
+Object URLs are revoked via `_closeFrogmarksRestoreModal()` on both confirm and cancel to prevent memory leaks.
 
-```typescript
-import { packProject, unpackProject } from '@zaings/salsa/persistence/project-package';
+### Salsa ShapeManager API
 
-const blob = await packProject(input);   // → Blob (ZIP)
-const data = await unpackProject(file);  // → PackageOutput
-```
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `sm.packProject()` | `Promise<Blob>` | Pack all document state (2D + 3D + brushes) into a ZIP blob |
+| `sm.unpackProject(file)` | `Promise<void>` | Restore full project state from a `.frogmarks` File object |
+| `sm.captureThumbnailBlob(size)` | `Promise<Blob \| null>` | Capture a PNG thumbnail at the given pixel size |
 
-### Compression Strategy
-
-| Content | ZIP level | Reason |
-|---------|-----------|--------|
-| JSON files (manifest, scene, brushes, scene3d, textures3d) | 6 | Text compresses well |
-| `.bin` pixel data (layers, cels) | 1 | Already nearly incompressible (raw RGBA or WebP) |
-| `.glb` model files | 0 | GLB is already internally compressed |
+`packProject()` takes no arguments — it auto-collects all state internally (scene graph, raster layers, animation cels, 3D mesh nodes, GLB buffers, brush presets, texture library).
 
 ### Format Version
 
-`PACKAGE_FORMAT_VERSION = 1`. On unpack, if `envelope.formatVersion > 1`, an error is thrown: "package version X is newer than this build". This ensures forward compatibility errors are surfaced clearly.
-
-### Current Status: Live
-
-All required Salsa APIs are now public on `ShapeManager`:
-
-| Method | Returns | Purpose |
-|---|---|---|
-| `snapshotDocument()` | `DocumentSavePayload` | layers + scene + brushes + animation |
-| `restoreDocument(payload)` | `Promise<void>` | full 2D restore |
-| `getScene3DNodeStates()` | `any[]` | `Mesh3D.toJSON()` per node, including `glbMeshId` |
-| `getGltfBuffers3D()` | `Record<string, ArrayBuffer>` | raw GLB bytes keyed by mesh ID |
-| `restoreScene3DNodes(nodes, models3d)` | `Promise<void>` | clears + rebuilds 3D scene |
-
-`IllustrationComponent.frogmarksSave()` / `frogmarksLoad()` implement the full pack/unpack cycle using these APIs + jszip.
+`formatVersion: 1` in `frogmarks-state.json`. If a file with `formatVersion > 1` is loaded, an error is shown: "This .frogmarks file requires a newer version of Frogmarks." The Salsa-internal `manifest.json` has its own separate version (`PACKAGE_FORMAT_VERSION`) that Salsa validates independently during `unpackProject`.
 
 ---
 

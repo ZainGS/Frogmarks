@@ -47,6 +47,21 @@ export interface BrushStabilization {
   pullStringLength?: number; // 10-60px (only for pull-string)
 }
 
+/** Brush bleed — spreads wet paint into surrounding pixels */
+export interface BrushBleed {
+  enabled: boolean;
+  perDab: boolean;   // true = ping-pong bleed every dab; false = diffusion only at end-of-stroke
+  radius: number;    // 1–32 px — how far wet paint spreads
+  strength: number;  // 0–1
+}
+
+/** Brush smudge — picks up existing canvas color and mixes it into the stroke */
+export interface BrushSmudge {
+  enabled: boolean;
+  strength: number;     // 0–1 (scaled by stylus pressure per-dab)
+  sampleRadius: number; // currently unused by engine, reserved for future multi-px sampling
+}
+
 /** Full brush preset (matches Salsa engine schema) */
 export interface BrushPreset {
   id: string;
@@ -62,6 +77,9 @@ export interface BrushPreset {
   blending: BrushBlending;
   stabilization: BrushStabilization;
 
+  bleed?: BrushBleed;
+  smudge?: BrushSmudge;
+
   antiAliasing: boolean;
   minSize: number; // px
   maxSize: number; // px
@@ -69,7 +87,7 @@ export interface BrushPreset {
 }
 
 /** Raster layer entry type */
-export type RasterLayerType = 'layer' | 'folder' | '3d-scene';
+export type RasterLayerType = 'layer' | 'folder' | '3d-scene' | 'reference';
 
 /** Raster layer descriptor */
 export interface RasterLayer {

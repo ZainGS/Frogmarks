@@ -546,7 +546,9 @@ namespace Frogmarks.Controllers
         }
 
         /// <summary>
-        /// Returns a short-lived bundle URL for viewing a published illustration. No authentication required.
+        /// Returns metadata and a bundle URL for viewing a published illustration. No authentication required.
+        /// Relative bundle URLs (local dev) are rewritten to an absolute API endpoint so the client can
+        /// fetch them cross-origin without CORS issues.
         /// </summary>
         [AllowAnonymous]
         [HttpGet("view/{uid:guid}")]
@@ -555,7 +557,39 @@ namespace Frogmarks.Controllers
             try
             {
                 var result = await _illustrationService.GetPublicView(uid);
+                if (result.ResultType == ResultType.Success && result.ResultObject != null)
+                {
+                    var dto = result.ResultObject;
+                    // If the blob provider returned a relative path (local dev), rewrite to the
+                    // bundle-download API endpoint so the browser can fetch it cross-origin.
+                    if (!string.IsNullOrEmpty(dto.BundleUrl) && dto.BundleUrl.StartsWith("/"))
+                    {
+                        dto.BundleUrl = $"{Request.Scheme}://{Request.Host}/api/illustration/view/{uid}/bundle";
+                    }
+                    return Ok(dto);
+                }
                 return GenerateResponseActionResult(result);
+            }
+            catch (Exception ex)
+            {
+                return HandleErrorActionResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Downloads the published bundle bytes for a public illustration. No authentication required.
+        /// Used in local dev where blob storage URLs are not directly accessible from the client origin.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("view/{uid:guid}/bundle")]
+        public async Task<IActionResult> GetPublicViewBundle(Guid uid)
+        {
+            try
+            {
+                var result = await _illustrationService.DownloadPublicBundle(uid);
+                if (result.ResultType == ResultType.Success && result.ResultObject != null)
+                    return File(result.ResultObject, "application/octet-stream", "illustration.frogmarks");
+                return NotFound();
             }
             catch (Exception ex)
             {

@@ -49,7 +49,7 @@ The active tool is stored in `controlPanelActiveTool: string`. Switching a tool 
 | `'select:ellipse'` | `sm.enableRasterSelection('ellipse')` | Selection toolbar |
 | `'select:lasso'` | `sm.enableRasterSelection('lasso')` | Selection toolbar |
 | `'select:magic-wand'` | `sm.enableRasterSelection('magic-wand')` | Magic wand options |
-| `'fill'` | No explicit enable — handled in `onClick` | Fill settings |
+| `'fill'` | `(sm as any).enableFloodFillTool?.()` / `disableFloodFillTool?.()` | Fill settings |
 | `'raster-text'` | `sm.enableRasterText()` | Raster text sidebar |
 | `'live-text'` | No engine enable — places LiveText nodes on click | LiveText sidebar |
 | `'balloon'` | No engine enable — places balloons on click | Balloon sidebar |
@@ -82,6 +82,8 @@ All shortcuts are handled in `handleHotkeys(e: KeyboardEvent)` registered on `wi
 | `Ctrl+Shift+Z` | `rasterBrushService.redo()` |
 | `Ctrl+C` | Copy selected shape |
 | `Ctrl+V` | Paste shape |
+| `Ctrl+0` | `fitArtboard()` — zoom to fit illustration bounds |
+| `Ctrl+J` | `duplicateActiveLayer()` |
 | `Delete` / `Backspace` | Delete selected shape node |
 | `B` | Switch to Brush tool |
 | `E` | Switch to Eraser tool |
@@ -170,6 +172,7 @@ The right-side control panel is tab-driven. The relevant component properties an
 - Applies per-layer or global dither via `(sm as any).setLayerDitherConfig(layerId, config)` or `(sm as any).setGlobalDitherConfig(config)`
 - Algorithms: `bayer`, `halftone_dot`, `halftone_line`, `halftone_diamond`, `blue_noise`, `noise`
 - Color modes: `quantize`, `duotone`
+- Full reference: `features/dither.md`
 
 ### 3D Scene tab (`scene3dPanelVisible = true`)
 - Activated when the `3d-scene` layer entry is selected in the layer panel
@@ -179,10 +182,15 @@ The right-side control panel is tab-driven. The relevant component properties an
 - `paperGrainType: CanvasGrainType`, `paperGrainScale`, `paperGrainStrength`
 - Delegated to `rasterBrushService.setPaperGrain(settings)` / `getPaperGrain()`
 - Types: `none`, `cold-press`, `hot-press`, `canvas-linen`, `rough`, `watercolor`, `newsprint`
+- Full reference: `features/canvas-grain.md`
 
 ### Selection / Transform toolbar
 - Active when `controlPanelActiveTool.startsWith('select:')`
-- Backed by `RasterSelectionService` — see `04-services-reference.md`
+- Backed by `RasterSelectionService` — see `features/selection-tools.md`
+
+### Frame Link Animation
+- Per-layer procedural animation applied via `(sm as any).setLayerFrameLinkAnimation(layerId, config)`
+- Full reference: `features/frame-link-animation.md`
 
 ---
 
@@ -211,6 +219,7 @@ Local-only illustrations skip all `IllustrationService` HTTP calls. The save flo
      c. sm.importRasterLayersFromDataURLs(layers[])
      d. Restore animation: animationService.setAnimationEnabled(state.animation.enabled), etc.
      e. Restore per-layer dither configs if present
+     f. Restore per-layer frame link animation configs if present
 4. Refresh raster layers: rasterBrushService.refreshLayers()
 5. Check OPFS for fresher data (compare savedAt timestamps)
 ```
@@ -229,6 +238,8 @@ Local-only illustrations skip all `IllustrationService` HTTP calls. The save flo
 1. FrogFileService.buildStatePayload()
      - sm.getSceneGraphJSON()
      - sm.getRasterLayers() + animationService observables → IllustrationStateDto
+     - sm.getLayerDitherConfig?(layerId) — per-layer dither
+     - sm.getLayerFrameLinkAnimation?(layerId) — per-layer frame link animation
 2. IllustrationService.saveState(id, state)         → PUT /api/illustration/{id}/state
 3. For each dirty static layer:
      sm.exportRasterLayerToBlob(layerId, 'image/webp')

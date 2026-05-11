@@ -272,6 +272,29 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     }
   }
 
+  toggleBatchMode(): void {
+    this.batchMode = !this.batchMode;
+    if (!this.batchMode) this.selectedItems.clear();
+  }
+
+  toggleGridItemSelection(event: MouseEvent, uuid: string): void {
+    event.stopPropagation();
+    if (this.selectedItems.has(uuid)) {
+      this.selectedItems.delete(uuid);
+    } else {
+      this.selectedItems.add(uuid);
+    }
+  }
+
+  batchDelete(): void {
+    for (const uuid of [...this.selectedItems]) {
+      const item = this.filteredListItems.find((i: any) => i.uuid === uuid);
+      if (item) this.onDeleteBoard(item);
+    }
+    this.selectedItems.clear();
+    this.batchMode = false;
+  }
+
   onDeleteBoard(item: DashboardItem | null) {
     if (!item) return;
     this._removeFromLists(item);
@@ -368,6 +391,7 @@ onKeydown(e: KeyboardEvent) {
   filteredSearchItems: any = [];
   selectedItems: Set<string> = new Set<string>();
   favorites: Set<string> = new Set();
+  batchMode = false;
 
   // Filtering
   isFrogmarksGalaxyActive: boolean = false;
@@ -1102,16 +1126,24 @@ onKeydown(e: KeyboardEvent) {
       };
 
       this._illustrationService.createIllustration(newIllustration).subscribe({
-        next: (res: any) => {
+        next: async (res: any) => {
           if (res.resultType === ResultType.Success) {
-            const uuid = res.resultObject.uuid;
+            const ill = res.resultObject;
+            await this.localIllustrationService.createFromCloudMetadata({
+              uuid: ill.uuid, name: ill.name ?? generatedName, syncMode: 2,
+              createdAt: Date.now(), updatedAt: Date.now(), documentAspect: docAspect,
+              isFavorite: false, isArchived: false, type: 'illustration',
+              syncStatus: result.syncMode === 0 ? 'synced' : 'cloud-metadata-only',
+              localLibraryId: this.localIllustrationService['_profileService']?.getLocalLibraryId?.() ?? '',
+              cloudIllustrationId: ill.id, cloudOwnerUserId: this.uid,
+            });
             if (result.bounded && result.docW && result.docH) {
-              this.router.navigate(['/illustration', uuid], {
+              this.router.navigate(['/illustration', ill.uuid], {
                 queryParams: { docW: result.docW, docH: result.docH },
-                state: { illustration: res.resultObject, isNew: true }
+                state: { illustration: ill, isNew: true }
               });
             } else {
-              this.router.navigate(['/illustration', uuid], { state: { illustration: res.resultObject, isNew: true } });
+              this.router.navigate(['/illustration', ill.uuid], { state: { illustration: ill, isNew: true } });
             }
           } else {
             this._notifyService.error('There was an error creating a new illustration :(');
@@ -1166,14 +1198,22 @@ onKeydown(e: KeyboardEvent) {
       };
 
       this._illustrationService.createIllustration(newIllustration).subscribe({
-        next: (res: any) => {
+        next: async (res: any) => {
           if (res.resultType === ResultType.Success) {
-            const uuid = res.resultObject.uuid;
+            const ill = res.resultObject;
+            await this.localIllustrationService.createFromCloudMetadata({
+              uuid: ill.uuid, name: ill.name ?? generatedName, syncMode: 2,
+              createdAt: Date.now(), updatedAt: Date.now(), documentAspect: docAspect,
+              isFavorite: false, isArchived: false, type: 'illustration',
+              syncStatus: result.syncMode === 0 ? 'synced' : 'cloud-metadata-only',
+              localLibraryId: this.localIllustrationService['_profileService']?.getLocalLibraryId?.() ?? '',
+              cloudIllustrationId: ill.id, cloudOwnerUserId: this.uid,
+            });
             const queryParams = result.bounded && result.docW && result.docH
               ? { docW: result.docW, docH: result.docH } : {};
-            this.router.navigate(['/illustration', uuid], {
+            this.router.navigate(['/illustration', ill.uuid], {
               queryParams,
-              state: { illustration: res.resultObject, isNew: true, startAnimation: true },
+              state: { illustration: ill, isNew: true, startAnimation: true },
             });
           } else {
             this._notifyService.error('There was an error creating a new animation :(');

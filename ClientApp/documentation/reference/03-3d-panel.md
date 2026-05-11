@@ -149,6 +149,236 @@ Both paths are called because the API may live on the sub-manager or top-level d
 
 ---
 
+## Multi-Material Submesh Slots
+
+A mesh can have multiple material slots — each slot covers a named subset of the mesh's geometry (for multi-part models like imported GLBs). Each slot has its own diffuse color, opacity, and render style, independent of the mesh-level material.
+
+### Component state
+
+```typescript
+scene3dSubmeshes: Array<{
+  label: string;
+  color: string;       // hex
+  opacity: number;     // 0–1
+  renderStyle: string; // 'default' | 'cel' | 'sketch' | 'ink'
+}>
+```
+
+Populated by `_scene3dReloadSubmeshes()`, which is called every time a mesh is selected:
+
+```typescript
+private _scene3dReloadSubmeshes(): void {
+  const rawSubs = sm.getMeshSubmeshes3D?.(id) ?? [];
+  this.scene3dSubmeshes = rawSubs.map((s, i) => ({
+    label: s.label ?? `Slot ${i}`,
+    color: /* hex from s.material.diffuse */,
+    opacity: s.material?.opacity ?? 1,
+    renderStyle: s.material?.renderStyle ?? 'default',
+  }));
+}
+```
+
+### CRUD operations
+
+| Method | Salsa call | Notes |
+|--------|-----------|-------|
+| `scene3dAddSubmesh()` | `(sm as any).appendMeshSubmesh3D?.(id, { label, material })` | Appends a new white slot; reloads list |
+| `scene3dRemoveSubmesh(slotIndex)` | `(sm as any).removeMeshSubmesh3D?.(id, slotIndex)` | Removes by slot index; reloads list |
+| `scene3dClearSubmeshes()` | `(sm as any).clearMeshSubmeshes3D?.(id)` | Removes all slots |
+
+### Per-slot mutation
+
+All three read the live slot data from the engine before writing, to avoid clobbering unrelated material fields:
+
+```typescript
+scene3dUpdateSubmeshColor(slotIndex): void
+// reads rawSubs[slotIndex], merges diffuseColor, calls setMeshSubmesh3D
+
+scene3dUpdateSubmeshOpacity(slotIndex): void
+// reads rawSubs[slotIndex], merges opacity, calls setMeshSubmesh3D
+
+scene3dUpdateSubmeshRenderStyle(slotIndex, style): void
+// reads rawSubs[slotIndex], merges renderStyle, calls setMeshSubmesh3D
+
+scene3dUpdateSubmeshLabel(slotIndex): void
+// calls setMeshSubmesh3D with { label } only — no material read needed
+```
+
+All mutations call `scene3dMarkDirty()` to trigger a re-render.
+
+### Salsa API summary
+
+| Call | Purpose |
+|------|---------|
+| `(sm as any).getMeshSubmeshes3D?.(meshId)` | Returns `any[]` — current slot array |
+| `(sm as any).appendMeshSubmesh3D?.(meshId, slot)` | Adds a new slot |
+| `(sm as any).setMeshSubmesh3D?.(meshId, index, partial)` | Updates an existing slot (partial merge) |
+| `(sm as any).removeMeshSubmesh3D?.(meshId, index)` | Removes slot at index |
+| `(sm as any).clearMeshSubmeshes3D?.(meshId)` | Removes all slots |
+
+---
+
+## Cloth Simulation
+
+Cloth meshes are a special mesh type created via `ClothBuilderComponent`. They use a position-based physics solver (Salsa-internal) to simulate hanging fabric and draped cloth.
+
+### Cloth Builder
+
+Opened via `scene3dOpenClothBuilder(meshId?)`:
+
+```typescript
+// New cloth (no existing mesh)
+scene3dOpenClothBuilder()
+// → clothBuilderExistingId = null; clothBuilderVisible = true
+
+// Edit existing cloth
+scene3dOpenClothBuilder(meshId)
+// → reads cfg = scene3d.getClothConfig(meshId)
+// → clothBuilderExistingId = meshId
+// → clothBuilderInitialGrid, clothBuilderInitialPhysics, clothBuilderInitialSimMode, clothBuilderInitialSimPositions
+// → clothBuilderVisible = true
+```
+
+An edit button (✎) appears next to cloth entries in the outliner (`scene3dClothIds: Set<string>` tracks which node IDs are cloth).
+
+### ClothBuilderComponent
+
+`ClothBuilderComponent` is declared in `IllustrateModule`, receives `@Input() existingMeshId`, `initialGrid`, `initialPhysics`, `initialSimMode`, `initialSimPositions`, and `scene3dManager`.
+
+**Grid parameters:**
+
+| Property | Range | Description |
+|----------|-------|-------------|
+| `cols` | 2–64 | Columns of cloth vertices |
+| `rows` | 2–64 | Rows of cloth vertices |
+| `cellSize` | 0.01–2.0 | Size of each grid cell |
+
+**Physics parameters:**
+
+| Property | Range | Description |
+|----------|-------|-------------|
+| `gravity` | 0–20 | Downward acceleration |
+| `damping` | 0–1 | Velocity damping per step |
+| `stiffness` | 0–1 | Constraint stiffness |
+| `thickness` | 0–0.5 | Collision shell radius |
+| `wind` | vec3 | Wind force applied per step |
+
+**Simulation modes** (live preview in the builder):
+
+| `liveSimMode` | Behaviour |
+|---------------|-----------|
+| `'off'` | No simulation — flat cloth grid displayed |
+| `'hang'` | Pins the top row, gravity pulls cloth down |
+| `'drape'` | Drops cloth onto a proxy collider (ground plane, sphere, or box) |
+
+**Editor modes:**
+
+| `editorMode` | Function |
+|--------------|---------|
+| `'draw'` | Add/remove pinned vertices |
+| `'pin'` | Toggle individual vertex pins |
+| `'stitch'` | Draw stitch connections between vertex pairs |
+| `'paint-stiffness'` | Paint per-face bend stiffness (0–1) |
+
+### On Confirm: `onClothBuilderCreated(result)`
+
+```typescript
+const { grid, physics, simulatedPositions, simMode, existingMeshId, previewMeshId, stitches, bendStiffnessMap } = result;
+
+// Edit path:
+if (existingMeshId) {
+  s3d.replaceClothMesh(existingMeshId, grid, physics, simulatedPositions, simMode);
+  if (previewMeshId && previewMeshId !== existingMeshId)
+    s3d.removeNode(previewMeshId);  // clean up preview temp mesh
+}
+// Create path (no existing, but had a preview):
+else if (previewMeshId) {
+  s3d.replaceClothMesh(previewMeshId, grid, physics, simulatedPositions, simMode);
+}
+// Create path (no preview):
+else {
+  s3d.createClothMesh(cx, cy, cz, grid, physics, simulatedPositions, 'Cloth');
+}
+// Optional post-process:
+s3d.setClothStitches(targetMeshId, stitches);
+s3d.setClothBendStiffness(targetMeshId, bendStiffnessMap);
+```
+
+> `previewMeshId` is always initialized to `existingMeshId` when editing (not `null`). This prevents a duplicate mesh when the user re-opens an existing cloth in the builder.
+
+### Cloth Inspector
+
+Shown in the 3D panel when the selected mesh is a cloth node (`scene3dIsCloth === true`):
+
+```typescript
+clothInfoGrid: { cols: number; rows: number; cellSize: number } | null
+clothInfoSim: { isSimulated: boolean; simulationMode: string } | null
+clothInfoVertexCount: number | null
+clothInfoTriCount: number | null
+```
+
+Read on every mesh select:
+```typescript
+const cfg = s3d.getClothConfig(meshId);      // → { grid, physics }
+const mesh = s3d.getNode(meshId);             // → includes simState
+const geom = s3d.getClothGeometryResult(meshId); // → { vertexCount, geometry.indices }
+```
+
+The inspector also shows **Re-simulate** and **Edit Cloth** buttons.
+
+### Live Physics
+
+```typescript
+async setLiveCloth(enabled: boolean): Promise<void>
+```
+
+| Enabled | Salsa call |
+|---------|-----------|
+| `true` | `s3d.enableLiveCloth(meshId)` — Salsa ticks the cloth solver every render frame |
+| `false` | `await s3d.disableLiveCloth(meshId, true)` — stops ticking, optionally freezes positions |
+
+When live physics is disabled, any active wind animation is also disabled.
+
+State: `clothLiveEnabled: boolean` — read from `mesh.liveConfig?.enabled` on mesh select.
+
+### Wind Animation
+
+Cloth meshes can animate continuously as waving flags via `FrameLinkAnimation3D` with `type: 'wind'`:
+
+```typescript
+applyWindAnimation(): void
+// → (sm as any).setFrameLinkAnimation3D(meshId, {
+//     enabled: clothWindEnabled,
+//     type: 'wind',
+//     axis: clothWindAxis,         // 'x' | 'y' | 'z'
+//     amplitude: clothWindAmplitude,   // px of displacement
+//     framesPerCycle: clothWindFramesPerCycle,
+//     phase: clothWindPhase,
+//   })
+```
+
+Wind animation requires live physics to be enabled first. The checkbox is only shown when `clothLiveEnabled === true`. State is read back on mesh select via `sm.getFrameLinkAnimation3D(meshId)` — if `windAnim.type === 'wind'`, the sliders are populated.
+
+### Salsa API
+
+| Call | Purpose |
+|------|---------|
+| `s3d.createClothMesh(x, y, z, grid, physics, positions?, name?)` | Create a new cloth mesh at world position |
+| `s3d.replaceClothMesh(meshId, grid, physics, positions?, simMode?)` | Replace geometry and physics config of an existing cloth |
+| `s3d.getClothConfig(meshId)` | Returns `{ grid, physics }` — full config snapshot |
+| `s3d.getClothGeometryResult(meshId)` | Returns `{ vertexCount, geometry }` — for inspector display |
+| `s3d.getClothStitches(meshId)` | Returns dense-index stitch array |
+| `s3d.setClothStitches(meshId, stitches)` | Apply stitch constraints |
+| `s3d.getClothBendStiffnessMap(meshId)` | Returns `Float32Array` per-face stiffness values |
+| `s3d.setClothBendStiffness(meshId, map)` | Apply per-face bend stiffness |
+| `s3d.enableLiveCloth(meshId)` | Start per-frame physics tick |
+| `s3d.disableLiveCloth(meshId, freeze?)` | Stop tick; optionally freeze vertex positions |
+| `s3d.getLiveClothHandle(meshId)` | Returns live handle for `reset(grid, physics, mode, proxy)` calls |
+| `(sm as any).setFrameLinkAnimation3D(meshId, config)` | Set/update wind animation config |
+| `(sm as any).getFrameLinkAnimation3D(meshId)` | Read current animation config |
+
+---
+
 ## Material and Render Styles
 
 ### Render Style

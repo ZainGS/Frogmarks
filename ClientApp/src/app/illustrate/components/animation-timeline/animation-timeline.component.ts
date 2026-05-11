@@ -6,6 +6,8 @@ import {
   ElementRef,
   ViewChild,
   Input,
+  Output,
+  EventEmitter,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -110,6 +112,12 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   /** Salsa ShapeManager — passed through to the export dialog. */
   @Input() shapeManager: any;
 
+  /** Emitted after any keyframe is added, deleted, moved, or cleared — parent should refresh track data. */
+  @Output() keyframesChanged = new EventEmitter<void>();
+
+  /** Emitted when the user clicks the Record KF button in the transport bar. */
+  @Output() recordKeyframeRequested = new EventEmitter<void>();
+
   private _collapsedMesh3dIds = new Set<string>();
 
   toggleMesh3dCollapse(meshId: string): void {
@@ -122,6 +130,21 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   isMesh3dCollapsed(meshId: string): boolean {
     return this._collapsedMesh3dIds.has(meshId);
+  }
+
+  get allMeshesCollapsed(): boolean {
+    return this.mesh3dAllTracks.length > 0 &&
+      this.mesh3dAllTracks.every(e => this._collapsedMesh3dIds.has(e.meshId));
+  }
+
+  collapseAllMeshes(): void {
+    for (const entry of this.mesh3dAllTracks) {
+      this._collapsedMesh3dIds.add(entry.meshId);
+    }
+  }
+
+  expandAllMeshes(): void {
+    this._collapsedMesh3dIds.clear();
   }
 
   /** The property tracks we expose in the Dope Sheet, in order. */
@@ -150,6 +173,35 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   kfContextCurrentEasing = 'ease-in-out';
   kfContextIsCamera = false;
   showEasingMenu = false;
+
+  // Track-level context menu (right-click on property track label)
+  showTrackMenu = false;
+  trackMenuX = 0;
+  trackMenuY = 0;
+  trackMenuMeshId = '';
+  trackMenuTrackKey = '';
+  trackMenuIsCamera = false;
+
+  // Multi-keyframe selection
+  selectedKfKeys = new Set<string>();
+
+  // Bulk move prompt
+  showKfBulkMovePrompt = false;
+  kfBulkMoveTarget = 1;
+
+  // KF copy/move prompt
+  showKfFramePrompt = false;
+  kfFramePromptMode: 'copy' | 'move' = 'copy';
+  kfFramePromptTarget = 1;
+
+  // KF drag state
+  kfDragging = false;
+  kfDragMeshId = '';
+  kfDragTrackKey = '';
+  kfDragFromFrame = 0;
+  kfDragGhostFrame = 0;
+  kfDragIsCamera = false;
+  kfDragIsCopy = false;
 
   readonly easingOptions = [
     { value: 'step',        label: 'Step',         icon: '◆' },
@@ -209,6 +261,239 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
     }
     this.kfContextCurrentEasing = easing;
     this.showEasingMenu = false;
+    this.keyframesChanged.emit();
+  }
+
+  deleteKeyframe(): void {
+    if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
+    const sm = this.shapeManager as any;
+    if (this.kfContextIsCamera) {
+      sm.removeCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame);
+    } else {
+      sm.removeMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
+    }
+    this.showEasingMenu = false;
+    this.keyframesChanged.emit();
+  }
+
+  clearAllKeyframes(): void {
+    if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
+    const sm = this.shapeManager as any;
+    if (this.kfContextIsCamera) {
+      const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
+      for (const def of this.camera3dTrackDefs) {
+        const track: any[] = [...(entry?.tracks?.[def.key] ?? [])];
+        for (const kf of track) {
+          sm.removeCameraKeyframe3D?.(def.key, kf.frame);
+        }
+      }
+    } else {
+      sm.clearMeshKeyframeTracks3D?.(this.kfContextMeshId);
+    }
+    this.showEasingMenu = false;
+    this.keyframesChanged.emit();
+  }
+
+  openKfCopyPrompt(): void {
+    this.kfFramePromptMode = 'copy';
+    this.kfFramePromptTarget = this.kfContextFrame + 1;
+    this.showKfFramePrompt = true;
+    this.showEasingMenu = false;
+  }
+
+  openKfMovePrompt(): void {
+    this.kfFramePromptMode = 'move';
+    this.kfFramePromptTarget = this.kfContextFrame + 1;
+    this.showKfFramePrompt = true;
+    this.showEasingMenu = false;
+  }
+
+  confirmKfFrameAction(): void {
+    if (!this.shapeManager || !this.kfContextMeshId) { this.showKfFramePrompt = false; return; }
+    const sm = this.shapeManager as any;
+    const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
+    const track: any[] = entry?.tracks?.[this.kfContextTrackKey] ?? [];
+    const kf = track.find((k: any) => k.frame === this.kfContextFrame);
+    if (!kf) { this.showKfFramePrompt = false; return; }
+    const target = this.kfFramePromptTarget;
+    if (this.kfContextIsCamera) {
+      sm.setCameraKeyframe3D?.(this.kfContextTrackKey, target, kf.value, kf.easing);
+      if (this.kfFramePromptMode === 'move') {
+        sm.removeCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame);
+      }
+    } else {
+      sm.setMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, target, kf.value, kf.easing);
+      if (this.kfFramePromptMode === 'move') {
+        sm.removeMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
+      }
+    }
+    this.showKfFramePrompt = false;
+    this.keyframesChanged.emit();
+  }
+
+  cancelKfFramePrompt(): void {
+    this.showKfFramePrompt = false;
+  }
+
+  // ── Track-level context menu ────────────────────────────────
+
+  onKfTrackLabelContextMenu(event: MouseEvent, meshId: string, trackKey: string, isCamera: boolean): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.trackMenuX = event.clientX;
+    this.trackMenuY = event.clientY;
+    this.trackMenuMeshId = meshId;
+    this.trackMenuTrackKey = trackKey;
+    this.trackMenuIsCamera = isCamera;
+    this.showTrackMenu = true;
+    this.showEasingMenu = false;
+    this.contextMenuVisible = false;
+  }
+
+  clearTrackKeyframes(): void {
+    if (!this.shapeManager || !this.trackMenuMeshId) { this.showTrackMenu = false; return; }
+    const sm = this.shapeManager as any;
+    const entry = this.mesh3dAllTracks.find(e => e.meshId === this.trackMenuMeshId);
+    const track: any[] = [...(entry?.tracks?.[this.trackMenuTrackKey] ?? [])];
+    for (const kf of track) {
+      if (this.trackMenuIsCamera) {
+        sm.removeCameraKeyframe3D?.(this.trackMenuTrackKey, kf.frame);
+      } else {
+        sm.removeMeshKeyframe3D?.(this.trackMenuMeshId, this.trackMenuTrackKey, kf.frame);
+      }
+    }
+    this.showTrackMenu = false;
+    this.keyframesChanged.emit();
+  }
+
+  closeTrackMenu(): void { this.showTrackMenu = false; }
+
+  // ── Multi-keyframe selection ────────────────────────────────
+
+  kfKey(meshId: string, trackKey: string, frame: number): string {
+    return `${meshId}:${trackKey}:${frame}`;
+  }
+
+  isKfSelected(meshId: string, trackKey: string, frame: number): boolean {
+    return this.selectedKfKeys.has(this.kfKey(meshId, trackKey, frame));
+  }
+
+  clearKfSelection(): void { this.selectedKfKeys.clear(); }
+
+  deleteSelectedKeyframes(): void {
+    if (!this.shapeManager) return;
+    const sm = this.shapeManager as any;
+    for (const key of [...this.selectedKfKeys]) {
+      const parts = key.split(':');
+      const meshId = parts[0];
+      const trackKey = parts[1];
+      const frame = +parts[2];
+      const entry = this.mesh3dAllTracks.find(e => e.meshId === meshId);
+      if (entry?.isCamera) {
+        sm.removeCameraKeyframe3D?.(trackKey, frame);
+      } else {
+        sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+      }
+    }
+    this.selectedKfKeys.clear();
+    this.keyframesChanged.emit();
+  }
+
+  openKfBulkMovePrompt(): void {
+    this.kfBulkMoveTarget = this.currentFrame;
+    this.showKfBulkMovePrompt = true;
+  }
+
+  confirmKfBulkMove(): void {
+    if (!this.shapeManager) { this.showKfBulkMovePrompt = false; return; }
+    const sm = this.shapeManager as any;
+    const keys = [...this.selectedKfKeys];
+    const minFrame = Math.min(...keys.map(k => +k.split(':')[2]));
+    const delta = this.kfBulkMoveTarget - minFrame;
+    for (const key of keys) {
+      const parts = key.split(':');
+      const meshId = parts[0];
+      const trackKey = parts[1];
+      const frame = +parts[2];
+      const newFrame = Math.max(1, Math.min(this.frameCount, frame + delta));
+      const entry = this.mesh3dAllTracks.find(e => e.meshId === meshId);
+      const track: any[] = entry?.tracks?.[trackKey] ?? [];
+      const kf = track.find((k: any) => k.frame === frame);
+      if (!kf) continue;
+      if (entry?.isCamera) {
+        sm.setCameraKeyframe3D?.(trackKey, newFrame, kf.value, kf.easing);
+        sm.removeCameraKeyframe3D?.(trackKey, frame);
+      } else {
+        sm.setMeshKeyframe3D?.(meshId, trackKey, newFrame, kf.value, kf.easing);
+        sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+      }
+    }
+    this.selectedKfKeys.clear();
+    this.showKfBulkMovePrompt = false;
+    this.keyframesChanged.emit();
+  }
+
+  cancelKfBulkMove(): void { this.showKfBulkMovePrompt = false; }
+
+  onKfDiamondMouseDown(event: MouseEvent, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+
+    if (event.shiftKey) {
+      const key = this.kfKey(meshId, trackKey, frame);
+      if (this.selectedKfKeys.has(key)) {
+        this.selectedKfKeys.delete(key);
+      } else {
+        this.selectedKfKeys.add(key);
+      }
+      return;
+    }
+
+    this.kfDragging = false;
+    this.kfDragMeshId = meshId;
+    this.kfDragTrackKey = trackKey;
+    this.kfDragFromFrame = frame;
+    this.kfDragGhostFrame = frame;
+    this.kfDragIsCamera = isCamera;
+    this.kfDragIsCopy = event.altKey;
+
+    const onMove = (e: MouseEvent) => {
+      if (!this.kfDragging && Math.abs(e.clientX - event.clientX) > 4) {
+        this.kfDragging = true;
+      }
+      if (this.kfDragging) {
+        const dx = e.clientX - event.clientX;
+        this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
+        this.kfDragIsCopy = e.altKey;
+      }
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (this.kfDragging && this.kfDragGhostFrame !== this.kfDragFromFrame) {
+        const sm = this.shapeManager as any;
+        const entry = this.mesh3dAllTracks.find(en => en.meshId === meshId);
+        const track: any[] = entry?.tracks?.[trackKey] ?? [];
+        const kf = track.find((k: any) => k.frame === frame);
+        if (kf && sm) {
+          const targetFrame = this.kfDragGhostFrame;
+          if (isCamera) {
+            sm.setCameraKeyframe3D?.(trackKey, targetFrame, kf.value, kf.easing);
+            if (!this.kfDragIsCopy) sm.removeCameraKeyframe3D?.(trackKey, frame);
+          } else {
+            sm.setMeshKeyframe3D?.(meshId, trackKey, targetFrame, kf.value, kf.easing);
+            if (!this.kfDragIsCopy) sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+          }
+          this.keyframesChanged.emit();
+        }
+      }
+      this.kfDragging = false;
+      this.kfDragMeshId = '';
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
 
   closeEasingMenu(): void {
@@ -288,6 +573,29 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       const frameDelta = Math.round(dx / this.frameWidth);
       const newFrame = Math.max(1, Math.min(this.frameCount, startFrame + frameDelta));
       this.animService.setCurrentFrame(newFrame);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  onPlayRangeHandleMouseDown(event: MouseEvent, which: 'start' | 'end'): void {
+    event.stopPropagation();
+    if (event.button !== 0) return;
+    const startX = event.clientX;
+    const startValue = which === 'start' ? this.playRangeStart : this.playRangeEnd;
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - startX;
+      const frameDelta = Math.round(dx / this.frameWidth);
+      const newValue = Math.max(1, Math.min(this.frameCount, startValue + frameDelta));
+      if (which === 'start') {
+        this.animService.setPlayRange(Math.min(newValue, this.playRangeEnd - 1), this.playRangeEnd);
+      } else {
+        this.animService.setPlayRange(this.playRangeStart, Math.max(newValue, this.playRangeStart + 1));
+      }
     };
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
@@ -387,6 +695,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   closeContextMenu(): void {
     this.contextMenuVisible = false;
     this.showEasingMenu = false;
+    this.showTrackMenu = false;
   }
 
   ctxNewCel(): void {

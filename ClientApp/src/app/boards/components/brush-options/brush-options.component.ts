@@ -16,6 +16,8 @@ import {
   CanvasGrainType,
   CanvasGrainOption,
   CANVAS_GRAIN_OPTIONS,
+  BrushBleed,
+  BrushSmudge,
 } from '../../models/brush-preset.model';
 
 export type BrushPanelView = 'grid' | 'editor';
@@ -146,6 +148,18 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   wetEdgeDarkness = 0.4;
   wetEdgeWidth = 2;
   wetEdgeStrength = 0.5;
+
+  // ── Bleed ─────────────────────────────────────────────────────
+  showBleed = false;
+  bleedEnabled = false;
+  bleedPerDab = true;
+  bleedRadius = 4;
+  bleedStrength = 0.3;
+
+  // ── Smudge ────────────────────────────────────────────────────
+  showSmudge = false;
+  smudgeEnabled = false;
+  smudgeStrength = 0.5;
 
   // ── Stroke Texture ────────────────────────────────────────────
   showStrokeTexture = false;
@@ -626,6 +640,40 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
     this.cancelImport();
   }
 
+  // ── Bleed handlers ────────────────────────────────────────────
+
+  onBleedChange(): void {
+    const settings: BrushBleed = {
+      enabled: this.bleedEnabled,
+      perDab: this.bleedPerDab,
+      radius: this.bleedRadius,
+      strength: this.bleedStrength,
+    };
+    this.rasterService.setBrushBleed(settings);
+  }
+
+  // ── Smudge handlers ───────────────────────────────────────────
+
+  onSmudgeChange(): void {
+    const settings: BrushSmudge = {
+      enabled: this.smudgeEnabled,
+      strength: this.smudgeStrength,
+      sampleRadius: 0,
+    };
+    this.rasterService.setBrushSmudge(settings);
+  }
+
+  exportAllPresets(): void {
+    const json = this.rasterService.exportAll();
+    if (!json) return;
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'brushes.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   cancelImport(): void {
     this.showImportDialog = false;
     this._pendingPackJson = '';
@@ -681,6 +729,28 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
       this.canvasGrainType = grain.type ?? 'none';
       this.canvasGrainScale = grain.scale ?? 1.0;
       this.canvasGrainStrength = grain.strength ?? 0.6;
+    }
+
+    // Bleed
+    if (preset.bleed) {
+      this.bleedEnabled = preset.bleed.enabled;
+      this.bleedPerDab = preset.bleed.perDab;
+      this.bleedRadius = preset.bleed.radius ?? 4;
+      this.bleedStrength = preset.bleed.strength;
+    } else {
+      this.bleedEnabled = false;
+      this.bleedPerDab = true;
+      this.bleedRadius = 4;
+      this.bleedStrength = 0.3;
+    }
+
+    // Smudge
+    if (preset.smudge) {
+      this.smudgeEnabled = preset.smudge.enabled;
+      this.smudgeStrength = preset.smudge.strength;
+    } else {
+      this.smudgeEnabled = false;
+      this.smudgeStrength = 0.5;
     }
   }
 
@@ -740,5 +810,13 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
     this.strokeTextureEdgeSoftness = 0.2;
     this.strokeTextureData = '';
     this.strokeTexturePreview = '';
+    this.showBleed = false;
+    this.bleedEnabled = false;
+    this.bleedPerDab = true;
+    this.bleedRadius = 4;
+    this.bleedStrength = 0.3;
+    this.showSmudge = false;
+    this.smudgeEnabled = false;
+    this.smudgeStrength = 0.5;
   }
 }

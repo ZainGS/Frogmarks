@@ -66,12 +66,14 @@
       </div>
     </div>
 
-    <!-- Import Brush Pack -->
+    <!-- Import / Export Brush Pack -->
     <div class="import-row">
       <label class="btn-brush btn-import" title="Import a brush pack file containing presets and textures.">
         📦 Import Pack
         <input type="file" accept=".json" (change)="onBrushPackFileSelected($event)" hidden>
       </label>
+      <button class="btn-brush btn-export" (click)="exportAllPresets()"
+              title="Export all brushes as a .json pack file">💾 Export Pack</button>
     </div>
 
     <!-- Import confirmation dialog -->
@@ -505,6 +507,60 @@
             <span class="slider-value">{{ strokeTextureEdgeSoftness | number:'1.2-2' }}</span>
           </div>
           <div *ngIf="dualBrushEnabled" class="info-hint">ℹ Dual Brush is bypassed when Stroke Texture is active.</div>
+        </div>
+
+        <!-- ▶ Bleed -->
+        <div class="collapsible-header" (click)="showBleed = !showBleed">
+          <span>{{ showBleed ? '▼' : '▶' }}</span>
+          Bleed
+          <input type="checkbox" class="section-toggle" [(ngModel)]="bleedEnabled"
+                 (ngModelChange)="onBleedChange()" (click)="$event.stopPropagation()"
+                 title="Spreads wet paint into surrounding pixels. Per-dab mode runs every stamp; end-of-stroke runs only when you lift the pen.">
+        </div>
+        <div *ngIf="showBleed" class="collapsible-body" [class.section-disabled]="!bleedEnabled">
+          <div class="radio-row" style="margin-bottom:6px">
+            <label class="radio-option" [class.active]="bleedPerDab">
+              <input type="radio" name="bleedMode" [value]="true"
+                     [(ngModel)]="bleedPerDab" (ngModelChange)="onBleedChange()" hidden>
+              <span>● Per-Dab</span>
+            </label>
+            <label class="radio-option" [class.active]="!bleedPerDab">
+              <input type="radio" name="bleedMode" [value]="false"
+                     [(ngModel)]="bleedPerDab" (ngModelChange)="onBleedChange()" hidden>
+              <span>● End of Stroke</span>
+            </label>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How far wet paint spreads (in pixels).">Radius</span>
+            <input type="range" min="1" max="32" step="1"
+                   [(ngModel)]="bleedRadius" (ngModelChange)="onBleedChange()">
+            <span class="slider-value">{{ bleedRadius }}px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label" title="How far wet paint spreads.">Strength</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="bleedStrength" (ngModelChange)="onBleedChange()">
+            <span class="slider-value">{{ bleedStrength | number:'1.2-2' }}</span>
+          </div>
+          <div class="info-hint">ℹ Per-Dab blends every stamp; End of Stroke diffuses once you lift the pen.</div>
+        </div>
+
+        <!-- ▶ Smudge -->
+        <div class="collapsible-header" (click)="showSmudge = !showSmudge">
+          <span>{{ showSmudge ? '▼' : '▶' }}</span>
+          Smudge
+          <input type="checkbox" class="section-toggle" [(ngModel)]="smudgeEnabled"
+                 (ngModelChange)="onSmudgeChange()" (click)="$event.stopPropagation()"
+                 title="Picks up the existing canvas color and mixes it into the stroke, scaled by stylus pressure.">
+        </div>
+        <div *ngIf="showSmudge" class="collapsible-body" [class.section-disabled]="!smudgeEnabled">
+          <div class="slider-row">
+            <span class="slider-label" title="How strongly the brush picks up existing color. Scaled by stylus pressure.">Strength</span>
+            <input type="range" min="0" max="1" step="0.01"
+                   [(ngModel)]="smudgeStrength" (ngModelChange)="onSmudgeChange()">
+            <span class="slider-value">{{ smudgeStrength | number:'1.2-2' }}</span>
+          </div>
+          <div class="info-hint">ℹ 1-dab lag — the sampled color comes from the previous stamp position.</div>
         </div>
 
         <!-- ▶ Texture / Grain -->

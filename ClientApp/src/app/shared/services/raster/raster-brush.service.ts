@@ -11,6 +11,8 @@ import {
   CurvePoint,
   CanvasGrainSettings,
   CanvasGrainType,
+  BrushBleed,
+  BrushSmudge,
 } from '../../../boards/models/brush-preset.model';
 
 /**
@@ -153,6 +155,20 @@ export class RasterBrushService {
 
   updateBrushBlendMode(mode: 'normal' | 'multiply' | 'screen' | 'overlay'): void {
     this._mutatePreset(p => { p.blending.mode = mode; });
+  }
+
+  // ── Bleed & Smudge ───────────────────────────────────────────
+
+  setBrushBleed(settings: BrushBleed): void {
+    const id = this._activePresetId$.value;
+    if (id) (this.sm as any)?.setBrushBleed?.(id, settings);
+    this._mutatePreset(p => { p.bleed = settings; });
+  }
+
+  setBrushSmudge(settings: BrushSmudge): void {
+    const id = this._activePresetId$.value;
+    if (id) (this.sm as any)?.setBrushSmudge?.(id, settings);
+    this._mutatePreset(p => { p.smudge = settings; });
   }
 
   // ── Spacing / scatter ───────────────────────────────────────
@@ -410,6 +426,21 @@ export class RasterBrushService {
 
   add3DScene(name?: string): void {
     (this.sm as any)?.addRaster3DScene?.(name) ?? (this.sm as any)?.addRaster3DDivider?.(name);
+    this.refreshLayers();
+  }
+
+  duplicateLayer(id: string): void {
+    (this.sm as any)?.duplicateLayer?.(id);
+    this.refreshLayers();
+  }
+
+  mergeLayerDown(id: string): void {
+    (this.sm as any)?.mergeLayerDown?.(id);
+    this.refreshLayers();
+  }
+
+  addReferenceImageLayer(name: string, file: File | Blob): void {
+    (this.sm as any)?.addReferenceImageLayer?.(name, file);
     this.refreshLayers();
   }
 

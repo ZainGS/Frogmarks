@@ -81,6 +81,11 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       e.preventDefault();
       this.toggleLockTransparencyOnActive();
     }
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (e.key === 'j' || e.key === 'J') && !this._isInputFocused()) {
+      e.preventDefault();
+      this.duplicateActiveLayer();
+    }
   }
 
   // ── Computed ──────────────────────────────────────────────────
@@ -160,6 +165,14 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.layers.filter(l => this.isPaintable(l)).length > 1;
   }
 
+  /** Whether the active layer can be merged down (needs a paintable layer below it) */
+  get canMergeDown(): boolean {
+    if (!this.activeLayerId) return false;
+    const idx = this.layers.findIndex(l => l.id === this.activeLayerId);
+    if (idx < 0 || idx >= this.layers.length - 1) return false;
+    return this.isPaintable(this.layers[idx + 1]);
+  }
+
   /** Index of the currently active layer */
   get activeLayerIndex(): number {
     return this.layers.findIndex(l => l.id === this.activeLayerId);
@@ -201,6 +214,30 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     this.rasterService.deleteLayer(id);
+  }
+
+  duplicateActiveLayer(): void {
+    if (!this.activeLayerId) return;
+    this.rasterService.duplicateLayer(this.activeLayerId);
+  }
+
+  mergeActiveLayerDown(): void {
+    if (!this.activeLayerId || !this.canMergeDown) return;
+    this.rasterService.mergeLayerDown(this.activeLayerId);
+  }
+
+  triggerReferenceImagePicker(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) {
+        this.rasterService.addReferenceImageLayer(file.name.replace(/\.[^.]+$/, ''), file);
+      }
+    };
+    input.click();
+    this.showAddMenu = false;
   }
 
   // ── Folders ───────────────────────────────────────────────────

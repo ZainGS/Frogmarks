@@ -117,6 +117,18 @@ canvas {
     // filter: brightness(0);
 }
 
+.zoom-percent-display {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    text-align: center;
+    padding: 2px 0;
+    cursor: pointer;
+    border-bottom: 1px solid rgb(105,105,105);
+    letter-spacing: 0.3px;
+    &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+}
+
 .fit-artboard-btn {
     font-size: 10px;
     font-weight: 600;
@@ -2814,6 +2826,257 @@ svg {
     font-family: monospace;
 }
 
+/* Recent color history dots */
+.recent-colors-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+    max-width: 180px;
+    margin-top: 6px;
+}
+
+.recent-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.1s, border-color 0.1s;
+    &:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.5); }
+    &.recent-color-dot--active { border-color: #fff; }
+}
+
+/* Shortcut help button */
+.shortcut-help-btn {
+    font-weight: 700;
+    font-size: 14px;
+    padding: 0 8px !important;
+    opacity: 0.6;
+    &:hover { opacity: 1; }
+}
+
+/* Shortcut cheatsheet overlay */
+.shortcut-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shortcut-modal {
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+    width: 700px;
+    max-width: 96vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.shortcut-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid #333;
+    font-weight: 700;
+    font-size: 14px;
+    color: #e0e0e0;
+    flex-shrink: 0;
+}
+
+.shortcut-modal-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    &:hover { background: rgba(255,255,255,0.08); color: #e0e0e0; }
+}
+
+.shortcut-modal-body {
+    display: flex;
+    gap: 0;
+    overflow-y: auto;
+    padding: 12px 0;
+}
+
+.shortcut-col {
+    flex: 1;
+    padding: 0 18px;
+    &:not(:last-child) { border-right: 1px solid #333; }
+}
+
+.shortcut-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #9B59B6;
+    margin-bottom: 6px;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    font-size: 12px;
+}
+
+.shortcut-key {
+    font-family: monospace;
+    font-size: 11px;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #ccc;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 90px;
+    text-align: center;
+}
+
+.shortcut-desc {
+    color: #aaa;
+    font-size: 11px;
+}
+
+/* Palette swatch context menu */
+.palette-ctx-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+}
+
+.palette-ctx-menu {
+    position: fixed;
+    z-index: 9999;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 160px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.palette-ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #e0e0e0;
+    cursor: pointer;
+    &:hover { background: rgba(255,255,255,0.08); }
+}
+
+.palette-ctx-item-muted {
+    color: #888;
+    font-size: 11px;
+}
+
+.palette-ctx-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+}
+
+/* Canvas resize dialog */
+.resize-dialog {
+    width: 300px;
+    max-width: 90vw;
+}
+
+.resize-dialog-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.resize-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    label {
+        width: 56px;
+        font-size: 12px;
+        color: #ccc;
+        flex-shrink: 0;
+    }
+}
+
+.resize-input {
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    padding: 4px 8px;
+    font-size: 12px;
+    &:focus { outline: 2px solid #9B59B6; }
+}
+
+.resize-unit {
+    font-size: 11px;
+    color: #777;
+    width: 16px;
+}
+
+.resize-select {
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.resize-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding-top: 4px;
+}
+
+.resize-cancel-btn {
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #aaa;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    &:hover { background: #444; }
+}
+
+.resize-confirm-btn {
+    background: #9B59B6;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    &:hover { background: #b87fd9; }
+}
+
 /* Shape type picker grid in subpanel */
 .shape-type-grid {
     display: flex;
@@ -3213,6 +3476,45 @@ svg {
     &:hover { background: rgba(155, 89, 182, 0.14); }
 }
 
+.scene3d-edit-mesh-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 6px;
+}
+
+.scene3d-edit-mesh-btn {
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.12s;
+
+    &:hover { background: rgba(123, 94, 167, 0.2); border-color: #7b5ea7; color: #ddd; }
+
+    &.active {
+        background: rgba(123, 94, 167, 0.25);
+        border-color: #9b59b6;
+        color: #c39fdf;
+        font-weight: 600;
+    }
+}
+
+.scene3d-edit-mesh-hint {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+    padding: 2px 5px;
+    white-space: nowrap;
+}
+
 // ── Undo/redo in header ───────────────────────────────────────────────────────
 .scene3d-undo-btns {
     display: flex;
@@ -3262,6 +3564,63 @@ svg {
     color: #ddd;
     cursor: pointer;
     &:hover { background: rgba(155, 89, 182, 0.2); color: #fff; }
+}
+
+.scene3d-quick-form {
+    margin-top: 4px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding: 8px 10px 6px;
+    background: #202020;
+}
+
+.scene3d-quick-form-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9b59b6;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+}
+
+.scene3d-qf-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+
+.scene3d-qf-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    min-width: 52px;
+    flex-shrink: 0;
+}
+
+.scene3d-qf-num {
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-size: 10px;
+    text-align: right;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { opacity: 0; }
+}
+
+.scene3d-qf-btn {
+    width: 100%;
+    background: rgba(155, 89, 182, 0.2);
+    border: 1px solid rgba(155, 89, 182, 0.4);
+    color: #c39fdf;
+    padding: 5px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-top: 4px;
+    &:hover { background: rgba(155, 89, 182, 0.35); color: #fff; }
 }
 
 // ── Layer move buttons ────────────────────────────────────────────────────────
@@ -3345,6 +3704,131 @@ svg {
     }
 }
 
+// ── Publish Share Dialog ──────────────────────────────────────────
+.publish-share-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.publish-share-dialog {
+    background: #1e1e2e;
+    border: 1px solid #3a3a5c;
+    border-radius: 10px;
+    width: 440px;
+    max-width: calc(100vw - 32px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+    overflow: hidden;
+}
+
+.publish-share-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #2e2e4a;
+}
+
+.publish-share-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e0e0ff;
+}
+
+.publish-share-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    &:hover { background: #2e2e4a; color: #ccc; }
+}
+
+.publish-share-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.publish-share-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.publish-share-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #888;
+}
+
+.publish-share-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.publish-share-input {
+    flex: 1;
+    background: #12121e;
+    border: 1px solid #3a3a5c;
+    border-radius: 6px;
+    color: #d0d0f0;
+    font-size: 12px;
+    padding: 7px 10px;
+    outline: none;
+    cursor: text;
+    min-width: 0;
+    &:focus { border-color: #6666cc; }
+}
+
+.publish-share-textarea {
+    flex: 1;
+    background: #12121e;
+    border: 1px solid #3a3a5c;
+    border-radius: 6px;
+    color: #d0d0f0;
+    font-size: 11px;
+    font-family: monospace;
+    padding: 7px 10px;
+    outline: none;
+    cursor: text;
+    resize: none;
+    min-width: 0;
+    &:focus { border-color: #6666cc; }
+}
+
+.publish-share-copy-btn {
+    background: #4040a0;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: stretch;
+    &:hover { background: #5050b8; }
+}
+
+.publish-share-hint {
+    font-size: 11px;
+    color: #666;
+}
+
+// ─────────────────────────────────────────────────────────────────
 .board-shell.viewer-mode {
     padding-top: 44px;
 
@@ -3355,4 +3839,38 @@ svg {
     .layer-tree-panel {
         display: none !important;
     }
+}
+
+// ── Screencast Keys overlay ───────────────────────────────────────
+@keyframes screencast-key-fade {
+    0%   { opacity: 0; transform: translateY(6px); }
+    10%  { opacity: 1; transform: translateY(0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.screencast-keys-overlay {
+    position: absolute;
+    bottom: 48px;
+    left: 16px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.screencast-key-entry {
+    align-self: flex-start;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #f0f0f0;
+    font-family: 'SF Mono', 'Fira Mono', 'Consolas', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    padding: 4px 10px;
+    animation: screencast-key-fade 2.5s ease forwards;
+    white-space: nowrap;
 }

@@ -46,6 +46,7 @@ import { AnimationExportComponent } from './illustrate/components/animation-expo
 import { NewIllustrationDialogComponent } from './shared/components/new-illustration-dialog/new-illustration-dialog.component';
 import { ClothBuilderComponent } from './illustrate/components/cloth-builder/cloth-builder.component';
 import { ParticleEmittersComponent } from './illustrate/components/particle-emitters/particle-emitters.component';
+import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/mesh-edit-panel.component';
 
 // Define MSAL configuration
 /*
@@ -85,6 +86,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     NewIllustrationDialogComponent,
     ClothBuilderComponent,
     ParticleEmittersComponent,
+    MeshEditPanelComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })

@@ -59,6 +59,23 @@
           </div>
         </div>
 
+        <!-- Mesh Edit Panel overlay -->
+        <app-mesh-edit-panel
+            *ngIf="scene3dIsEditingMesh && scene3dSelectedMeshId"
+            [shapeManager]="$any(shapeManager)"
+            [meshId]="scene3dSelectedMeshId"
+            [meshName]="scene3dSelectedMeshName || scene3dSelectedMeshId || ''"
+            [activeTool]="scene3dEditTool"
+            (exitRequest)="exitMeshEditMode()"
+            (toolChange)="scene3dEditTool = $event">
+        </app-mesh-edit-panel>
+
+        <!-- Screencast Keys overlay -->
+        <div *ngIf="screenscastKeysEnabled" class="screencast-keys-overlay">
+            <div *ngFor="let entry of screenscastKeyEntries; trackBy: trackScreencastKey"
+                 class="screencast-key-entry">{{ entry.text }}</div>
+        </div>
+
         <!-- Export reminder banner (no-cloud / local-only) -->
         <div *ngIf="showExportReminder" class="export-reminder">
           <span class="export-reminder-icon">💾</span>
@@ -167,6 +184,34 @@
           </div>
         </div>
 
+        <!-- Publish share dialog -->
+        <div *ngIf="showPublishShareDialog" class="publish-share-overlay" (click)="closePublishShareDialog()">
+          <div class="publish-share-dialog" (click)="$event.stopPropagation()">
+            <div class="publish-share-header">
+              <span class="publish-share-title">🎉 Published!</span>
+              <button class="publish-share-close" (click)="closePublishShareDialog()">✕</button>
+            </div>
+            <div class="publish-share-body">
+              <div class="publish-share-section">
+                <label class="publish-share-label">View link</label>
+                <div class="publish-share-row">
+                  <input class="publish-share-input" [value]="publishShareViewUrl" readonly (click)="$any($event.target).select()">
+                  <button class="publish-share-copy-btn" (click)="copyPublishUrl()">Copy</button>
+                </div>
+              </div>
+              <div class="publish-share-section">
+                <label class="publish-share-label">Embed on your site</label>
+                <div class="publish-share-row">
+                  <textarea class="publish-share-textarea" [value]="publishShareEmbedCode" readonly rows="3"
+                            (click)="$any($event.target).select()"></textarea>
+                  <button class="publish-share-copy-btn" (click)="copyEmbedCode()">Copy</button>
+                </div>
+                <div class="publish-share-hint">Paste this into any HTML page to embed an interactive viewer.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Hidden file inputs -->
         <input #imageFileInput type="file" accept="image/*" style="display:none"
                (change)="onImageFileSelected($event)">
@@ -178,7 +223,7 @@
         <script type="module" src="/src/main.ts"></script>
 
         <!-- Control Panels -->
-        <div *ngIf="!uiHidden" class="control-panel-dark row">
+        <div *ngIf="!uiHidden && !isViewerMode" class="control-panel-dark row">
             <span class="construction-svg">
                 <svg width="20px" height="20px" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--twemoji" preserveAspectRatio="xMidYMid meet"><path fill="#FFCC4D" d="M36 15a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v8z"></path><path d="M6 3H4a4 4 0 0 0-4 4v2l6-6zm6 0L0 15c0 1.36.682 2.558 1.72 3.28L17 3h-5zM7 19h5L28 3h-5zm16 0L35.892 6.108A3.995 3.995 0 0 0 33.64 3.36L18 19h5zm13-4v-3l-7 7h3a4 4 0 0 0 4-4z" fill="#292F33"></path><path fill="#99AAB5" d="M4 19h5v14H4zm23 0h5v14h-5z"></path></svg>
             </span>
@@ -570,11 +615,12 @@
         <div *ngIf="controlPanelActiveTool.startsWith('shape') && !uiHidden" class="shape-subcontrol-panel">
             <div class="row">
                 <div class="col-12 d-flex gap-2">
-                    <div *ngFor="let color of penColorPalette" 
-                        class="palette-circle" 
-                        [ngClass]="{'palette-circle-selected': selectedShapeColor === color}" 
+                    <div *ngFor="let color of penColorPalette; let i = index"
+                        class="palette-circle"
+                        [ngClass]="{'palette-circle-selected': selectedShapeColor === color}"
                         [style.background-color]="color"
-                        (click)="setShapeColor(color)">
+                        (click)="setShapeColor(color)"
+                        (contextmenu)="onPaletteCtxMenu($event, i)">
                     </div>
                 </div>
             </div>
@@ -630,11 +676,12 @@
         <div *ngIf="controlPanelActiveTool=='text' && !uiHidden" class="text-subcontrol-panel">
             <div class="row">
                 <div class="col-12 d-flex gap-2">
-                    <div *ngFor="let color of penColorPalette" 
-                        class="palette-circle" 
-                        [ngClass]="{'palette-circle-selected': selectedTextColor === color}" 
+                    <div *ngFor="let color of penColorPalette; let i = index"
+                        class="palette-circle"
+                        [ngClass]="{'palette-circle-selected': selectedTextColor === color}"
                         [style.background-color]="color"
-                        (click)="setTextColor(color)">
+                        (click)="setTextColor(color)"
+                        (contextmenu)="onPaletteCtxMenu($event, i)">
                     </div>
                 </div>
             </div>
@@ -673,7 +720,7 @@
         </svg>
 
         <!-- Top Toolbar -->
-        <div *ngIf="!uiHidden" class="left-panel">
+        <div *ngIf="!uiHidden && !isViewerMode" class="left-panel">
             <div class="top-toolbar-row">
                 <!-- Left group: Frog + Title -->
                 <div class="top-toolbar-left">
@@ -833,6 +880,10 @@
                                      (click)="rasterRotate(180); closeAllMenus()">
                                     <span>Rotate 180°</span>
                                 </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="toggleScreencastKeys(); closeAllMenus()">
+                                    <span>{{ screenscastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
+                                </div>
                             </div>
                         </div>
                         <div class="menubar-item">
@@ -864,12 +915,14 @@
                         </div>
                     </div>
                     <div class="top-toolbar-btn share-btn" (click)="downloadCanvasViewAsPng()" title="Share">Share</div>
+                    <div class="top-toolbar-btn shortcut-help-btn" (click)="openResizeDialog()" title="Resize canvas">⊞</div>
+                    <div class="top-toolbar-btn shortcut-help-btn" (click)="showShortcutCheatsheet = true" title="Keyboard shortcuts">?</div>
                 </div>
             </div>
         </div>
 
         <!-- Right-side column: Tool Options + Layers stacked vertically -->
-        <div *ngIf="!uiHidden" class="right-column">
+        <div *ngIf="!uiHidden && !isViewerMode" class="right-column">
 
         <!-- Right Content Panel -->
         <div class="right-panel">
@@ -966,11 +1019,59 @@
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('plane'); scene3dShowAddMeshMenu=false">Plane</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('cylinder'); scene3dShowAddMeshMenu=false">Cylinder</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('torus'); scene3dShowAddMeshMenu=false">Torus</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowPolygonForm=!scene3dShowPolygonForm; scene3dShowCircleForm=false"
+                                         title="Editable polygon from 2D silhouette">Polygon…</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowCircleForm=!scene3dShowCircleForm; scene3dShowPolygonForm=false"
+                                         title="Circle / n-gon with optional height">Circle…</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddGroup(); scene3dShowAddMeshMenu=false">Group</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddRibbon(); scene3dShowAddMeshMenu=false"
                                          title="Ribbon — flat strip for banners/scrolling text">Ribbon</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dOpenClothBuilder(); scene3dShowAddMeshMenu=false"
                                          title="Cloth — GPU-simulated fabric mesh">Cloth…</div>
+                                </div>
+
+                                <!-- Polygon quick-form -->
+                                <div *ngIf="scene3dShowPolygonForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+                                    <div class="scene3d-quick-form-title">Polygon Mesh</div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Sides</span>
+                                        <input type="number" class="scene3d-qf-num" min="3" max="64" step="1"
+                                               [(ngModel)]="scene3dPolygonSides">
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Radius</span>
+                                        <input type="number" class="scene3d-qf-num" min="0.01" step="0.1"
+                                               [(ngModel)]="scene3dPolygonRadius">
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Height</span>
+                                        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+                                               [(ngModel)]="scene3dPolygonHeight"
+                                               title="0 = flat cap only">
+                                    </div>
+                                    <button class="scene3d-qf-btn" (click)="scene3dAddPolygon()">Add Polygon</button>
+                                </div>
+
+                                <!-- Circle quick-form -->
+                                <div *ngIf="scene3dShowCircleForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+                                    <div class="scene3d-quick-form-title">Circle Mesh</div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Radius</span>
+                                        <input type="number" class="scene3d-qf-num" min="0.01" step="0.1"
+                                               [(ngModel)]="scene3dCircleRadius">
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Segments</span>
+                                        <input type="number" class="scene3d-qf-num" min="3" max="128" step="1"
+                                               [(ngModel)]="scene3dCircleSegments">
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Height</span>
+                                        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+                                               [(ngModel)]="scene3dCircleHeight"
+                                               title="0 = flat cap only">
+                                    </div>
+                                    <button class="scene3d-qf-btn" (click)="scene3dAddCircle()">Add Circle</button>
                                 </div>
                             </div>
                             <button class="scene3d-btn" (click)="modelFileInput.click()" title="Import .glb, .gltf, or .obj file" style="margin-left:auto">↑ Import</button>
@@ -1028,6 +1129,16 @@
 
                     <details *ngIf="scene3dSelectedMeshId" class="scene3d-section-group" open>
                     <summary class="scene3d-major-header">SELECTED MESH</summary>
+
+                    <div class="scene3d-edit-mesh-row" *ngIf="scene3dSelectedMeshId">
+                        <button class="scene3d-edit-mesh-btn"
+                                [class.active]="scene3dIsEditingMesh"
+                                (click)="scene3dIsEditingMesh ? exitMeshEditMode() : enterMeshEditMode()"
+                                title="Toggle mesh edit mode (Tab)">
+                            {{ scene3dIsEditingMesh ? '✓ In Edit Mode' : 'Edit Mesh' }}
+                        </button>
+                        <span class="scene3d-edit-mesh-hint">Tab</span>
+                    </div>
 
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId" open>
                         <summary>Transform</summary>
@@ -1108,9 +1219,21 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="scene3d-btn" style="margin-top:4px;width:100%"
-                                    (click)="scene3dClearSubmeshes()"
-                                    title="Revert to single-material mode">↩ Use Single Material</button>
+                            <div style="display:flex;gap:4px;margin-top:4px">
+                                <button class="scene3d-btn" style="flex:1"
+                                        (click)="scene3dAddSubmesh()"
+                                        title="Add a new material slot">+ Add Slot</button>
+                                <button class="scene3d-btn" style="flex:1"
+                                        (click)="scene3dClearSubmeshes()"
+                                        title="Revert to single-material mode">↩ Single</button>
+                            </div>
+                        </ng-container>
+
+                        <!-- Add first slot button (transitions single → multi) -->
+                        <ng-container *ngIf="scene3dSubmeshes.length === 0">
+                            <button class="scene3d-btn" style="margin-top:6px;width:100%"
+                                    (click)="scene3dAddSubmesh()"
+                                    title="Add a material slot to enable per-part materials">+ Add Material Slot</button>
                         </ng-container>
                     </details>
 
@@ -2085,7 +2208,7 @@
         </div> <!-- close .right-column -->
 
         <!-- Always-visible Color Picker (CSP-style) -->
-        <div *ngIf="!uiHidden" class="persistent-color-picker"
+        <div *ngIf="!uiHidden && !isViewerMode" class="persistent-color-picker"
              (mousedown)="$event.stopPropagation()">
             <!-- Hue ring -->
             <div class="hue-ring"
@@ -2110,10 +2233,20 @@
                        [ngModel]="selectedPenColor"
                        (ngModelChange)="onPersistentHexInput($event)">
             </div>
+            <!-- Recent colors -->
+            <div *ngIf="recentColors.length" class="recent-colors-row">
+                <div *ngFor="let c of recentColors"
+                     class="recent-color-dot"
+                     [style.background-color]="c"
+                     [class.recent-color-dot--active]="c === selectedPenColor"
+                     (click)="setPenColor(c)"
+                     [title]="c"></div>
+            </div>
         </div>
 
         <!-- Zoom Controls -->
-        <div *ngIf="!uiHidden" class="zoom-control">
+        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control">
+            <div class="zoom-percent-display" (click)="fitArtboard()" title="Current zoom — click to fit artboard">{{ currentZoomPercent }}</div>
             <div class="row zoom-control-row">
                 <div class="col-6 zoom-button-left" (click)="zoomOut()">
                     <span class="zoom-symbol" style="filter: brightness(10);">➖</span>
@@ -2684,11 +2817,12 @@
 
             <div class="tool-label" style="margin-top: 10px;">Shape Colors</div>
             <div class="color-palette">
-                <div *ngFor="let color of penColorPalette" 
-                    class="palette-circle" 
+                <div *ngFor="let color of penColorPalette; let i = index"
+                    class="palette-circle"
                     [class.selected]="selectedShapeColor === color"
                     [style.background-color]="color"
-                    (click)="setShapeColor(color)"></div>
+                    (click)="setShapeColor(color)"
+                    (contextmenu)="onPaletteCtxMenu($event, i)"></div>
             </div>
 
             <!-- Polygon side count (only for shape:polygon) -->
@@ -2723,11 +2857,12 @@
             </div>
             <div class="tool-label" style="margin-top: 6px;">Colors</div>
             <div class="color-palette">
-                <div *ngFor="let color of penColorPalette" 
-                    class="palette-circle" 
+                <div *ngFor="let color of penColorPalette; let i = index"
+                    class="palette-circle"
                     [class.selected]="selectedShapeColor === color"
                     [style.background-color]="color"
-                    (click)="setShapeColor(color)"></div>
+                    (click)="setShapeColor(color)"
+                    (contextmenu)="onPaletteCtxMenu($event, i)"></div>
             </div>
 
             <!-- Preset shapes -->
@@ -3602,9 +3737,11 @@
     </div>
 
     <!-- Animation timeline — shown when animation mode is enabled (outside tool-subpanel, at board-shell level) -->
-    <app-animation-timeline *ngIf="animationEnabled" class="animation-timeline-wrapper"
+    <app-animation-timeline *ngIf="animationEnabled && !isViewerMode" class="animation-timeline-wrapper"
       [mesh3dAllTracks]="scene3dAllMeshTracks"
-      [shapeManager]="shapeManager">
+      [shapeManager]="shapeManager"
+      (keyframesChanged)="scene3dRefreshKeyframeTracks()"
+      (recordKeyframeRequested)="scene3dRecordKeyframe()">
     </app-animation-timeline>
 
     <!-- Cloth Builder Modal -->
@@ -3656,4 +3793,132 @@
             </div>
         </div>
     </div>
+
+    <!-- ── Palette swatch context menu (Q2) ──────────────────── -->
+    <div *ngIf="paletteCtxMenuVisible"
+         class="palette-ctx-overlay"
+         (click)="closePaletteCtxMenu()">
+    </div>
+    <div *ngIf="paletteCtxMenuVisible"
+         class="palette-ctx-menu"
+         [style.left.px]="paletteCtxMenuX"
+         [style.top.px]="paletteCtxMenuY"
+         (click)="$event.stopPropagation()">
+        <div class="palette-ctx-item" (click)="replacePaletteWithCurrentColor()">
+            <span class="palette-ctx-swatch" [style.background]="selectedPenColor"></span>
+            Set to current color
+        </div>
+        <div class="palette-ctx-item palette-ctx-item-muted" (click)="resetPaletteToDefault()">Reset all to defaults</div>
+    </div>
+
+    <!-- ── Canvas Resize Dialog (M2) ─────────────────────────── -->
+    <div *ngIf="showResizeDialog" class="shortcut-overlay" (click)="showResizeDialog = false">
+        <div class="shortcut-modal resize-dialog" (click)="$event.stopPropagation()">
+            <div class="shortcut-modal-header">
+                <span>Resize Canvas</span>
+                <button class="shortcut-modal-close" (click)="showResizeDialog = false">✕</button>
+            </div>
+            <div class="resize-dialog-body">
+                <div class="resize-row">
+                    <label>Width</label>
+                    <input type="number" min="1" max="16384" [(ngModel)]="resizeDialogWidth" class="resize-input">
+                    <span class="resize-unit">px</span>
+                </div>
+                <div class="resize-row">
+                    <label>Height</label>
+                    <input type="number" min="1" max="16384" [(ngModel)]="resizeDialogHeight" class="resize-input">
+                    <span class="resize-unit">px</span>
+                </div>
+                <div class="resize-row">
+                    <label>Anchor</label>
+                    <select [(ngModel)]="resizeDialogAnchor" class="resize-select">
+                        <option value="center">Center</option>
+                        <option value="top-left">Top-Left</option>
+                    </select>
+                </div>
+                <div class="resize-actions">
+                    <button class="resize-cancel-btn" (click)="showResizeDialog = false">Cancel</button>
+                    <button class="resize-confirm-btn" (click)="confirmResize()">Resize</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Keyboard Shortcut Cheatsheet ───────────────────────── -->
+    <div *ngIf="showShortcutCheatsheet" class="shortcut-overlay" (click)="showShortcutCheatsheet = false">
+        <div class="shortcut-modal" (click)="$event.stopPropagation()">
+            <div class="shortcut-modal-header">
+                <span>Keyboard Shortcuts</span>
+                <button class="shortcut-modal-close" (click)="showShortcutCheatsheet = false">✕</button>
+            </div>
+            <div class="shortcut-modal-body">
+                <div class="shortcut-col">
+                    <div class="shortcut-section-title">Tools</div>
+                    <div class="shortcut-row"><span class="shortcut-key">V</span><span class="shortcut-desc">Cursor / Select</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">H</span><span class="shortcut-desc">Pan hand</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">B</span><span class="shortcut-desc">Raster brush</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+B</span><span class="shortcut-desc">Airbrush</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">E</span><span class="shortcut-desc">Pen / draw</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+E</span><span class="shortcut-desc">Eraser</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">I</span><span class="shortcut-desc">Highlighter</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">G</span><span class="shortcut-desc">Fill (paint bucket)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Q</span><span class="shortcut-desc">Move layer</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">T</span><span class="shortcut-desc">Text</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+T</span><span class="shortcut-desc">Balloon</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+Y</span><span class="shortcut-desc">Live text</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">M</span><span class="shortcut-desc">Stamp</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">L</span><span class="shortcut-desc">Arrow</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">S</span><span class="shortcut-desc">Section panel</span></div>
+                    <div class="shortcut-section-title" style="margin-top: 12px;">Selection</div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+M</span><span class="shortcut-desc">Rect select</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+O</span><span class="shortcut-desc">Ellipse select</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+L</span><span class="shortcut-desc">Lasso select</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">W</span><span class="shortcut-desc">Magic wand</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+A</span><span class="shortcut-desc">Select all</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+D</span><span class="shortcut-desc">Deselect</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+I</span><span class="shortcut-desc">Invert selection</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+T</span><span class="shortcut-desc">Transform selection</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Enter</span><span class="shortcut-desc">Commit transform</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Escape</span><span class="shortcut-desc">Cancel / cursor tool</span></div>
+                </div>
+                <div class="shortcut-col">
+                    <div class="shortcut-section-title">Edit</div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Z</span><span class="shortcut-desc">Undo</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+Z</span><span class="shortcut-desc">Redo</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Y</span><span class="shortcut-desc">Redo</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+X</span><span class="shortcut-desc">Cut</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+C</span><span class="shortcut-desc">Copy</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+V</span><span class="shortcut-desc">Paste</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Del / Backspace</span><span class="shortcut-desc">Delete selection / shape</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Alt+Backspace</span><span class="shortcut-desc">Fill with foreground color</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+H</span><span class="shortcut-desc">Flip horizontal</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+V</span><span class="shortcut-desc">Flip vertical</span></div>
+                    <div class="shortcut-section-title" style="margin-top: 12px;">View</div>
+                    <div class="shortcut-row"><span class="shortcut-key">+ / =</span><span class="shortcut-desc">Zoom in</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">– / _</span><span class="shortcut-desc">Zoom out</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">F</span><span class="shortcut-desc">Fullscreen</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">X</span><span class="shortcut-desc">Toggle UI</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+\</span><span class="shortcut-desc">Toggle bleed guides</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+;</span><span class="shortcut-desc">Toggle gutter guides</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">5</span><span class="shortcut-desc">Toggle 3D perspective / ortho</span></div>
+                    <div class="shortcut-section-title" style="margin-top: 12px;">File</div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+S</span><span class="shortcut-desc">Save</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+E</span><span class="shortcut-desc">Export .frog file</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+O</span><span class="shortcut-desc">Import .frog file</span></div>
+                    <div class="shortcut-section-title" style="margin-top: 12px;">Timeline</div>
+                    <div class="shortcut-row"><span class="shortcut-key">Space</span><span class="shortcut-desc">Play / Pause</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">, / .</span><span class="shortcut-desc">Previous / Next frame</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Home / End</span><span class="shortcut-desc">First / Last frame</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Ctrl+D</span><span class="shortcut-desc">Duplicate cel &amp; advance</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">F5</span><span class="shortcut-desc">Add cel at current frame</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">F6</span><span class="shortcut-desc">Advance &amp; add cel</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">F7</span><span class="shortcut-desc">Insert blank frame</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">O</span><span class="shortcut-desc">Toggle onion skin</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Alt+, / Alt+.</span><span class="shortcut-desc">Decrease / Increase FPS</span></div>
+                    <div class="shortcut-row"><span class="shortcut-key">Shift+click ◆</span><span class="shortcut-desc">Multi-select keyframes</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>

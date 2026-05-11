@@ -43,6 +43,7 @@ namespace Frogmarks.Services
         Task<ResultModel<IllustrationDto>> PublishIllustration(long illustrationId, IFormFile bundle, string? publishedTitle);
         Task<ResultModel<string>> UnpublishIllustration(long illustrationId);
         Task<ResultModel<IllustrationViewDto>> GetPublicView(Guid uid);
+        Task<ResultModel<byte[]>> DownloadPublicBundle(Guid uid);
 
         // Storage quota
         Task<ResultModel<StorageQuotaDto>> GetStorageQuota();

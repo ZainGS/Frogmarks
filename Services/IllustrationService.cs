@@ -1589,6 +1589,26 @@ namespace Frogmarks.Services
             }
         }
 
+        public async Task<ResultModel<byte[]>> DownloadPublicBundle(Guid uid)
+        {
+            try
+            {
+                var illustration = await _context.Illustrations
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(i => i.UUID == uid);
+
+                if (illustration == null || !illustration.IsPublic || string.IsNullOrEmpty(illustration.PublishedBundleBlobName))
+                    return new ResultModel<byte[]>(ResultType.NotFound, "Illustration not found.");
+
+                var data = await _blobStorage.DownloadAsync(_publishedContainerName, illustration.PublishedBundleBlobName);
+                return new ResultModel<byte[]>(ResultType.Success, resultObject: data);
+            }
+            catch (Exception ex)
+            {
+                return new ResultModel<byte[]>(ResultType.Failure, ex.Message);
+            }
+        }
+
     }
 
     public class IllustrationWithLastViewed

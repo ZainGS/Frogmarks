@@ -12,6 +12,7 @@
           <button (click)="addLayer(); showAddMenu = false">2D Layer</button>
           <button (click)="add3DScene(); showAddMenu = false" [disabled]="has3DScene">3D Scene</button>
           <button (click)="addFolder(); showAddMenu = false">Folder</button>
+          <button (click)="triggerReferenceImagePicker()">📷 Reference Image</button>
         </div>
       </div>
     </div>
@@ -76,6 +77,39 @@
                  (keyup.escape)="cancelRename()"
                  (click)="$event.stopPropagation()"
                  autofocus>
+        </div>
+      </ng-container>
+
+      <!-- ═══ Reference image row ═══ -->
+      <ng-container *ngIf="layer.type === 'reference'">
+        <div class="rl-row-top">
+          <span class="rl-icon rl-eye" (click)="toggleVisibility(layer, $event)"
+                [title]="layer.visible ? 'Hide reference' : 'Show reference'">
+            <mat-icon class="rl-mat-icon">{{ layer.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </span>
+          <span class="rl-ref-icon">📷</span>
+          <span *ngIf="renamingLayerId !== layer.id"
+                class="rl-name"
+                (dblclick)="startRename(layer, $event)">
+            {{ layer.name }}
+          </span>
+          <input *ngIf="renamingLayerId === layer.id"
+                 type="text" class="rl-rename-input"
+                 [(ngModel)]="renameValue"
+                 (blur)="commitRename(layer)"
+                 (keyup.enter)="commitRename(layer)"
+                 (keyup.escape)="cancelRename()"
+                 (click)="$event.stopPropagation()"
+                 autofocus>
+        </div>
+        <div class="rl-row-bottom">
+          <div class="opacity-control">
+            <input type="range" min="0" max="100" step="1"
+                   [value]="layer.opacity * 100"
+                   (input)="onOpacityChange(layer, $event)"
+                   (click)="$event.stopPropagation()">
+            <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
+          </div>
         </div>
       </ng-container>
 
@@ -172,7 +206,18 @@
   <div class="rl-actions">
     <button class="rl-btn" *ngIf="activeLayerId"
             [disabled]="!canDeleteLayer"
-            (click)="deleteLayer(activeLayerId!)" title="Delete Layer"><mat-icon class="rl-mat-icon">delete</mat-icon></button>
+            (click)="deleteLayer(activeLayerId!)" title="Delete Layer">
+      <mat-icon class="rl-mat-icon">delete</mat-icon>
+    </button>
+    <button class="rl-btn" *ngIf="activeLayerId"
+            (click)="duplicateActiveLayer()" title="Duplicate Layer (Ctrl+J)">
+      <mat-icon class="rl-mat-icon">content_copy</mat-icon>
+    </button>
+    <button class="rl-btn" *ngIf="activeLayerId"
+            [disabled]="!canMergeDown"
+            (click)="mergeActiveLayerDown()" title="Merge Down">
+      <mat-icon class="rl-mat-icon">merge</mat-icon>
+    </button>
     <span class="rl-actions-spacer"></span>
     <button class="rl-btn rl-btn-sm" *ngIf="activeLayerId"
             (click)="moveDown(activeLayerIndex)"

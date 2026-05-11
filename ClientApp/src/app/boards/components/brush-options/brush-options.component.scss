@@ -595,6 +595,8 @@ $radius: 6px;
 /* ── Brush Pack Import ───────────────────────────────────────── */
 
 .import-row {
+  display: flex;
+  gap: 4px;
   padding-top: 6px;
   border-top: 1px solid $border;
   margin-top: 4px;
@@ -604,10 +606,17 @@ $radius: 6px;
   display: flex;
   align-items: center;
   gap: 4px;
-  width: 100%;
+  flex: 1;
   justify-content: center;
   cursor: pointer;
   font-size: 11px;
+}
+
+.btn-export {
+  flex: 1;
+  font-size: 11px;
+  cursor: pointer;
+  justify-content: center;
 }
 
 /* Import confirmation dialog overlay */

@@ -244,6 +244,8 @@ All property mutations go through `_mutatePreset(fn)` which reads the preset fro
 | `setPaperGrain(settings)` | `sm.setPaperGrain(settings)` | Global canvas paper material |
 | `getPaperGrain()` | `sm.getPaperGrain()` | |
 | `getAvailableGrainTypes()` | `sm.getAvailableGrainTypes()` | Returns `CanvasGrainType[]` |
+| `setBrushBleed(settings)` | `(sm as any).setBrushBleed(id, settings)` | `BrushBleed`: `{ enabled, perDab, radius, strength }` |
+| `setBrushSmudge(settings)` | `(sm as any).setBrushSmudge(id, settings)` | `BrushSmudge`: `{ enabled, strength, sampleRadius }` |
 
 ### Layer Management
 
@@ -266,6 +268,9 @@ All property mutations go through `_mutatePreset(fn)` which reads the preset fro
 | `add3DScene(name?)` | `(sm as any).addRaster3DScene(name)` | |
 | `remove3DScene()` | `(sm as any).removeRaster3DScene()` | |
 | `has3DScene()` | `(sm as any).hasRaster3DScene()` | |
+| `duplicateLayer(id)` | `(sm as any).duplicateLayer(id)` | GPU copy placed above source |
+| `mergeLayerDown(id)` | `(sm as any).mergeLayerDown(id)` | Composites layer onto the one below, deletes upper |
+| `addReferenceImageLayer(name, file)` | `(sm as any).addReferenceImageLayer(name, file)` | Letterbox-fits image, creates locked `'reference'` type layer at 50% opacity |
 | `undo()` | `sm.rasterUndo()` | |
 | `redo()` | `sm.rasterRedo()` | |
 

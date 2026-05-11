@@ -291,42 +291,6 @@ class Board {
 
 `sceneGraphData` is the single source of truth for all vector content. It is the string returned by `shapeManager.getSceneGraphJSON()` and accepted by `shapeManager.setSceneGraphJSON(json)`.
 
-### `BoardItem`
-
-Legacy/supplementary data attached to a board independent of the scene graph:
-
-```typescript
-class BoardItem {
-  id!: number;
-  boardItemPosition?: BoardItemPositionData;  // x, y, width, height, rotation
-  type?: BoardItemType;
-  options?: BoardItemOptions;
-}
-```
-
-`BoardItemType` is a descriptor object with capability flags (`hasFillColor`, `hasBorderOptions`, `hasLink`, etc.) rather than an enum. `BoardItemOptions` carries font, border, alignment, and color settings. These fields are defined in the data model but are not actively used by `BoardComponent` in the current implementation — the scene graph handles all positioning and styling.
-
-### `BoardPermissions`
-
-```typescript
-class BoardPermissions {
-  canNonCollaboratorsView: boolean;   // public view link
-  canNonCollaboratorsEdit: boolean;   // public edit link
-}
-```
-
-### `BoardCollaborator`
-
-```typescript
-class BoardCollaborator {
-  id!: number;
-  userId?: number;
-  roles?: BoardRole[];
-}
-```
-
-Collaborator records and permissions are stored on the `Board` model and managed server-side. No real-time collaborative editing (WebSocket / CRDT) is wired in the current client code — the component comment "In the future, you can setup your WebSocket comms here" marks the `saveBoardIfChanged` method as the intended insertion point.
-
 ---
 
 ## Saving and Loading
@@ -346,12 +310,6 @@ sceneChanged$ (Subject<string>)
                               POST /api/board/thumbnails/{uid}
 ```
 
-`sceneChanged$` is pushed by the persistent `onSceneGraphChanged` subscription wired in `initForBoard`.
-
-### Manual thumbnail override
-
-`setCurrentViewAsThumbnail()` calls `sm.captureThumbnailBlob(300)` and uploads with `isCustom = true`, which sets `board.isCustomThumbnail = true` server-side. Subsequent auto-thumbnail saves are skipped while this flag is set.
-
 ### Load flow
 
 ```
@@ -361,8 +319,6 @@ sceneChanged$ (Subject<string>)
      buildLayerTree(JSON.parse(sceneGraphData).root)
 3. rasterBrushService.refreshLayers()  (implicit via subscription)
 ```
-
-`setSceneGraphJSON` is awaited to ensure textures (stamps, patterns) are fully loaded before the scene-applied signal fires.
 
 ### `BoardService` endpoints
 
@@ -381,26 +337,9 @@ sceneChanged$ (Subject<string>)
 | `getBoardsByTeamId(id, ...)` | GET | `/api/board/search` (with pagination params) |
 | `searchBoards(query, ...)` | GET | `/api/board/search` |
 
-Thumbnail URLs are cached in `localStorage` under key `"cachedThumbnails"` with a 5-minute TTL. Board IDs with valid cached entries are sent as a query param so the server can skip re-signing those SAS URLs.
-
----
-
-## Background and Dot Color
-
-The board canvas background and dot-grid color are controlled separately from shape fill colors:
-
-```typescript
-sm.setBackgroundColor(r, g, b, a);  // normalised 0–1 floats
-sm.setDotColor(r, g, b, a);
-```
-
-Both are read back on init via `sm.getBackgroundColor()` and `sm.getDotColor()` to sync the hex input fields in the left panel.
-
 ---
 
 ## Keyboard Shortcuts
-
-All shortcuts are handled in `handleHotkeys(e: KeyboardEvent)` on `window.keydown`. Shortcuts are suppressed when an input, textarea, or contenteditable element is focused, or when SDF/plain-text drawing is in progress.
 
 | Key | Action |
 |---|---|
@@ -416,37 +355,11 @@ All shortcuts are handled in `handleHotkeys(e: KeyboardEvent)` on `window.keydow
 | `m` | Stamp tool |
 | `+` / `=` | Zoom in (`worldManager.zoomIn()`) |
 | `-` / `_` | Zoom out (`worldManager.zoomOut()`) |
-| `Delete` | Delete selected shapes; prune from local `layerTree` |
+| `Delete` | Delete selected shapes |
 | `f` | Toggle fullscreen |
 | `x` | Toggle UI chrome visibility |
 
-The raster layers panel registers its own `document:keydown` listener:
-
-| Key | Action |
-|---|---|
-| `/` | Toggle lock-transparency on the active raster layer |
-
----
-
-## Collaboration
-
-Collaboration data is modeled but not yet activated in the client:
-
-- `Board.collaborators: BoardCollaborator[]` — list of users and their roles.
-- `Board.permissions: BoardPermissions` — `canNonCollaboratorsView` / `canNonCollaboratorsEdit` flags for link sharing.
-- No WebSocket or CRDT connection is established. The comment in `saveBoardIfChanged` marks this as the intended point for future real-time sync.
-
----
-
-## Board Management Actions
-
-Available from the board header context menu (`openBoardMenu`):
-
-- **New board** — `boardService.createBoard(...)` with the current `teamId`, then navigate to `/board/{newUuid}`.
-- **Duplicate board** — `boardService.duplicateBoard(board.id, { name: 'Copy of …', teamId, copyThumbnail: false })`, then navigate to the duplicate.
-- **Set thumbnail** — `setCurrentViewAsThumbnail()` — captures the current viewport at 300 px width and uploads as the custom thumbnail.
-
-The board title is editable in-place and saved via `boardService.renameBoard(board.id, newName)` on blur.
+The raster layers panel also registers `/` → toggle lock-transparency on the active raster layer.
 
 ---
 
@@ -458,10 +371,9 @@ The board title is editable in-place and saved via `boardService.renameBoard(boa
 | Primary tools | Vector, SDF text, stamps, connectors, sections | Raster brush, selection, fill, live text, balloons, panels |
 | Autosave | Single JSON POST at 1 s debounce | Multi-part V2 PUT (scene + pixel blobs) + OPFS stroke recovery |
 | Animation | None | Full timeline via `RasterAnimationService` |
-| 3D scene | Available as raster layer type | Full panel with `ThreeSceneManager` |
+| 3D scene | Available as raster layer type | Full panel with `Scene3DManager` |
 | Undo/Redo | Delegated to Salsa engine (no explicit calls in component) | `rasterBrushService.undo()` / `redo()` |
 | Paper grain | Not present | `rasterBrushService.setPaperGrain()` |
 | Board context menu | New / duplicate / set thumbnail | Not present |
 | Fullscreen | `boardShellRef` fullscreen API | Not present |
 | UI toggle (`x`) | `uiHidden` flag hides all chrome | Not present |
-| Layer tree | Rebuilt from scene JSON on every change | Same, plus raster layer list from `RasterBrushService` |

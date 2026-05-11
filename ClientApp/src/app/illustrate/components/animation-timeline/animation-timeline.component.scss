@@ -152,6 +152,31 @@ $play-range: rgba($accent, 0.08);
   &.current.in-range { background: $current-frame; }
 }
 
+/* ── Play range drag handles ─────────────────────────────────── */
+
+.range-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 10;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 2px;
+    width: 2px;
+    background: $accent-light;
+    border-radius: 1px;
+    opacity: 0.85;
+  }
+
+  &:hover::after { opacity: 1; background: #fff; }
+}
+
 /* ── Layer rows ──────────────────────────────────────────────── */
 
 .tl-layer-row {
@@ -374,6 +399,16 @@ $play-range: rgba($accent, 0.08);
 
 .icon-btn {
   font-size: 13px;
+}
+
+.record-kf-btn {
+  width: auto !important;
+  padding: 0 8px !important;
+  color: #f48fb1;
+  font-weight: 700;
+  font-size: 11px;
+  border-color: rgba(#f48fb1, 0.5);
+  &:hover { border-color: #f48fb1; background: rgba(#f48fb1, 0.15); }
 }
 
 .transport-label {
@@ -607,6 +642,11 @@ $play-range: rgba($accent, 0.08);
     color: $accent;
     font-weight: 600;
   }
+
+  &.ctx-item-danger {
+    color: #f48fb1;
+    &:hover { background: rgba(#f48fb1, 0.15); }
+  }
 }
 
 .ctx-divider {
@@ -649,6 +689,60 @@ $play-range: rgba($accent, 0.08);
     color: #fff;
     background: rgba($accent, 0.3);
   }
+}
+
+/* ── Multi-keyframe selection ───────────────────────────────── */
+
+.kf-diamond.kf-selected {
+  transform: scale(1.6) !important;
+  filter: drop-shadow(0 0 3px currentColor);
+  outline: 1px solid currentColor;
+  border-radius: 1px;
+}
+
+.kf-bulk-bar {
+  position: absolute;
+  top: 0;
+  left: 140px;
+  right: 0;
+  height: 24px;
+  background: rgba(#4a3060, 0.97);
+  border-bottom: 1px solid #8a6090;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  z-index: 20;
+  pointer-events: all;
+
+  // override the fixed 28px width from transport-btn
+  .transport-btn {
+    width: auto;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+}
+
+.kf-bulk-count {
+  font-size: 10px;
+  color: #ce93d8;
+  margin-right: 4px;
+}
+
+.kf-bulk-delete-btn {
+  color: #f48fb1;
+}
+
+/* ── Keyframe drag states ───────────────────────────────────── */
+
+.kf-diamond.kf-drag-source {
+  opacity: 0.25;
+}
+
+.kf-diamond.kf-drag-ghost {
+  opacity: 0.55;
+  animation: none !important;
+  pointer-events: none;
 }
 
 /* ── Duplicate prompt dialog ───────────────────────────────── */

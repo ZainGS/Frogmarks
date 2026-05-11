@@ -1182,6 +1182,64 @@ export class IllustrationComponent implements OnInit {
   scene3dFrameLinkFramesPerCycle = 24;
 
   // Ribbon mesh
+  // ── Mesh Edit state ────────────────────────────────────────
+  scene3dIsEditingMesh = false;
+  scene3dEditTool: 'select' | 'knife' = 'select';
+  private _knifeStart: { x: number; y: number } | null = null;
+
+  enterMeshEditMode(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    const canvas = this.canvasRef?.nativeElement;
+    sm.enterMeshEditMode3D?.(this.scene3dSelectedMeshId);
+    this.scene3dIsEditingMesh = true;
+    if (canvas) {
+      sm.attachMeshEditPointerHandlers?.(
+        canvas,
+        this.scene3dSelectedMeshId,
+        () => this.ngZone.run(() => { /* trigger change detection so panel re-reads selection */ }),
+      );
+    }
+  }
+
+  exitMeshEditMode(): void {
+    const sm = this.shapeManager as any;
+    sm.detachMeshEditPointerHandlers?.();
+    sm.exitMeshEditMode3D?.();
+    this.scene3dIsEditingMesh = false;
+    this.scene3dEditTool = 'select';
+    this._knifeStart = null;
+    this._clearKnifePreview();
+  }
+
+  private _drawKnifePreview(x0: number, y0: number, x1: number, y1: number): void {
+    const hc = this.handleCanvasRef?.nativeElement;
+    if (!hc) return;
+    const ctx = hc.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, hc.width, hc.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.strokeStyle = 'rgba(255, 255, 80, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 3]);
+    ctx.stroke();
+    // Start dot
+    ctx.beginPath();
+    ctx.arc(x0, y0, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 80, 0.9)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private _clearKnifePreview(): void {
+    const hc = this.handleCanvasRef?.nativeElement;
+    if (!hc) return;
+    hc.getContext('2d')?.clearRect(0, 0, hc.width, hc.height);
+  }
+
   // ── Cloth state ────────────────────────────────────────────
   scene3dIsCloth = false;
   scene3dClothIds = new Set<string>();
@@ -1605,6 +1663,16 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
+  // Polygon / circle creation forms
+  scene3dShowPolygonForm = false;
+  scene3dShowCircleForm = false;
+  scene3dPolygonSides = 6;
+  scene3dPolygonRadius = 0.5;
+  scene3dPolygonHeight = 0.2;
+  scene3dCircleRadius = 0.5;
+  scene3dCircleSegments = 16;
+  scene3dCircleHeight = 0.2;
+
   scene3dAddMesh(primitive: string): void {
     const sm = this.shapeManager as any;
     const s3d = sm.scene3d;
@@ -1630,9 +1698,49 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
+  scene3dAddPolygon(): void {
+    const sm = this.shapeManager as any;
+    const n = Math.max(3, Math.floor(this.scene3dPolygonSides));
+    const r = this.scene3dPolygonRadius;
+    const points: [number, number][] = Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      return [Math.cos(a) * r, Math.sin(a) * r];
+    });
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const mesh = sm.addPolygonMesh3D?.(center[0], center[1], center[2], points, this.scene3dPolygonHeight);
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowPolygonForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dAddCircle(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const mesh = sm.addCircleMesh3D?.(
+      center[0], center[1], center[2],
+      this.scene3dCircleRadius,
+      Math.max(3, Math.floor(this.scene3dCircleSegments)),
+      this.scene3dCircleHeight,
+    );
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowCircleForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
   scene3dSelectMesh(id: string): void {
     this.scene3dRenamingId = null;
     this._scene3dHideHandles();
+    if (this.scene3dIsEditingMesh && id !== this.scene3dSelectedMeshId) {
+      this.exitMeshEditMode();
+    }
     this.scene3dSelectedMeshId = id;
     // Reset per-mesh state so switching between mesh types clears the flags
     this.scene3dIsCloth = false;
@@ -2154,6 +2262,16 @@ export class IllustrationComponent implements OnInit {
     if (!canvas) return;
     const sm = this.shapeManager as any;
 
+    // 0. Mesh edit mode — Salsa's MeshEditPointerController owns face/vertex/edge picking.
+    // For knife: capture start position here. Either way, prevent fallthrough to mesh selection.
+    if (this.scene3dIsEditingMesh && this.scene3dSelectedMeshId) {
+      if (this.scene3dEditTool === 'knife') {
+        this._knifeStart = { x: event.offsetX, y: event.offsetY };
+        canvas.setPointerCapture(event.pointerId);
+      }
+      return;
+    }
+
     // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
     if (this.scene3dIsRibbon && this.scene3dSelectedMeshId && this.scene3dRibbonShowHandles) {
       const cw = canvas.clientWidth || canvas.width;
@@ -2185,6 +2303,10 @@ export class IllustrationComponent implements OnInit {
   }
 
   scene3dCanvasPointerMove(event: PointerEvent): void {
+    if (this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart) {
+      this._drawKnifePreview(this._knifeStart.x, this._knifeStart.y, event.offsetX, event.offsetY);
+      return;
+    }
     if (this._scene3dActiveDragIndex === null || !this.scene3dSelectedMeshId) return;
     const canvas = this.canvasRef?.nativeElement;
     const cw = canvas ? (canvas.clientWidth || canvas.width) : 0;
@@ -2200,7 +2322,22 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
-  scene3dCanvasPointerUp(_event: PointerEvent): void {
+  scene3dCanvasPointerUp(event: PointerEvent): void {
+    if (this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart) {
+      const canvas = this.canvasRef?.nativeElement;
+      if (canvas && this.scene3dSelectedMeshId) {
+        const dpr = window.devicePixelRatio || 1;
+        (this.shapeManager as any).knifeCut3D?.(
+          this.scene3dSelectedMeshId,
+          this._knifeStart.x * dpr, this._knifeStart.y * dpr,
+          event.offsetX * dpr, event.offsetY * dpr,
+          canvas.width, canvas.height,
+        );
+      }
+      this._knifeStart = null;
+      this._clearKnifePreview();
+      return;
+    }
     if (this._scene3dActiveDragIndex === null) return;
     (this.shapeManager as any).endRibbonHandleDrag3D?.(this.scene3dSelectedMeshId!, this._scene3dActiveDragIndex);
     this._scene3dActiveDragIndex = null;
@@ -2581,6 +2718,17 @@ export class IllustrationComponent implements OnInit {
   scene3dRemoveSubmesh(slotIndex: number): void {
     const id = this.scene3dSelectedMeshId; if (!id) return;
     (this.shapeManager as any).removeMeshSubmesh3D?.(id, slotIndex);
+    this._scene3dReloadSubmeshes();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dAddSubmesh(): void {
+    const id = this.scene3dSelectedMeshId; if (!id) return;
+    const label = `Slot ${this.scene3dSubmeshes.length + 1}`;
+    (this.shapeManager as any).appendMeshSubmesh3D?.(id, {
+      label,
+      material: { diffuseColor: [1, 1, 1, 1], opacity: 1, renderStyle: 'default' },
+    });
     this._scene3dReloadSubmeshes();
     this.scene3dMarkDirty();
   }
@@ -3131,7 +3279,53 @@ export class IllustrationComponent implements OnInit {
   // Pen/Highlight/Pattern
   showPenColorPicker = false;
   customPenColor = '#fff';
-  penColorPalette: string[] = ['#000000','#E74C3C','#F39C12','#ffff00','#2ECC71','#3498DB','#9B59B6','#FFFFFF'];
+  private readonly _defaultPenPalette = ['#000000','#E74C3C','#F39C12','#ffff00','#2ECC71','#3498DB','#9B59B6','#FFFFFF'];
+  penColorPalette: string[] = [...this._defaultPenPalette];
+
+  // ── Palette context menu (Q2) ──────────────────────────────────
+  paletteCtxMenuVisible = false;
+  paletteCtxMenuX = 0;
+  paletteCtxMenuY = 0;
+  paletteCtxMenuIndex = -1;
+
+  onPaletteCtxMenu(e: MouseEvent, i: number): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.paletteCtxMenuIndex = i;
+    this.paletteCtxMenuX = e.clientX;
+    this.paletteCtxMenuY = e.clientY;
+    this.paletteCtxMenuVisible = true;
+  }
+
+  replacePaletteWithCurrentColor(): void {
+    if (this.paletteCtxMenuIndex < 0) return;
+    this.penColorPalette = [...this.penColorPalette];
+    this.penColorPalette[this.paletteCtxMenuIndex] = this.selectedPenColor;
+    try { localStorage.setItem('frog-pen-palette', JSON.stringify(this.penColorPalette)); } catch {}
+    this.paletteCtxMenuVisible = false;
+  }
+
+  resetPaletteToDefault(): void {
+    this.penColorPalette = [...this._defaultPenPalette];
+    try { localStorage.removeItem('frog-pen-palette'); } catch {}
+    this.paletteCtxMenuVisible = false;
+  }
+
+  closePaletteCtxMenu(): void {
+    this.paletteCtxMenuVisible = false;
+  }
+
+  private _loadPaletteFromStorage(): void {
+    try {
+      const stored = localStorage.getItem('frog-pen-palette');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length === 8) {
+          this.penColorPalette = parsed;
+        }
+      }
+    } catch {}
+  }
   highlightColorPalette: string[] = ['#A8A8A8','#FFADAD','#FFD6A5','#FDFFB6','#CAFFBF','#a0fdff','#DAB6FC','#FFFFFF'];
   highlightColorMapping: Map<string, string> = new Map([
     ['#A8A8A8', '#828282'],
@@ -3172,6 +3366,52 @@ export class IllustrationComponent implements OnInit {
   isViewerMode = false;
   viewerTitle = '';
   isPublishing = false;
+  showPublishShareDialog = false;
+  publishShareViewUrl = '';
+  publishShareEmbedCode = '';
+
+  // ── Screencast Keys ───────────────────────────────────────────
+  screenscastKeysEnabled = false;
+  screenscastKeyEntries: { text: string; id: number }[] = [];
+  private _screenscastKeyIdCounter = 0;
+
+  toggleScreencastKeys(): void {
+    this.screenscastKeysEnabled = !this.screenscastKeysEnabled;
+    if (!this.screenscastKeysEnabled) this.screenscastKeyEntries = [];
+  }
+
+  trackScreencastKey(_: number, entry: { text: string; id: number }): number {
+    return entry.id;
+  }
+
+  private _pushScreenscastKey(text: string): void {
+    if (!this.screenscastKeysEnabled) return;
+    const id = ++this._screenscastKeyIdCounter;
+    this.ngZone.run(() => {
+      this.screenscastKeyEntries = [{ text, id }, ...this.screenscastKeyEntries.slice(0, 4)];
+    });
+    setTimeout(() => {
+      this.ngZone.run(() => {
+        this.screenscastKeyEntries = this.screenscastKeyEntries.filter(e => e.id !== id);
+      });
+    }, 2500);
+  }
+
+  private _formatKeyForScreencast(e: KeyboardEvent): string | null {
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return null;
+    const parts: string[] = [];
+    const isMac = navigator.userAgent.includes('Mac');
+    if (isMac ? e.metaKey : e.ctrlKey) parts.push('Ctrl');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.altKey) parts.push('Alt');
+    const keyMap: Record<string, string> = {
+      ' ': 'Space', 'ArrowLeft': '←', 'ArrowRight': '→',
+      'ArrowUp': '↑', 'ArrowDown': '↓',
+      'Delete': 'Del', 'Backspace': '⌫', 'Escape': 'Esc', 'Enter': '↵',
+    };
+    parts.push(keyMap[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key));
+    return parts.join('+');
+  }
   noCloudEmptyState = false;
   showSyncModePanel = false;
   syncModePanelSelection = 0;
@@ -3195,6 +3435,7 @@ export class IllustrationComponent implements OnInit {
   ) { }
 
   ngOnInit() {
+    this._loadPaletteFromStorage();
     // React whenever /illustrate/:id changes
     this.routeSub = this.route.paramMap
       .pipe(
@@ -3605,7 +3846,10 @@ export class IllustrationComponent implements OnInit {
 
     if (isEditable || this.shapeManager.isInputActive?.()) return;
 
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const label = this._formatKeyForScreencast(event);
+    if (label) this._pushScreenscastKey(label);
+
+    const isMac = navigator.userAgent.includes('Mac');
     const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
 
     // Global undo/redo routing by active context.
@@ -3639,6 +3883,10 @@ export class IllustrationComponent implements OnInit {
       return;
     }
 
+    // Ctrl+0 — fit artboard to view
+    if (ctrlKey && event.key === '0') {
+      this.fitArtboard(); event.preventDefault(); return;
+    }
     // Ctrl+S — save now
     if (ctrlKey && (event.key === 's' || event.key === 'S') && !event.shiftKey) {
       this.saveNow(); event.preventDefault(); return;
@@ -3709,6 +3957,12 @@ export class IllustrationComponent implements OnInit {
 
     switch (event.key) {
       case 'Escape':
+        if (this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife') {
+          this.scene3dEditTool = 'select';
+          this._knifeStart = null;
+          this._clearKnifePreview();
+          break;
+        }
         if (this.rasterSelectionService.info.isTransforming) {
           this.rasterSelectionService.cancelTransform(); break;
         }
@@ -3761,8 +4015,23 @@ export class IllustrationComponent implements OnInit {
         return;
       case 'k':
       case 'K':
+        if (this.scene3dPanelVisible && this.scene3dIsEditingMesh) {
+          this.scene3dEditTool = this.scene3dEditTool === 'knife' ? 'select' : 'knife';
+          if (this.scene3dEditTool === 'select') this._clearKnifePreview();
+          break;
+        }
         if (this.scene3dPanelVisible) {
           this.scene3dRecordKeyframe();
+          break;
+        }
+        return;
+      case 'Tab':
+        if (this.scene3dPanelVisible && this.scene3dSelectedMeshId) {
+          if (this.scene3dIsEditingMesh) {
+            this.exitMeshEditMode();
+          } else {
+            this.enterMeshEditMode();
+          }
           break;
         }
         return;
@@ -3823,18 +4092,19 @@ export class IllustrationComponent implements OnInit {
   }
 
   setStrokeWidth(w: number) { this.strokeWidth = w; this.shapeManager.setRasterBrushSize(w); }
-  setPenColor(c: string) { 
-    this.showPenColorPicker = false; 
-    this.selectedPenColor = c; 
-    
+  setPenColor(c: string) {
+    this.showPenColorPicker = false;
+    this.selectedPenColor = c;
+
     // update raster brush for illustrations
     this.rasterBrushColor = c;
     this.shapeManager.setRasterBrushColor(c);
 
     // sync persistent picker state
     this._syncPersistentPickerFromHex(c);
+    this._addRecentColor(c);
   }
-  onColorPickerSelection(c: string) { this.selectedPenColor = c; this.shapeManager.setStrokeColor(c); this._syncPersistentPickerFromHex(c); }
+  onColorPickerSelection(c: string) { this.selectedPenColor = c; this.shapeManager.setStrokeColor(c); this._syncPersistentPickerFromHex(c); this._addRecentColor(c); }
 
   // ── Persistent (always-visible) color picker ──────────────────
   persistentHue = 0;
@@ -3867,7 +4137,7 @@ export class IllustrationComponent implements OnInit {
     this._hueSelecting = true;
     this._updateHueFromEvent(e);
     const moveHandler = (ev: MouseEvent) => { if (this._hueSelecting) this._updateHueFromEvent(ev); };
-    const upHandler = () => { this._hueSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
+    const upHandler = () => { this._hueSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); this._addRecentColor(this.selectedPenColor); };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
   }
@@ -3889,7 +4159,7 @@ export class IllustrationComponent implements OnInit {
     this._sbSelecting = true;
     this._updateSbFromEvent(e);
     const moveHandler = (ev: MouseEvent) => { if (this._sbSelecting) this._updateSbFromEvent(ev); };
-    const upHandler = () => { this._sbSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
+    const upHandler = () => { this._sbSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); this._addRecentColor(this.selectedPenColor); };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
   }
@@ -3910,6 +4180,7 @@ export class IllustrationComponent implements OnInit {
       this.rasterBrushColor = hex;
       this.shapeManager?.setRasterBrushColor?.(hex);
       this.shapeManager?.setStrokeColor?.(hex);
+      this._addRecentColor(hex);
     }
   }
 
@@ -4944,6 +5215,45 @@ export class IllustrationComponent implements OnInit {
 
   zoomIn() { this.worldManager.zoomIn(); }
   zoomOut() { this.worldManager.zoomOut(); }
+
+  get currentZoomPercent(): string {
+    try { return Math.round((this.worldManager?.getZoomFactor?.() ?? 1) * 100) + '%'; }
+    catch { return '100%'; }
+  }
+
+  // ── Canvas resize dialog (M2) ──────────────────────────────────
+  showResizeDialog = false;
+  resizeDialogWidth = 1920;
+  resizeDialogHeight = 1080;
+  resizeDialogAnchor: 'top-left' | 'center' = 'center';
+
+  openResizeDialog(): void {
+    const sm = this.shapeManager as any;
+    const size = sm?.getDocumentSize?.();
+    this.resizeDialogWidth = size?.w ?? 1920;
+    this.resizeDialogHeight = size?.h ?? 1080;
+    this.resizeDialogAnchor = 'center';
+    this.showResizeDialog = true;
+  }
+
+  confirmResize(): void {
+    const w = Math.round(this.resizeDialogWidth);
+    const h = Math.round(this.resizeDialogHeight);
+    if (!w || !h || w < 1 || h < 1) return;
+    const sm = this.shapeManager as any;
+    sm?.resizeDocument?.(w, h, this.resizeDialogAnchor);
+    this.showResizeDialog = false;
+  }
+
+  // ── Color history ──────────────────────────────────────────────
+  recentColors: string[] = [];
+
+  private _addRecentColor(color: string): void {
+    this.recentColors = [color, ...this.recentColors.filter(c => c !== color)].slice(0, 8);
+  }
+
+  // ── Shortcut cheatsheet ───────────────────────────────────────
+  showShortcutCheatsheet = false;
 
   // ── Artboard overlay ────────────────────────────────────────
 
@@ -6138,6 +6448,8 @@ export class IllustrationComponent implements OnInit {
 
       await (this.shapeManager as any).unpackProject(bundle);
       this._disableAllViewerTools();
+      // Safety fallback: if unpackProject doesn't fire onSceneGraphChanged, unblock the loader
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
     } catch (e) {
       console.error('[Viewer] failed to load bundle', e);
       this.notifyService.error('Could not load this illustration.');
@@ -6166,36 +6478,44 @@ export class IllustrationComponent implements OnInit {
     sm.disableTextDrawing?.();
   }
 
-  publishIllustration(): void {
+  async publishIllustration(): Promise<void> {
     if (!this.illustration?.id || this.isPublishing) return;
     this.isPublishing = true;
-    const sm = this.shapeManager as any;
-    sm.packProject().then((bundle: Blob) => {
-      this.illustrationService.publishIllustration(
-        this.illustration!.id!,
-        bundle,
-        this.illustrationTitle || this.illustration!.name
-      ).subscribe({
-        next: (res: any) => {
-          this.isPublishing = false;
-          const updated = res?.resultObject ?? res;
-          if (updated?.isPublic !== undefined) {
-            this.illustration!.isPublic = updated.isPublic;
-            this.illustration!.publishedVersion = updated.publishedVersion;
-            this.illustration!.publishedAt = updated.publishedAt;
-          }
-          this.notifyService.success('Published! Share the link from the address bar.');
-        },
-        error: () => {
-          this.isPublishing = false;
-          this.notifyService.error('Publish failed. Please try again.');
-        }
-      });
-    }).catch(() => {
-      this.isPublishing = false;
-      this.notifyService.error('Could not pack illustration for publishing.');
-    });
     this.closeContextMenu();
+    try {
+      const sm = this.shapeManager as any;
+      if (!sm?.packProject) throw new Error('packProject not available');
+      const bundle: Blob = await sm.packProject();
+      await new Promise<void>((resolve, reject) => {
+        this.illustrationService.publishIllustration(
+          this.illustration!.id!,
+          bundle,
+          this.illustrationTitle || this.illustration!.name
+        ).subscribe({
+          next: (res: any) => {
+            const updated = res?.resultObject ?? res;
+            if (updated?.isPublic !== undefined) {
+              this.illustration!.isPublic = updated.isPublic;
+              this.illustration!.publishedVersion = updated.publishedVersion;
+              this.illustration!.publishedAt = updated.publishedAt;
+            }
+            const uid = this.illustration!.uuid ?? updated?.uuid ?? '';
+            const origin = window.location.origin;
+            this.publishShareViewUrl = `${origin}/view/${uid}`;
+            this.publishShareEmbedCode =
+              `<script src="${origin}/salsa-viewer.js"><\/script>\n` +
+              `<salsa-viewer src="${this.publishShareViewUrl}"></salsa-viewer>`;
+            this.showPublishShareDialog = true;
+            resolve();
+          },
+          error: (err: any) => reject(err),
+        });
+      });
+    } catch (e: any) {
+      this.notifyService.error(e?.message?.includes('packProject') ? 'Could not pack illustration for publishing.' : 'Publish failed. Please try again.');
+    } finally {
+      this.isPublishing = false;
+    }
   }
 
   unpublishIllustration(): void {
@@ -6208,6 +6528,22 @@ export class IllustrationComponent implements OnInit {
       error: () => this.notifyService.error('Unpublish failed.')
     });
     this.closeContextMenu();
+  }
+
+  closePublishShareDialog(): void {
+    this.showPublishShareDialog = false;
+  }
+
+  copyPublishUrl(): void {
+    navigator.clipboard.writeText(this.publishShareViewUrl).then(() => {
+      this.notifyService.success('Link copied!');
+    });
+  }
+
+  copyEmbedCode(): void {
+    navigator.clipboard.writeText(this.publishShareEmbedCode).then(() => {
+      this.notifyService.success('Embed code copied!');
+    });
   }
 
   ngOnDestroy(): void {

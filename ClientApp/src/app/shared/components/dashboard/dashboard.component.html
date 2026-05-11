@@ -291,13 +291,19 @@
               </div>
             </div>
             <!-- Actions & Settings Column -->
-            <div class="col-6 text-end text-nowrap row-padding-right-negation">
+            <div class="col-6 text-end text-nowrap row-padding-right-negation" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
               <button [hidden]="!isTeamSelected" *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button>
                 <mat-icon>add</mat-icon>
                 Invite members
               </button>
               <button [hidden]="!isTeamSelected" style="color: rgb(192, 192, 192) !important; background-color: black !important;" *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
                 <span>Upgrade</span>
+              </button>
+              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button
+                      [class.batch-mode-active]="batchMode"
+                      (click)="toggleBatchMode()"
+                      [title]="batchMode ? 'Exit selection mode' : 'Select multiple items'">
+                <mat-icon>{{ batchMode ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
               </button>
               <button *ngIf="!isLoading" class="ms-2 align-top header-action-button-first" mat-icon-button (click)="showNotificationPanel=true"><mat-icon>notifications_none</mat-icon></button>
               <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon>settings</mat-icon></button>
@@ -676,14 +682,22 @@
                      [class.rotate-right]="!isLeftHalf(ri.globalIndex)"
                      [class.selected]="overlayIndex === ri.globalIndex"
                      [class.grid-item--exit]="_exitingIds.has(ri.item.uuid)"
+                     [class.grid-item--batch-selected]="selectedItems.has(ri.item.uuid)"
                      [attr.data-item-id]="ri.item.uuid"
                      [style.--fade-delay]="(ri.globalIndex * 12) + 'ms'"
-                     (mousedown)="onGridItemMouseDown(ri.item, ri.globalIndex, $event)"
-                     (mouseup)="onGridItemMouseUp(ri.item, ri.globalIndex, $event)"
+                     (mousedown)="batchMode ? toggleGridItemSelection($event, ri.item.uuid) : onGridItemMouseDown(ri.item, ri.globalIndex, $event)"
+                     (mouseup)="batchMode ? null : onGridItemMouseUp(ri.item, ri.globalIndex, $event)"
                      (mouseleave)="onGridItemMouseLeave(ri.globalIndex)"
                      (click)="$event.stopPropagation()"
                      (contextmenu)="openBoardMenu($event, ri.item)">
                   <div class="image-wrapper">
+                    <!-- Batch mode checkbox overlay -->
+                    <div *ngIf="batchMode || selectedItems.has(ri.item.uuid)"
+                         class="batch-checkbox"
+                         [class.batch-checkbox--checked]="selectedItems.has(ri.item.uuid)"
+                         (click)="toggleGridItemSelection($event, ri.item.uuid)">
+                      <mat-icon>{{ selectedItems.has(ri.item.uuid) ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                    </div>
                     <img [src]="getThumbnailSrc(ri.item)"
                          class="thumbnail-img">
                     <div class="favorite-icon-wrapper">
@@ -1042,6 +1056,16 @@
   </div>
 
   <!-- Dev panel — toggle with Ctrl+Shift+D -->
+  <!-- Batch action bar -->
+  <div *ngIf="batchMode && selectedItems.size > 0" class="batch-action-bar">
+    <span class="batch-action-count">{{ selectedItems.size }} selected</span>
+    <button mat-stroked-button color="warn" (click)="batchDelete()">
+      <mat-icon>delete</mat-icon> Delete selected
+    </button>
+    <button mat-stroked-button (click)="selectedItems.clear()">Clear selection</button>
+    <button mat-stroked-button (click)="toggleBatchMode()">Done</button>
+  </div>
+
   <div *ngIf="showDevPanel" class="dev-panel">
     <span class="dev-panel-title">Dev Tools <small>(Ctrl+Shift+D)</small></span>
     <button mat-stroked-button [disabled]="isSyncingCloud" (click)="syncCloudToLocal()">

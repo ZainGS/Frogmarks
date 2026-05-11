@@ -421,3 +421,20 @@ $radius: 6px;
   vertical-align: middle;
   line-height: 16px;
 }
+
+/* ── Reference image layer ───────────────────────────────── */
+
+.rl-item:has(.rl-ref-icon) {
+  background: rgba(255, 200, 100, 0.04);
+  border-left: 2px solid rgba(255, 200, 100, 0.3);
+
+  &.active {
+    background: rgba($accent, 0.18);
+    border-left: 3px solid $accent;
+  }
+}
+
+.rl-ref-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}

@@ -20,8 +20,6 @@ export class AuthInterceptor implements HttpInterceptor {
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
 
-    console.log(req);
-
     // Skip token handling for auth/email endpoints
     if (req.url.includes("signin") || req.url.includes("email")) {
       return next.handle(req);

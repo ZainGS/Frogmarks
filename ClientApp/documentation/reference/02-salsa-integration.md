@@ -1,6 +1,6 @@
 # 02 — Salsa Integration
 
-This document describes how Frogmarks consumes `@zaings/salsa`. For Salsa's own internal architecture see `c:\Users\szain\source\repos\salsa\documentation\00-architecture-overview.md`.
+This document describes how Frogmarks consumes `@zaings/salsa`. For Salsa's own internal architecture see `c:\Users\szain\source\repos\salsa\docs\reference\00-architecture-overview.md`.
 
 ---
 
@@ -58,6 +58,41 @@ private get sm(): ShapeManager | null {
 // Usage:
 (this.sm as any).newMethod?.();
 ```
+
+---
+
+## WorldManager Singleton Pattern
+
+`WorldManager` is the second Salsa singleton, imported from `@zaings/salsa/world-manager`. It owns the viewport state — zoom level, pan position, and world reset. `ShapeManager` handles scene content; `WorldManager` handles the camera/viewport.
+
+```typescript
+import WorldManager from '@zaings/salsa/world-manager';
+```
+
+### Acquisition
+
+Like `ShapeManager`, it is never `new`d. Both components acquire it after the renderer boots:
+
+```typescript
+// In IllustrationComponent.afterRendererBoot() and BoardComponent.initForBoard():
+this.worldManager = WorldManager.getInstance();
+```
+
+The reference is held directly (not via a `get wm()` accessor) because `WorldManager` does not get replaced on `reinitializeWebGPURendering`.
+
+### API used by Frogmarks
+
+| Method | Effect |
+|--------|--------|
+| `worldManager.zoomIn()` | Zoom in one step (keyboard `+`) |
+| `worldManager.zoomOut()` | Zoom out one step (keyboard `-`) |
+| `worldManager.resetWorldState()` | Resets pan, zoom, and world transform to defaults |
+
+`resetWorldState()` is called at the top of every `initForIllustration()` / `initForBoard()` to clear leftover viewport state before loading the new scene.
+
+### Boards vs. Illustrations
+
+Both `BoardComponent` and `IllustrationComponent` hold a `worldManager` field and call the same three methods. The illustration editor additionally calls `fitArtboard()` (a ShapeManager method that auto-zooms to the illustration bounds) which is separate from WorldManager.
 
 ---
 
@@ -208,23 +243,4 @@ If this fix is ever lost (e.g. a salsa reset), the symptom is that all 3D meshes
 | Illustration model (name, UUID, team) | No | Yes — `IllustrationService` |
 | Cloud save / blob storage | No | Yes — `IllustrationService` |
 | `.frog` zip export | No | Yes — `FrogFileService` |
-| `.frogmarks` zip export | Yes (packProject/unpackProject) | Blocked — see below |
-
----
-
-## Blocked APIs (snapshotDocument / restoreDocument)
-
-The `.frogmarks` portable format (`packProject` / `unpackProject` in Salsa's `project-package.ts`) requires `DocumentSavePayload` which Salsa's `persist` sub-manager produces via `snapshotDocument()` / `restoreDocument()`. These APIs have not been promoted to the public `ShapeManager` surface yet.
-
-**Current workaround:** `FrogFileService` implements a JSZip-based `.frog` format that approximates the same content using the public APIs that are available:
-
-```typescript
-sm.getSceneGraphJSON()            // scene.json equivalent
-sm.getRasterLayers()              // layer metadata
-sm.exportRasterLayerToBlob()      // layer pixel data
-sm.getCelPixelDataBlob()          // cel pixel data
-sm.getBrushPresets()              // brushes
-sm.captureThumbnailBlob?.(512)    // thumbnail
-```
-
-The `.frog` format does **not** include 3D scene data, GLTF models, or the TextureLibrary. Full `.frogmarks` support is deferred until Salsa exposes `snapshotDocument()` publicly.
+| `.frogmarks` zip export | Yes (`packProject`/`unpackProject`) | Host for pack/unpack cycle |

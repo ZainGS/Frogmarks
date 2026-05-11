@@ -1,0 +1,225 @@
+<div class="me-panel">
+
+  <!-- Header -->
+  <div class="me-header">
+    <button class="me-exit-btn" (click)="exit()">&#8592; Exit Edit Mode</button>
+    <span class="me-mesh-name" [title]="meshName">{{ meshName || 'Mesh' }}</span>
+  </div>
+
+  <div class="me-body">
+
+    <!-- Mode toggle: Vertex / Face / Edge -->
+    <div class="me-mode-row">
+      <span class="me-mode-label">Mode</span>
+      <button class="me-mode-btn" [class.active]="selectionMode === 'vertex'"
+              (click)="setMode('vertex')">Vertex</button>
+      <button class="me-mode-btn" [class.active]="selectionMode === 'face'"
+              (click)="setMode('face')">Face</button>
+      <button class="me-mode-btn" [class.active]="selectionMode === 'edge'"
+              (click)="setMode('edge')">Edge</button>
+    </div>
+
+    <!-- Selection info -->
+    <div class="me-selection-info">
+      <ng-container *ngIf="selectionMode === 'face'">
+        <span class="me-sel-count">{{ selectedFaces.length }} face(s) selected</span>
+        <button class="me-clear-btn" *ngIf="selectedFaces.length > 0" (click)="clearSelection()">Clear</button>
+      </ng-container>
+      <ng-container *ngIf="selectionMode === 'vertex'">
+        <span class="me-sel-count">{{ selectedVertices.length }} vertex/vertices selected</span>
+        <button class="me-clear-btn" *ngIf="selectedVertices.length > 0" (click)="clearSelection()">Clear</button>
+      </ng-container>
+      <ng-container *ngIf="selectionMode === 'edge'">
+        <span class="me-sel-count">{{ selectedEdges.length }} edge(s) selected</span>
+        <button class="me-clear-btn" *ngIf="selectedEdges.length > 0" (click)="clearEdgeSelection()">Clear</button>
+      </ng-container>
+      <span class="me-sel-hint">
+        <ng-container *ngIf="selectionMode !== 'edge'">Click canvas to select · Shift+click to add</ng-container>
+        <ng-container *ngIf="selectionMode === 'edge'">Enter half-edge index below to select an edge</ng-container>
+      </span>
+    </div>
+
+    <!-- ── Face / Vertex Ops ──────────────────────────────────── -->
+    <div class="me-section" *ngIf="selectionMode === 'face' || selectionMode === 'vertex'">
+      <div class="me-section-title">
+        {{ selectionMode === 'face' ? 'Face Operations' : 'Vertex Operations' }}
+      </div>
+
+      <!-- Face ops -->
+      <ng-container *ngIf="selectionMode === 'face'">
+        <div class="me-op-group">
+          <div class="me-op-inline">
+            <button class="me-op-btn" [disabled]="selectedFaces.length === 0"
+                    (click)="extrudeSelected()">Extrude</button>
+            <span class="me-label">Distance</span>
+            <input type="number" class="me-num" step="0.05" min="0.01"
+                   [(ngModel)]="extrudeDistance">
+          </div>
+        </div>
+
+        <div class="me-op-group">
+          <div class="me-op-inline">
+            <button class="me-op-btn" [disabled]="selectedFaces.length === 0"
+                    (click)="insetSelected()">Inset</button>
+            <span class="me-label">Amount</span>
+            <input type="number" class="me-num" step="0.05" min="0" max="1"
+                   [(ngModel)]="insetAmount">
+          </div>
+        </div>
+
+        <button class="me-op-btn me-op-full me-op-danger"
+                [disabled]="selectedFaces.length === 0"
+                (click)="deleteSelected()">Delete Face</button>
+      </ng-container>
+
+      <!-- Vertex ops: weld -->
+      <ng-container *ngIf="selectionMode === 'vertex'">
+        <div class="me-hint">Enter vertex indices to weld.</div>
+        <div class="me-weld-row">
+          <span class="me-label">V1</span>
+          <input type="number" class="me-num" min="0" placeholder="0"
+                 [(ngModel)]="weldV1Input">
+          <span class="me-label">V2</span>
+          <input type="number" class="me-num" min="0" placeholder="1"
+                 [(ngModel)]="weldV2Input">
+        </div>
+        <button class="me-op-btn me-op-full"
+                [disabled]="!weldV1Input || !weldV2Input"
+                (click)="weldVertices()">Weld V2 into V1</button>
+      </ng-container>
+    </div>
+
+    <!-- ── Edge Ops ───────────────────────────────────────────── -->
+    <div class="me-section">
+      <div class="me-section-title">Edge Operations</div>
+
+      <!-- Edge index input (prominent in edge mode) -->
+      <div class="me-op-inline" style="margin-bottom:8px"
+           *ngIf="selectionMode === 'edge'">
+        <span class="me-label">Select edge</span>
+        <input type="number" class="me-num me-num-wide" min="0" placeholder="half-edge idx"
+               [(ngModel)]="halfEdgeInput"
+               (change)="selectEdge()">
+        <button class="me-op-btn" (click)="selectEdge()" [disabled]="!halfEdgeInput">Select</button>
+      </div>
+
+      <!-- Compact half-edge input for non-edge modes -->
+      <div class="me-op-inline" style="margin-bottom:8px"
+           *ngIf="selectionMode !== 'edge'">
+        <span class="me-label">Half-edge</span>
+        <input type="number" class="me-num" min="0" placeholder="idx"
+               [(ngModel)]="halfEdgeInput">
+      </div>
+
+      <div class="me-op-group">
+        <div class="me-op-inline">
+          <button class="me-op-btn" [disabled]="!halfEdgeInput" (click)="loopCut()"
+                  title="Insert edge ring across quad faces (Ctrl+R)">Loop Cut</button>
+          <span class="me-label">t</span>
+          <input type="number" class="me-num" min="0" max="1" step="0.05"
+                 [(ngModel)]="loopCutT" title="0=start vertex · 0.5=midpoint · 1=end">
+          <span class="me-kbd">Ctrl+R</span>
+        </div>
+      </div>
+
+      <button class="me-op-btn me-op-full me-op-danger"
+              [disabled]="!halfEdgeInput" (click)="dissolveEdge()"
+              title="Remove edge and merge adjacent faces">
+        Dissolve Edge <span class="me-kbd">X</span>
+      </button>
+
+      <div class="me-op-group" style="margin-top:6px">
+        <div class="me-op-inline">
+          <button class="me-op-btn" [disabled]="!halfEdgeInput" (click)="bevelEdge()"
+                  title="Chamfer edge into a quad strip (Ctrl+B)">Bevel</button>
+          <span class="me-label">Amount</span>
+          <input type="number" class="me-num" min="0" max="1" step="0.05"
+                 [(ngModel)]="bevelAmount">
+          <span class="me-kbd">Ctrl+B</span>
+        </div>
+      </div>
+
+      <div class="me-op-sep"></div>
+
+      <button class="me-op-btn me-op-full"
+              [class.me-tool-knife-active]="activeTool === 'knife'"
+              (click)="activateTool(activeTool === 'knife' ? 'select' : 'knife')"
+              title="Draw a cut line across faces — drag on canvas to cut">
+        {{ activeTool === 'knife' ? '✓ Knife Active — drag canvas' : 'Knife Cut' }}
+        <span class="me-kbd">K</span>
+      </button>
+      <div *ngIf="activeTool === 'knife'" class="me-tool-hint">
+        Drag on canvas to draw cut line · Esc to cancel
+      </div>
+
+      <button class="me-op-btn me-op-full me-op-secondary"
+              style="margin-top:6px"
+              [disabled]="selectedVertices.length < 4"
+              (click)="bridgeLoops()"
+              title="Fill gap between two vertex loops with quad faces (B)">
+        Bridge Loops <span class="me-kbd">B</span>
+      </button>
+      <div class="me-hint" *ngIf="selectedVertices.length > 0 && selectedVertices.length < 4">
+        Select ≥ 4 vertices (equal halves)
+      </div>
+    </div>
+
+    <!-- ── UV / Paint ─────────────────────────────────────────── -->
+    <div class="me-section">
+      <div class="me-section-title">UV / Paint</div>
+      <button class="me-op-btn me-op-full me-op-secondary" (click)="autoUnwrap()"
+              title="Generate UV coordinates (needed before UV texture painting)">
+        Auto Unwrap UV
+      </button>
+
+      <div class="me-paint-color-row" style="margin-top:8px">
+        <input type="color" class="me-color-swatch" [(ngModel)]="paintColorHex"
+               title="Paint color">
+        <div class="me-alpha-block">
+          <span class="me-label">Alpha</span>
+          <input type="range" min="0" max="1" step="0.01" [(ngModel)]="paintAlpha">
+          <span class="me-val">{{ paintAlpha | number:'1.2-2' }}</span>
+        </div>
+      </div>
+      <div class="me-paint-btn-row">
+        <button class="me-op-btn" [disabled]="selectedFaces.length === 0"
+                (click)="paintFaces()">Paint Face</button>
+        <button class="me-op-btn" [disabled]="selectedVertices.length === 0"
+                (click)="paintVertices()">Paint Vertex</button>
+      </div>
+    </div>
+
+    <!-- ── Modifiers ───────────────────────────────────────────── -->
+    <div class="me-section">
+      <div class="me-section-title">Modifiers</div>
+
+      <div class="me-mod-add-row">
+        <span class="me-label">Mirror</span>
+        <button class="me-chip" (click)="addMirror('x')">+X</button>
+        <button class="me-chip" (click)="addMirror('y')">+Y</button>
+        <button class="me-chip" (click)="addMirror('z')">+Z</button>
+        <span class="me-label me-label-gap">Subdiv</span>
+        <button class="me-chip" (click)="addSubdivision(1)">×1</button>
+        <button class="me-chip" (click)="addSubdivision(2)">×2</button>
+      </div>
+
+      <div class="me-mod-list">
+        <div class="me-mod-row" *ngFor="let mod of modifiers">
+          <span class="me-mod-label">
+            <ng-container *ngIf="mod.type === 'mirror'">Mirror {{ mod.axis?.toUpperCase() }}</ng-container>
+            <ng-container *ngIf="mod.type === 'subdivision'">Subdiv ×{{ mod.iterations ?? 1 }}</ng-container>
+          </span>
+          <button class="me-mod-toggle" [class.enabled]="mod.enabled"
+                  (click)="toggleModifier(mod)" [title]="mod.enabled ? 'Disable' : 'Enable'">
+            {{ mod.enabled ? '●' : '○' }}
+          </button>
+          <button class="me-mod-apply" (click)="applyModifier(mod)" title="Bake into geometry (destructive)">Apply</button>
+          <button class="me-mod-remove" (click)="removeModifier(mod)" title="Remove">✕</button>
+        </div>
+        <div *ngIf="modifiers.length === 0" class="me-hint">No modifiers</div>
+      </div>
+    </div>
+
+  </div><!-- /me-body -->
+
+</div>

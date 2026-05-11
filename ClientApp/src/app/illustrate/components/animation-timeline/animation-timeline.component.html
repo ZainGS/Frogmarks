@@ -2,7 +2,7 @@
      Animation Timeline — bottom panel
      ═══════════════════════════════════════════════════════════ -->
 
-<div class="timeline-panel" (click)="closeContextMenu(); closeEasingMenu()">
+<div class="timeline-panel" (click)="closeContextMenu(); closeEasingMenu(); closeTrackMenu()">
 
   <!-- ── Layer labels (left column) ──────────────────────── -->
   <div class="timeline-layers" #timelineLayers (wheel)="onLayersWheel($event)">
@@ -28,7 +28,8 @@
       <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
         <div *ngFor="let def of getTrackDefsForEntry(entry)" class="tl-3d-track-label"
              [style.border-left-color]="def.color"
-             [title]="def.label + ' keyframe track'">
+             [title]="def.label + ' keyframe track — right-click to clear'"
+             (contextmenu)="onKfTrackLabelContextMenu($event, entry.meshId, def.key, !!entry.isCamera)">
           {{ def.label }}
         </div>
       </ng-container>
@@ -52,6 +53,15 @@
            [title]="'Click to jump to frame ' + f + '. Drag to scrub.'">
         {{ f }}
       </div>
+      <!-- Play range drag handles -->
+      <div class="range-handle range-handle-start"
+           [style.left.px]="(playRangeStart - 1) * frameWidth"
+           (mousedown)="onPlayRangeHandleMouseDown($event, 'start')"
+           title="Drag to set play range start"></div>
+      <div class="range-handle range-handle-end"
+           [style.left.px]="playRangeEnd * frameWidth - 6"
+           (mousedown)="onPlayRangeHandleMouseDown($event, 'end')"
+           title="Drag to set play range end"></div>
     </div>
 
     <!-- Cel rows per layer -->
@@ -121,8 +131,14 @@
                [title]="getTrackFrameSet(entry.tracks, def.key).has(f) ? def.label + ' keyframe at frame ' + f + ' — right-click to change easing' : ''">
             <span *ngIf="getTrackFrameSet(entry.tracks, def.key).has(f)"
                   class="kf-diamond"
+                  [class.kf-drag-source]="kfDragging && kfDragMeshId === entry.meshId && kfDragTrackKey === def.key && kfDragFromFrame === f"
+                  [class.kf-selected]="isKfSelected(entry.meshId, def.key, f)"
                   [style.color]="def.color"
+                  (mousedown)="onKfDiamondMouseDown($event, entry.meshId, def.key, f, !!entry.isCamera)"
                   (contextmenu)="onKfDiamondContextMenu($event, entry.meshId, def.key, f, !!entry.isCamera)">&#x25C6;</span>
+            <span *ngIf="kfDragging && kfDragMeshId === entry.meshId && kfDragTrackKey === def.key && kfDragGhostFrame === f && kfDragGhostFrame !== kfDragFromFrame"
+                  class="kf-diamond kf-drag-ghost"
+                  [style.color]="def.color">&#x25C6;</span>
           </div>
         </div>
       </ng-container>
@@ -193,6 +209,16 @@
               title="Add more frames to the end of the timeline.">+</button>
       <button class="transport-btn icon-btn" (click)="openExportDialog()"
               title="Export the animation as GIF, MP4, sprite sheet, or PNG sequence.">📤</button>
+      <button *ngIf="mesh3dAllTracks.length > 0"
+              class="transport-btn record-kf-btn"
+              (click)="recordKeyframeRequested.emit()"
+              title="Record keyframe for the selected 3D mesh at the current frame. Keyboard: same as the panel button.">◉ KF</button>
+      <button *ngIf="mesh3dAllTracks.length > 0"
+              class="transport-btn icon-btn"
+              (click)="allMeshesCollapsed ? expandAllMeshes() : collapseAllMeshes()"
+              [title]="allMeshesCollapsed ? 'Expand all 3D mesh tracks' : 'Collapse all 3D mesh tracks'">
+        {{ allMeshesCollapsed ? '▶▶' : '▼▼' }}
+      </button>
     </div>
   </div>
 
@@ -354,6 +380,12 @@
          (click)="setKfEasing(opt.value)">
       {{ opt.icon }}&nbsp;&nbsp;{{ opt.label }}
     </div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item" (click)="openKfCopyPrompt()" title="Duplicate this keyframe to another frame.">📋 Copy to Frame…</div>
+    <div class="ctx-item" (click)="openKfMovePrompt()" title="Move this keyframe to a different frame.">✂️ Move to Frame…</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item ctx-item-danger" (click)="deleteKeyframe()" title="Remove this keyframe.">🗑️ Delete Keyframe</div>
+    <div class="ctx-item ctx-item-danger" (click)="clearAllKeyframes()" title="Remove all keyframes for this object.">🗑️ Clear All Keyframes</div>
   </div>
 
   <!-- ── Duplicate cel prompt dialog ────────────────────── -->
@@ -371,6 +403,68 @@
       <div style="display: flex; gap: 6px; margin-top: 8px;">
         <button class="transport-btn" style="flex: 1;" (click)="confirmDuplicate()">Duplicate</button>
         <button class="transport-btn" style="flex: 1;" (click)="cancelDuplicate()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Multi-keyframe bulk action bar ──────────────────── -->
+  <div *ngIf="selectedKfKeys.size > 0" class="kf-bulk-bar" (click)="$event.stopPropagation()">
+    <span class="kf-bulk-count">{{ selectedKfKeys.size }} kf{{ selectedKfKeys.size > 1 ? 's' : '' }} selected</span>
+    <button class="transport-btn" (click)="openKfBulkMovePrompt()" title="Shift all selected keyframes by a frame offset">Move…</button>
+    <button class="transport-btn kf-bulk-delete-btn" (click)="deleteSelectedKeyframes()" title="Delete all selected keyframes">🗑️</button>
+    <button class="transport-btn" (click)="clearKfSelection()" title="Clear selection">✕</button>
+  </div>
+
+  <!-- ── Track clear menu ─────────────────────────────────── -->
+  <div *ngIf="showTrackMenu" class="ctx-menu"
+       [style.left.px]="trackMenuX"
+       [style.top.px]="trackMenuY"
+       (click)="$event.stopPropagation()">
+    <div class="ctx-item" style="opacity:.5; pointer-events:none; font-size:10px; padding:4px 14px;">
+      {{ trackMenuTrackKey }} track
+    </div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item ctx-item-danger" (click)="clearTrackKeyframes()" title="Remove all keyframes on this property track.">🗑️ Clear Track</div>
+  </div>
+
+  <!-- ── Keyframe bulk move prompt ────────────────────────── -->
+  <div *ngIf="showKfBulkMovePrompt" class="floating-panel duplicate-panel">
+    <div class="fp-header">
+      <span>Move {{ selectedKfKeys.size }} Keyframe{{ selectedKfKeys.size > 1 ? 's' : '' }}</span>
+      <button class="fp-close" (click)="cancelKfBulkMove()">✕</button>
+    </div>
+    <div class="fp-body">
+      <div style="font-size: 10px; color: #999; margin-bottom: 6px;">
+        Moves all selected keyframes so the earliest one lands at the target frame.
+      </div>
+      <div class="setting-row">
+        <span class="slider-label">Target Frame</span>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" [(ngModel)]="kfBulkMoveTarget">
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button class="transport-btn" style="flex: 1;" (click)="confirmKfBulkMove()">Move</button>
+        <button class="transport-btn" style="flex: 1;" (click)="cancelKfBulkMove()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Keyframe copy/move prompt ───────────────────────── -->
+  <div *ngIf="showKfFramePrompt" class="floating-panel duplicate-panel">
+    <div class="fp-header">
+      <span>{{ kfFramePromptMode === 'copy' ? 'Copy Keyframe to Frame' : 'Move Keyframe to Frame' }}</span>
+      <button class="fp-close" (click)="cancelKfFramePrompt()">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="setting-row">
+        <span class="slider-label">Target Frame</span>
+        <input type="number" class="setting-input" min="1" [max]="frameCount"
+               [(ngModel)]="kfFramePromptTarget">
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button class="transport-btn" style="flex: 1;" (click)="confirmKfFrameAction()">
+          {{ kfFramePromptMode === 'copy' ? 'Copy' : 'Move' }}
+        </button>
+        <button class="transport-btn" style="flex: 1;" (click)="cancelKfFramePrompt()">Cancel</button>
       </div>
     </div>
   </div>
