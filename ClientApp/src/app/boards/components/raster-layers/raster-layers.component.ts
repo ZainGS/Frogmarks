@@ -53,6 +53,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Drag state */
   dragIndex: number | null = null;
   dragOverIndex: number | null = null;
+  dragOverPosition: 'before' | 'after' = 'before';
 
   private subs: Subscription[] = [];
 
@@ -420,6 +421,9 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onDragOver(index: number, e: DragEvent): void {
     e.preventDefault();
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    this.dragOverPosition = e.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
     this.dragOverIndex = index;
   }
 
@@ -428,39 +432,39 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onDrop(dropIndex: number): void {
-    if (this.dragIndex === null || this.dragIndex === dropIndex) {
-      this.dragIndex = null;
-      this.dragOverIndex = null;
-      return;
-    }
+    if (this.dragIndex === null) { this.dragOverIndex = null; return; }
     const displayed = this.filteredLayers;
     const dragEntry = displayed[this.dragIndex];
     const dropEntry = displayed[dropIndex];
     if (!dragEntry || !dropEntry) { this.dragIndex = null; this.dragOverIndex = null; return; }
 
-    // If dropped onto a folder → move layer into/out of the folder
-    if (dropEntry.type === 'folder' && dragEntry.type !== 'folder' && dragEntry.type !== '3d-scene') {
-      // If already a child of this folder, remove from folder
+    // Folder drop: hovering the label of a folder (before position) moves layer into/out of it
+    if (this.dragOverPosition === 'before' && dropEntry.type === 'folder'
+        && dragEntry.type !== 'folder' && dragEntry.type !== '3d-scene') {
       if (dragEntry.parentId === dropEntry.id) {
         this.rasterService.setLayerParent(dragEntry.id, null);
       } else {
         this.rasterService.setLayerParent(dragEntry.id, dropEntry.id);
       }
-      this.dragIndex = null;
-      this.dragOverIndex = null;
+      this.dragIndex = null; this.dragOverIndex = null;
       return;
     }
 
-    // Otherwise reorder in the flat list
+    // Reorder: this.layers is in reverse display order, so:
+    //   "before in display" → insert AFTER dropEntry in ids (ids[realDrop + 1])
+    //   "after in display"  → insert BEFORE dropEntry in ids (ids[realDrop])
     const ids = this.layers.map(l => l.id);
     const realDrag = ids.indexOf(dragEntry.id);
     const realDrop = ids.indexOf(dropEntry.id);
     if (realDrag < 0 || realDrop < 0) { this.dragIndex = null; this.dragOverIndex = null; return; }
+
     const [moved] = ids.splice(realDrag, 1);
-    ids.splice(realDrop, 0, moved);
+    // Adjust drop index after removal
+    let insertAt = realDrop > realDrag ? realDrop - 1 : realDrop;
+    if (this.dragOverPosition === 'before') insertAt += 1; // after in layers array = above in display
+    ids.splice(insertAt, 0, moved);
     this.rasterService.reorderLayers(ids);
-    this.dragIndex = null;
-    this.dragOverIndex = null;
+    this.dragIndex = null; this.dragOverIndex = null;
   }
 
   onDragEnd(): void {

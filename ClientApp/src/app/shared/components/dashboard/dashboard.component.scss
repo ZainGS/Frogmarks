@@ -19,10 +19,12 @@ $enable-negative-margins: true;
 }
 
 .compact-logo {
-    display: none !important;
-    margin-left: 5px !important;
-    margin-top: -50px !important;
-  }
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  margin: 0 !important;
+  pointer-events: none;
+}
 
 .col-2,
 .base-sidenav-column {
@@ -30,8 +32,14 @@ $enable-negative-margins: true;
   max-width: 250px !important; // Explicit normal max-width
   min-width: 250px !important; // Explicit normal min-width
   flex: 0 0 250px !important; // Explicit flex for Bootstrap columns
-  transition: all 0.3s ease !important;
-  
+  height: 100% !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden;
+  padding-top: 0 !important;
+  transition: width 0.2s ease, max-width 0.2s ease, min-width 0.2s ease, flex-basis 0.2s ease !important;
+
   // Smooth transitions for specific elements
   .frogmarks-logo,
   .sidenav-list li label,
@@ -48,12 +56,12 @@ $enable-negative-margins: true;
 .base-work-pane {
   flex: 0 0 calc(100% - 250px) !important; // Explicit normal flex
   max-width: calc(100% - 250px) !important; // Explicit normal max-width
-  transition: all 0.3s ease !important;
+  transition: all 0.2s ease !important;
 }
 
 .sidenav-list li label,
 .list-link label {
-  transition: opacity 0.3s ease, width 0.3s ease;
+  transition: opacity 0.3s ease, width 0.2s ease;
 }
 
 .sidenav-list li label,
@@ -63,16 +71,24 @@ $enable-negative-margins: true;
   transition: opacity 0.3s ease, width 0.3s ease;
 }
 
+.sidebar-logo-area {
+  height: 60px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
 .frogmarks-logo {
   max-width: 180px;
   padding-left: 28px;
-  padding-top: 8px;
-  opacity: 1; // Explicit normal opacity
+  opacity: 1;
+  transform: translateY(10px);
   transition: opacity 0.3s ease;
 }
 
 // LIGHT
 .dashboard-container {
+  height: 100vh;
   max-height: 100vh;
   overflow-x: hidden;
   padding-bottom: 10px;
@@ -160,7 +176,7 @@ $enable-negative-margins: true;
     flex-flow: column !important;
   }
 
-  .file-filter-list, .file-filter-grid {
+  .file-filter-list, .file-filter-grid, .file-filter-masonry {
     display: none;
   }
 }
@@ -172,7 +188,6 @@ $enable-negative-margins: true;
 .frogmarks-logo {
   max-width: 180px;
   padding-left: 28px;
-  padding-top: 8px;
 }
 
 .sidenav-list {
@@ -197,6 +212,23 @@ li {
   background-color: #d0d0d0;
   cursor: pointer;
 }
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.settings-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fm-text-secondary, #888);
+  margin-bottom: 4px;
+}
+
 
 .notification-panel-content-empty-icon {
   transform: scale(4);
@@ -297,8 +329,19 @@ li {
   opacity: 0;
 }
 
-::ng-deep .sortorder-dropdown-chip span.mdc-evolution-chip__action {
+::ng-deep .sortorder-dropdown-chip span.mdc-evolution-chip__action,
+::ng-deep .storage-dropdown-chip span.mdc-evolution-chip__action {
   padding-left: 0 !important;
+}
+
+.filetype-dropdown-arrow,
+.storage-dropdown-arrow,
+.sortorder-dropdown-arrow {
+  vertical-align: middle;
+  margin-top: -2px;
+  margin-left: -14px;
+  transform: scale(0.65);
+  cursor: default;
 }
 
 .shaking {
@@ -528,7 +571,22 @@ li {
   color: #4e4e4e;
 }
 
-.file-filter-grid:active {
+.file-filter-grid:active,
+.file-filter-grid.grid-view-selected {
+  background-color: rgb(243, 243, 243);
+  color: black;
+}
+
+.file-filter-masonry {
+  margin-top: -7px;
+  transform: scale(.7);
+  transform-origin: bottom;
+  border-radius: 8px;
+  color: #4e4e4e;
+}
+
+.file-filter-masonry:active,
+.file-filter-masonry.masonry-view-selected {
   background-color: rgb(243, 243, 243);
   color: black;
 }
@@ -543,19 +601,28 @@ li {
   color: #4e4e4e;
 }
 
-.file-filter-list:active {
+.file-filter-list:active,
+.file-filter-list.list-view-selected {
   background-color: rgb(243, 243, 243);
   color: black;
 }
 
 
-// For design item grid
+// Justified NSO-style grid — flex column of rows, each row is a flex line
 .grid-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  display: flex !important;
+  flex-direction: column;
   gap: 0;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.grid-row {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
+  overflow: visible;
+  transition: height 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .list-container {
@@ -640,8 +707,8 @@ li {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 22px 10px 8px;
-  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%);
+  padding: 10px 10px 8px;
+  background: none;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -651,7 +718,7 @@ li {
 .item-overlay-name {
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--fm-overlay-title-color, #fff);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -660,7 +727,7 @@ li {
 
 .item-overlay-date {
   font-size: 10px;
-  color: rgba(255,255,255,0.65);
+  color: var(--fm-overlay-date-color, rgba(255,255,255,0.65));
 }
 
 /* selection ring is now an outline on .grid-item.selected, not on image-wrapper */
@@ -1438,9 +1505,12 @@ img:active:not(.selected)
   }
 
   .compact-logo {
-    display: flex !important;
-    margin-left: 5px !important;
-    margin-top: -50px !important;
+    max-width: 46px !important;
+    overflow: visible !important;
+    margin: auto !important;
+    pointer-events: auto;
+    opacity: 0;
+    animation: fadeInCompactLogo 0.2s ease forwards 0.3s;
   }
 }
 
@@ -1456,14 +1526,14 @@ img:active:not(.selected)
     flex: 0 0 70px !important;
     max-width: 70px !important;
     min-width: 70px !important;
-    transition: all 0.3s ease !important;
+    transition: width 0.2s ease, max-width 0.2s ease, min-width 0.2s ease, flex-basis 0.2s ease !important;
   }
-  
+
   .col-10,
   .base-work-pane {
     flex: 0 0 calc(100% - 70px) !important;
     max-width: calc(100% - 70px) !important;
-    transition: all 0.3s ease !important;
+    transition: width 0.2s ease, max-width 0.2s ease, min-width 0.2s ease, flex-basis 0.2s ease !important;
   }
 }
 
@@ -1656,10 +1726,13 @@ img:active:not(.selected)
 .base-sidenav-column.frogmarks-galaxy-compact {
   width: 70px !important;
   
-  // Fade out logo
+  .sidebar-logo-area {
+    padding-top: 10px;
+  }
+
+  // Hide full logo (takes no space so compact-logo doesn't need negative margin)
   .frogmarks-logo {
-    opacity: 0;
-    pointer-events: none;
+    display: none !important;
   }
   
   // Fade out labels
@@ -1689,6 +1762,58 @@ img:active:not(.selected)
   }
   
   // Remove the .socials-list margin-top since nothing is shifting now
+}
+
+@keyframes fadeInCompactLogo {
+  to { opacity: 1; }
+}
+
+.base-sidenav-column > .ps-2 {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-spacer {
+  flex: 1;
+}
+
+.sidebar-collapse-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 12px 12px;
+  cursor: pointer;
+  opacity: 0.35;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+
+  &:hover { opacity: 0.85; }
+
+  &--expand {
+    padding: 12px 0;
+    overflow: visible;
+  }
+}
+
+.sidebar-chev {
+  display: block;
+  flex-shrink: 0;
+  width: 11px;
+  height: 17px;
+  background: white;
+
+  &--left {
+    clip-path: polygon(100% 0%, 0% 50%, 100% 100%, 100% 72%, 32% 50%, 100% 28%);
+  }
+
+  &--right {
+    clip-path: polygon(0% 0%, 100% 50%, 0% 100%, 0% 72%, 68% 50%, 0% 28%);
+    width: 14px;
+    height: 22px;
+  }
 }
 
 // Fade-in animation for Design Center content
@@ -1836,6 +1961,103 @@ img:active:not(.selected)
   background: #3e8be0;
 }
 
+// ── Compact storage icon (Explore mode) ──────────────────────────────────────
+
+.opfs-compact {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+
+  &:hover .opfs-compact-popup {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+}
+
+.opfs-compact-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  opacity: 0.55;
+  cursor: default;
+  transition: opacity 0.15s;
+
+  .opfs-compact:hover & { opacity: 0.9; }
+}
+
+.opfs-compact-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: 200px;
+  background: #1e1e22;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 999;
+}
+
+.opfs-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+
+  &--mt { margin-top: 10px; }
+}
+
+.opfs-compact-row-icon {
+  font-size: 13px;
+  width: 13px;
+  height: 13px;
+  line-height: 13px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.opfs-compact-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  flex-shrink: 0;
+}
+
+.opfs-compact-stat {
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(255,255,255,0.7);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.opfs-compact-track {
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.opfs-compact-fill {
+  height: 100%;
+  background: #9B59B6;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+
+  &--cloud { background: #3e8be0; }
+  &.opfs-warn { background: #e67e22; }
+}
+
 .cloud-pro-badge {
   font-size: 9px;
   font-weight: 700;
@@ -1848,7 +2070,7 @@ img:active:not(.selected)
   line-height: 1.4;
 }
 
-// Apply to labels + icons when NOT in compact mode
+// Fade in labels (not icons — icons stay visible through collapse/expand)
 .base-sidenav-column:not(.frogmarks-galaxy-compact) {
   .sidenav-list li label,
   .list-link label,
@@ -1856,7 +2078,6 @@ img:active:not(.selected)
   .horizontal-line,
   .row.ms-0.text-nowrap.flex-nowrap,
   span[style*="blueviolet"],
-  .list-item-icon,
   .opfs-sidenav {
     animation: fadeInDelayed 0.4s ease-in-out;
   }
@@ -1866,29 +2087,115 @@ img:active:not(.selected)
    Phase 2 – Explore-style grid hover / overlay
    ═══════════════════════════════════════════════════════════════ */
 
-// Justified (NSO-style) grid — rows with variable-aspect items, no gaps
-.grid-container {
-  display: flex !important;
+// ── Masonry layout container ────────────────────────────────────
+.masonry-container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  overflow: visible;
+  width: 100%;
+}
+
+.masonry-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
-  gap: 0;
-  border-radius: 0;
+  gap: 8px;
   overflow: visible;
 }
 
-// Each row is a flex line whose height is computed in TypeScript
-.grid-row {
-  display: flex;
-  width: 100%;
+.masonry-item {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 4px;
   flex-shrink: 0;
-  overflow: visible; // let hover transforms pop out of the row
+  transform-origin: 50% 70%;
+  transition: transform 160ms ease-out;
+  will-change: transform;
+
+  .image-wrapper {
+    position: absolute;
+    inset: 0;
+    aspect-ratio: unset;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .image-wrapper .thumbnail-img {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    min-width: 0;
+    object-fit: cover;
+    display: block;
+  }
 }
 
-// Items fill their flex cell; image fills via absolute inset
+// Tile being archived
+.masonry-item--exit,
+.grid-item--exit {
+  opacity: 0 !important;
+  transform: scale(0.82) !important;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease !important;
+}
+
+// Hover scale + rotation
+.masonry-item:not(.pressed):hover {
+  z-index: 10;
+  outline: var(--fm-grid-item-hover-border, none);
+  outline-offset: -2px;
+  &.rotate-left  { transform: scale(1.06) rotate(-2deg); }
+  &.rotate-right { transform: scale(1.06) rotate(2deg); }
+}
+
+// Mouse held
+.masonry-item.pressed {
+  transform: scale(0.97) !important;
+  transition: transform 80ms ease-out;
+}
+
+// Release pop
+@keyframes growSettle {
+  0%   { transform: scale(0.97); }
+  55%  { transform: scale(1.1) rotate(var(--lift-rotate, 0deg)); }
+  75%  { transform: scale(1.06) rotate(var(--lift-rotate, 0deg)); }
+  100% { transform: scale(1.06) rotate(var(--lift-rotate, 0deg)); }
+}
+
+.masonry-item.lift.rotate-left  { --lift-rotate: -2deg; animation: growSettle 320ms forwards; }
+.masonry-item.lift.rotate-right { --lift-rotate:  2deg; animation: growSettle 320ms forwards; }
+
+// Name/date overlay — hidden until hover
+.item-overlay {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 4;
+}
+
+.masonry-item:hover .item-overlay,
+.masonry-item.selected .item-overlay {
+  opacity: 1;
+}
+
+// Freeze grid interaction while overlay is open
+.grid-container.overlay-open,
+.masonry-container.overlay-open {
+  pointer-events: none;
+}
+
+// Grid-item — fills its flex cell, image fills via absolute inset
 .grid-item {
   flex-shrink: 0;
   min-width: 0;
   border-radius: 0;
   overflow: visible;
+  transform-origin: 50% 70%;
+  transition: transform 160ms ease-out;
+  will-change: transform;
 
   .image-wrapper {
     position: absolute;
@@ -1907,61 +2214,25 @@ img:active:not(.selected)
     object-fit: cover;
     display: block;
   }
-
-  transform-origin: 50% 70%;
-  transition: transform 160ms ease-out;
-  will-change: transform;
 }
 
-// Tile is being archived — fades and shrinks before the grid rebuilds
-.grid-item--exit {
-  opacity: 0 !important;
-  transform: scale(0.82) !important;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease !important;
-}
-
-// Hover scale + rotation; sit above sibling tiles
+// Hover scale + rotation
 .grid-item:not(.pressed):hover {
   z-index: 10;
   &.rotate-left  { transform: scale(1.1) rotate(-3deg); }
   &.rotate-right { transform: scale(1.1) rotate(3deg); }
 }
 
-// While mouse is held: flatten scale back
+// Mouse held
 .grid-item.pressed {
   transform: scale(0.97) !important;
   transition: transform 80ms ease-out;
 }
 
-// Release pop (fires after mouseup, class is applied briefly via releasedIndex)
-@keyframes growSettle {
-  0%   { transform: scale(0.97); }
-  55%  { transform: scale(1.12) rotate(var(--lift-rotate, 0deg)); }
-  75%  { transform: scale(1.08) rotate(var(--lift-rotate, 0deg)); }
-  100% { transform: scale(1.1)  rotate(var(--lift-rotate, 0deg)); }
-}
-
 .grid-item.lift.rotate-left  { --lift-rotate: -3deg; animation: growSettle 320ms forwards; }
 .grid-item.lift.rotate-right { --lift-rotate:  3deg; animation: growSettle 320ms forwards; }
 
-// Hide name overlay until hover; show on hover or when tile is overlay-selected
-.item-overlay {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.grid-item:hover .item-overlay,
-.grid-item.selected .item-overlay {
-  opacity: 1;
-}
-
-// Freeze grid interaction while overlay is open
-.grid-container.overlay-open {
-  pointer-events: none;
-}
-
-// Selected tile: above all siblings, cancel all legacy selected animations/shadows
+// Selected
 .grid-item.selected {
   z-index: 20;
   animation: none;
@@ -1974,9 +2245,53 @@ img:active:not(.selected)
   }
 }
 
-// Name/date overlay must sit above the img (old .selected rule sets img z-index:2)
-.item-overlay {
+.grid-item:hover .item-overlay,
+.grid-item.selected .item-overlay {
+  opacity: 1;
+}
+
+// Selected tile
+.masonry-item.selected {
+  z-index: 20;
+  animation: none;
+  outline: var(--fm-grid-item-selected-border, 3px solid rgba(137, 124, 255, 0.88));
+  outline-offset: -1px;
+
+  img {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+}
+
+// ── Card frame overlays ─────────────────────────────────────────
+.image-wrapper::before,
+.image-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  pointer-events: none;
   z-index: 3;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+// Fixed 56px base height so the overlay always covers the title+date text regardless of tile size.
+// Teeth are 6px tall (calc(100% - 62px) tips vs calc(100% - 56px) baseline).
+.grid-item:not(.selected):hover .image-wrapper::before,
+.grid-item.selected .image-wrapper::before,
+.masonry-item:not(.selected):hover .image-wrapper::before,
+.masonry-item.selected .image-wrapper::before {
+  background: rgba(0, 0, 0, 0.88);
+  clip-path: polygon(0% 100%, 100% 100%, 100% calc(100% - 56px), 96.875% calc(100% - 62px), 93.75% calc(100% - 56px), 90.625% calc(100% - 62px), 87.5% calc(100% - 56px), 84.375% calc(100% - 62px), 81.25% calc(100% - 56px), 78.125% calc(100% - 62px), 75% calc(100% - 56px), 71.875% calc(100% - 62px), 68.75% calc(100% - 56px), 65.625% calc(100% - 62px), 62.5% calc(100% - 56px), 59.375% calc(100% - 62px), 56.25% calc(100% - 56px), 53.125% calc(100% - 62px), 50% calc(100% - 56px), 46.875% calc(100% - 62px), 43.75% calc(100% - 56px), 40.625% calc(100% - 62px), 37.5% calc(100% - 56px), 34.375% calc(100% - 62px), 31.25% calc(100% - 56px), 28.125% calc(100% - 62px), 25% calc(100% - 56px), 21.875% calc(100% - 62px), 18.75% calc(100% - 56px), 15.625% calc(100% - 62px), 12.5% calc(100% - 56px), 9.375% calc(100% - 62px), 6.25% calc(100% - 56px), 3.125% calc(100% - 62px), 0% calc(100% - 56px));
+  opacity: 1;
+}
+
+.masonry-item.selected .image-wrapper::after,
+.grid-item.selected .image-wrapper::after {
+  background-image: var(--fm-grid-selected-overlay, none);
+  opacity: 1;
 }
 
 // ── Overlay backdrop ──────────────────────────────────────────
@@ -2011,7 +2326,8 @@ img:active:not(.selected)
 }
 
 @media (hover: hover) {
-  .grid-item:hover .image-wrapper {
+  .grid-item:hover .image-wrapper,
+  .masonry-item:hover .image-wrapper {
     animation: borderFlash .8s ease-in-out infinite;
   }
 }
@@ -2021,26 +2337,30 @@ img:active:not(.selected)
   position: fixed;
   width: 18px;
   height: 18px;
-  background: #ffffff;
-  border: 4px solid #8a2be2;
+  background: var(--fm-popup-tail-color, #ffffff);
+  border: 4px solid var(--fm-accent, #8a2be2);
   transform: rotate(45deg);
   z-index: 10050;
   border-radius: 2px;
   pointer-events: none;
 }
 
-// ── Menu wrapper — white 8-directional drop-shadow outline ────
+// ── Menu wrapper — 8-directional drop-shadow outline ──────────
+// --fm-popup-glow-color controls the outline colour (default white).
+// --fm-popup-glow-size controls the pixel offset in each direction (default 2px).
 .menu-wrapper {
   position: relative;
+  --_gc: var(--fm-popup-glow-color, #ffffff);
+  --_gs: var(--fm-popup-glow-size, 2px);
   filter:
-    drop-shadow(0px  2px 0px rgba(255,255,255,1))
-    drop-shadow( 2px 0px 0px rgba(255,255,255,1))
-    drop-shadow(0px -2px 0px rgba(255,255,255,1))
-    drop-shadow(-2px 0px 0px rgba(255,255,255,1))
-    drop-shadow( 2px  2px 0px #fff)
-    drop-shadow(-2px -2px 0px #fff)
-    drop-shadow( 2px -2px 0px #fff)
-    drop-shadow(-2px  2px 0px #fff);
+    drop-shadow(0px var(--_gs) 0px var(--_gc))
+    drop-shadow(var(--_gs) 0px 0px var(--_gc))
+    drop-shadow(0px calc(-1 * var(--_gs)) 0px var(--_gc))
+    drop-shadow(calc(-1 * var(--_gs)) 0px 0px var(--_gc))
+    drop-shadow(var(--_gs) var(--_gs) 0px var(--_gc))
+    drop-shadow(calc(-1 * var(--_gs)) calc(-1 * var(--_gs)) 0px var(--_gc))
+    drop-shadow(var(--_gs) calc(-1 * var(--_gs)) 0px var(--_gc))
+    drop-shadow(calc(-1 * var(--_gs)) var(--_gs) 0px var(--_gc));
 }
 
 // ── Menu card ─────────────────────────────────────────────────
@@ -2050,17 +2370,21 @@ img:active:not(.selected)
   border: 1px solid rgba(255,255,255,0.04);
   box-shadow: inset -2px -2px 48px rgb(97, 95, 99);
 
-  // Dots + solid black as two background layers — same as Explore
+  // Overlay image on top, then dots, then solid card bg
   background:
+    var(--fm-popup-bg-image, none),
     radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px),
-    #000;
+    var(--fm-popup-bg, #000);
   background-size:
+    cover,
     10px 10px,
     100%;
   background-position:
+    center,
     bottom right,
     0 0;
   background-repeat:
+    no-repeat,
     repeat,
     no-repeat;
 
@@ -2083,8 +2407,46 @@ img:active:not(.selected)
 }
 
 @keyframes dotScroll {
-  from { background-position: 0    0, 0 0; }
-  to   { background-position: 10px -10px, 0 0; }
+  from { background-position: center, 0    0, 0 0; }
+  to   { background-position: center, 10px -10px, 0 0; }
+}
+
+// ── Border runner ─────────────────────────────────────────────
+// background-image / background-size / animation-name / animation-duration are
+// injected by FroguiSkinService.injectBorderRunnerCss() as concrete-pixel CSS so
+// that keyframe values never contain var() references (which don't re-evaluate on
+// a running animation when the token changes).
+.border-runner {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  --_sz: var(--fm-popup-border-sprite-size, 24px);
+
+  .br-strip {
+    position: absolute;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-play-state: paused;
+  }
+
+  &.br-animated .br-strip { animation-play-state: running; }
+
+  .br-top    { top: 0;    left: 0; right: 0;  height: var(--_sz); }
+  .br-bottom { bottom: 0; left: 0; right: 0;  height: var(--_sz); }
+  .br-right  { top: 0;    right: 0; bottom: 0; width: var(--_sz); }
+  .br-left   { top: 0;    left: 0;  bottom: 0; width: var(--_sz); }
+}
+
+.border-runner-outer {
+  z-index: 0;
+  overflow: visible;
+  clip-path: none;
+
+  .br-top    { top:    calc(-1 * var(--_sz)); left: calc(-1 * var(--_sz)); right: calc(-1 * var(--_sz)); }
+  .br-bottom { bottom: calc(-1 * var(--_sz)); left: calc(-1 * var(--_sz)); right: calc(-1 * var(--_sz)); }
+  .br-left   { left:  calc(-1 * var(--_sz)); }
+  .br-right  { right: calc(-1 * var(--_sz)); }
 }
 
 // ── Close button ──────────────────────────────────────────────
@@ -2108,6 +2470,8 @@ img:active:not(.selected)
 
 // ── Right-side content ────────────────────────────────────────
 .menu-right {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2117,7 +2481,7 @@ img:active:not(.selected)
 .menu-title {
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: var(--fm-popup-title-color, #fff);
   margin: 0 0 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -2136,8 +2500,8 @@ img:active:not(.selected)
 
 .primary-btn {
   flex: 1;
-  background: #fff;
-  color: #111;
+  background: var(--fm-popup-primary-btn-bg, #fff);
+  color: var(--fm-popup-primary-btn-text, #111);
   border: 0;
   font-size: 12px;
   font-weight: 600;
@@ -2172,14 +2536,14 @@ img:active:not(.selected)
   justify-content: center;
   width: 34px;
   height: 34px;
-  background: rgba(255,255,255,0.05);
+  background: color-mix(in srgb, var(--fm-popup-icon-btn-bg, #2a2a2a) var(--fm-popup-icon-btn-bg-opacity, 100%), transparent);
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 8px;
-  color: rgba(255,255,255,0.65);
+  color: var(--fm-popup-icon-btn-icon, rgba(255,255,255,0.65));
   cursor: pointer;
   transition: background 120ms, color 120ms;
 
-  mat-icon { font-size: 17px; width: 17px; height: 17px; line-height: 17px; }
+  fm-icon { font-size: 17px; }
 
   &:hover {
     background: rgba(255,255,255,0.12);
@@ -2207,7 +2571,7 @@ img:active:not(.selected)
 
 .menu-meta-item {
   font-size: 10px;
-  color: rgba(255,255,255,0.5);
+  color: var(--fm-popup-meta-text, rgba(255,255,255,0.5));
   opacity: 0;
   transform: translateY(6px);
   animation: metaFadeIn 150ms ease-out both;
@@ -2244,6 +2608,10 @@ img:active:not(.selected)
   }
 }
 
+.list-item-badge-row {
+  margin-bottom: 2px;
+}
+
 .sync-badge-inline {
   display: inline-block;
   font-size: 9px;
@@ -2256,7 +2624,7 @@ img:active:not(.selected)
   border: 1px solid rgba(137, 124, 255, 0.4);
   color: #c8bfff;
   vertical-align: middle;
-  margin-left: 5px;
+  margin-left: 0;
 }
 
 // ── Session-expired login modal ───────────────────────────────
@@ -2548,7 +2916,8 @@ img:active:not(.selected)
   color: #9B59B6 !important;
 }
 
-.grid-item--batch-selected .image-wrapper {
+.grid-item--batch-selected .image-wrapper,
+.masonry-item--batch-selected .image-wrapper {
   outline: 3px solid #9B59B6;
   outline-offset: -3px;
 }
@@ -2561,7 +2930,7 @@ img:active:not(.selected)
   color: rgba(255,255,255,0.6);
   cursor: pointer;
   transition: color 0.12s;
-  mat-icon { font-size: 22px; width: 22px; height: 22px; }
+  fm-icon { font-size: 22px; }
   &:hover { color: rgba(255,255,255,0.9); }
   &.batch-checkbox--checked { color: #9B59B6; }
 }
@@ -2637,6 +3006,56 @@ img:active:not(.selected)
   &:hover {
     background: rgba(255,255,255,0.08);
     border-color: rgba(255,255,255,0.6);
+  }
+}
+
+// ── Archive "Delete all" button ───────────────────────────────────
+
+.archive-title-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding-right: 16px;
+}
+
+.dash-reset-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 5px;
+  color: #999;
+  font-size: 11px;
+  padding: 4px 9px;
+  cursor: pointer;
+  &:hover { background: rgba(255,255,255,0.06); color: #ccc; }
+}
+
+.dash-confirm-row {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dash-confirm-label {
+  font-size: 11px;
+  color: #e05555;
+}
+
+.dash-confirm-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 5px;
+  color: #888;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  &:hover { background: rgba(255,255,255,0.06); color: #ccc; }
+  &--danger {
+    border-color: rgba(224,85,85,0.45);
+    color: #e05555;
+    &:hover { background: rgba(224,85,85,0.12); color: #ff7777; }
   }
 }
 

@@ -104,6 +104,8 @@ export interface IllustrationStateDto {
   scene3dNodesGzip?: string | null;       // legacy gzip+base64 — only present on old saves
   textureLibrary3dGzip?: string | null;   // legacy gzip+base64 — only present on old saves
   meshIds?: string[] | null;             // per-mesh blob IDs (v3+)
+  scene3dGroups?: Array<{ name: string; children: string[] }> | null;  // group hierarchy (v3+)
+  scene3dFrameLinkBuckets?: Record<string, string[][]> | null;         // groupId → phase buckets (v3+)
   meshSasUrls?: Record<string, string> | null;  // load response only — read SAS URLs per mesh
   texLibSasUrl?: string | null;           // load response only — read SAS URL for texture library
   bgColor?: string | null;

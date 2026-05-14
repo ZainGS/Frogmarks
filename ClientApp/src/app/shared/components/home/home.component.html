@@ -12,6 +12,21 @@
     <rect width="200" height="200" fill="url(#fm-grid-cell)" stroke="white" stroke-width="0.75"/>
   </svg>
 
+  <!-- Thumbnail particles — user's own artwork drifting left-to-right -->
+  <div class="fm-particles" aria-hidden="true">
+    <div *ngFor="let p of thumbnailParticles"
+         class="fm-thumb-particle"
+         [style.width.px]="p.width"
+         [style.height.px]="p.height"
+         [style.top]="p.top + '%'"
+         [style.opacity]="p.opacity"
+         [style.--dur]="p.dur + 's'"
+         [style.--del]="p.delay + 's'"
+         [style.--tilt]="p.tilt + 'deg'"
+         [style.background-image]="'url(' + p.dataUrl + ')'">
+    </div>
+  </div>
+
   <!-- Geometric particles — outlined shapes drifting left-to-right -->
   <div class="fm-particles" aria-hidden="true">
     <svg *ngFor="let p of particles"

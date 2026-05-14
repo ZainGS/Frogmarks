@@ -17,6 +17,8 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatExpansionModule } from '@angular/material/expansion';
+import { SkinBuilderComponent } from './shared/components/skin-builder/skin-builder.component';
 
 import { AppComponent } from './app.component';
 import { ApiAuthorizationModule } from '../../src/api-authorization/api-authorization.module';
@@ -44,6 +46,7 @@ import { SelectionToolbarComponent } from './boards/components/selection-toolbar
 import { AnimationTimelineComponent } from './illustrate/components/animation-timeline/animation-timeline.component';
 import { AnimationExportComponent } from './illustrate/components/animation-export/animation-export.component';
 import { NewIllustrationDialogComponent } from './shared/components/new-illustration-dialog/new-illustration-dialog.component';
+import { FmIconComponent } from './shared/components/fm-icon/fm-icon.component';
 import { ClothBuilderComponent } from './illustrate/components/cloth-builder/cloth-builder.component';
 import { ParticleEmittersComponent } from './illustrate/components/particle-emitters/particle-emitters.component';
 import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/mesh-edit-panel.component';
@@ -87,6 +90,8 @@ export function MSALInstanceFactory(): PublicClientApplication {
     ClothBuilderComponent,
     ParticleEmittersComponent,
     MeshEditPanelComponent,
+    SkinBuilderComponent,
+    FmIconComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
@@ -109,6 +114,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     ReactiveFormsModule,
     MatAutocompleteModule,
     MatTooltipModule,
+    MatExpansionModule,
     ApiAuthorizationModule,
     RouterModule.forRoot([
       { path: '', component: HomeComponent, pathMatch: 'full' },

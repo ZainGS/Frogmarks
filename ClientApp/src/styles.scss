@@ -941,3 +941,367 @@ mat-error {
   align-self: center !important;
   top: 9% !important;
 }
+
+// ── .frogui skin image application layer ─────────────────────────────────────
+// Applies --fm-*-image tokens to their target elements on the real dashboard.
+// Color tokens are already bridged in themes.scss; this layer handles background-image.
+
+.dashboard-container {
+  background-image: var(--fm-app-bg-image, none);
+  background-size: var(--fm-app-bg-size, cover);
+  background-position: center;
+}
+
+.base-sidenav-column {
+  background-image: var(--fm-sidebar-bg-image, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.list-item:hover {
+  background-image: var(--fm-nav-item-hover-bg-image, none);
+  background-size: cover;
+}
+
+.design-center-active,
+.frogmarks-galaxy-active,
+.templates-active,
+.archived-filter-active,
+.list-view-selected,
+.grid-view-selected {
+  background-image: var(--fm-nav-item-active-bg-image, none) !important;
+  background-size: cover;
+}
+
+.search-bar {
+  background-image: var(--fm-search-bg-image, none);
+  background-size: cover;
+}
+
+.new-design-item-container {
+  background-image: var(--fm-action-card-bg-image, none);
+  background-size: var(--fm-action-card-bg-size, cover);
+  background-position: center;
+}
+
+.board-context-menu {
+  background-image: var(--fm-context-bg-image, none);
+  background-size: cover;
+}
+
+.opfs-track {
+  background: var(--fm-storage-track-bg, rgba(255,255,255,0.1)) !important;
+  background-image: var(--fm-storage-track-bg-image, none) !important;
+}
+
+.opfs-fill {
+  background: var(--fm-storage-fill-bg, #9B59B6) !important;
+  background-image: var(--fm-storage-fill-bg-image, none) !important;
+
+  &.opfs-warn {
+    background: var(--fm-storage-fill-warn-bg, #e67e22) !important;
+  }
+}
+
+.notification-panel {
+  background-image: var(--fm-panel-bg-image, none);
+}
+
+// ── .frogui skin text color application ───────────────────────────────────────
+
+// Sidebar nav text
+.sidenav-list li label,
+.list-link label {
+  color: var(--fm-nav-item-text, inherit) !important;
+}
+
+.sidenav-list li mat-icon,
+.list-link mat-icon {
+  color: var(--fm-nav-item-icon, inherit) !important;
+}
+
+// Active nav item overrides
+.design-center-active label,
+.frogmarks-galaxy-active label,
+.templates-active label,
+.archived-filter-active label {
+  color: var(--fm-nav-item-active-text, inherit) !important;
+}
+
+.design-center-active mat-icon,
+.frogmarks-galaxy-active mat-icon,
+.templates-active mat-icon,
+.archived-filter-active mat-icon {
+  color: var(--fm-nav-item-active-icon, inherit) !important;
+}
+
+// Action card text
+.new-design-item-title {
+  color: var(--fm-action-card-title, inherit);
+}
+
+.new-design-item-subtitle {
+  color: var(--fm-action-card-subtitle, inherit) !important;
+}
+
+// Search bar
+.search-bar {
+  color: var(--fm-search-text, inherit);
+}
+
+.search-bar::placeholder {
+  color: var(--fm-search-placeholder, inherit);
+}
+
+.search-icon {
+  color: var(--fm-search-icon, inherit) !important;
+}
+
+// Context menu
+.board-context-menu .menu-item {
+  color: var(--fm-context-item-text, inherit) !important;
+}
+
+.board-context-menu .menu-item:hover:not(.deletion-menu-item) {
+  background: var(--fm-context-item-hover-bg, rgba(255,255,255,0.07)) !important;
+}
+
+// Storage labels
+.opfs-label {
+  color: var(--fm-storage-label-color, inherit);
+}
+
+.opfs-stat {
+  color: var(--fm-storage-value-color, inherit);
+}
+
+// Settings / notification panel title
+.notification-panel b {
+  color: var(--fm-panel-title-color, inherit);
+}
+
+// ── Skin inspector zone highlights ───────────────────────────────────────────
+// Active when the skin builder panel is open (.sb-inspecting on body).
+// Hovering a dashboard region highlights it and switches the editor group tab.
+// Hovering an editor group tab highlights the corresponding dashboard region.
+
+.sb-inspecting [data-fm-zone] {
+  position: relative;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 120ms;
+  cursor: crosshair !important;
+}
+
+// Overlay drawn over child content
+.sb-inspecting [data-fm-zone]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: transparent;
+  transition: background 120ms;
+}
+
+.sb-inspecting [data-fm-zone]:hover {
+  outline-color: rgba(123, 94, 167, 1) !important;
+}
+.sb-inspecting [data-fm-zone]:hover::before {
+  background: rgba(123, 94, 167, 0.45) !important;
+}
+
+// Suppress parent zone when a nested child zone is also hovered — only the innermost zone should light up
+.sb-inspecting [data-fm-zone]:hover:has([data-fm-zone]:hover) {
+  outline-color: transparent !important;
+}
+.sb-inspecting [data-fm-zone]:hover:has([data-fm-zone]:hover)::before {
+  background: transparent !important;
+}
+.sb-inspecting [data-fm-zone]:hover:has([data-fm-zone]:hover)::after {
+  display: none;
+}
+
+.sb-inspecting [data-fm-zone][data-fm-active] {
+  outline-color: rgba(123, 94, 167, 0.7) !important;
+}
+.sb-inspecting [data-fm-zone][data-fm-active]::before {
+  background: rgba(123, 94, 167, 0.25) !important;
+}
+
+// ── Token-level element highlights (finer grain than zone) ───────────────────
+// box-shadow:inset renders above background-image so the tint always shows.
+// [data-fm-token-active] alone covers _applySpecialActive targets that have no data-fm-token attribute.
+.sb-inspecting [data-fm-token]:hover,
+.sb-inspecting [data-fm-token][data-fm-token-active],
+.sb-inspecting [data-fm-token-active] {
+  outline: 2px solid rgba(190, 150, 255, 1) !important;
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 9999px rgba(150, 100, 255, 0.35) !important;
+}
+
+// Suppress zone overlay when hovering a token child (avoid double-overlay noise)
+.sb-inspecting [data-fm-zone]:hover:has([data-fm-token]:hover)::before {
+  background: transparent !important;
+}
+
+// Token badge replaces zone badge when hovering a token element
+.sb-inspecting [data-fm-token]:hover::after {
+  content: attr(data-fm-token);
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(130, 80, 220, 0.95);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 10300;
+  white-space: nowrap;
+}
+
+// Suppress the zone badge when a token child is hovered
+.sb-inspecting [data-fm-zone]:hover:has([data-fm-token]:hover)::after {
+  display: none;
+}
+
+// ── Icon-level element highlights ────────────────────────────────────────────
+.sb-inspecting [data-fm-icon]:hover,
+.sb-inspecting [data-fm-icon][data-fm-icon-active] {
+  outline: 2px solid rgba(190, 150, 255, 1) !important;
+  outline-offset: 1px;
+  background-color: rgba(150, 100, 255, 0.35) !important;
+  cursor: pointer !important;
+}
+
+// Icon badge at the bottom — shown when in icons pick mode
+.sb-inspecting [data-fm-icon]:hover::after {
+  content: attr(data-fm-icon);
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(130, 80, 220, 0.95);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 10300;
+  white-space: nowrap;
+}
+
+// Label badge showing zone name on hover
+.sb-inspecting [data-fm-zone]:hover::after {
+  content: attr(data-fm-zone);
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(123, 94, 167, 0.95);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 10300;
+  white-space: nowrap;
+}
+
+// Hover preview — set by skin inspector when hover-related token rows are hovered in editor
+// Uses ::after border instead of outline — outline fails to render on will-change:transform composited layers
+.grid-item.fm-preview-hover,
+.masonry-item.fm-preview-hover {
+  z-index: 10;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: var(--fm-grid-item-hover-border, 2px solid rgba(255,255,255,0.5)) !important;
+    pointer-events: none;
+    z-index: 12;
+    box-sizing: border-box;
+    border-radius: inherit;
+  }
+
+  &.rotate-left  { transform: scale(1.1) rotate(-3deg); }
+  &.rotate-right { transform: scale(1.1) rotate(3deg); }
+
+  .item-overlay { opacity: 1 !important; }
+
+  .image-wrapper::before {
+    background-image: var(--fm-grid-hover-overlay, none);
+    opacity: 1 !important;
+  }
+}
+
+// Selected state preview — set by skin inspector when "Selected border" token row is hovered
+.grid-item.fm-preview-selected,
+.masonry-item.fm-preview-selected {
+  z-index: 10;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: var(--fm-grid-item-selected-border, 3px solid rgba(137, 124, 255, 0.88)) !important;
+    pointer-events: none;
+    z-index: 12;
+    box-sizing: border-box;
+    border-radius: inherit;
+  }
+
+  .image-wrapper::after {
+    background-image: var(--fm-grid-selected-overlay, none);
+    opacity: 1 !important;
+  }
+}
+
+// Action card hover preview — forces hover background when "Card hover" token row is hovered
+.new-design-item-container.fm-preview-hover {
+  background-color: var(--fm-action-card-hover-bg) !important;
+}
+
+// ── Hold Ctrl while skin builder is open — fade panel + hide all highlights ──
+.sb-panel { transition: opacity 150ms ease; }
+.sb-inspecting-paused .sb-panel { opacity: 0.2; pointer-events: none; }
+
+
+.sb-inspecting-paused [data-fm-zone],
+.sb-inspecting-paused [data-fm-zone]:hover,
+.sb-inspecting-paused [data-fm-zone][data-fm-active] {
+  outline-color: transparent !important;
+  cursor: default !important;
+}
+.sb-inspecting-paused [data-fm-zone]::before,
+.sb-inspecting-paused [data-fm-zone]:hover::before,
+.sb-inspecting-paused [data-fm-zone][data-fm-active]::before {
+  background: transparent !important;
+}
+.sb-inspecting-paused [data-fm-zone]::after,
+.sb-inspecting-paused [data-fm-zone]:hover::after {
+  display: none !important;
+}
+.sb-inspecting-paused [data-fm-token]:hover,
+.sb-inspecting-paused [data-fm-token][data-fm-token-active],
+.sb-inspecting-paused [data-fm-token-active] {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.sb-inspecting-paused [data-fm-token]:hover::after { display: none !important; }
+.sb-inspecting-paused [data-fm-icon]:hover,
+.sb-inspecting-paused [data-fm-icon][data-fm-icon-active] {
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: default !important;
+}
+.sb-inspecting-paused [data-fm-icon]:hover::after { display: none !important; }

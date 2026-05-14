@@ -1,0 +1,21 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  font-size: 24px;  // matches mat-icon default; explicit overrides (17px, 22px, etc.) still win
+}
+
+mat-icon {
+  font-size: inherit;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+img {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+  display: block;
+}

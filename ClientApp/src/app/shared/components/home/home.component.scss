@@ -77,6 +77,8 @@
 // ── Center ────────────────────────────────────────────────────────
 
 .fm-center {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -249,6 +251,7 @@
 
 .fm-copy {
   position: absolute;
+  z-index: 1;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
@@ -266,8 +269,10 @@
 .fm-particles {
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  isolation: isolate;
 }
 
 @keyframes fm-particle-fly {
@@ -281,6 +286,22 @@
   stroke: white;
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.2));
   animation: fm-particle-fly var(--dur, 16s) linear infinite var(--del, 0s);
+}
+
+// ── Thumbnail particles ───────────────────────────────────────────
+
+@keyframes fm-thumb-fly {
+  from { transform: translateX(-250px) rotate(var(--tilt, 0deg)); }
+  to   { transform: translateX(calc(100vw + 250px)) rotate(var(--tilt, 0deg)); }
+}
+
+.fm-thumb-particle {
+  position: absolute;
+  background-size: cover;
+  background-position: center;
+  border-radius: 3px;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+  animation: fm-thumb-fly var(--dur, 22s) linear infinite var(--del, 0s);
 }
 
 // ── Exit flash overlay ────────────────────────────────────────────

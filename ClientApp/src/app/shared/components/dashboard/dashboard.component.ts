@@ -16,11 +16,14 @@ import { UpgradeModalComponent } from '../upgrade-modal/upgrade-modal.component'
 import { FormControl } from '@angular/forms';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { ThemeService } from 'app/shared/services/theme/theme.service';
+import { FroguiSkinService } from 'app/shared/services/theme/frogui-skin.service';
+import { SkinInspectorService } from 'app/shared/services/theme/skin-inspector.service';
 import { ConfigurationService } from 'app/shared/services/api/configuration.service';
 import { Illustration } from 'app/illustrate/models/illustration.model';
 import { IllustrationService } from 'app/shared/services/illustrate/illustration.service';
 import { FrogFileService } from 'app/shared/services/illustrate/frog-file.service';
 import { LocalIllustrationService, LocalIllustration } from 'app/shared/services/illustrate/local-illustration.service';
+import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
 import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import JSZip from 'jszip';
@@ -32,11 +35,20 @@ interface GridRowItem {
   item: DashboardItem;
   globalIndex: number;
   aspect: number;
+  maxWidth: number;
 }
 
 interface GridRow {
   items: GridRowItem[];
   height: number;
+  isPartial: boolean;
+}
+
+interface MasonryItem {
+  item: DashboardItem;
+  globalIndex: number;
+  aspect: number;
+  height: number; // px
 }
 
 @Component({
@@ -84,11 +96,14 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
   @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef<HTMLInputElement>>;
   @ViewChild('gridContainer') gridContainerEl?: ElementRef;
 
-  // Justified grid (NSO-style variable aspect ratios)
+  // Justified grid
   gridRows: GridRow[] = [];
+  private readonly GRID_TARGET_ROW_HEIGHT = 200;
+
+  // Masonry grid
+  masonryColumns: MasonryItem[][] = [];
   private _gridDirty = false;
   private _resizeObserver?: ResizeObserver;
-  private readonly GRID_TARGET_ROW_HEIGHT = 200;
   _exitingIds = new Set<string>(); // public so template can bind
   startInlineRename(item: DashboardItem) {
     this.closeContextMenu();
@@ -118,6 +133,30 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     this.editingId = null;
   }
 
+  @HostListener('mouseover', ['$event'])
+  onZoneHover(event: MouseEvent): void {
+    if (!document.body.classList.contains('sb-inspecting')) return;
+    const target = event.target as Element;
+
+    const zone = target.closest('[data-fm-zone]')?.getAttribute('data-fm-zone') ?? null;
+    if (zone !== this._hoveringZone) {
+      this._hoveringZone = zone;
+      this.skinInspector.setZoneFromDashboard(zone);
+    }
+
+    const token = target.closest('[data-fm-token]')?.getAttribute('data-fm-token') ?? null;
+    if (token !== this._hoveringToken) {
+      this._hoveringToken = token;
+      this.skinInspector.setTokenFromDashboard(token);
+    }
+  }
+
+  @HostListener('mouseleave')
+  onZoneLeave(): void {
+    if (this._hoveringZone)  { this._hoveringZone  = null; this.skinInspector.setZoneFromDashboard(null); }
+    if (this._hoveringToken) { this._hoveringToken = null; this.skinInspector.setTokenFromDashboard(null); }
+  }
+
   // Click Host Listener for dropdown menus
   @HostListener('document:click', ['$event'])
   handleOutsideClick(event: MouseEvent) {
@@ -138,6 +177,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
       && !target.closest('.filetype-dropdown-arrow')
       && !target.closest('.filetype-dropdown-chip')) {
       this.showFileTypeDropdown = false;
+    }
+
+    if (!target.closest('.menu-container')
+      && !target.closest('.storage-dropdown-arrow')
+      && !target.closest('.storage-dropdown-chip')) {
+      this.showStorageDropdown = false;
     }
   }
 
@@ -210,8 +255,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
       this.illustrationService.updateIllustration(item).subscribe(() => {});
     }
 
-    // List view or grid not mounted — remove immediately
-    if (!container || this.viewType !== 'grid') {
+    // List view or masonry not mounted — remove immediately
+    if (!container || this.viewType === 'list') {
       this._removeFromLists(item);
       return;
     }
@@ -272,11 +317,6 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     }
   }
 
-  toggleBatchMode(): void {
-    this.batchMode = !this.batchMode;
-    if (!this.batchMode) this.selectedItems.clear();
-  }
-
   toggleGridItemSelection(event: MouseEvent, uuid: string): void {
     event.stopPropagation();
     if (this.selectedItems.has(uuid)) {
@@ -286,13 +326,27 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     }
   }
 
+  confirmDeleteAll(): void { this.deleteAllPending = true; }
+  cancelDeleteAll(): void  { this.deleteAllPending = false; }
+
+  doDeleteAll(): void {
+    for (const item of [...this.filteredListItems]) {
+      this.onDeleteBoard(item);
+    }
+    this.deleteAllPending = false;
+  }
+
   batchDelete(): void {
     for (const uuid of [...this.selectedItems]) {
       const item = this.filteredListItems.find((i: any) => i.uuid === uuid);
-      if (item) this.onDeleteBoard(item);
+      if (!item) continue;
+      if (this.isArchivedFilterActive) {
+        this.onDeleteBoard(item);
+      } else {
+        this.onArchiveItem(item);
+      }
     }
     this.selectedItems.clear();
-    this.batchMode = false;
   }
 
   onDeleteBoard(item: DashboardItem | null) {
@@ -302,10 +356,22 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     if (this.isBoard(item)) {
       this.boardService.deleteBoard(item.id).subscribe(() => {});
     } else if (this.isLocalIllustration(item)) {
+      // delete() cleans up IndexedDB + OPFS metadata JSON + salsa raster data
       this.localIllustrationService.delete(item.uuid!).catch(() => {});
     } else if (this.isIllustration(item)) {
       this.illustrationService.deleteIllustration(item.id).subscribe(() => {});
+      // Clean up any locally cached OPFS data for this cloud illustration
+      this.opfsMetadataService.delete(item.id.toString()).catch(() => {});
+      this._deleteRasterOpfs(item.id.toString()).catch(() => {});
     }
+  }
+
+  private async _deleteRasterOpfs(docId: string): Promise<void> {
+    try {
+      const root = await navigator.storage.getDirectory();
+      const salsaDir = await root.getDirectoryHandle('salsa-documents');
+      await (salsaDir as any).removeEntry(docId, { recursive: true });
+    } catch { /* not found — ignore */ }
   }
 
   isLocalIllustration(item: DashboardItem): boolean {
@@ -391,7 +457,6 @@ onKeydown(e: KeyboardEvent) {
   filteredSearchItems: any = [];
   selectedItems: Set<string> = new Set<string>();
   favorites: Set<string> = new Set();
-  batchMode = false;
 
   // Filtering
   isFrogmarksGalaxyActive: boolean = false;
@@ -399,6 +464,7 @@ onKeydown(e: KeyboardEvent) {
   isDesignCenterActive: boolean = true;
   isFavoritesFilterActive: boolean = false;
   isArchivedFilterActive: boolean = false;
+  deleteAllPending: boolean = false;
   isUpdatesActive: boolean = false;
   currentRecentCreationsTab = 1;
   sortBy: number = SortByOptions.LastViewed;
@@ -406,11 +472,14 @@ onKeydown(e: KeyboardEvent) {
   fileType: number = FileTypeOptions.All;
   showSortOrderDropdown: boolean = false;
   showFileTypeDropdown: boolean = false;
+  showStorageDropdown: boolean = false;
   showNotificationPanel: boolean = false;
   showSettingsPanel: boolean = false;
   showProfilePanel: boolean = false;
-  sortOrderDropdownText: any = ["Alphabetical", "Date created", "Last viewed"]
-  fileTypeDropdownText: any = ["All files", "Design files", "Boards", "Slide decks"]
+  sortOrderDropdownText: string[] = ['Alphabetical', 'Date created', 'Last viewed'];
+  fileTypeDropdownText: string[] = ['All file types', 'Boards', 'Illustrations', 'Animations'];
+  storageFilterText: string[] = ['All storage', 'Local-Only', 'No-Cloud', 'Cloud-Only'];
+  storageFilter: number = 0;
   viewType: string = "grid";
   teamInviteLink: string = 'https://www.frogmarks.com/team_invite/redeem/...';
 
@@ -455,6 +524,13 @@ onKeydown(e: KeyboardEvent) {
   loginVerifying = false;
   loginError = '';
   private _sessionExpiredSub?: Subscription;
+  private _inspectorPreviewSub?: Subscription;
+  private _overlayAutoOpened = false;
+  private _galleryPreviewSub?: Subscription;
+  private _previewOverlayIndex: number | null | undefined = undefined;
+  private _hoveringZone:  string | null = null;
+  private _hoveringToken: string | null = null;
+  private _inspectClickHandler = (e: MouseEvent) => this._onInspectClick(e);
   searchControl = new FormControl('');
   isDarkMode: boolean = false;
 
@@ -499,6 +575,7 @@ onKeydown(e: KeyboardEvent) {
   private _notifyService: NotifyService;
 
   constructor(private cdr: ChangeDetectorRef,
+    private el: ElementRef,
     private teamService: TeamService,
     private boardService: BoardService,
     private illustrationService: IllustrationService,
@@ -510,7 +587,10 @@ onKeydown(e: KeyboardEvent) {
     public themeService: ThemeService,
     public configurationService: ConfigurationService,
     private frogFileService: FrogFileService,
-    private localIllustrationService: LocalIllustrationService) {
+    private localIllustrationService: LocalIllustrationService,
+    public skinService: FroguiSkinService,
+    private skinInspector: SkinInspectorService,
+    private opfsMetadataService: OpfsMetadataService) {
       this._boardService = boardService;
       this._illustrationService = illustrationService;
       this._teamService = teamService;
@@ -650,6 +730,56 @@ onKeydown(e: KeyboardEvent) {
     this.themeService.toggleDarkMode(!this.themeService.getDarkMode());
   }
 
+  importingSkin = false;
+  hasSkin = false;
+  showSkinBuilder = false;
+
+  get borderRunnerAnimated(): boolean {
+    return this.skinService.currentTokens['--fm-popup-border-animate'] === '1';
+  }
+
+  get borderRunnerOuter(): boolean {
+    return this.skinService.currentTokens['--fm-popup-border-outer'] === '1';
+  }
+
+  get hasBorderSprite(): boolean {
+    return this.skinService.currentTokens['--fm-popup-border-sprite'] !== 'none';
+  }
+
+  openSkinBuilder(): void {
+    this.showSkinBuilder = true;
+    this.showSettingsPanel = false;
+  }
+
+  onSkinBuilderClosed(): void {
+    this.showSkinBuilder = false;
+    this.hasSkin = this.skinService.hasSkin;
+  }
+
+  async onImportSkin(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.importingSkin = true;
+    const result = await this.skinService.importSkin(file);
+    this.importingSkin = false;
+    if (result.ok) {
+      this.hasSkin = true;
+    } else {
+      this._notifyService.error(result.error ?? 'Failed to import skin.');
+    }
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  disableSkin(): void {
+    this.skinService.disableSkin();
+    this.hasSkin = false;
+  }
+
+  async enableSavedSkin(): Promise<void> {
+    await this.skinService.enableSavedSkin();
+    this.hasSkin = this.skinService.hasSkin;
+  }
+
   openUpgradeDialog() {
     const dialogRef = this.dialog.open(UpgradeModalComponent, {
       data: {
@@ -675,7 +805,11 @@ onKeydown(e: KeyboardEvent) {
     return ri.item.uuid ?? ri.globalIndex.toString();
   }
 
-  // ── Justified grid ────────────────────────────────────────────
+  trackByMasonryItem(_: number, mi: MasonryItem): string {
+    return mi.item.uuid ?? mi.globalIndex.toString();
+  }
+
+  // ── Masonry grid ───────────────────────────────────────────────
 
   getItemAspect(item: DashboardItem): number {
     if (this.isIllustration(item) && (item as Illustration).documentAspect) {
@@ -684,9 +818,24 @@ onKeydown(e: KeyboardEvent) {
     return 16 / 10;
   }
 
-  private recomputeGrid(): void {
+  private getMasonryColumnCount(width: number): number {
+    if (width >= 1600) return 8;
+    if (width >= 1100) return 6;
+    if (width >= 700)  return 4;
+    return 2;
+  }
+
+  private recomputeGrid(overrideWidth?: number): void {
+    if (this.viewType === 'masonry') {
+      this._recomputeMasonry(overrideWidth);
+    } else {
+      this._recomputeJustified(overrideWidth);
+    }
+  }
+
+  private _recomputeJustified(overrideWidth?: number): void {
     const el = this.gridContainerEl?.nativeElement;
-    const containerWidth: number = el ? el.getBoundingClientRect().width : 0;
+    const containerWidth: number = overrideWidth ?? (el ? el.getBoundingClientRect().width : 0);
     const items: DashboardItem[] = this.filteredListItems;
 
     if (!containerWidth || !items.length) {
@@ -701,31 +850,65 @@ onKeydown(e: KeyboardEvent) {
 
     items.forEach((item: DashboardItem, idx: number) => {
       const aspect = this.getItemAspect(item);
-
       if (rowItems.length > 0 && (rowAspectSum + aspect) * TARGET > containerWidth) {
-        rows.push({ items: rowItems, height: containerWidth / rowAspectSum });
+        rows.push({ items: rowItems, height: Math.min(containerWidth / rowAspectSum, TARGET), isPartial: false });
         rowItems = [];
         rowAspectSum = 0;
       }
-
-      rowItems.push({ item, globalIndex: idx, aspect });
+      rowItems.push({ item, globalIndex: idx, aspect, maxWidth: TARGET * aspect });
       rowAspectSum += aspect;
     });
 
     if (rowItems.length > 0) {
-      rows.push({ items: rowItems, height: Math.min(containerWidth / rowAspectSum, TARGET) });
+      // Only cap widths when the last row is noticeably underfull (< 75% of container).
+      // When it has nearly the same items as a full row, let it stretch like one.
+      const fillRatio = (rowAspectSum * TARGET) / containerWidth;
+      rows.push({ items: rowItems, height: Math.min(containerWidth / rowAspectSum, TARGET), isPartial: fillRatio < 0.75 });
     }
 
     this.gridRows = rows;
   }
 
+  private _recomputeMasonry(overrideWidth?: number): void {
+    const el = this.gridContainerEl?.nativeElement;
+    const containerWidth: number = overrideWidth ?? (el
+      ? (el.getBoundingClientRect().width || el.parentElement?.getBoundingClientRect().width || 0)
+      : 0);
+    const items: DashboardItem[] = this.filteredListItems;
+
+    if (!containerWidth || !items.length) {
+      this.masonryColumns = [];
+      return;
+    }
+
+    const gap = 8;
+    const numCols = this.getMasonryColumnCount(containerWidth);
+    const colWidth = (containerWidth - gap * (numCols - 1)) / numCols;
+
+    const columns: MasonryItem[][] = Array.from({ length: numCols }, () => []);
+    const colHeights = new Array<number>(numCols).fill(0);
+
+    items.forEach((item: DashboardItem, idx: number) => {
+      const aspect = this.getItemAspect(item);
+      const height = Math.round(colWidth / aspect);
+      const shortest = colHeights.indexOf(Math.min(...colHeights));
+      columns[shortest].push({ item, globalIndex: idx, aspect, height });
+      colHeights[shortest] += height + gap;
+    });
+
+    this.masonryColumns = columns;
+  }
+
   ngAfterViewChecked(): void {
-    if (this._gridDirty && this.gridContainerEl?.nativeElement?.clientWidth) {
+    const el = this.gridContainerEl?.nativeElement;
+    const measuredWidth = el?.clientWidth || el?.parentElement?.clientWidth || 0;
+    if ((this.viewType === 'grid' || this.viewType === 'masonry') && this._gridDirty && measuredWidth) {
       this._gridDirty = false;
 
       if (!this._resizeObserver) {
         this._resizeObserver = new ResizeObserver(() => {
           if (this.overlayOpen) return;
+          if (this._sidebarTransitioning) return;
           this.recomputeGrid();
         });
         this._resizeObserver.observe(this.gridContainerEl.nativeElement);
@@ -736,10 +919,36 @@ onKeydown(e: KeyboardEvent) {
   }
 
   ngOnDestroy() {
+    this.el.nativeElement.removeEventListener('click', this._inspectClickHandler, true);
     window.removeEventListener('scroll', this.scrollListener, true);
     window.removeEventListener('resize', this.onResize);
     this._resizeObserver?.disconnect();
     this._sessionExpiredSub?.unsubscribe();
+    this._inspectorPreviewSub?.unsubscribe();
+    this._galleryPreviewSub?.unsubscribe();
+  }
+
+  private _onInspectClick(event: MouseEvent): void {
+    if (!document.body.classList.contains('sb-inspecting')) return;
+
+    // Icons-section: intercept icon clicks before zone handling
+    const iconEl = (event.target as Element).closest('[data-fm-icon]');
+    const iconName = iconEl?.getAttribute('data-fm-icon') ?? null;
+    if (iconName && this.skinInspector.isIconsGroupActive) {
+      event.stopPropagation();
+      event.preventDefault();
+      this.skinInspector.clickIconFromDashboard(iconName);
+      return;
+    }
+
+    const zoneEl = (event.target as Element).closest('[data-fm-zone]');
+    const zone = zoneEl?.getAttribute('data-fm-zone') ?? null;
+    if (zone) this.skinInspector.clickZoneFromDashboard(zone);
+    // Allow gallery clicks through (opens the popup card); block everything else
+    if (zone && zone !== 'gallery') {
+      event.stopPropagation();
+      event.preventDefault();
+    }
   }
 
   private onScroll() {
@@ -750,11 +959,39 @@ onKeydown(e: KeyboardEvent) {
 
   private resizeTimeout: any;
   ngOnInit(): void {
+    this.hasSkin = this.skinService.hasSkin;
     setTimeout(() => this.initialLoad = false, 1200);
 
+    this.el.nativeElement.addEventListener('click', this._inspectClickHandler, true);
     this.scrollListener = this.onScroll.bind(this);
     window.addEventListener('scroll', this.scrollListener, true); // 'true' for capturing phase
     window.addEventListener('resize', this.onResize);
+
+    this._inspectorPreviewSub = this.skinInspector.popupPreview$.subscribe(show => {
+      if (show) {
+        if (this.filteredListItems.length > 0 && !this.overlayOpen) {
+          this.openItemOverlay(this.filteredListItems[0], 0);
+          this._overlayAutoOpened = true;
+        }
+      } else if (this._overlayAutoOpened) {
+        if (this.overlayOpen) this.closeItemOverlay();
+        this._overlayAutoOpened = false;
+      }
+    });
+
+    this._galleryPreviewSub = this.skinInspector.galleryPreview$.subscribe(mode => {
+      if (mode === 'selected') {
+        if (this._previewOverlayIndex === undefined && !this.overlayOpen && this.filteredListItems.length > 0) {
+          this._previewOverlayIndex = this.overlayIndex;
+          this.overlayIndex = 0;
+        }
+      } else {
+        if (this._previewOverlayIndex !== undefined) {
+          if (!this.overlayOpen) this.overlayIndex = this._previewOverlayIndex ?? null;
+          this._previewOverlayIndex = undefined;
+        }
+      }
+    });
 
     // 1. Load local items immediately — no auth needed
     this._loadLocalItemsOnly();
@@ -893,6 +1130,57 @@ onKeydown(e: KeyboardEvent) {
     this.isSidenavOpen = !this.isSidenavOpen;
   }
 
+  isSidenavCollapsed = false;
+  private _sidebarTransitioning = false;
+
+  toggleSidenavCollapsed(): void {
+    const container = this.gridContainerEl?.nativeElement as HTMLElement | undefined;
+
+    // Snapshot current positions before anything changes
+    const snapshots = new Map<string, DOMRect>();
+    if (container) {
+      container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+        snapshots.set(el.dataset['itemId']!, el.getBoundingClientRect());
+      });
+    }
+
+    // Sidebar is always 250px expanded / 70px collapsed → delta is always ±180px
+    const currentWidth = container?.getBoundingClientRect().width ?? 0;
+    const newWidth = currentWidth + (this.isSidenavCollapsed ? -180 : 180);
+
+    this._sidebarTransitioning = true;
+    this.isSidenavCollapsed = !this.isSidenavCollapsed;
+
+    if (container && newWidth > 0) {
+      // Recompute grid for the final width immediately — sidebar CSS transition runs in parallel
+      this.recomputeGrid(newWidth);
+      this.cdr.detectChanges();
+
+      requestAnimationFrame(() => {
+        container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+          const before = snapshots.get(el.dataset['itemId']!);
+          if (!before) return;
+          const after = el.getBoundingClientRect();
+          const dx = before.left - after.left;
+          const dy = before.top - after.top;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+          el.style.transition = 'none';
+          el.style.transform = `translate(${dx}px, ${dy}px)`;
+        });
+        requestAnimationFrame(() => {
+          container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+            if (!el.style.transform) return;
+            el.style.transition = 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1)';
+            el.style.transform = '';
+            el.addEventListener('transitionend', () => { el.style.transition = ''; }, { once: true });
+          });
+        });
+      });
+    }
+
+    setTimeout(() => { this._sidebarTransitioning = false; }, 210);
+  }
+
   clearData() {
     this.isLoadingItems = true;
     this.boards = [];
@@ -1006,21 +1294,32 @@ onKeydown(e: KeyboardEvent) {
     }
   }
 
-  changeFileType(option: number) {
-    this.filteredListItems = this.listItems;
-    this.fileType = option;
-    switch(option) {
-      case 0:
-        this.filteredListItems = this.listItems;
-        break;
-      case 1:
-        this.filteredListItems = this.listItems.filter((item: any) => this.isBoard(item));
-        break;
-      case 2:
-        this.filteredListItems = this.listItems.filter((item: any) => this.isIllustration(item));
-        break;
+  private _applyFilters(): void {
+    let items = this.listItems;
+
+    switch (this.fileType) {
+      case 1: items = items.filter((item: any) => this.isBoard(item)); break;
+      case 2: items = items.filter((item: any) => this.isIllustration(item)); break;
     }
+
+    switch (this.storageFilter) {
+      case 1: items = items.filter((item: any) => item.syncMode === 2); break;  // Local-Only
+      case 2: items = items.filter((item: any) => item.syncMode === 1); break;  // No-Cloud
+      case 3: items = items.filter((item: any) => item.syncMode === 0); break;  // Cloud-Only
+    }
+
+    this.filteredListItems = items;
     this._gridDirty = true;
+  }
+
+  changeFileType(option: number) {
+    this.fileType = option;
+    this._applyFilters();
+  }
+
+  changeStorageFilter(option: number) {
+    this.storageFilter = option;
+    this._applyFilters();
   }
 
   sort(option: number) {
@@ -1037,10 +1336,17 @@ onKeydown(e: KeyboardEvent) {
 
   toggleSortOrderDropdown() {
     this.showSortOrderDropdown = !this.showSortOrderDropdown;
+    if (this.showSortOrderDropdown) { this.showFileTypeDropdown = false; this.showStorageDropdown = false; }
   }
 
   toggleFileTypeDropdown() {
     this.showFileTypeDropdown = !this.showFileTypeDropdown;
+    if (this.showFileTypeDropdown) { this.showSortOrderDropdown = false; this.showStorageDropdown = false; }
+  }
+
+  toggleStorageDropdown() {
+    this.showStorageDropdown = !this.showStorageDropdown;
+    if (this.showStorageDropdown) { this.showFileTypeDropdown = false; this.showSortOrderDropdown = false; }
   }
 
   draftsClicked(): void { }
@@ -1082,14 +1388,18 @@ onKeydown(e: KeyboardEvent) {
   }
 
   newIllustrationButtonClicked(): void {
-    const ref = this.dialog.open(NewIllustrationDialogComponent, {
+    if (this._newIllustrationDialogRef) return;
+    this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
       panelClass: 'new-illustration-dialog',
       disableClose: false,
+      enterAnimationDuration: '0ms',
       data: { isLoggedIn: this.isLoggedIn },
     });
+    const ref = this._newIllustrationDialogRef;
 
     ref.afterClosed().subscribe(async (result: { name: string; docW: number | null; docH: number | null; bounded: boolean; syncMode: number } | null) => {
+      this._newIllustrationDialogRef = null;
       if (!result) return;
 
       const generatedName = `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Illustration`;
@@ -1155,14 +1465,18 @@ onKeydown(e: KeyboardEvent) {
   }
 
   newAnimationButtonClicked(): void {
-    const ref = this.dialog.open(NewIllustrationDialogComponent, {
+    if (this._newIllustrationDialogRef) return;
+    this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
       panelClass: 'new-illustration-dialog',
       disableClose: false,
+      enterAnimationDuration: '0ms',
       data: { isLoggedIn: this.isLoggedIn },
     });
+    const ref = this._newIllustrationDialogRef;
 
     ref.afterClosed().subscribe(async (result: { name: string; docW: number | null; docH: number | null; bounded: boolean; syncMode: number } | null) => {
+      this._newIllustrationDialogRef = null;
       if (!result) return;
 
       const generatedName = `${this.namingHelper.getRandomAdjective()} ${this.namingHelper.getRandomGemstone()} Animation`;
@@ -1231,14 +1545,17 @@ onKeydown(e: KeyboardEvent) {
       const result = await this.frogFileService.importFrogFile();
 
       // 2. Ask the user which storage mode to use
-      const modeRef = this.dialog.open(NewIllustrationDialogComponent, {
+      if (this._newIllustrationDialogRef) return;
+      this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
         width: '420px',
         panelClass: 'new-illustration-dialog',
         disableClose: false,
+        enterAnimationDuration: '0ms',
         data: { importMode: true, defaultName: result.manifest.name || 'Imported Illustration', isLoggedIn: this.isLoggedIn }
       });
 
-      const modeResult: { syncMode: number } | null = await firstValueFrom(modeRef.afterClosed());
+      const modeResult: { syncMode: number } | null = await firstValueFrom(this._newIllustrationDialogRef.afterClosed());
+      this._newIllustrationDialogRef = null;
       if (!modeResult) return; // user cancelled
 
       const importName = result.manifest.name || 'Imported Illustration';
@@ -1350,6 +1667,11 @@ onKeydown(e: KeyboardEvent) {
     this.viewType = "grid";
   }
 
+  masonryViewClicked() {
+    this.viewType = "masonry";
+    this._gridDirty = true;
+  }
+
   listViewClicked() {
     this.viewType = "list";
   }
@@ -1383,6 +1705,7 @@ onKeydown(e: KeyboardEvent) {
   }
 
   archivedClicked(): void {
+    this.deleteAllPending = false;
     if (!this.isArchivedFilterActive) {
       this.clearData();
       this.isArchivedFilterActive = true;
@@ -1578,7 +1901,7 @@ onKeydown(e: KeyboardEvent) {
       const localItems = await this.localIllustrationService.getAll(this.isArchivedFilterActive);
       const filtered = this.isFavoritesFilterActive ? localItems.filter(i => i.isFavorite) : localItems;
       filtered.forEach(local => {
-        this.listItems.push(local as any);
+        this.listItems.push({ ...local, dateModified: new Date(local.updatedAt).toISOString() } as any);
         if (local.isFavorite && local.uuid) this.favorites.add(local.uuid);
       });
       this.filteredListItems = [...this.listItems];
@@ -1604,6 +1927,7 @@ onKeydown(e: KeyboardEvent) {
 
   isSyncingCloud = false;
   showDevPanel = false;
+  private _newIllustrationDialogRef: import('@angular/material/dialog').MatDialogRef<NewIllustrationDialogComponent> | null = null;
 
   async syncCloudToLocal(): Promise<void> {
     if (!this.currentTeam?.id || this.isSyncingCloud) return;
@@ -1926,21 +2250,21 @@ onKeydown(e: KeyboardEvent) {
             (illustrationsRes?.resultObject ?? []).map((i: Illustration) => i.id).filter(Boolean)
           );
           const localItems: LocalIllustration[] = await this.localIllustrationService.getAll(this.isArchivedFilterActive);
-          const filtered = this.isFavoritesFilterActive ? localItems.filter(i => i.isFavorite) : localItems;
+          const archiveFiltered = this.isArchivedFilterActive ? localItems.filter(i => i.isArchived) : localItems;
+          const filtered = this.isFavoritesFilterActive ? archiveFiltered.filter(i => i.isFavorite) : archiveFiltered;
           filtered.forEach(local => {
             // If this local item has been backed up and the cloud copy is present, skip it
             if (local.cloudIllustrationId && cloudIds.has(local.cloudIllustrationId)) return;
-            this.listItems.push(local as any);
+            this.listItems.push({ ...local, dateModified: new Date(local.updatedAt).toISOString() } as any);
             if (local.isFavorite && local.uuid) this.favorites.add(local.uuid);
           });
         } catch (e) {
           console.warn('[Dashboard] local illustrations load failed:', e);
         }
 
-        this.filteredListItems = this.listItems;
+        this._applyFilters();
         this.isLoadingItems = false;
         this.isLoading = false;
-        this._gridDirty = true;
       },
       error: (err) => {
         console.error('[Dashboard] forkJoin error:', err);

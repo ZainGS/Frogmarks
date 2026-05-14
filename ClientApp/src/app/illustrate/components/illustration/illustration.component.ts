@@ -1153,6 +1153,7 @@ export class IllustrationComponent implements OnInit {
   private _toolsSwapTimer: ReturnType<typeof setTimeout> | null = null;
 
   scene3dGizmoMode: 'move' | 'rotate' | 'scale' = 'move';
+  scene3dGizmoOrientation: 'world' | 'local' = 'world';
   scene3dOrbitEnabled = false;
   scene3dCameraMode: 'perspective' | 'orthographic' = 'perspective';
   scene3dIllustrationProjection: 'perspective' | 'orthographic' = 'orthographic';
@@ -1180,6 +1181,12 @@ export class IllustrationComponent implements OnInit {
   scene3dFrameLinkAxis: 'x' | 'y' | 'z' = 'y';
   scene3dFrameLinkAmplitude = 0.15;
   scene3dFrameLinkFramesPerCycle = 24;
+  scene3dFrameLinkPhase = 0;
+  scene3dFrameLinkStagger = 0;
+  scene3dSelectedIsGroup = false;
+  // Bucket state — persisted per group ID in the illustration save
+  scene3dAllGroupBuckets: Record<string, string[][]> = {};
+  scene3dBucketSelections: string[] = []; // per-bucket dropdown selection (transient)
 
   // Ribbon mesh
   // ── Mesh Edit state ────────────────────────────────────────
@@ -1743,6 +1750,7 @@ export class IllustrationComponent implements OnInit {
     }
     this.scene3dSelectedMeshId = id;
     // Reset per-mesh state so switching between mesh types clears the flags
+    this.scene3dSelectedIsGroup = false;
     this.scene3dIsCloth = false;
     this.clothLiveEnabled = false;
     this.clothWindEnabled = false;
@@ -1758,6 +1766,7 @@ export class IllustrationComponent implements OnInit {
     const s3d = (this.shapeManager as any).scene3d;
     if (!s3d) return;
     (this.shapeManager as any).setSelectedNode?.(id);
+    this.scene3dSelectedIsGroup = !!s3d.getMeshGroup?.(id);
     const mesh = s3d.getMesh(id);
     if (mesh) {
       this.scene3dMeshPosX = mesh.x ?? mesh.position?.x ?? 0;
@@ -1790,8 +1799,10 @@ export class IllustrationComponent implements OnInit {
         this.scene3dFrameLinkAxis = fl.axis ?? 'y';
         this.scene3dFrameLinkAmplitude = fl.amplitude ?? 0.15;
         this.scene3dFrameLinkFramesPerCycle = fl.framesPerCycle ?? 24;
+        this.scene3dFrameLinkPhase = fl.phase ?? 0;
       } else {
         this.scene3dFrameLinkEnabled = false;
+        this.scene3dFrameLinkPhase = 0;
         // Ribbons default to Scroll (UV) so the setting is ready to enable immediately
         const isRibbonMesh = !!(sm2.getRibbonData3D?.(id)
           ?? (mesh.type === 'ribbon' || mesh.type === 'Ribbon' || mesh.controlPoints ? mesh : null));
@@ -1800,6 +1811,8 @@ export class IllustrationComponent implements OnInit {
         this.scene3dFrameLinkAmplitude = isRibbonMesh ? 1.0 : 0.15;
         this.scene3dFrameLinkFramesPerCycle = isRibbonMesh ? 240 : 24;
       }
+      this.scene3dFrameLinkStagger = 0;
+      this.scene3dBucketSelections = [];
       // Load ribbon state — getRibbonData3D may return null on a just-restored scene,
       // so also check mesh.type and mesh.controlPoints as fallbacks.
       const ribbonData = sm2.getRibbonData3D?.(id)
@@ -1875,6 +1888,31 @@ export class IllustrationComponent implements OnInit {
         this.clothInfoVertexCount = null;
         this.clothInfoTriCount = null;
       }
+    } else if (this.scene3dSelectedIsGroup) {
+      // Load FLA from the first child as representative values for the group panel
+      const sm2 = this.shapeManager as any;
+      const groupNode = this.scene3dHierarchy.find((n: any) => n.id === id);
+      const firstChildId: string | undefined = groupNode?.children?.[0]?.id;
+      const fl = firstChildId ? sm2.getFrameLinkAnimation3D?.(firstChildId) : null;
+      if (fl) {
+        this.scene3dFrameLinkEnabled = fl.enabled ?? false;
+        this.scene3dFrameLinkType = fl.type ?? 'bounce';
+        this.scene3dFrameLinkAxis = fl.axis ?? 'y';
+        this.scene3dFrameLinkAmplitude = fl.amplitude ?? 0.15;
+        this.scene3dFrameLinkFramesPerCycle = fl.framesPerCycle ?? 24;
+        this.scene3dFrameLinkPhase = fl.phase ?? 0;
+      } else {
+        this.scene3dFrameLinkEnabled = false;
+        this.scene3dFrameLinkType = 'bounce';
+        this.scene3dFrameLinkAxis = 'y';
+        this.scene3dFrameLinkAmplitude = 0.15;
+        this.scene3dFrameLinkFramesPerCycle = 24;
+        this.scene3dFrameLinkPhase = 0;
+      }
+      this.scene3dFrameLinkStagger = 0;
+      // Restore bucket selections array sized to stored buckets for this group
+      const storedBuckets = this.scene3dAllGroupBuckets[id] ?? [];
+      this.scene3dBucketSelections = storedBuckets.map(() => '');
     }
     this.scene3dRefreshKeyframeTracks();
   }
@@ -2502,15 +2540,108 @@ export class IllustrationComponent implements OnInit {
   }
 
   scene3dApplyFrameLink(): void {
-    if (!this.scene3dSelectedMeshId) return;
-    (this.shapeManager as any).setFrameLinkAnimation3D?.(this.scene3dSelectedMeshId, {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const sm = this.shapeManager as any;
+    const baseConfig = {
       enabled: this.scene3dFrameLinkEnabled,
       type: this.scene3dFrameLinkType,
       axis: this.scene3dFrameLinkAxis,
       amplitude: this.scene3dFrameLinkAmplitude,
       framesPerCycle: this.scene3dFrameLinkFramesPerCycle,
-    });
+      phase: this.scene3dFrameLinkPhase,
+    };
+    if (this.scene3dSelectedIsGroup) {
+      const freshHierarchy: any[] = sm.getScene3DHierarchy?.() ?? [];
+      const groupNode = freshHierarchy.find((n: any) => n.id === id);
+      const children: any[] = groupNode?.children ?? [];
+
+      const buckets = this.scene3dAllGroupBuckets[id] ?? [];
+      const bucketed = new Set(buckets.flat());
+      const unbucketed = children.filter((c: any) => !bucketed.has(c.id));
+
+      // Stagger units: each bucket counts as one unit, each unbucketed child counts as one unit
+      const units: string[][] = [
+        ...buckets,
+        ...unbucketed.map((c: any) => [c.id as string]),
+      ];
+      const totalUnits = units.length || 1;
+
+      units.forEach((unitIds, i) => {
+        const unitPhase = this.scene3dFrameLinkPhase + (i / totalUnits) * this.scene3dFrameLinkStagger;
+        unitIds.forEach(childId => {
+          sm.setFrameLinkAnimation3D?.(childId, { ...baseConfig, phase: unitPhase });
+        });
+      });
+    } else {
+      sm.setFrameLinkAnimation3D?.(id, baseConfig);
+    }
     this.scene3dMarkDirty();
+  }
+
+  // ── Phase Bucket helpers ────────────────────────────────────────────────────
+
+  scene3dGetCurrentBuckets(): string[][] {
+    return this.scene3dAllGroupBuckets[this.scene3dSelectedMeshId!] ?? [];
+  }
+
+  scene3dGetAvailableChildren(): Array<{ id: string; name: string }> {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return [];
+    const bucketed = new Set((this.scene3dAllGroupBuckets[id] ?? []).flat());
+    const groupNode = this.scene3dHierarchy.find((n: any) => n.id === id);
+    return (groupNode?.children ?? [])
+      .filter((c: any) => !bucketed.has(c.id))
+      .map((c: any) => ({ id: c.id as string, name: (c.name ?? c.id) as string }));
+  }
+
+  scene3dGetChildName(childId: string): string {
+    const groupNode = this.scene3dHierarchy.find((n: any) => n.id === this.scene3dSelectedMeshId);
+    return groupNode?.children?.find((c: any) => c.id === childId)?.name ?? childId;
+  }
+
+  scene3dAddBucket(): void {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const existing = this.scene3dAllGroupBuckets[id] ?? [];
+    this.scene3dAllGroupBuckets = { ...this.scene3dAllGroupBuckets, [id]: [...existing, []] };
+    this.scene3dBucketSelections = [...this.scene3dBucketSelections, ''];
+  }
+
+  scene3dRemoveBucket(bi: number): void {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const buckets = [...(this.scene3dAllGroupBuckets[id] ?? [])];
+    buckets.splice(bi, 1);
+    this.scene3dAllGroupBuckets = { ...this.scene3dAllGroupBuckets, [id]: buckets };
+    const sels = [...this.scene3dBucketSelections];
+    sels.splice(bi, 1);
+    this.scene3dBucketSelections = sels;
+    this.scene3dApplyFrameLink();
+  }
+
+  scene3dAddChildToBucket(bi: number): void {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const childId = this.scene3dBucketSelections[bi];
+    if (!childId) return;
+    const buckets = (this.scene3dAllGroupBuckets[id] ?? []).map(b => [...b]);
+    if (!buckets[bi]) buckets[bi] = [];
+    buckets[bi].push(childId);
+    this.scene3dAllGroupBuckets = { ...this.scene3dAllGroupBuckets, [id]: buckets };
+    const sels = [...this.scene3dBucketSelections];
+    sels[bi] = '';
+    this.scene3dBucketSelections = sels;
+    this.scene3dApplyFrameLink();
+  }
+
+  scene3dRemoveChildFromBucket(bi: number, childId: string): void {
+    const id = this.scene3dSelectedMeshId;
+    if (!id) return;
+    const buckets = (this.scene3dAllGroupBuckets[id] ?? []).map(b => [...b]);
+    buckets[bi] = buckets[bi].filter(c => c !== childId);
+    this.scene3dAllGroupBuckets = { ...this.scene3dAllGroupBuckets, [id]: buckets };
+    this.scene3dApplyFrameLink();
   }
 
   scene3dUpdateMeshPosition(): void {
@@ -2599,11 +2730,35 @@ export class IllustrationComponent implements OnInit {
     const nowVisible = !(node.visible !== false);
     if (node.type === '3DMeshGroup') {
       sm.setGroupVisible3D?.(node.id, nowVisible);
+      this._scene3dSetChildrenVisible(node.children ?? [], nowVisible, sm);
     } else {
       sm.setMeshVisible3D?.(node.id, nowVisible);
     }
     this.scene3dRefreshHierarchy();
     this.scene3dMarkDirty();
+  }
+
+  private _scene3dSetChildrenVisible(children: any[], visible: boolean, sm: any): void {
+    for (const child of children) {
+      if (child.type === '3DMeshGroup') {
+        sm.setGroupVisible3D?.(child.id, visible);
+        this._scene3dSetChildrenVisible(child.children ?? [], visible, sm);
+      } else {
+        sm.setMeshVisible3D?.(child.id, visible);
+      }
+    }
+  }
+
+  private _scene3dReconstructGroups(sm: any, groups: Array<{ name: string; children: string[] }>): void {
+    for (const g of groups) {
+      if (!g.children?.length) continue;
+      const group = sm.scene3d?.createMeshGroup?.(g.name ?? 'Group');
+      const groupId: string | undefined = group?.id;
+      if (!groupId) continue;
+      for (const childId of g.children) {
+        sm.scene3d?.addMeshToGroup?.(childId, groupId);
+      }
+    }
   }
 
   scene3dStartRename(node: any, event: Event): void {
@@ -2802,6 +2957,11 @@ export class IllustrationComponent implements OnInit {
     const sm = this.shapeManager as any;
     sm.scene3d?.setGizmoMode?.(mode);
     sm.setGizmoMode3D?.(mode);
+  }
+
+  scene3dToggleGizmoOrientation(): void {
+    this.scene3dGizmoOrientation = this.scene3dGizmoOrientation === 'world' ? 'local' : 'world';
+    (this.shapeManager as any).setGizmoOrientation3D?.(this.scene3dGizmoOrientation);
   }
 
   scene3dResetCamera(): void {
@@ -5399,7 +5559,13 @@ export class IllustrationComponent implements OnInit {
       const opfsKey = 'local-' + (this.illustration?.uuid ?? '');
       void this.opfsMetadataService.write(opfsKey, state);
       if (this.illustration?.uuid) {
-        await this.localIllustrationService.update({ uuid: this.illustration.uuid, name: this.illustrationTitle ?? this.illustration.name ?? 'Untitled' }).catch(() => {});
+        const docSize = (this.shapeManager as any).getDocumentSize?.() as { w: number; h: number } | null | undefined;
+        const docAspect = docSize?.w && docSize?.h ? docSize.w / docSize.h : undefined;
+        await this.localIllustrationService.update({
+          uuid: this.illustration.uuid,
+          name: this.illustrationTitle ?? this.illustration.name ?? 'Untitled',
+          ...(docAspect !== undefined ? { documentAspect: docAspect } : {}),
+        }).catch(() => {});
       }
       return;
     }
@@ -5463,6 +5629,17 @@ export class IllustrationComponent implements OnInit {
       const allMeshIds = allNodes.map((n: any) => n.id ?? n.nodeId).filter(Boolean) as string[];
       state.meshIds = allMeshIds.length > 0 ? allMeshIds : undefined;
 
+      const hierarchy: any[] = sm3d.getScene3DHierarchy?.() ?? [];
+      const groupsMeta = hierarchy
+        .filter((n: any) => n.type === '3DMeshGroup')
+        .map((g: any) => ({ name: g.name as string, children: ((g.children ?? []) as any[]).map((c: any) => c.id as string).filter(Boolean) }));
+      state.scene3dGroups = groupsMeta.length ? groupsMeta : undefined;
+
+      const bucketKeys = Object.keys(this.scene3dAllGroupBuckets).filter(k => this.scene3dAllGroupBuckets[k]?.length);
+      state.scene3dFrameLinkBuckets = bucketKeys.length
+        ? Object.fromEntries(bucketKeys.map(k => [k, this.scene3dAllGroupBuckets[k]]))
+        : undefined;
+
       if (dirtyMeshIds.length > 0) {
         // getMeshState3D(id) serializes only that mesh — O(1 mesh) instead of O(all meshes)
         const meshUploadTasks = dirtyMeshIds.map(async (id) => {
@@ -5501,6 +5678,15 @@ export class IllustrationComponent implements OnInit {
     } catch (e) {
       console.error('[V2 Save] state save failed', e);
       return;
+    }
+
+    // Sync documentAspect back to the illustration model if it changed
+    if (this.illustration && state.documentSize) {
+      const newAspect = state.documentSize.w / state.documentSize.h;
+      if (this.illustration.documentAspect !== newAspect) {
+        this.illustration.documentAspect = newAspect;
+        this.illustrationService.updateIllustration(this.illustration).subscribe({ error: e => console.warn('[V2 Save] documentAspect update failed', e) });
+      }
     }
 
     // Step 2: Write metadata to OPFS — scene graph, animation config, canvas settings
@@ -5895,7 +6081,11 @@ export class IllustrationComponent implements OnInit {
                 })
               );
               const nodes3d = nodeBlobs.filter(Boolean);
-              if (nodes3d.length) await sm.restoreScene3DNodes?.(nodes3d, {});
+              if (nodes3d.length) {
+                await sm.restoreScene3DNodes?.(nodes3d, {});
+                this._scene3dReconstructGroups(sm, effectiveMeta.scene3dGroups ?? []);
+                this.scene3dAllGroupBuckets = effectiveMeta.scene3dFrameLinkBuckets ?? {};
+              }
               if (effectiveMeta.texLibSasUrl) {
                 const buf = await fetch(effectiveMeta.texLibSasUrl).then(r => r.arrayBuffer());
                 sm.restoreTextureLibrary3D?.(await gunzipFromBinary(buf));
@@ -5912,6 +6102,8 @@ export class IllustrationComponent implements OnInit {
               console.timeLog('[V2 Load] total', 'scene3d-restore-start');
               const nodes3d = await gunzipFromBase64(effectiveMeta.scene3dNodesGzip) as any[];
               await sm.restoreScene3DNodes?.(nodes3d, {});
+              this._scene3dReconstructGroups(sm, effectiveMeta.scene3dGroups ?? []);
+              this.scene3dAllGroupBuckets = effectiveMeta.scene3dFrameLinkBuckets ?? {};
               if (effectiveMeta.textureLibrary3dGzip) {
                 sm.restoreTextureLibrary3D?.(await gunzipFromBase64(effectiveMeta.textureLibrary3dGzip));
                 console.timeLog('[V2 Load] total', 'texture-lib-restored');
@@ -6126,6 +6318,8 @@ export class IllustrationComponent implements OnInit {
             })
           );
           await smAny.restoreScene3DNodes?.(nodeBlobs, {});
+          this._scene3dReconstructGroups(smAny, state.scene3dGroups ?? []);
+          this.scene3dAllGroupBuckets = state.scene3dFrameLinkBuckets ?? {};
           if (state.texLibSasUrl) {
             const buf = await fetch(state.texLibSasUrl).then(r => r.arrayBuffer());
             smAny.restoreTextureLibrary3D?.(await gunzipFromBinary(buf));
@@ -6142,6 +6336,8 @@ export class IllustrationComponent implements OnInit {
           console.timeLog('[V2 Load] total', 'scene3d-restore-start');
           const nodes3d = await gunzipFromBase64(state.scene3dNodesGzip) as any[];
           await smAny.restoreScene3DNodes?.(nodes3d, {});
+          this._scene3dReconstructGroups(smAny, state.scene3dGroups ?? []);
+          this.scene3dAllGroupBuckets = state.scene3dFrameLinkBuckets ?? {};
           if (state.textureLibrary3dGzip) {
             smAny.restoreTextureLibrary3D?.(await gunzipFromBase64(state.textureLibrary3dGzip));
             console.timeLog('[V2 Load] total', 'texture-lib-restored');

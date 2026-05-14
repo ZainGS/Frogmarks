@@ -1,0 +1,6 @@
+<ng-container *ngIf="iconUrl; else matIcon">
+  <img [src]="iconUrl" [attr.data-fm-icon]="name" alt="">
+</ng-container>
+<ng-template #matIcon>
+  <mat-icon [attr.data-fm-icon]="name">{{ name }}</mat-icon>
+</ng-template>

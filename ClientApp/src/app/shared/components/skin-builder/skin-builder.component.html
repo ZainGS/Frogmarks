@@ -1,0 +1,280 @@
+<div class="sb-panel">
+
+  <!-- Header -->
+  <div class="sb-header">
+    <div class="sb-header-left">
+      <span class="sb-title">Skin Builder</span>
+      <span class="sb-subtitle">{{ skinService.hasSkin ? 'Editing skin — dashboard updates live' : 'Changes apply live to the dashboard' }}</span>
+      <span class="sb-ctrl-hint">Hold <kbd>Ctrl</kbd> to hide highlights</span>
+    </div>
+    <div class="sb-header-right">
+      <label class="sb-import-label" [class.disabled]="importing" title="Import .frogui file">
+        <mat-icon>file_upload</mat-icon>
+        <input type="file" accept=".frogui" (change)="onImportSkin($event)" [disabled]="importing" hidden>
+      </label>
+      <button class="sb-icon-btn sb-save-btn"
+              [class.saving]="saving"
+              [class.saved]="saveSuccess"
+              [disabled]="saving || metaForm.invalid"
+              (click)="onSave()"
+              title="Save skin to local storage">
+        <mat-icon>{{ saveSuccess ? 'check' : 'save' }}</mat-icon>
+      </button>
+      <button class="sb-icon-btn" (click)="discardAndClose()" title="Discard changes and close">
+        <mat-icon>undo</mat-icon>
+      </button>
+      <button class="sb-icon-btn" (click)="close()" title="Close and keep changes">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="importError" class="sb-error">{{ importError }}</div>
+
+  <!-- Scrollable body -->
+  <div class="sb-body">
+
+    <!-- Section: Metadata -->
+    <div class="sb-section">
+      <div class="sb-section-title">1 · Metadata</div>
+      <form [formGroup]="metaForm" class="sb-meta-form">
+        <div class="sb-field">
+          <label>Skin name *</label>
+          <input formControlName="name" type="text" class="sb-input" placeholder="e.g. Acid Frog">
+        </div>
+        <div class="sb-field">
+          <label>Author</label>
+          <input formControlName="author" type="text" class="sb-input" placeholder="Your name">
+        </div>
+        <div class="sb-field">
+          <label>Description</label>
+          <textarea formControlName="description" class="sb-input sb-textarea" rows="2" placeholder="A short description…"></textarea>
+        </div>
+      </form>
+    </div>
+
+    <!-- Section: Colors -->
+    <div class="sb-section">
+      <div class="sb-section-title">2 · Colors</div>
+      <div class="sb-color-tabs">
+        <button *ngFor="let g of colorGroups; let i = index"
+                class="sb-tab"
+                [class.active]="activeGroup === i"
+                [class.zone-hover]="hoveredZoneGroup === i"
+                (click)="activeGroup = i"
+                (mouseenter)="onGroupTabHover(i)"
+                (mouseleave)="onGroupTabLeave()">{{ g.label }}</button>
+      </div>
+      <div class="sb-token-list">
+        <div *ngFor="let token of colorGroups[activeGroup].tokens"
+             class="sb-token-row"
+             [class.token-highlight]="highlightedToken === token"
+             (mouseenter)="onTokenRowHover(token)"
+             (mouseleave)="onTokenRowLeave()">
+          <span class="sb-token-label-group">
+            <span class="sb-token-label">{{ tokenLabel(token) }}</span>
+            <span class="sb-help-icon"
+                  (mouseenter)="showTip($event, token)"
+                  (mouseleave)="hideTip()">?</span>
+          </span>
+          <span class="sb-token-controls">
+            <input *ngIf="isColorToken(token)"
+                   type="color"
+                   class="sb-color-input"
+                   [value]="tokens[token]"
+                   (input)="onColorInput(token, $event)">
+            <ng-container *ngIf="isSteppable(token); else freeText">
+              <button class="sb-stepper-btn" (click)="stepToken(token, -1)" tabindex="-1">
+                <mat-icon>remove</mat-icon>
+              </button>
+              <input class="sb-text-input sb-text-input--narrow"
+                     type="text"
+                     [value]="tokens[token]"
+                     (change)="onTextInput(token, $event)">
+              <button class="sb-stepper-btn" (click)="stepToken(token, 1)" tabindex="-1">
+                <mat-icon>add</mat-icon>
+              </button>
+            </ng-container>
+            <ng-template #freeText>
+              <input class="sb-text-input"
+                     type="text"
+                     [value]="tokens[token]"
+                     (change)="onTextInput(token, $event)">
+            </ng-template>
+          </span>
+        </div>
+      </div>
+
+      <!-- Reset button — two-state confirmation -->
+      <ng-container *ngIf="!resetPending; else resetConfirm">
+        <button class="sb-reset-btn" (click)="confirmReset()">Reset all to defaults</button>
+      </ng-container>
+      <ng-template #resetConfirm>
+        <div class="sb-confirm-row">
+          <span class="sb-confirm-label">Are you sure?</span>
+          <button class="sb-confirm-btn sb-confirm-btn--danger" (click)="doReset()">Reset</button>
+          <button class="sb-confirm-btn" (click)="cancelReset()">Cancel</button>
+        </div>
+      </ng-template>
+    </div>
+
+    <!-- Section: Images -->
+    <div class="sb-section">
+      <div class="sb-section-title">3 · Images <span class="sb-section-hint">(optional except preview.png)</span></div>
+
+      <!-- Font upload -->
+      <div class="sb-font-row">
+        <div class="sb-font-label">
+          <span class="sb-slot-label">UI Font</span>
+          <span class="sb-slot-dims">.woff2 / .woff / .ttf / .otf</span>
+        </div>
+        <ng-container *ngIf="skinService.fontFile; else noFont">
+          <span class="sb-font-filename">{{ skinService.fontFile.name }}</span>
+          <button class="sb-icon-remove-btn" (click)="removeFont()">×</button>
+        </ng-container>
+        <ng-template #noFont>
+          <label class="sb-icon-upload-btn">
+            Upload
+            <input type="file"
+                   accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                   (change)="onFontSelected($event)"
+                   hidden>
+          </label>
+        </ng-template>
+      </div>
+
+      <div class="sb-image-grid">
+        <div *ngFor="let slot of imageSlots" class="sb-image-slot"
+             (mouseenter)="onImageSlotHover(slot)"
+             (mouseleave)="onImageSlotLeave()">
+          <div class="sb-slot-header">
+            <span class="sb-slot-label">{{ slot.label }}</span>
+            <span class="sb-slot-dims">{{ slot.dimensions }}</span>
+          </div>
+          <div class="sb-slot-drop"
+               [class.has-image]="imagePreviewUrls.has(slot.assetFile)"
+               [style.background-image]="imagePreviewUrls.has(slot.assetFile) ? 'url(' + imagePreviewUrls.get(slot.assetFile) + ')' : 'none'">
+            <label class="sb-slot-pick" *ngIf="!imagePreviewUrls.has(slot.assetFile)">
+              <mat-icon>add_photo_alternate</mat-icon>
+              <span>Upload</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                     (change)="onImageSelected(slot.assetFile, $event)" hidden>
+            </label>
+            <button *ngIf="imagePreviewUrls.has(slot.assetFile)"
+                    class="sb-slot-remove"
+                    (click)="removeImage(slot.assetFile)">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <span class="sb-slot-filename">{{ slot.assetFile }}</span>
+        </div>
+      </div>
+
+      <!-- Border runner options — shown when a sprite is uploaded -->
+      <div *ngIf="imagePreviewUrls.has('popup-border-sprite.png')" class="sb-runner-options">
+        <div class="sb-runner-label">Border runner</div>
+        <label class="sb-check-row">
+          <input type="checkbox"
+                 [checked]="tokens['--fm-popup-border-outer'] === '1'"
+                 (change)="onTokenChange('--fm-popup-border-outer', $any($event.target).checked ? '1' : '0')">
+          <span>Place on outer frame (over the white border)</span>
+        </label>
+        <label class="sb-check-row">
+          <input type="checkbox"
+                 [checked]="tokens['--fm-popup-border-animate'] === '1'"
+                 (change)="onTokenChange('--fm-popup-border-animate', $any($event.target).checked ? '1' : '0')">
+          <span>Animate (march around the border)</span>
+        </label>
+        <div class="sb-runner-row">
+          <label class="sb-runner-field-label">Sprite size</label>
+          <input class="sb-runner-input" type="text"
+                 [value]="tokens['--fm-popup-border-sprite-size']"
+                 (change)="onTokenChange('--fm-popup-border-sprite-size', $any($event.target).value)">
+        </div>
+        <div class="sb-runner-row">
+          <label class="sb-runner-field-label">Spacing between sprites</label>
+          <input class="sb-runner-input" type="text"
+                 [value]="tokens['--fm-popup-border-sprite-spacing']"
+                 (change)="onTokenChange('--fm-popup-border-sprite-spacing', $any($event.target).value)">
+        </div>
+        <div class="sb-runner-row">
+          <label class="sb-runner-field-label">Animation speed</label>
+          <input class="sb-runner-input" type="text"
+                 [value]="tokens['--fm-popup-border-speed']"
+                 (change)="onTokenChange('--fm-popup-border-speed', $any($event.target).value)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Icons -->
+    <div class="sb-section">
+      <div class="sb-section-title sb-icons-title">
+        4 · Icons
+        <button class="sb-icons-mode-btn"
+                [class.active]="iconsMode"
+                (click)="toggleIconsMode()"
+                [title]="iconsMode ? 'Exit pick mode — dashboard icon clicks restored' : 'Enable click-to-replace — click any icon in the dashboard to upload a replacement'">
+          {{ iconsMode ? '🖱 Exit pick mode' : '🖱 Click to replace' }}
+        </button>
+      </div>
+      <div class="sb-icon-tabs">
+        <button *ngFor="let g of iconGroups; let i = index"
+                class="sb-tab"
+                [class.active]="activeIconGroup === i"
+                [class.zone-hover]="hoveredIconZoneGroup === i"
+                (click)="activeIconGroup = i"
+                (mouseenter)="onIconTabHover(g.group, i)"
+                (mouseleave)="onIconTabLeave()">{{ g.label }}</button>
+      </div>
+      <!-- Base / Hover / Click state selector -->
+      <div class="sb-icon-state-tabs">
+        <button class="sb-state-tab" [class.active]="iconState === 'base'"  (click)="iconState = 'base'">Base</button>
+        <button class="sb-state-tab" [class.active]="iconState === 'hover'" (click)="iconState = 'hover'">Hover</button>
+        <button class="sb-state-tab" [class.active]="iconState === 'click'" (click)="iconState = 'click'">Click</button>
+      </div>
+      <div class="sb-token-list">
+        <div *ngFor="let iconName of iconGroups[activeIconGroup].icons"
+             class="sb-icon-slot-row"
+             (mouseenter)="onIconGroupHover(iconName)"
+             (mouseleave)="onIconGroupLeave()">
+          <fm-icon [name]="iconName" class="sb-icon-preview"></fm-icon>
+          <span class="sb-icon-name">{{ iconLabel(iconName) }}</span>
+          <label class="sb-icon-upload-btn"
+                 [class.has-icon]="skinService.getIconUrl(iconName, iconState)">
+            {{ skinService.getIconUrl(iconName, iconState) ? 'Replace' : 'Upload' }}
+            <input [id]="'fm-icon-input-' + iconName + '-' + iconState"
+                   type="file"
+                   accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                   (change)="onIconFileSelected(iconName, $event, iconState)"
+                   hidden>
+          </label>
+          <button *ngIf="skinService.getIconUrl(iconName, iconState)"
+                  class="sb-icon-remove-btn"
+                  (click)="removeIcon(iconName, iconState)">×</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Export -->
+    <div class="sb-section sb-export-section">
+      <div class="sb-section-title">5 · Export</div>
+      <p class="sb-export-hint">
+        Packages everything into a <code>.frogui</code> file. Assembled in your browser — nothing is uploaded.
+      </p>
+      <button class="sb-export-btn"
+              [disabled]="exporting || metaForm.invalid"
+              (click)="onExport()">
+        <mat-icon>download</mat-icon>
+        {{ exporting ? 'Building…' : 'Download .frogui' }}
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Fixed tooltip — rendered outside sb-body so overflow-y: auto can't clip it -->
+  <div class="sb-float-tip"
+       [class.sb-float-tip--visible]="tipVisible"
+       [style.left.px]="tipX"
+       [style.top.px]="tipY">{{ tipText }}</div>
+
+</div>

@@ -109,6 +109,7 @@ $radius: 6px;
   gap: 3px;
   padding: 5px 8px;
   border-radius: 4px;
+  border-left: 3px solid transparent;
   cursor: pointer;
   position: relative;
   transition: background 0.15s, opacity 0.15s;
@@ -117,19 +118,32 @@ $radius: 6px;
 
   &.active {
     background: rgba($accent, 0.18);
-    border-left: 3px solid $accent;
+    border-left-color: $accent;
   }
 
   &.invisible-layer { opacity: 0.45; }
 
   &.clipped {
     margin-left: 16px;
-    border-left: 2px solid $muted;
+    border-left-color: $muted;
+    border-left-width: 2px;
   }
 
-  &.drag-over {
-    border-top: 2px solid $accent-light;
+  &.drag-over-before::before,
+  &.drag-over-after::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: $accent-light;
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 1;
   }
+
+  &.drag-over-before::before { top: -1px; }
+  &.drag-over-after::after   { bottom: -1px; }
 }
 
 /* ── Clipping indicator ──────────────────────────────────── */

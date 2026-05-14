@@ -1088,7 +1088,7 @@
                                  [class.active]="scene3dSelectedMeshId === node.id"
                                  [class.scene3d-node-hidden]="!node.visible"
                                  [style.paddingLeft.px]="8 + depth * 16"
-                                 (click)="node.type !== '3DMeshGroup' ? scene3dSelectMesh(node.id) : null"
+                                 (click)="scene3dSelectMesh(node.id)"
                                  (mouseenter)="node.type !== '3DMeshGroup' ? scene3dSetHovered(node.id) : null"
                                  (mouseleave)="node.type !== '3DMeshGroup' ? scene3dSetHovered(null) : null">
                                 <button class="scene3d-eye-btn"
@@ -1651,7 +1651,7 @@
                         </div>
                         <div class="scene3d-material-row">
                             <label>{{ scene3dFrameLinkType === 'scroll' ? 'UV/loop' : 'Amplitude' }}</label>
-                            <input type="range" min="0" max="2" step="0.01" [(ngModel)]="scene3dFrameLinkAmplitude" (input)="scene3dApplyFrameLink()">
+                            <input type="range" min="0" [attr.max]="scene3dFrameLinkType === 'scroll' || scene3dFrameLinkType === 'spin' || scene3dFrameLinkType === 'sway' ? 2 : 0.20" step="0.01" [(ngModel)]="scene3dFrameLinkAmplitude" (input)="scene3dApplyFrameLink()">
                             <span class="scene3d-val">{{ scene3dFrameLinkAmplitude | number:'1.2-2' }}</span>
                         </div>
                         <!-- Scroll: show seconds-per-loop; others: show raw frame count -->
@@ -1670,6 +1670,51 @@
                                 <input type="number" step="1" min="1" class="scene3d-input-small" [(ngModel)]="scene3dFrameLinkFramesPerCycle" (input)="scene3dApplyFrameLink()">
                             </div>
                         </ng-container>
+                        <div class="scene3d-material-row">
+                            <label>Phase</label>
+                            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dFrameLinkPhase" (input)="scene3dApplyFrameLink()">
+                            <span class="scene3d-val">{{ scene3dFrameLinkPhase | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dSelectedIsGroup">
+                            <label>Stagger</label>
+                            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dFrameLinkStagger" (input)="scene3dApplyFrameLink()">
+                            <span class="scene3d-val">{{ scene3dFrameLinkStagger | number:'1.2-2' }}</span>
+                        </div>
+
+                        <!-- Phase Buckets — group children that share the same stagger phase offset -->
+                        <div class="scene3d-bucket-section" *ngIf="scene3dSelectedIsGroup">
+                            <div class="scene3d-bucket-header">
+                                <span class="scene3d-bucket-section-label">Phase Buckets</span>
+                                <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dAddBucket()">+ Create Bucket</button>
+                            </div>
+                            <div class="scene3d-bucket" *ngFor="let bucket of scene3dGetCurrentBuckets(); let bi = index">
+                                <div class="scene3d-bucket-title">
+                                    <span>Bucket {{ bi + 1 }}</span>
+                                    <button class="scene3d-bucket-delete" (click)="scene3dRemoveBucket(bi)" title="Delete bucket">×</button>
+                                </div>
+                                <div class="scene3d-bucket-pills" *ngIf="bucket.length > 0">
+                                    <span class="scene3d-bucket-pill" *ngFor="let childId of bucket">
+                                        {{ scene3dGetChildName(childId) }}
+                                        <button (click)="scene3dRemoveChildFromBucket(bi, childId)" title="Remove from bucket">×</button>
+                                    </span>
+                                </div>
+                                <div class="scene3d-bucket-add-row" *ngIf="scene3dGetAvailableChildren().length > 0">
+                                    <select class="scene3d-select" [(ngModel)]="scene3dBucketSelections[bi]">
+                                        <option value="">— add child —</option>
+                                        <option *ngFor="let c of scene3dGetAvailableChildren()" [value]="c.id">{{ c.name }}</option>
+                                    </select>
+                                    <button class="scene3d-btn scene3d-btn-sm"
+                                            [disabled]="!scene3dBucketSelections[bi]"
+                                            (click)="scene3dAddChildToBucket(bi)">+</button>
+                                </div>
+                                <div class="scene3d-bucket-empty-hint" *ngIf="bucket.length === 0 && scene3dGetAvailableChildren().length === 0">
+                                    All children assigned
+                                </div>
+                            </div>
+                            <div class="scene3d-bucket-unbucketed" *ngIf="scene3dGetCurrentBuckets().length > 0 && scene3dGetAvailableChildren().length > 0">
+                                <span class="scene3d-bucket-unbucketed-label">Ungrouped (individual stagger): {{ scene3dGetAvailableChildren().length }}</span>
+                            </div>
+                        </div>
                     </details>
 
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId">
@@ -2651,6 +2696,13 @@
                     <line x1="21" y1="3" x2="14" y2="10"/>
                     <line x1="3" y1="21" x2="10" y2="14"/>
                 </svg>
+            </div>
+            <!-- World / Local orientation toggle -->
+            <div class="vertical-tool-button gizmo-orientation-btn"
+                 [class.selected]="scene3dGizmoOrientation === 'local'"
+                 (click)="scene3dToggleGizmoOrientation()"
+                 [title]="scene3dGizmoOrientation === 'world' ? 'Gizmo: World orientation (click for Local)' : 'Gizmo: Local orientation (click for World)'">
+                <span class="gizmo-orientation-label">{{ scene3dGizmoOrientation === 'world' ? 'W' : 'L' }}</span>
             </div>
         </div><!-- /.tools-3d -->
 

@@ -30,7 +30,8 @@
          [class.active]="activeLayerId === layer.id || selected3DSceneId === layer.id"
          [class.invisible-layer]="!layer.visible"
          [class.clipped]="layer.clipped && isPaintable(layer)"
-         [class.drag-over]="dragOverIndex === i"
+         [class.drag-over-before]="dragOverIndex === i && dragOverPosition === 'before'"
+         [class.drag-over-after]="dragOverIndex === i && dragOverPosition === 'after'"
          [class.rl-folder]="layer.type === 'folder'"
          [class.rl-scene]="layer.type === '3d-scene'"
          [style.padding-left.px]="8 + layer.depth * 16"
@@ -107,7 +108,8 @@
             <input type="range" min="0" max="100" step="1"
                    [value]="layer.opacity * 100"
                    (input)="onOpacityChange(layer, $event)"
-                   (click)="$event.stopPropagation()">
+                   (click)="$event.stopPropagation()"
+                   (mousedown)="$event.stopPropagation()">
             <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
           </div>
         </div>
@@ -190,7 +192,8 @@
             <input type="range" min="0" max="100" step="1"
                    [value]="layer.opacity * 100"
                    (input)="onOpacityChange(layer, $event)"
-                   (click)="$event.stopPropagation()">
+                   (click)="$event.stopPropagation()"
+                   (mousedown)="$event.stopPropagation()">
             <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
           </div>
         </div>

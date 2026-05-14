@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
+import { LocalIllustrationService } from '../../services/illustrate/local-illustration.service';
 
 interface HomeParticle {
   shape: 'circle' | 'square' | 'triangle';
@@ -8,6 +9,17 @@ interface HomeParticle {
   dur:     number;
   delay:   number;
   opacity: number;
+}
+
+interface ThumbnailParticle {
+  dataUrl:  string;
+  width:    number;
+  height:   number;
+  top:      number;
+  dur:      number;
+  delay:    number;
+  opacity:  number;
+  tilt:     number;
 }
 
 @Component({
@@ -25,13 +37,15 @@ export class HomeComponent implements OnInit, OnDestroy {
   exitOverlayActive = false;
 
   particles: HomeParticle[] = [];
+  thumbnailParticles: ThumbnailParticle[] = [];
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private localIllustrationService: LocalIllustrationService) {}
 
   ngOnInit(): void {
     document.body.classList.remove('base-body');
     setTimeout(() => this.showContent = true, 100);
     this._spawnParticles();
+    this._spawnThumbnailParticles();
   }
 
   private _spawnParticles(): void {
@@ -46,6 +60,30 @@ export class HomeComponent implements OnInit, OnDestroy {
         opacity: 0.01 + Math.random() * 0.02,
       });
     }
+  }
+
+  private async _spawnThumbnailParticles(): Promise<void> {
+    try {
+      const items = await this.localIllustrationService.getAll(false);
+      const withThumbs = items.filter(i => i.thumbnailDataUrl);
+      if (withThumbs.length < 3) return;
+
+      // Shuffle and cap at 12
+      const pool = withThumbs.sort(() => Math.random() - 0.5).slice(0, 12);
+      for (const item of pool) {
+        const h = 70 + Math.floor(Math.random() * 80);
+        this.thumbnailParticles.push({
+          dataUrl:  item.thumbnailDataUrl!,
+          width:    Math.round(h * 1.6),
+          height:   h,
+          top:      -5  + Math.random() * 95,
+          dur:      22  + Math.random() * 18,
+          delay:    -(Math.random() * 40),
+          opacity:  0.55 + Math.random() * 0.40,
+          tilt:     -10  + Math.random() * 20,
+        });
+      }
+    } catch { /* OPFS unavailable — shapes-only mode */ }
   }
 
   ngOnDestroy(): void {

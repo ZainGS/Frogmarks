@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ProfileService } from '../auth/profile.service';
+import { OpfsMetadataService } from './opfs-metadata.service';
 
 export type LocalSyncStatus =
   | 'local-only'           // never uploaded — no cloud record
@@ -42,7 +43,7 @@ const STORE = 'illustrations';
 export class LocalIllustrationService {
   private _db: IDBDatabase | null = null;
 
-  constructor(private _profileService: ProfileService) {}
+  constructor(private _profileService: ProfileService, private _opfsMeta: OpfsMetadataService) {}
 
   private async _open(): Promise<IDBDatabase> {
     if (this._db) return this._db;
@@ -175,12 +176,23 @@ export class LocalIllustrationService {
   }
 
   async delete(uuid: string): Promise<void> {
+    // 1. IndexedDB metadata
     const [store] = await this._tx('readwrite');
     await new Promise<void>((resolve, reject) => {
       const req = store.delete(uuid);
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
+
+    // 2. OPFS state JSON (frogmarks/ill-local-{uuid}-meta.json)
+    await this._opfsMeta.delete('local-' + uuid);
+
+    // 3. Salsa raster pixel data (salsa-documents/local-{uuid}/)
+    try {
+      const root = await navigator.storage.getDirectory();
+      const salsaDir = await root.getDirectoryHandle('salsa-documents');
+      await (salsaDir as any).removeEntry('local-' + uuid, { recursive: true });
+    } catch { /* not found — ignore */ }
   }
 
   async archive(uuid: string, isArchived: boolean): Promise<void> {

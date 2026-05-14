@@ -1,22 +1,21 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,200" />
+<!-- Skin builder floating panel -->
+<app-skin-builder *ngIf="showSkinBuilder" (closed)="onSkinBuilderClosed()"></app-skin-builder>
+
 <!-- Frogmarks Dashboard Template -->
-<div class="dashboard-container" [class.dash-initial-load]="initialLoad" [ngStyle]="isFrogmarksGalaxyActive ? { overflow: 'hidden' } : {}">
+<div class="dashboard-container" data-fm-zone="dashboard" [class.dash-initial-load]="initialLoad" [ngStyle]="isFrogmarksGalaxyActive ? { overflow: 'hidden' } : {}">
     <!-- Notification Panel -->
     <div *ngIf="showNotificationPanel" class="notification-panel ps-4 pt-3 pe-4">
       <div class="row">
         <div class="col-8"><b>Notifications</b></div>
         <div class="col-4 text-end pe-4 ">
-          <mat-icon 
-          class="close-icon type-icon material-symbols-outlined"
-          (click)="closeNotificationPanel()">
-            close
-          </mat-icon>
+          <fm-icon name="close" class="close-icon type-icon" (click)="closeNotificationPanel()"></fm-icon>
         </div>
         
       </div>
       <div class="text-center notification-panel-content-empty">
         <div>
-          <mat-icon *ngIf="!isLoading" class="notification-panel-content-empty-icon mb-5">campaign</mat-icon>
+          <fm-icon *ngIf="!isLoading" name="campaign" class="notification-panel-content-empty-icon mb-5"></fm-icon>
           <h5><b>No notifications yet</b></h5>
         </div>
         <div>
@@ -24,21 +23,48 @@
         </div>
       </div>
     </div>
+    <!-- Profile Panel -->
+    <div *ngIf="showProfilePanel" class="notification-panel ps-4 pt-3 pe-4">
+      <div class="row">
+        <div class="col-8"><b>Account</b></div>
+        <div class="col-4 text-end pe-4">
+          <fm-icon name="close" class="close-icon type-icon" (click)="showProfilePanel=false"></fm-icon>
+        </div>
+      </div>
+      <div class="settings-section">
+        <button style="min-width: -webkit-fill-available;" mat-raised-button (click)="onLogout(); showProfilePanel=false">
+          <fm-icon name="logout"></fm-icon> Sign out
+        </button>
+      </div>
+    </div>
     <!-- Settings Panel -->
-    <div *ngIf="showSettingsPanel" class="notification-panel ps-4 pt-3 pe-4">
+    <div *ngIf="showSettingsPanel" class="notification-panel ps-4 pt-3 pe-4" data-fm-zone="storage">
       <div class="row">
         <div class="col-8"><b>Settings</b></div>
         <div class="col-4 text-end pe-4 ">
-          <mat-icon 
-          class="close-icon type-icon material-symbols-outlined"
-          (click)="closeSettingsPanel()">
-            close
-          </mat-icon>
+          <fm-icon name="close" class="close-icon type-icon" (click)="closeSettingsPanel()"></fm-icon>
         </div>
         
       </div>
-      <div>
-        <button class="mt-5" style="min-width: -webkit-fill-available;" mat-raised-button (click)="toggleDarkMode()">Toggle Dark Mode</button>
+      <div class="settings-section">
+        <div class="settings-section-label">Appearance</div>
+        <button *ngIf="!hasSkin" style="min-width: -webkit-fill-available;" mat-raised-button (click)="toggleDarkMode()">Toggle Dark Mode</button>
+        <button style="min-width: -webkit-fill-available;" mat-raised-button (click)="openSkinBuilder()">
+          <fm-icon name="palette"></fm-icon> {{ hasSkin ? 'Edit Skin' : 'Create Skin' }}
+        </button>
+        <input #skinFileInput type="file" accept=".frogui" (change)="onImportSkin($event)" [disabled]="importingSkin" hidden>
+        <button style="min-width: -webkit-fill-available;" mat-raised-button
+                [disabled]="importingSkin"
+                (click)="skinFileInput.click()">
+          <fm-icon name="file_upload"></fm-icon>
+          {{ importingSkin ? 'Importing…' : 'Import .frogui Skin' }}
+        </button>
+        <button *ngIf="hasSkin" style="min-width: -webkit-fill-available;" mat-raised-button (click)="disableSkin()">
+          <fm-icon name="format_color_reset"></fm-icon> Use Default Skin
+        </button>
+        <button *ngIf="!hasSkin && skinService.hasSavedSkin" style="min-width: -webkit-fill-available;" mat-raised-button (click)="enableSavedSkin()">
+          <fm-icon name="palette"></fm-icon> Use Saved Skin
+        </button>
       </div>
       <!-- <div class="text-center notification-panel-content-empty">
         <div>
@@ -53,14 +79,18 @@
     <!-- Base Row -->
     <div class="row flex-nowrap" style="height: -webkit-fill-available;">
         <!-- Base Sidenav Column -->
-        <div class="col-2 base-sidenav-column" 
+        <div class="col-2 base-sidenav-column"
+          data-fm-zone="sidebar"
+          data-fm-token="--fm-sidebar-bg"
           [class.open]="isSidenavOpen"
-          [class.frogmarks-galaxy-compact]="isFrogmarksGalaxyActive"
+          [class.frogmarks-galaxy-compact]="isFrogmarksGalaxyActive || isSidenavCollapsed"
           style="max-height: min-content;">
             <!-- Frogmarks Logo -->
-            <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png" [routerLink]="['/']" style="cursor:pointer">
-            <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png" [routerLink]="['/']" style="cursor:pointer">
-            <img class="compact-logo" src="../../../../assets/images/fishing_frog.png" [routerLink]="['/']" style="cursor:pointer">
+            <div class="sidebar-logo-area">
+              <img *ngIf="this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo-light.png" [routerLink]="['/']" style="cursor:pointer">
+              <img *ngIf="!this.themeService.getDarkMode()" class="frogmarks-logo" src="../../../../assets/images/logo.png" [routerLink]="['/']" style="cursor:pointer">
+              <img class="compact-logo" src="../../../../assets/images/fishing_frog.png" [routerLink]="['/']" style="cursor:pointer">
+            </div>
             <!-- <span style="background-color: blueviolet; 
                          color: white; 
                          padding: 2px 4px 2px 4px; 
@@ -79,130 +109,99 @@
               <!-- Board Type Selection -->
               <div>
                 <ul class="sidenav-list pt-3">
-                  <li class="list-item" 
+                  <li class="list-item"
+                      [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="frogmarksGalaxyClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'frogmarks-galaxy-active': isFrogmarksGalaxyActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">explore</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Explore</label>  
+                    <fm-icon *ngIf="!isLoading" name="explore" class="list-item-icon"
+                             [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Explore</label>
                   </li>
                   <li class="list-item"
+                      [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="designCenterClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'design-center-active': isDesignCenterActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">storefront</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Design Center</label>
+                    <fm-icon *ngIf="!isLoading" name="storefront" class="list-item-icon"
+                             [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Design Center</label>
                   </li>
-                  <li class="list-item" 
+                  <li class="list-item"
+                      [attr.data-fm-token]="isTemplatesActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="templatesClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'templates-active': isTemplatesActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">view_quilt</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Templates</label>
+                    <fm-icon *ngIf="!isLoading" name="view_quilt" class="list-item-icon"
+                             [attr.data-fm-token]="isTemplatesActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isTemplatesActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Templates</label>
                   </li>
-                  <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">history_edu</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Tutorials</label>
+                  <li class="list-item disabled"
+                      data-fm-token="--fm-nav-item-hover-bg"
+                      [ngClass]="{ 'loading-container': isLoading }">
+                    <fm-icon *ngIf="!isLoading" name="history_edu" class="list-item-icon" data-fm-token="--fm-nav-item-icon"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text">Tutorials</label>
                   </li>
-                  <!-- <li class="list-item"
-                      (click)="favoriteClicked()"
-                      [ngClass]="{ 'loading-container': isLoading, 'favorite-filter-active': isFavoritesFilterActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon out">person_play</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Shared with me</label>
-                  </li> -->
+                  <li class="list-item"
+                      [attr.data-fm-token]="isArchivedFilterActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
+                      (click)="archivedClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'archived-filter-active': isArchivedFilterActive }">
+                    <fm-icon *ngIf="!isLoading" name="inventory_2" class="list-item-icon"
+                             [attr.data-fm-token]="isArchivedFilterActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isArchivedFilterActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Archive</label>
+                  </li>
                 </ul>
               </div>
-              <hr class="ms-2 horizontal-line">
+              <hr class="ms-2 me-2 horizontal-line" data-fm-token="--fm-nav-divider">
 
-              <!-- Team Selection -->
+              <!--
               <div class="team-section row ms-0 text-nowrap flex-nowrap">
                 <div class="col-9" [ngClass]="{ 'loading-container': isLoading }">
-                  <!-- <div *ngIf="!isLoading" class="col-2">
-                    <mat-icon class="list-item-icon">people_outline</mat-icon>
-                  </div> -->
                   <div *ngIf="!isLoading" class="col-10 fw-semibold">
-                    <!-- <label class="ms-1">{{currentTeam.name}}</label> -->
                      <label class="ms-1">Teams</label>
-                     
-                    <!-- <span class="team-dropdown-arrow material-symbols-outlined">
-                      keyboard_arrow_down
-                    </span> -->
                   </div>
                 </div>
-
-                <!-- Team Payment Tier -->
                 <div class="col-3 ms-1" [ngClass]="{ 'loading-container': isLoading }">
-                  <span class="team-dropdown-arrow material-symbols-outlined" >
-                      add
-                    </span>
-                  <!-- <label *ngIf="!isLoading" class="payment-tier">Free</label> -->
+                  <span class="team-dropdown-arrow material-symbols-outlined">add</span>
                 </div>
               </div>
-              
-              <!-- Team Content Options -->
               <div class="team-section">
                 <ul class="sidenav-list" [ngClass]="{ 'loading-container': isLoading }">
                   <li class="list-item">
                     <label class="ms-1">{{currentTeam.name}}</label>
                   </li>
-                  <!-- <li class="list-item" (click)="draftsClicked()">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon ">insert_drive_file</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Drafts</label>
-                  </li> -->
-                  <!-- <li class="list-item" (click)="allProjectsClicked()" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">grid_view</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">All Projects</label>
-                  </li> -->
                 </ul>
               </div>
-              <hr class="ms-2 horizontal-line">
+              <hr class="ms-2 me-2 horizontal-line" data-fm-token="--fm-nav-divider">
+              -->
 
-              <!-- Templates & Tools Section -->
-              <div>
-                <ul class="sidenav-list">
-                  <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">view_quilt</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Templates</label>
-                  </li> -->
-                  <!-- Frogmarks Galaxy List Item -->
-                  <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">public</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Frogmarks Galaxy</label>
-                  </li> -->
-                  <!-- Import List Item -->
-                  <!-- <li class="list-item disabled">
-                      <mat-icon class="list-item-icon">file_upload</mat-icon>
-                      <label class="ms-1">Import Board</label>
-                  </li> -->
-                </ul>
-              </div>
-              <!-- <hr class="ms-2 horizontal-line"> -->
               <div class="socials-list" style="height: max-content; justify-content: end;">
                 <ul class="sidenav-list">
-                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
+                  <!--
+                  <li class="list-item" data-fm-token="--fm-nav-item-hover-bg" [ngClass]="{ 'loading-container': isLoading }">
                     <a href="https://discord.gg/wmEbYgwTz5" target="_blank" class="list-link">
-                        <mat-icon *ngIf="!isLoading" class="list-item-icon" style="color: rgb(145, 123, 255);">discord</mat-icon>
-                        <label *ngIf="!isLoading" style="color: rgb(184, 170, 255);" class="ms-1">Join our discord</label>
+                        <fm-icon *ngIf="!isLoading" name="discord" class="list-item-icon" data-fm-token="--fm-nav-item-icon" style="color: rgb(145, 123, 255);"></fm-icon>
+                        <label *ngIf="!isLoading" data-fm-token="--fm-nav-item-text" style="color: rgb(184, 170, 255);" class="ms-1">Join our discord</label>
                     </a>
                   </li>
-                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
+                  <li class="list-item" data-fm-token="--fm-nav-item-hover-bg" [ngClass]="{ 'loading-container': isLoading }">
                     <a href="https://www.instagram.com/frogmarks/" target="_blank" class="list-link">
-                      <mat-icon *ngIf="!isLoading" class="list-item-icon" style="color: rgb(255, 0, 166);">photo_camera</mat-icon>
-                      <label *ngIf="!isLoading" class="ms-1" style="color: rgb(255, 83, 195);">Follow us on instagram</label>
+                      <fm-icon *ngIf="!isLoading" name="photo_camera" class="list-item-icon" data-fm-token="--fm-nav-item-icon" style="color: rgb(255, 0, 166);"></fm-icon>
+                      <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text" style="color: rgb(255, 83, 195);">Follow us on instagram</label>
                     </a>
                   </li>
+                  -->
                   <li class="list-item"
-                      (click)="archivedClicked()"
-                      [ngClass]="{ 'loading-container': isLoading, 'archived-filter-active': isArchivedFilterActive }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">inventory_2</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Archive</label>
+                      data-fm-token="--fm-nav-item-hover-bg"
+                      (click)="updatesClicked()"
+                      [ngClass]="{ 'loading-container': isLoading }">
+                    <fm-icon *ngIf="!isLoading" name="newspaper" class="list-item-icon" data-fm-token="--fm-nav-item-icon"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text">Updates</label>
                   </li>
-                  <li class="list-item" 
-                  (click)="updatesClicked()"
-                  [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">newspaper</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Updates</label>
-                  </li>
-                  <li class="list-item" [ngClass]="{ 'loading-container': isLoading }">
-                    <mat-icon *ngIf="!isLoading" class="list-item-icon">help</mat-icon>
-                    <label *ngIf="!isLoading" class="ms-1">Help & Feedback</label>
+                  <li class="list-item" data-fm-token="--fm-nav-item-hover-bg" [ngClass]="{ 'loading-container': isLoading }">
+                    <fm-icon *ngIf="!isLoading" name="help" class="list-item-icon" data-fm-token="--fm-nav-item-icon"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text">Help & Feedback</label>
                   </li>
                   <!-- Frogmarks Galaxy List Item -->
                   <!-- <li class="list-item disabled" [ngClass]="{ 'loading-container': isLoading }">
@@ -217,41 +216,100 @@
                 </ul>
               </div>
 
-              <!-- OPFS Storage Bar -->
-              <div *ngIf="opfsSupported" class="opfs-sidenav ms-1 me-2 mt-2">
-                <div class="opfs-sidenav-header">
-                  <mat-icon class="opfs-icon">save</mat-icon>
-                  <span class="opfs-label">OPFS Local Storage</span>
-                  <mat-icon class="opfs-info-icon"
-                    matTooltip="Your work is auto-saved locally in your browser (OPFS). Browsers may evict this data if disk space runs critically low. Safari on iOS may clear it after 7 days of inactivity. Make regular backups!"
-                    matTooltipPosition="above"
-                    matTooltipClass="opfs-tooltip">info</mat-icon>
+              <div class="sidebar-spacer"></div>
+
+              <!-- Storage: compact icon when Explore active or sidebar collapsed, full bars otherwise -->
+              <ng-container *ngIf="!isFrogmarksGalaxyActive && !isSidenavCollapsed">
+                <!-- OPFS Storage Bar -->
+                <div *ngIf="opfsSupported" class="opfs-sidenav ms-1 me-2 mt-2" data-fm-zone="storage">
+                  <div class="opfs-sidenav-header">
+                    <fm-icon name="save" class="opfs-icon"></fm-icon>
+                    <span class="opfs-label" data-fm-token="--fm-storage-label-color">OPFS Local Storage</span>
+                    <fm-icon name="info" class="opfs-info-icon"
+                      matTooltip="Your work is auto-saved locally in your browser (OPFS). Browsers may evict this data if disk space runs critically low. Safari on iOS may clear it after 7 days of inactivity. Make regular backups!"
+                      matTooltipPosition="above"
+                      matTooltipClass="opfs-tooltip"></fm-icon>
+                  </div>
+                  <div class="opfs-track opfs-track-full" data-fm-token="--fm-storage-track-bg">
+                    <div class="opfs-fill" data-fm-token="--fm-storage-fill-bg" [style.width.%]="opfsUsagePct" [class.opfs-warn]="opfsUsagePct > 75"></div>
+                  </div>
+                  <div class="opfs-sidenav-footer">
+                    <span class="opfs-stat" data-fm-token="--fm-storage-value-color">~{{ opfsUsageMb | number:'1.0-0' }} MB / {{ opfsQuotaGb | number:'1.1-1' }} GB</span>
+                    <button class="opfs-backup-btn" (click)="downloadLocalBackup()" [disabled]="isBackingUp">
+                      <fm-icon name="download" style="font-size:13px;"></fm-icon>
+                      {{ isBackingUp ? '…' : 'Backup' }}
+                    </button>
+                  </div>
                 </div>
-                <div class="opfs-track opfs-track-full">
-                  <div class="opfs-fill" [style.width.%]="opfsUsagePct" [class.opfs-warn]="opfsUsagePct > 75"></div>
+
+                <!-- Cloud Storage Bar -->
+                <div *ngIf="cloudQuotaGb > 0" class="opfs-sidenav ms-1 me-2 mt-2">
+                  <div class="opfs-sidenav-header">
+                    <fm-icon name="cloud" class="opfs-icon"></fm-icon>
+                    <span class="opfs-label">Cloud Storage</span>
+                    <span *ngIf="cloudIsPro" class="cloud-pro-badge">PRO</span>
+                  </div>
+                  <div class="opfs-track opfs-track-full">
+                    <div class="opfs-fill cloud-fill" [style.width.%]="cloudUsagePct" [class.opfs-warn]="cloudUsagePct > 85"></div>
+                  </div>
+                  <div class="opfs-sidenav-footer">
+                    <span class="opfs-stat">{{ cloudUsedMb | number:'1.0-0' }} MB / {{ cloudQuotaGb | number:'1.0-0' }} GB</span>
+                  </div>
                 </div>
-                <div class="opfs-sidenav-footer">
-                  <span class="opfs-stat">~{{ opfsUsageMb | number:'1.0-0' }} MB / {{ opfsQuotaGb | number:'1.1-1' }} GB</span>
-                  <button class="opfs-backup-btn" (click)="downloadLocalBackup()" [disabled]="isBackingUp">
-                    <mat-icon style="font-size:13px;width:13px;height:13px;line-height:13px;">download</mat-icon>
-                    {{ isBackingUp ? '…' : 'Backup' }}
-                  </button>
+              </ng-container>
+
+              <!-- Left chevrons (expanded sidebar → collapse) -->
+              <div *ngIf="!isFrogmarksGalaxyActive && !isSidenavCollapsed"
+                   class="sidebar-collapse-row"
+                   (click)="toggleSidenavCollapsed()">
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+                <span class="sidebar-chev sidebar-chev--left"></span>
+              </div>
+
+              <!-- Compact storage icon (Explore mode or collapsed sidebar) -->
+              <div *ngIf="(isFrogmarksGalaxyActive || isSidenavCollapsed) && (opfsSupported || cloudQuotaGb > 0)" class="opfs-compact">
+                <fm-icon name="save" class="opfs-compact-icon"></fm-icon>
+                <div class="opfs-compact-popup">
+                  <ng-container *ngIf="opfsSupported">
+                    <div class="opfs-compact-row">
+                      <fm-icon name="save" class="opfs-compact-row-icon"></fm-icon>
+                      <span class="opfs-compact-label">Local</span>
+                      <span class="opfs-compact-stat">~{{ opfsUsageMb | number:'1.0-0' }} MB / {{ opfsQuotaGb | number:'1.1-1' }} GB</span>
+                    </div>
+                    <div class="opfs-compact-track">
+                      <div class="opfs-compact-fill" [style.width.%]="opfsUsagePct" [class.opfs-warn]="opfsUsagePct > 75"></div>
+                    </div>
+                  </ng-container>
+                  <ng-container *ngIf="cloudQuotaGb > 0">
+                    <div class="opfs-compact-row" [class.opfs-compact-row--mt]="opfsSupported">
+                      <fm-icon name="cloud" class="opfs-compact-row-icon"></fm-icon>
+                      <span class="opfs-compact-label">Cloud</span>
+                      <span class="opfs-compact-stat">{{ cloudUsedMb | number:'1.0-0' }} MB / {{ cloudQuotaGb | number:'1.0-0' }} GB</span>
+                    </div>
+                    <div class="opfs-compact-track">
+                      <div class="opfs-compact-fill opfs-compact-fill--cloud" [style.width.%]="cloudUsagePct" [class.opfs-warn]="cloudUsagePct > 85"></div>
+                    </div>
+                  </ng-container>
                 </div>
               </div>
 
-              <!-- Cloud Storage Bar -->
-              <div *ngIf="cloudQuotaGb > 0" class="opfs-sidenav ms-1 me-2 mt-2">
-                <div class="opfs-sidenav-header">
-                  <mat-icon class="opfs-icon">cloud</mat-icon>
-                  <span class="opfs-label">Cloud Storage</span>
-                  <span *ngIf="cloudIsPro" class="cloud-pro-badge">PRO</span>
-                </div>
-                <div class="opfs-track opfs-track-full">
-                  <div class="opfs-fill cloud-fill" [style.width.%]="cloudUsagePct" [class.opfs-warn]="cloudUsagePct > 85"></div>
-                </div>
-                <div class="opfs-sidenav-footer">
-                  <span class="opfs-stat">{{ cloudUsedMb | number:'1.0-0' }} MB / {{ cloudQuotaGb | number:'1.0-0' }} GB</span>
-                </div>
+              <!-- Right chevron (collapsed sidebar → expand), always last in sidebar -->
+              <div *ngIf="!isFrogmarksGalaxyActive && isSidenavCollapsed"
+                   class="sidebar-collapse-row sidebar-collapse-row--expand"
+                   (click)="toggleSidenavCollapsed()">
+                <span class="sidebar-chev sidebar-chev--right"></span>
               </div>
 
             </div>
@@ -272,16 +330,17 @@
           </div>
 
           <!-- Header toolbar for the Base Work Pane -->
-          <div *ngIf="!isFrogmarksGalaxyActive && !isUpdatesActive" class="row header-row" [ngClass]="{ 'loading-container': isLoading }">
+          <div *ngIf="!isFrogmarksGalaxyActive && !isUpdatesActive" class="row header-row" data-fm-zone="header" data-fm-token="--fm-header-bg" [ngClass]="{ 'loading-container': isLoading }">
             <!-- Search Column -->
             <div class="col-6">
-              <div *ngIf="!isLoading" class="search-wrapper ms-1">
-                <mat-icon class="search-icon">search</mat-icon>
+              <div *ngIf="!isLoading" class="search-wrapper ms-1" data-fm-token="--fm-search-bg">
+                <fm-icon name="search" class="search-icon" data-fm-token="--fm-search-icon"></fm-icon>
                 <input
                   class="search-bar"
                   matInput
                   placeholder="Search for anything"
                   type="text"
+                  data-fm-token="--fm-search-text"
                   [matAutocomplete]="filteredSearchItems.length ? auto : null"
                   [formControl]="searchControl"
                   (input)="onSearch()"
@@ -293,30 +352,18 @@
             <!-- Actions & Settings Column -->
             <div class="col-6 text-end text-nowrap row-padding-right-negation" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
               <button [hidden]="!isTeamSelected" *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button>
-                <mat-icon>add</mat-icon>
+                <fm-icon name="add"></fm-icon>
                 Invite members
               </button>
               <button [hidden]="!isTeamSelected" style="color: rgb(192, 192, 192) !important; background-color: black !important;" *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
                 <span>Upgrade</span>
               </button>
-              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button
-                      [class.batch-mode-active]="batchMode"
-                      (click)="toggleBatchMode()"
-                      [title]="batchMode ? 'Exit selection mode' : 'Select multiple items'">
-                <mat-icon>{{ batchMode ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-              </button>
-              <button *ngIf="!isLoading" class="ms-2 align-top header-action-button-first" mat-icon-button (click)="showNotificationPanel=true"><mat-icon>notifications_none</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon>settings</mat-icon></button>
+              <button *ngIf="!isLoading" class="ms-2 align-top header-action-button-first" mat-icon-button (click)="showNotificationPanel=true"><fm-icon name="notifications_none"></fm-icon></button>
+              <button *ngIf="!isLoading" class="align-top header-action-button" mat-icon-button (click)="showSettingsPanel=true;"><fm-icon name="settings"></fm-icon></button>
               <button *ngIf="!isLoading && isLoggedIn" class="align-top header-action-button" mat-icon-button
-                      [matMenuTriggerFor]="profileMenu">
-                <mat-icon>person</mat-icon>
+                      (click)="showProfilePanel=true">
+                <fm-icon name="person"></fm-icon>
               </button>
-              <mat-menu #profileMenu="matMenu" xPosition="before">
-                <button mat-menu-item (click)="onLogout()">
-                  <mat-icon>logout</mat-icon>
-                  Sign out
-                </button>
-              </mat-menu>
               <button *ngIf="!isLoading && !isLoggedIn" class="signin-header-btn" mat-stroked-button
                       (click)="onPersonButtonClicked()">
                 Sign In
@@ -326,17 +373,17 @@
           </div>
 
           <!-- Row: Add new file in Design Center -->
-          <div class="d-flex pe-1 container-fluid gap-2 pt-3 fw-normal new-file-row" *ngIf="isDesignCenterActive">
+          <div class="d-flex pe-1 container-fluid gap-2 pt-3 fw-normal new-file-row" data-fm-zone="action-cards" *ngIf="isDesignCenterActive">
             <!-- New Board File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" data-fm-token="--fm-action-card-bg" (click)="newBoardButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
-                <div class="col-3 col-md-2 align-content-center">
-                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                <div class="col-3 col-md-2 align-content-center" data-fm-token="--fm-action-card-icon">
+                  <fm-icon *ngIf="!isLoading" name="add" class="dark-icon"></fm-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New whiteboard</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title" data-fm-token="--fm-action-card-title">New whiteboard</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Doodle with friends!</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold" data-fm-token="--fm-action-card-subtitle">Doodle with friends!</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -348,15 +395,15 @@
             </div>
 
             <!-- New Slide Deck File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newIllustrationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" data-fm-token="--fm-action-card-bg" (click)="newIllustrationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }">
               <div class="row ms-0 me-0">
-                <div class="col-3 col-md-2 align-content-center">
-                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                <div class="col-3 col-md-2 align-content-center" data-fm-token="--fm-action-card-icon">
+                  <fm-icon *ngIf="!isLoading" name="add" class="dark-icon"></fm-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New illustration</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title" data-fm-token="--fm-action-card-title">New illustration</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Vector, raster, and 3D layers</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold" data-fm-token="--fm-action-card-subtitle">Vector, raster, and 3D layers</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -368,15 +415,15 @@
             </div>
 
             <!-- New Animation File -->
-            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" (click)="newAnimationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }" style="cursor: pointer;">
+            <div class="new-design-item-container position-relative overflow-hidden flex-grow-1" data-fm-token="--fm-action-card-bg" (click)="newAnimationButtonClicked()" [ngClass]="{ 'loading-container': isLoading }" style="cursor: pointer;">
               <div class="row ms-0 me-0">
-                <div class="col-3 col-md-2 align-content-center">
-                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                <div class="col-3 col-md-2 align-content-center" data-fm-token="--fm-action-card-icon">
+                  <fm-icon *ngIf="!isLoading" name="add" class="dark-icon"></fm-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">New animation</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title" data-fm-token="--fm-action-card-title">New animation</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Frame-by-frame animation</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold" data-fm-token="--fm-action-card-subtitle">Frame-by-frame animation</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -389,17 +436,18 @@
 
             <!-- Import File -->
             <div class="new-design-item-container position-relative overflow-hidden flex-grow-1 d-none d-xl-block"
+                 data-fm-token="--fm-action-card-bg"
                  (click)="importFrogFile()"
                  [ngClass]="{ 'loading-container': isLoading }"
                  style="cursor: pointer;">
               <div class="row ms-0 me-0">
-                <div class="col-3 col-md-2 align-content-center">
-                  <mat-icon *ngIf="!isLoading" class="dark-icon">add</mat-icon>
+                <div class="col-3 col-md-2 align-content-center" data-fm-token="--fm-action-card-icon">
+                  <fm-icon *ngIf="!isLoading" name="add" class="dark-icon"></fm-icon>
                 </div>
                 <div class="col-9 col-md-9 text-start">
-                  <label *ngIf="!isLoading" class="new-design-item-title">Import</label>
+                  <label *ngIf="!isLoading" class="new-design-item-title" data-fm-token="--fm-action-card-title">Import</label>
                   <br>
-                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold">Open a .frog file</label>
+                  <label *ngIf="!isLoading" class="new-design-item-subtitle fw-bold" data-fm-token="--fm-action-card-subtitle">Open a .frogmarks file</label>
                 </div>
               </div>
               <!-- Button Design -->
@@ -462,7 +510,17 @@
           <div *ngIf="!isFrogmarksGalaxyActive" class="row pt-3 fw-normal display-6 ps-4" >
             <!-- <span *ngIf="!isLoading && isDesignCenterActive">Design Center</span> -->
             <span *ngIf="!isLoading && isFavoritesFilterActive">My Files</span>
-            <span *ngIf="!isLoading && isArchivedFilterActive">Archive</span>
+            <span *ngIf="!isLoading && isArchivedFilterActive" class="archive-title-row">
+              Archive
+              <ng-container *ngIf="filteredListItems.length > 0">
+                <button *ngIf="!deleteAllPending" class="dash-reset-btn" (click)="confirmDeleteAll()">Delete all</button>
+                <div *ngIf="deleteAllPending" class="dash-confirm-row">
+                  <span class="dash-confirm-label">Permanently delete all?</span>
+                  <button class="dash-confirm-btn dash-confirm-btn--danger" (click)="doDeleteAll()">Delete</button>
+                  <button class="dash-confirm-btn" (click)="cancelDeleteAll()">Cancel</button>
+                </div>
+              </ng-container>
+            </span>
             <span *ngIf="!isLoading && isUpdatesActive">Updates</span>
             <span *ngIf="!isLoading && isTemplatesActive">Templates</span>
           </div>
@@ -494,14 +552,17 @@
             </div>
           </div>
 
-          <div *ngIf="isDesignCenterActive" class="mobile-chips-row row pe-4 fw-normal display-6">
+          <div *ngIf="isDesignCenterActive" class="mobile-chips-row row pe-4 fw-normal display-6" data-fm-zone="chips">
             <div class="col-4" [ngClass]="{ 'loading-container': isLoading }">
               <mat-chip-set class="mobile-chips">
                 <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 1 ? 'selected-chip' : 'unselected-chip'"
+                          [attr.data-fm-token]="currentRecentCreationsTab === 1 ? '--fm-chip-selected-bg' : '--fm-chip-unselected-bg'"
                           (click)="setRecentCreationsTab(1)">Recently viewed</mat-chip>
                 <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 2 ? 'selected-chip' : 'unselected-chip'"
+                          [attr.data-fm-token]="currentRecentCreationsTab === 2 ? '--fm-chip-selected-bg' : '--fm-chip-unselected-bg'"
                           (click)="setRecentCreationsTab(2)">Shared files</mat-chip>
                 <mat-chip *ngIf="!isLoading" [ngClass]="currentRecentCreationsTab === 3 ? 'selected-chip' : 'unselected-chip'"
+                          [attr.data-fm-token]="currentRecentCreationsTab === 3 ? '--fm-chip-selected-bg' : '--fm-chip-unselected-bg'"
                           (click)="setRecentCreationsTab(3)">Shared projects</mat-chip>
               </mat-chip-set>
             </div>
@@ -513,18 +574,14 @@
                   <mat-chip *ngIf="!isLoading" class="teamname-dropdown-chip file-filter-chip">
                     All teams
                   </mat-chip>
-                  <span class="sortorder-dropdown-arrow material-symbols-outlined">
-                    keyboard_arrow_down
-                  </span>
+                  <fm-icon name="keyboard_arrow_down" class="sortorder-dropdown-arrow"></fm-icon>
                 </span>
 
                 <span class="align-content-center" (click)="toggleFileTypeDropdown()">
                   <mat-chip *ngIf="!isLoading" class="filetype-dropdown-chip file-filter-chip">
-                    All files
+                    {{fileTypeDropdownText[fileType]}}
                   </mat-chip>
-                  <span class="filetype-dropdown-arrow material-symbols-outlined">
-                    keyboard_arrow_down
-                  </span>
+                  <fm-icon name="keyboard_arrow_down" class="filetype-dropdown-arrow"></fm-icon>
                   <div [hidden]="!showFileTypeDropdown" (click)="$event.stopPropagation()" class="menu-container">
                     <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
 
@@ -534,7 +591,7 @@
                            [ngClass]="{ 'selected-dropdown-option': fileType == 0 }"
                            [@slideInOut]="fileType == 0 ? 'flash-in' : 'out'"
                            (click)="changeFileType(0)">
-                        All files
+                        All file types
                       </div>
 
                       <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
@@ -562,13 +619,53 @@
                   </div>
                 </span>
 
+                <span class="align-content-center ms-0" (click)="toggleStorageDropdown()">
+                  <mat-chip *ngIf="!isLoading" class="storage-dropdown-chip file-filter-chip ms-0">
+                    {{storageFilterText[storageFilter]}}
+                  </mat-chip>
+                  <fm-icon name="keyboard_arrow_down" class="storage-dropdown-arrow"></fm-icon>
+                  <div [hidden]="!showStorageDropdown" (click)="$event.stopPropagation()" class="menu-container">
+                    <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
+
+                      <div class="row pb-2 menu-header">Storage</div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': storageFilter == 0 }"
+                           [@slideInOut]="storageFilter == 0 ? 'flash-in' : 'out'"
+                           (click)="changeStorageFilter(0)">
+                        All storage
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': storageFilter == 1 }"
+                           [@slideInOut]="storageFilter == 1 ? 'flash-in' : 'out'"
+                           (click)="changeStorageFilter(1)">
+                        Local-Only
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': storageFilter == 2 }"
+                           [@slideInOut]="storageFilter == 2 ? 'flash-in' : 'out'"
+                           (click)="changeStorageFilter(2)">
+                        No-Cloud
+                      </div>
+
+                      <div class="row mb-1 pb-1 pt-1 me-0 ps-3 dropdown-option"
+                           [ngClass]="{ 'selected-dropdown-option': storageFilter == 3 }"
+                           [@slideInOut]="storageFilter == 3 ? 'flash-in' : 'out'"
+                           (click)="changeStorageFilter(3)">
+                        Cloud-Only
+                      </div>
+
+                    </div>
+                  </div>
+                </span>
+
                 <span class="align-content-center ms-0" (click)="toggleSortOrderDropdown()">
                   <mat-chip *ngIf="!isLoading" class="sortorder-dropdown-chip file-filter-chip ms-0">
                     {{sortOrderDropdownText[sortBy]}}
                   </mat-chip>
-                  <span class="sortorder-dropdown-arrow material-symbols-outlined">
-                    keyboard_arrow_down
-                  </span>
+                  <fm-icon name="keyboard_arrow_down" class="sortorder-dropdown-arrow"></fm-icon>
                   <div [hidden]="!showSortOrderDropdown" (click)="$event.stopPropagation()" class="menu-container">
                     <div class="menu-content ms-3 ps-4 pt-2 pb-2 shadow">
 
@@ -634,23 +731,31 @@
                 <button (click)="gridViewClicked()"
                         class="ms-1 align-bottom file-filter-grid"
                         [ngClass]="{ 'grid-view-selected': viewType == 'grid' }"
-                        mat-icon-button>
-                  <mat-icon>grid_view</mat-icon>
+                        mat-icon-button
+                        title="Grid view">
+                  <fm-icon name="grid_view"></fm-icon>
+                </button>
+                <button (click)="masonryViewClicked()"
+                        class="align-bottom file-filter-masonry"
+                        [ngClass]="{ 'masonry-view-selected': viewType == 'masonry' }"
+                        mat-icon-button
+                        title="Masonry view">
+                  <fm-icon name="view_quilt"></fm-icon>
                 </button>
                 <button (click)="listViewClicked()"
                         class="align-bottom file-filter-list"
                         [ngClass]="{ 'list-view-selected': viewType == 'list' }"
-                        mat-icon-button>
-                  <mat-icon>menu</mat-icon>
+                        mat-icon-button
+                        title="List view">
+                  <fm-icon name="menu"></fm-icon>
                 </button>
               </mat-chip-set>
             </div>
           </div>
 
 
-          <!-- List Items View -->
+          <!-- Grid View (justified NSO-style rows) -->
           <div *ngIf="viewType == 'grid' && !isFrogmarksGalaxyActive" class="row pe-1 ps-4 pe-1 pt-3 fw-normal">
-
 
             <div *ngIf="isLoggedIn && filteredListItems.length == 0 && !isLoadingItems"
                  [ngClass]="{ 'loading-container': isLoading }"
@@ -661,7 +766,7 @@
               </label>
               <label class="text-center" *ngIf="!isLoading && isArchivedFilterActive">
                 <div style="background-color: var(--selected-chip-color); padding: 8px; max-width: min-content; justify-self: center; border-radius: 4px; margin-bottom: 4px;">
-                  <mat-icon>delete_forever</mat-icon>
+                  <fm-icon name="delete_forever"></fm-icon>
                 </div>
                 Your trash can is empty.<br/>
                 <span style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 16px; font-weight: 400;">Here you can restore or permanently delete your archived items.</span>
@@ -670,12 +775,14 @@
 
             <div *ngIf="!isLoading && filteredListItems.length > 0"
                  class="grid-container"
+                 data-fm-zone="gallery"
                  #gridContainer
                  [class.overlay-open]="overlayOpen">
               <div class="grid-row" *ngFor="let row of gridRows" [style.height.px]="row.height">
                 <div class="grid-item"
                      *ngFor="let ri of row.items; trackBy: trackByRowItem"
                      [style.flex]="ri.aspect + ' 1 0'"
+                     [style.max-width.px]="row.isPartial ? ri.maxWidth : null"
                      [class.pressed]="pressedIndex === ri.globalIndex"
                      [class.lift]="releasedIndex === ri.globalIndex"
                      [class.rotate-left]="isLeftHalf(ri.globalIndex)"
@@ -685,28 +792,19 @@
                      [class.grid-item--batch-selected]="selectedItems.has(ri.item.uuid)"
                      [attr.data-item-id]="ri.item.uuid"
                      [style.--fade-delay]="(ri.globalIndex * 12) + 'ms'"
-                     (mousedown)="batchMode ? toggleGridItemSelection($event, ri.item.uuid) : onGridItemMouseDown(ri.item, ri.globalIndex, $event)"
-                     (mouseup)="batchMode ? null : onGridItemMouseUp(ri.item, ri.globalIndex, $event)"
+                     (mousedown)="onGridItemMouseDown(ri.item, ri.globalIndex, $event)"
+                     (mouseup)="onGridItemMouseUp(ri.item, ri.globalIndex, $event)"
                      (mouseleave)="onGridItemMouseLeave(ri.globalIndex)"
                      (click)="$event.stopPropagation()"
                      (contextmenu)="openBoardMenu($event, ri.item)">
                   <div class="image-wrapper">
-                    <!-- Batch mode checkbox overlay -->
-                    <div *ngIf="batchMode || selectedItems.has(ri.item.uuid)"
+                    <div *ngIf="selectedItems.has(ri.item.uuid)"
                          class="batch-checkbox"
                          [class.batch-checkbox--checked]="selectedItems.has(ri.item.uuid)"
                          (click)="toggleGridItemSelection($event, ri.item.uuid)">
-                      <mat-icon>{{ selectedItems.has(ri.item.uuid) ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                      <fm-icon [name]="selectedItems.has(ri.item.uuid) ? 'check_circle' : 'radio_button_unchecked'"></fm-icon>
                     </div>
-                    <img [src]="getThumbnailSrc(ri.item)"
-                         class="thumbnail-img">
-                    <div class="favorite-icon-wrapper">
-                      <mat-icon class="favorite-icon HeartAnimation"
-                                [ngClass]="{ 'material-symbols-outlined': !isFavorite(ri.item.uuid), 'favorited-icon': isFavorite(ri.item.uuid), 'heart-animate': isFavorite(ri.item.uuid) }"
-                                (click)="toggleFavorite(ri.item.uuid, ri.item); $event.stopPropagation()">
-                      </mat-icon>
-                    </div>
-                    <!-- Sync status badge (local illustrations only) -->
+                    <img [src]="getThumbnailSrc(ri.item)" class="thumbnail-img">
                     <div class="sync-status-badge"
                          *ngIf="$any(ri.item).syncStatus"
                          [ngClass]="'sync-status-badge--' + $any(ri.item).syncStatus"
@@ -716,13 +814,11 @@
                         {{ getSyncStatusIcon($any(ri.item).syncStatus) }}
                       </mat-icon>
                     </div>
-                    <!-- Name / date overlay — hidden until hover -->
                     <div class="item-overlay" *ngIf="editingId !== ri.item.uuid">
-                      <span class="item-overlay-name">{{ ri.item.name }}</span>
-                      <span class="item-overlay-date">Edited {{ $any(ri.item).dateModified | date:'short' }}</span>
+                      <span class="item-overlay-name" data-fm-token="--fm-overlay-title-color">{{ ri.item.name }}</span>
+                      <span class="item-overlay-date" data-fm-token="--fm-overlay-date-color">Edited {{ $any(ri.item).dateModified | date:'short' }}</span>
                     </div>
                   </div>
-                  <!-- Rename input -->
                   <div class="rename-area" *ngIf="editingId === ri.item.uuid">
                     <input #renameInput
                            class="rename-input"
@@ -736,7 +832,84 @@
               </div>
             </div>
 
+          </div>
 
+          <!-- Masonry View (variable-height columns) -->
+          <div *ngIf="viewType == 'masonry' && !isFrogmarksGalaxyActive" class="row pe-1 ps-4 pe-1 pt-3 fw-normal">
+
+            <div *ngIf="isLoggedIn && filteredListItems.length == 0 && !isLoadingItems"
+                 [ngClass]="{ 'loading-container': isLoading }"
+                 class="row ms-1 files-container justify-content-center align-content-center"
+                 style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 22px; font-weight: 800;">
+              <label class="text-center me-5" *ngIf="!isLoading && !isArchivedFilterActive">
+                Couldn't find any matches. Try adjusting your filters.
+              </label>
+              <label class="text-center" *ngIf="!isLoading && isArchivedFilterActive">
+                <div style="background-color: var(--selected-chip-color); padding: 8px; max-width: min-content; justify-self: center; border-radius: 4px; margin-bottom: 4px;">
+                  <fm-icon name="delete_forever"></fm-icon>
+                </div>
+                Your trash can is empty.<br/>
+                <span style="height: 400px; width: 100%; color:var(--text-color); background-color: var(--background-color); font-size: 16px; font-weight: 400;">Here you can restore or permanently delete your archived items.</span>
+              </label>
+            </div>
+
+            <div *ngIf="!isLoading && filteredListItems.length > 0"
+                 class="masonry-container"
+                 data-fm-zone="gallery"
+                 #gridContainer
+                 [class.overlay-open]="overlayOpen">
+              <div class="masonry-col" *ngFor="let col of masonryColumns">
+                <div class="masonry-item"
+                     *ngFor="let mi of col; trackBy: trackByMasonryItem"
+                     [style.height.px]="mi.height"
+                     [class.pressed]="pressedIndex === mi.globalIndex"
+                     [class.lift]="releasedIndex === mi.globalIndex"
+                     [class.rotate-left]="isLeftHalf(mi.globalIndex)"
+                     [class.rotate-right]="!isLeftHalf(mi.globalIndex)"
+                     [class.selected]="overlayIndex === mi.globalIndex"
+                     [class.masonry-item--exit]="_exitingIds.has(mi.item.uuid)"
+                     [class.masonry-item--batch-selected]="selectedItems.has(mi.item.uuid)"
+                     [attr.data-item-id]="mi.item.uuid"
+                     [style.--fade-delay]="(mi.globalIndex * 12) + 'ms'"
+                     (mousedown)="onGridItemMouseDown(mi.item, mi.globalIndex, $event)"
+                     (mouseup)="onGridItemMouseUp(mi.item, mi.globalIndex, $event)"
+                     (mouseleave)="onGridItemMouseLeave(mi.globalIndex)"
+                     (click)="$event.stopPropagation()"
+                     (contextmenu)="openBoardMenu($event, mi.item)">
+                  <div class="image-wrapper">
+                    <div *ngIf="selectedItems.has(mi.item.uuid)"
+                         class="batch-checkbox"
+                         [class.batch-checkbox--checked]="selectedItems.has(mi.item.uuid)"
+                         (click)="toggleGridItemSelection($event, mi.item.uuid)">
+                      <fm-icon [name]="selectedItems.has(mi.item.uuid) ? 'check_circle' : 'radio_button_unchecked'"></fm-icon>
+                    </div>
+                    <img [src]="getThumbnailSrc(mi.item)" class="thumbnail-img">
+                    <div class="sync-status-badge"
+                         *ngIf="$any(mi.item).syncStatus"
+                         [ngClass]="'sync-status-badge--' + $any(mi.item).syncStatus"
+                         [title]="$any(mi.item).syncStatus">
+                      <mat-icon class="sync-status-icon"
+                                [class.sync-spin]="$any(mi.item).syncStatus === 'syncing'">
+                        {{ getSyncStatusIcon($any(mi.item).syncStatus) }}
+                      </mat-icon>
+                    </div>
+                    <div class="item-overlay" *ngIf="editingId !== mi.item.uuid">
+                      <span class="item-overlay-name" data-fm-token="--fm-overlay-title-color">{{ mi.item.name }}</span>
+                      <span class="item-overlay-date" data-fm-token="--fm-overlay-date-color">Edited {{ $any(mi.item).dateModified | date:'short' }}</span>
+                    </div>
+                  </div>
+                  <div class="rename-area" *ngIf="editingId === mi.item.uuid">
+                    <input #renameInput
+                           class="rename-input"
+                           [formControl]="nameControl"
+                           (keydown.enter)="commitInlineRename(mi.item)"
+                           (keydown.escape)="cancelInlineRename()"
+                           (blur)="commitInlineRename(mi.item)" />
+                    <div class="rename-hint">Enter to save • Esc to cancel</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
           </div>
 
@@ -771,29 +944,27 @@
                   </div>
 
                   <!-- Text on right -->
-                  <div class="ms-3 flex-grow-1 text-start fw-bold" style="font-size: 12px;">
-                    {{ listItem.name }}
-                    <span *ngIf="$any(listItem).syncMode === 1 || $any(listItem).syncMode === 2"
-                          class="sync-badge-inline"
-                          [title]="$any(listItem).syncMode === 2 ? 'Local only — stored in this browser' : 'No-cloud — pixel data on this device'">
-                      {{ $any(listItem).syncMode === 2 ? 'local' : 'no-cloud' }}
-                    </span><br/>
-                    <span class="fw-bold" class="edited-time">Edited {{ listItem.dateModified | date:'short' }}</span>
+                  <div class="ms-3 flex-grow-1 text-start" style="font-size: 12px;">
+                    <div *ngIf="$any(listItem).syncMode === 1 || $any(listItem).syncMode === 2" class="list-item-badge-row">
+                      <span class="sync-badge-inline"
+                            [title]="$any(listItem).syncMode === 2 ? 'Local only — stored in this browser' : 'No-cloud — pixel data on this device'">
+                        {{ $any(listItem).syncMode === 2 ? 'local' : 'no-cloud' }}
+                      </span>
+                    </div>
+                    <div class="fw-bold">{{ listItem.name }}</div>
+                    <div class="edited-time">Edited {{ listItem.dateModified | date:'short' }}</div>
                   </div>
 
                   <!-- Icons -->
-                  <mat-icon class="type-icon material-symbols-outlined ms-auto">draw</mat-icon>
+                  <fm-icon name="draw" class="type-icon ms-auto"></fm-icon>
 
-                  <div class="favorite-icon-wrapper ms-2">
-                    <mat-icon class="favorite-icon HeartAnimation"
-                              [ngClass]="{ 
-                                  'material-symbols-outlined': !isFavorite(listItem.uuid), 
-                                  'favorited-icon': isFavorite(listItem.uuid), 
-                                  'heart-animate': isFavorite(listItem.uuid) 
-                              }"
-                              (click)="toggleFavorite(listItem.uuid, listItem)">
-                    </mat-icon>
-                  </div>
+                  <!-- <div class="favorite-icon-wrapper ms-2">
+                    <fm-icon [name]="isFavorite(listItem.uuid) ? 'favorite' : 'favorite_border'"
+                             class="favorite-icon HeartAnimation"
+                             [class.favorited-icon]="isFavorite(listItem.uuid)"
+                             [class.heart-animate]="isFavorite(listItem.uuid)"
+                             (click)="toggleFavorite(listItem.uuid, listItem)"></fm-icon>
+                  </div> -->
                 </div>
               </div>
             </div>
@@ -858,25 +1029,25 @@
             (click)="$event.stopPropagation()">
 
           <button class="menu-item" role="menuitem" (click)="openItemInNewTab(contextMenu.item)">
-            <mat-icon class="menu-icon mt-1">open_in_new</mat-icon>
+            <fm-icon name="open_in_new" class="menu-icon mt-1"></fm-icon>
             Open in new tab
           </button>
           <hr class="mt-1 mb-1"/>
           <button (click)="copyItemLink(contextMenu.item)" class="menu-item" role="menuitem">
-            <mat-icon class="menu-icon mt-1">link</mat-icon>
+            <fm-icon name="link" class="menu-icon mt-1"></fm-icon>
             Copy Link
           </button>
           <button (click)="duplicateItem(contextMenu.item)" class="menu-item" role="menuitem">
-            <mat-icon class="menu-icon mt-1">file_copy</mat-icon>
+            <fm-icon name="file_copy" class="menu-icon mt-1"></fm-icon>
             Duplicate
           </button>
           <button class="menu-item" role="menuitem" (click)="startInlineRename(contextMenu.item)">
-            <mat-icon class="menu-icon mt-1">text_fields</mat-icon>
+            <fm-icon name="text_fields" class="menu-icon mt-1"></fm-icon>
             Rename
           </button>
           <hr class="mt-1 mb-1"/>
           <button class="menu-item" role="menuitem" (click)="onArchiveItem(contextMenu.item)">
-            <mat-icon class="menu-icon">inventory_2</mat-icon>
+            <fm-icon name="inventory_2" class="menu-icon"></fm-icon>
             Archive
           </button>
         </div>
@@ -888,11 +1059,11 @@
             role="menu"
             (click)="$event.stopPropagation()">
           <button class="menu-item" role="menuitem" (click)="onUnarchiveBoard(contextMenu.item)">
-            <mat-icon class="menu-icon mt-1">unarchive</mat-icon>
+            <fm-icon name="unarchive" class="menu-icon mt-1"></fm-icon>
             Restore
           </button>
           <button class="menu-item deletion-menu-item" role="menuitem" (click)="onDeleteBoard(contextMenu.item)">
-            <mat-icon class="menu-icon mt-1">local_fire_department</mat-icon>
+            <fm-icon name="local_fire_department" class="menu-icon mt-1"></fm-icon>
             Delete Permanently
           </button>
         </div>
@@ -916,40 +1087,59 @@
          position:fixed targets the viewport cleanly, above all stacking contexts -->
     <div *ngIf="overlayOpen" class="overlay-backdrop" (click)="closeItemOverlay($event)">
       <div class="menu-container"
+           data-fm-zone="popup"
            [ngStyle]="menuStyle"
            [class.side-left]="menuSide === 'left'"
            [class.side-right]="menuSide === 'right'"
            (click)="$event.stopPropagation()">
         <div class="menu-wrapper">
-          <div class="menu-card">
+          <!-- Outer border runner — sits on the white frame edge -->
+          <div *ngIf="hasBorderSprite && borderRunnerOuter"
+               class="border-runner border-runner-outer"
+               [class.br-animated]="borderRunnerAnimated">
+            <div class="br-strip br-top"></div>
+            <div class="br-strip br-right"></div>
+            <div class="br-strip br-bottom"></div>
+            <div class="br-strip br-left"></div>
+          </div>
+          <div class="menu-card" data-fm-token="--fm-popup-bg">
+            <!-- Inner border runner — clipped inside the card -->
+            <div *ngIf="hasBorderSprite && !borderRunnerOuter"
+                 class="border-runner"
+                 [class.br-animated]="borderRunnerAnimated">
+              <div class="br-strip br-top"></div>
+              <div class="br-strip br-right"></div>
+              <div class="br-strip br-bottom"></div>
+              <div class="br-strip br-left"></div>
+            </div>
             <button class="close-btn" (click)="closeItemOverlay()">✕</button>
             <div class="menu-right">
-              <h3 class="menu-title">{{ overlayItem?.name }}</h3>
+              <h3 class="menu-title" data-fm-token="--fm-popup-title-color">{{ overlayItem?.name }}</h3>
               <div class="menu-actions">
-                <button class="primary-btn" (click)="navigateToItem(overlayItem)">Open</button>
-                <button class="primary-btn" (click)="openItemInNewTab(overlayItem); closeItemOverlay()">New Tab</button>
+                <button class="primary-btn" data-fm-token="--fm-popup-primary-btn-bg" (click)="navigateToItem(overlayItem)"><span data-fm-token="--fm-popup-primary-btn-text">Open</span></button>
+                <button class="primary-btn" data-fm-token="--fm-popup-primary-btn-bg" (click)="openItemInNewTab(overlayItem); closeItemOverlay()"><span data-fm-token="--fm-popup-primary-btn-text">New Tab</span></button>
               </div>
               <div class="icon-actions">
-                <button class="icon-btn" title="Copy link" (click)="copyItemLink(overlayItem); closeItemOverlay()">
-                  <mat-icon>link</mat-icon>
+                <button class="icon-btn" data-fm-token="--fm-popup-icon-btn-bg" title="Copy link" (click)="copyItemLink(overlayItem); closeItemOverlay()">
+                  <fm-icon name="link" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
-                <button class="icon-btn" title="Duplicate" (click)="duplicateItem(overlayItem); closeItemOverlay()">
-                  <mat-icon>file_copy</mat-icon>
+                <button class="icon-btn" data-fm-token="--fm-popup-icon-btn-bg" title="Duplicate" (click)="duplicateItem(overlayItem); closeItemOverlay()">
+                  <fm-icon name="file_copy" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
-                <button class="icon-btn" title="Rename" (click)="startInlineRename(overlayItem!); closeItemOverlay()">
-                  <mat-icon>text_fields</mat-icon>
+                <button class="icon-btn" data-fm-token="--fm-popup-icon-btn-bg" title="Rename" (click)="startInlineRename(overlayItem!); closeItemOverlay()">
+                  <fm-icon name="text_fields" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
-                <button class="icon-btn" title="Archive" *ngIf="!isArchivedFilterActive" (click)="onArchiveItem(overlayItem); closeItemOverlay()">
-                  <mat-icon>inventory_2</mat-icon>
+                <button class="icon-btn" data-fm-token="--fm-popup-icon-btn-bg" title="Archive" *ngIf="!isArchivedFilterActive" (click)="onArchiveItem(overlayItem); closeItemOverlay()">
+                  <fm-icon name="inventory_2" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
-                <button class="icon-btn" title="Restore" *ngIf="isArchivedFilterActive" (click)="onUnarchiveBoard(overlayItem); closeItemOverlay()">
-                  <mat-icon>unarchive</mat-icon>
+                <button class="icon-btn" data-fm-token="--fm-popup-icon-btn-bg" title="Restore" *ngIf="isArchivedFilterActive" (click)="onUnarchiveBoard(overlayItem); closeItemOverlay()">
+                  <fm-icon name="unarchive" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Delete permanently" *ngIf="isArchivedFilterActive" (click)="onDeleteBoard(overlayItem); closeItemOverlay()">
-                  <mat-icon>local_fire_department</mat-icon>
+                <button class="icon-btn icon-btn-danger" data-fm-token="--fm-popup-icon-btn-bg" title="Delete permanently" *ngIf="isArchivedFilterActive" (click)="onDeleteBoard(overlayItem); closeItemOverlay()">
+                  <fm-icon name="local_fire_department" data-fm-token="--fm-popup-icon-btn-icon"></fm-icon>
                 </button>
               </div>
-              <div class="menu-meta">
+              <div class="menu-meta" data-fm-token="--fm-popup-meta-text">
                 <span class="menu-meta-item" data-index="0">{{ overlayItem && isBoard(overlayItem) ? 'Board' : 'Illustration' }}</span>
                 <span class="menu-meta-item" data-index="1">{{ $any(overlayItem)?.dateModified | date:'mediumDate' }}</span>
               </div>
@@ -960,7 +1150,7 @@
       <div class="menu-tail" *ngIf="menuTailStyle" [ngStyle]="menuTailStyle"></div>
     </div>
 
-    <div class="frogmarks-footer">
+    <div class="frogmarks-footer" data-fm-zone="footer">
       <span class="ms-1 me-1 ps-3 pe-2" *ngFor="let text of frogmarksList; let i = index"
             [class.alt-bg]="i % 2 === 1">
         {{ text }}
@@ -1057,13 +1247,15 @@
 
   <!-- Dev panel — toggle with Ctrl+Shift+D -->
   <!-- Batch action bar -->
-  <div *ngIf="batchMode && selectedItems.size > 0" class="batch-action-bar">
+  <div *ngIf="selectedItems.size > 1" class="batch-action-bar">
     <span class="batch-action-count">{{ selectedItems.size }} selected</span>
-    <button mat-stroked-button color="warn" (click)="batchDelete()">
-      <mat-icon>delete</mat-icon> Delete selected
+    <button *ngIf="!isArchivedFilterActive" mat-stroked-button (click)="batchDelete()">
+      <mat-icon>inventory_2</mat-icon> Archive selected
+    </button>
+    <button *ngIf="isArchivedFilterActive" mat-stroked-button color="warn" (click)="batchDelete()">
+      <mat-icon>delete_forever</mat-icon> Delete permanently
     </button>
     <button mat-stroked-button (click)="selectedItems.clear()">Clear selection</button>
-    <button mat-stroked-button (click)="toggleBatchMode()">Done</button>
   </div>
 
   <div *ngIf="showDevPanel" class="dev-panel">
