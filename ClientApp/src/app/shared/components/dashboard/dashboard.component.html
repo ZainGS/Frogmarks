@@ -808,7 +808,8 @@
                     <div class="sync-status-badge"
                          *ngIf="$any(ri.item).syncStatus"
                          [ngClass]="'sync-status-badge--' + $any(ri.item).syncStatus"
-                         [title]="$any(ri.item).syncStatus">
+                         [title]="$any(ri.item).syncStatus"
+                         data-grid-meta>
                       <mat-icon class="sync-status-icon"
                                 [class.sync-spin]="$any(ri.item).syncStatus === 'syncing'">
                         {{ getSyncStatusIcon($any(ri.item).syncStatus) }}
@@ -887,7 +888,8 @@
                     <div class="sync-status-badge"
                          *ngIf="$any(mi.item).syncStatus"
                          [ngClass]="'sync-status-badge--' + $any(mi.item).syncStatus"
-                         [title]="$any(mi.item).syncStatus">
+                         [title]="$any(mi.item).syncStatus"
+                         data-grid-meta>
                       <mat-icon class="sync-status-icon"
                                 [class.sync-spin]="$any(mi.item).syncStatus === 'syncing'">
                         {{ getSyncStatusIcon($any(mi.item).syncStatus) }}
@@ -927,13 +929,14 @@
             <div *ngIf="!isLoading && filteredListItems.length > 0" class="list-container">
               <div class="list-item board-item"
                   *ngFor="let listItem of filteredListItems; let i = index"
+                  [attr.data-item-id]="listItem.uuid"
                   (click)="listItemSelected($event, listItem.uuid)"
                   (dblclick)="listItemDoubleClicked($event, listItem)"
                   (contextmenu)="openBoardMenu($event, listItem)"
                   [ngClass]="{ 'selected': selectedItems.has(listItem.uuid) }">
 
-                <div class="list-image-wrapper shadow-sm d-flex align-items-center" 
-                    style="border-radius: 10px;" 
+                <div class="list-image-wrapper shadow-sm d-flex align-items-center"
+                    style="border-radius: 10px;"
                     [ngStyle]="{'background-color': 'assignListItemColorWhite(i)'}">
 
                   <!-- Image on left -->
@@ -944,7 +947,7 @@
                   </div>
 
                   <!-- Text on right -->
-                  <div class="ms-3 flex-grow-1 text-start" style="font-size: 12px;">
+                  <div class="ms-3 flex-grow-1 text-start" style="font-size: 12px;" data-list-meta>
                     <div *ngIf="$any(listItem).syncMode === 1 || $any(listItem).syncMode === 2" class="list-item-badge-row">
                       <span class="sync-badge-inline"
                             [title]="$any(listItem).syncMode === 2 ? 'Local only — stored in this browser' : 'No-cloud — pixel data on this device'">
@@ -955,8 +958,6 @@
                     <div class="edited-time">Edited {{ listItem.dateModified | date:'short' }}</div>
                   </div>
 
-                  <!-- Icons -->
-                  <fm-icon name="draw" class="type-icon ms-auto"></fm-icon>
 
                   <!-- <div class="favorite-icon-wrapper ms-2">
                     <fm-icon [name]="isFavorite(listItem.uuid) ? 'favorite' : 'favorite_border'"
@@ -1150,13 +1151,6 @@
       <div class="menu-tail" *ngIf="menuTailStyle" [ngStyle]="menuTailStyle"></div>
     </div>
 
-    <div class="frogmarks-footer" data-fm-zone="footer">
-      <span class="ms-1 me-1 ps-3 pe-2" *ngFor="let text of frogmarksList; let i = index"
-            [class.alt-bg]="i % 2 === 1">
-        {{ text }}
-      </span>
-    </div>
-
   <!-- Post-login backup prompt -->
   <div *ngIf="showBackupPrompt" class="login-modal-backdrop">
     <div class="login-modal backup-prompt">
@@ -1267,5 +1261,12 @@
       <mat-icon>cloud_sync</mat-icon> Backfill cloud → IndexedDB
     </button>
   </div>
+</div>
+
+<div class="frogmarks-footer" data-fm-zone="footer">
+  <span class="ms-1 me-1 ps-3 pe-2" *ngFor="let text of frogmarksList; let i = index"
+        [class.alt-bg]="i % 2 === 1">
+    {{ text }}
+  </span>
 </div>
 

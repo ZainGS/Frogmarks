@@ -1132,6 +1132,7 @@ onKeydown(e: KeyboardEvent) {
 
   isSidenavCollapsed = false;
   private _sidebarTransitioning = false;
+  private _flipAnimGen = 0;
 
   toggleSidenavCollapsed(): void {
     const container = this.gridContainerEl?.nativeElement as HTMLElement | undefined;
@@ -1156,24 +1157,25 @@ onKeydown(e: KeyboardEvent) {
       this.recomputeGrid(newWidth);
       this.cdr.detectChanges();
 
+      // Snap synchronously — no flash frame at new positions
+      const toAnimate: HTMLElement[] = [];
+      container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+        const before = snapshots.get(el.dataset['itemId']!);
+        if (!before) return;
+        const after = el.getBoundingClientRect();
+        const dx = before.left - after.left;
+        const dy = before.top - after.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+        el.style.transition = 'none';
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        toAnimate.push(el);
+      });
+
       requestAnimationFrame(() => {
-        container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
-          const before = snapshots.get(el.dataset['itemId']!);
-          if (!before) return;
-          const after = el.getBoundingClientRect();
-          const dx = before.left - after.left;
-          const dy = before.top - after.top;
-          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-          el.style.transition = 'none';
-          el.style.transform = `translate(${dx}px, ${dy}px)`;
-        });
-        requestAnimationFrame(() => {
-          container.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
-            if (!el.style.transform) return;
-            el.style.transition = 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1)';
-            el.style.transform = '';
-            el.addEventListener('transitionend', () => { el.style.transition = ''; }, { once: true });
-          });
+        toAnimate.forEach(el => {
+          el.style.transition = 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1)';
+          el.style.transform = '';
+          el.addEventListener('transitionend', () => { el.style.transition = ''; }, { once: true });
         });
       });
     }
@@ -1664,16 +1666,198 @@ onKeydown(e: KeyboardEvent) {
   }
 
   gridViewClicked() {
-    this.viewType = "grid";
+    if (this.viewType === 'list') { this._flipListTransition('grid'); return; }
+    this._flipViewSwitch('grid');
   }
 
   masonryViewClicked() {
-    this.viewType = "masonry";
-    this._gridDirty = true;
+    if (this.viewType === 'list') { this._flipListTransition('masonry'); return; }
+    this._flipViewSwitch('masonry');
   }
 
   listViewClicked() {
-    this.viewType = "list";
+    if (this.viewType === 'grid' || this.viewType === 'masonry') { this._flipListTransition('list'); return; }
+    this.viewType = 'list';
+  }
+
+  private _flipViewSwitch(newView: 'grid' | 'masonry'): void {
+    if (this.viewType === newView) return;
+    const gen = ++this._flipAnimGen;
+
+    // Snapshot positions before the old container is destroyed
+    const snapshots = new Map<string, DOMRect>();
+    (this.el.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[data-item-id]').forEach((el: HTMLElement) => {
+      snapshots.set(el.dataset['itemId']!, el.getBoundingClientRect());
+    });
+
+    // Open overflow so items animating from outside the new (shorter) layout aren't clipped
+    const workPane = (this.el.nativeElement as HTMLElement).querySelector<HTMLElement>('.base-work-pane');
+    if (workPane) workPane.style.overflow = 'visible';
+    // Max stagger (160ms) + animation duration (300ms) + small buffer
+    setTimeout(() => { if (workPane) workPane.style.overflow = ''; }, 480);
+
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+
+    this.viewType = newView;
+    // Don't set _gridDirty — we manage the recompute ourselves so ngAfterViewChecked
+    // doesn't schedule a competing setTimeout that would jump items mid-FLIP
+    this.cdr.detectChanges(); // new container is in DOM, gridContainerEl updated
+
+    // Wire up ResizeObserver for the new container
+    const newContainerEl = this.gridContainerEl?.nativeElement;
+    if (newContainerEl) {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (this.overlayOpen) return;
+        if (this._sidebarTransitioning) return;
+        this.recomputeGrid();
+      });
+      this._resizeObserver.observe(newContainerEl);
+    }
+
+    this.recomputeGrid();
+    this.cdr.detectChanges(); // rows/columns applied to DOM
+
+    // Build a row-index map from pre-switch top positions for stagger delays
+    const uniqueTops = [...new Set(
+      [...snapshots.values()].map(r => Math.round(r.top / 8) * 8)
+    )].sort((a, b) => a - b);
+    const rowDelay = (top: number) => Math.min(uniqueTops.indexOf(Math.round(top / 8) * 8) * 20, 160);
+
+    // Apply snaps synchronously — no rAF here, so there's no flash frame at new positions
+    const toAnimate: Array<{ el: HTMLElement; delay: number }> = [];
+    (this.el.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[data-item-id]').forEach((el: HTMLElement) => {
+      const before = snapshots.get(el.dataset['itemId']!);
+      if (!before) return;
+      const after = el.getBoundingClientRect();
+      const dx = before.left - after.left;
+      const dy = before.top - after.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      toAnimate.push({ el, delay: rowDelay(before.top) });
+    });
+
+    // Play: browser has committed the snap by next frame, enable transition with stagger
+    requestAnimationFrame(() => {
+      if (gen !== this._flipAnimGen) return;
+      toAnimate.forEach(({ el, delay }) => {
+        el.style.transition = `transform 300ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`;
+        el.style.transform = '';
+        el.addEventListener('transitionend', () => { el.style.transition = ''; }, { once: true });
+      });
+    });
+  }
+
+  private _flipListTransition(toView: 'grid' | 'masonry' | 'list'): void {
+    const fromView = this.viewType;
+    if (fromView === toView) return;
+    const gen = ++this._flipAnimGen;
+
+    const root = this.el.nativeElement as HTMLElement;
+
+    // Snapshot thumbnail rects and build stagger map from current layout
+    const imgSnapshots = new Map<string, DOMRect>();
+    const staggerByUuid = new Map<string, number>();
+    {
+      const cards = Array.from(root.querySelectorAll<HTMLElement>('[data-item-id]'));
+      const uniqueTops = [...new Set(
+        cards.map(el => Math.round(el.getBoundingClientRect().top / 8) * 8)
+      )].sort((a, b) => a - b);
+      cards.forEach(el => {
+        const img = el.querySelector<HTMLImageElement>('img.thumbnail-img');
+        if (img) imgSnapshots.set(el.dataset['itemId']!, img.getBoundingClientRect());
+        const rowKey = Math.round(el.getBoundingClientRect().top / 8) * 8;
+        staggerByUuid.set(el.dataset['itemId']!, Math.min(uniqueTops.indexOf(rowKey) * 20, 160));
+      });
+    }
+
+    // Open work-pane overflow for the full animation window
+    const workPane = root.querySelector<HTMLElement>('.base-work-pane');
+    if (workPane) workPane.style.overflow = 'visible';
+    setTimeout(() => { if (workPane) workPane.style.overflow = ''; }, 600);
+
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+
+    this.viewType = toView;
+    this.cdr.detectChanges();
+
+    if (toView !== 'list') {
+      const newContainerEl = this.gridContainerEl?.nativeElement;
+      if (newContainerEl) {
+        this._resizeObserver = new ResizeObserver(() => {
+          if (this.overlayOpen || this._sidebarTransitioning) return;
+          this.recomputeGrid();
+        });
+        this._resizeObserver.observe(newContainerEl);
+      }
+      this.recomputeGrid();
+      this.cdr.detectChanges();
+    }
+
+    // FLIP: animate only the thumbnail image, fade in non-image meta for list view
+    const toAnimate: Array<{ img: HTMLImageElement; card: HTMLElement; imgWrapper: HTMLElement | null; delay: number }> = [];
+    const metaEls: Array<{ el: HTMLElement; delay: number }> = [];
+
+    root.querySelectorAll<HTMLElement>('[data-item-id]').forEach(el => {
+      const uuid = el.dataset['itemId']!;
+      const before = imgSnapshots.get(uuid);
+      if (!before) return;
+
+      const img = el.querySelector<HTMLImageElement>('img.thumbnail-img');
+      if (!img) return;
+      const after = img.getBoundingClientRect();
+      if (after.width < 1 || after.height < 1) return;
+
+      const dx = before.left - after.left;
+      const dy = before.top - after.top;
+      const scaleX = before.width / after.width;
+      const scaleY = before.height / after.height;
+      const delay = staggerByUuid.get(uuid) ?? 0;
+
+      // Allow overflow so the thumbnail can travel outside its clipping container
+      el.style.overflow = 'visible';
+      const imgWrapper = el.querySelector<HTMLElement>('.image-wrapper');
+      if (imgWrapper) imgWrapper.style.overflow = 'visible';
+
+      img.style.transition = 'none';
+      img.style.transformOrigin = '0 0';
+      img.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`;
+
+      toAnimate.push({ img, card: el, imgWrapper, delay });
+
+      // Fade in non-image content when arriving at list or grid/masonry view
+      const metaSelector = toView === 'list' ? '[data-list-meta]' : '[data-grid-meta]';
+      el.querySelectorAll<HTMLElement>(metaSelector).forEach(metaEl => {
+        metaEl.style.opacity = '0';
+        metaEl.style.transition = 'none';
+        metaEls.push({ el: metaEl, delay: delay + 120 });
+      });
+    });
+
+    requestAnimationFrame(() => {
+      if (gen !== this._flipAnimGen) return;
+      toAnimate.forEach(({ img, card, imgWrapper, delay }) => {
+        img.style.transition = `transform 320ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`;
+        img.style.transform = '';
+        img.addEventListener('transitionend', () => {
+          img.style.transition = '';
+          img.style.transformOrigin = '';
+          card.style.overflow = '';
+          if (imgWrapper) imgWrapper.style.overflow = '';
+        }, { once: true });
+      });
+
+      metaEls.forEach(({ el, delay }) => {
+        el.style.transition = `opacity 200ms ease ${delay}ms`;
+        el.style.opacity = '1';
+        el.addEventListener('transitionend', () => {
+          el.style.transition = '';
+          el.style.opacity = '';
+        }, { once: true });
+      });
+    });
   }
 
   assignListItemColor(index: number) {

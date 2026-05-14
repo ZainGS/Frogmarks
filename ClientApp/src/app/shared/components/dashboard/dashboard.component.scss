@@ -12,7 +12,11 @@ $enable-negative-margins: true;
 }
 
 .base-work-pane {
-  flex: 1; /* Take up the remaining space */
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: overlay;
+  height: 100%;
+  padding-bottom: 76px;
   // min-width: 0; /* Allows shrinking */
   // max-width: calc(100vw - 250px); /* Ensures it never exceeds the screen */
   //overflow-x: auto; /* Prevents horizontal scrolling */
@@ -88,14 +92,18 @@ $enable-negative-margins: true;
 
 // LIGHT
 .dashboard-container {
-  height: 100vh;
-  max-height: 100vh;
-  overflow-x: hidden;
-  padding-bottom: 10px;
-  //
   display: flex;
   flex-direction: column;
   height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+
+  > .row.flex-nowrap {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 .mobile-chips-row {
@@ -182,7 +190,7 @@ $enable-negative-margins: true;
 }
 
 .notification-panel-content-empty {
-  min-height: 100%; align-content: center
+  min-height: 100vh; align-content: center
 }
 
 .frogmarks-logo {
@@ -1199,13 +1207,18 @@ img:active:not(.selected)
 }
 
 .frogmarks-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
   font-weight: 50;
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
   white-space: nowrap;
   color: var(--footer-text-color);
   border-top: 8px solid var(--footer-text-color);
   border-bottom: 8px solid var(--footer-text-color);
-  margin-top: 50px;
   font-size: 32px;
   animation: fadeIn 0.5s ease-in-out 0.15s both;
 }
@@ -2113,7 +2126,7 @@ img:active:not(.selected)
   border-radius: 4px;
   flex-shrink: 0;
   transform-origin: 50% 70%;
-  transition: transform 160ms ease-out;
+  transition: transform 160ms ease-out, height 200ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 
   .image-wrapper {
