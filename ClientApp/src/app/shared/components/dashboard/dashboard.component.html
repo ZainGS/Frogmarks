@@ -1,4 +1,5 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,200" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500&display=swap" />
 <!-- Skin builder floating panel -->
 <app-skin-builder *ngIf="showSkinBuilder" (closed)="onSkinBuilderClosed()"></app-skin-builder>
 
@@ -109,7 +110,8 @@
               <!-- Board Type Selection -->
               <div>
                 <ul class="sidenav-list pt-3">
-                  <li class="list-item"
+                  <!-- Explore nav item (kept for reference, replaced by FrogPlayer) -->
+                  <!-- <li class="list-item"
                       [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="frogmarksGalaxyClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'frogmarks-galaxy-active': isFrogmarksGalaxyActive }">
@@ -117,16 +119,27 @@
                              [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
                     <label *ngIf="!isLoading" class="ms-1"
                            [attr.data-fm-token]="isFrogmarksGalaxyActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Explore</label>
+                  </li> -->
+                  <li class="list-item nav-module-item"
+                      [attr.data-fm-token]="isFrogPlayerActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
+                      (click)="frogPlayerClicked()"
+                      [ngClass]="{ 'loading-container': isLoading, 'frog-player-active': isFrogPlayerActive }">
+                    <fm-icon *ngIf="!isLoading" name="videogame_asset" class="list-item-icon"
+                             [attr.data-fm-token]="isFrogPlayerActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isFrogPlayerActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">.frogcart_player</label>
                   </li>
-                  <li class="list-item"
+                  <li class="list-item nav-module-item"
                       [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="designCenterClicked()"
                       [ngClass]="{ 'loading-container': isLoading, 'design-center-active': isDesignCenterActive }">
                     <fm-icon *ngIf="!isLoading" name="storefront" class="list-item-icon"
                              [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
                     <label *ngIf="!isLoading" class="ms-1"
-                           [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Design Center</label>
+                           [attr.data-fm-token]="isDesignCenterActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">.frogmarks_studio</label>
                   </li>
+                  <hr class="ms-2 me-2 horizontal-line" data-fm-token="--fm-nav-divider">
+
                   <li class="list-item"
                       [attr.data-fm-token]="isTemplatesActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
                       (click)="templatesClicked()"
@@ -971,38 +984,17 @@
             </div>
 
           </div>
-          <!-- Frogmarks Galaxy -->
-          <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" [ngClass]="{ 'loading-container': isLoading }">
-            <!-- <div class="col-6">
-              <div class="row mt-2 fs-6 fw-bold">
-                <div class="col-1" style="color: var(--text-color-high-contrast);">
-                  Explore
-                </div>
-                <div class="col-1 ms-4">
-                  Feed
-                </div>
-                <div class="col-1">
-                  Notifications
-                </div>
-              </div>
-              <div *ngIf="!isLoading" class="search-wrapper ms-1">
-                
-              </div>
-              
-            </div>
-            <div class="col-6 text-end text-nowrap" style="padding-right: 42px;">
-              <button [hidden]="!isTeamSelected" *ngIf="!isLoading" (click)="openInviteDialog()" class="ms-3 align-top desktop-button" mat-stroked-button style="background-color:#000000 !important; color: white !important;">
-                <mat-icon>add</mat-icon>
-                Invite members
-              </button>
-              <button [hidden]="!isTeamSelected" *ngIf="!isLoading" class="ms-3 align-top desktop-button" mat-raised-button (click)="openUpgradeDialog()">
-                Upgrade
-              </button>
-              <button *ngIf="!isLoading" class="ms-2 align-top" style="margin-top: -5px" mat-icon-button (click)="showNotificationPanel=true"><mat-icon style="color:white">notifications_none</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button (click)="showSettingsPanel=true;"><mat-icon style="color:white">settings</mat-icon></button>
-              <button *ngIf="!isLoading" class="align-top" style="margin-top: -5px; margin-left: -10px;" mat-icon-button><mat-icon style="color:white">person</mat-icon></button>
-            </div> -->
+          <!-- Frogmarks Galaxy / Explore (kept, hidden — replaced by FrogPlayer) -->
+          <!-- <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" [ngClass]="{ 'loading-container': isLoading }">
             <app-explore-feed></app-explore-feed>
+          </div> -->
+
+          <!-- FrogPlayer -->
+          <div class="frog-player-container" *ngIf="isFrogPlayerActive">
+            <div class="frog-player-placeholder">
+              <fm-icon name="videogame_asset" style="font-size: 48px; opacity: 0.3;"></fm-icon>
+              <p style="margin-top: 12px; opacity: 0.4; font-size: 13px;">FrogPlayer coming soon — drag a .frogcart here to load it</p>
+            </div>
           </div>
 
           <!-- Templates Selected -->

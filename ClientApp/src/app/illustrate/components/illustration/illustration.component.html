@@ -1095,13 +1095,14 @@
                                         [class.scene3d-eye-hidden]="!node.visible"
                                         (click)="scene3dToggleVisibility(node); $event.stopPropagation()"
                                         [title]="node.visible ? 'Hide' : 'Show'">👁</button>
+                                <span *ngIf="node.type === '3DArrayGroup'" class="scene3d-node-icon">⊞</span>
                                 <span *ngIf="node.type === '3DMeshGroup'" class="scene3d-node-icon"
                                       (click)="scene3dToggleGroupCollapse(node.id); $event.stopPropagation()">
                                     {{ scene3dCollapsedGroups.has(node.id) ? '▶' : '▼' }} 📁
                                 </span>
-                                <span *ngIf="node.type !== '3DMeshGroup'" class="scene3d-node-icon">⬡</span>
+                                <span *ngIf="node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-node-icon">⬡</span>
                                 <span *ngIf="scene3dRenamingId !== node.id" class="scene3d-mesh-name"
-                                      (dblclick)="scene3dStartRename(node, $event)">{{ node.name }}</span>
+                                      (dblclick)="scene3dStartRename(node, $event)">{{ node.name }}<span *ngIf="node.type === '3DArrayGroup' && node.instanceCount != null" class="scene3d-array-badge"> ×{{ node.instanceCount }}</span></span>
                                 <input *ngIf="scene3dRenamingId === node.id" class="scene3d-rename-input"
                                        [(ngModel)]="scene3dRenamingName"
                                        (blur)="scene3dCommitRename(node)"
@@ -1114,12 +1115,12 @@
                                         title="Edit cloth mesh">✎</button>
                                 <button class="scene3d-move-btn" (click)="scene3dMoveMesh(node.id, 'up'); $event.stopPropagation()" title="Move up">↑</button>
                                 <button class="scene3d-move-btn" (click)="scene3dMoveMesh(node.id, 'down'); $event.stopPropagation()" title="Move down">↓</button>
-                                <button *ngIf="node.type !== '3DMeshGroup'" class="scene3d-move-btn"
+                                <button *ngIf="node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-move-btn"
                                         (click)="scene3dDuplicateMesh(node.id); $event.stopPropagation()"
                                         title="Duplicate mesh (Ctrl+D)">⧉</button>
                                 <button class="scene3d-mesh-delete"
-                                        (click)="node.type === '3DMeshGroup' ? scene3dDeleteGroup(node.id) : scene3dDeleteMesh(node.id); $event.stopPropagation()"
-                                        [title]="node.type === '3DMeshGroup' ? 'Delete group (children promoted to root)' : 'Delete mesh'">🗑</button>
+                                        (click)="node.type === '3DMeshGroup' ? scene3dDeleteGroup(node.id) : node.type === '3DArrayGroup' ? scene3dDeleteGroup(node.id) : scene3dDeleteMesh(node.id); $event.stopPropagation()"
+                                        [title]="node.type === '3DMeshGroup' || node.type === '3DArrayGroup' ? 'Delete group' : 'Delete mesh'">🗑</button>
                             </div>
                             <ng-container *ngIf="node.type === '3DMeshGroup' && node.children?.length && !scene3dCollapsedGroups.has(node.id)">
                                 <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: node.children, depth: depth + 1 }"></ng-container>
@@ -1127,7 +1128,138 @@
                         </ng-container>
                     </ng-template>
 
-                    <details *ngIf="scene3dSelectedMeshId" class="scene3d-section-group" open>
+                    <!-- Array Tool options strip (visible while hover-handle mode is active) -->
+                    <div *ngIf="scene3dArrayToolActive" class="scene3d-array-tool-strip">
+                        <span class="scene3d-array-strip-label">Mode</span>
+                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'line'"   (click)="scene3dSetArrayToolMode('line')">Line</button>
+                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'grid'"   (click)="scene3dSetArrayToolMode('grid')">Grid</button>
+                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'radial'" (click)="scene3dSetArrayToolMode('radial')">Radial</button>
+                        <span class="scene3d-array-strip-label" style="margin-left:8px;">Count</span>
+                        <input class="scene3d-array-strip-count" type="number" min="1" max="32"
+                               [ngModel]="scene3dArrayToolCount"
+                               (ngModelChange)="scene3dSetArrayToolCount($event)">
+                        <!-- Radial-specific pre-commit options -->
+                        <ng-container *ngIf="scene3dArrayToolMode === 'radial'">
+                            <span class="scene3d-array-strip-label" style="margin-left:8px;">Radius</span>
+                            <input class="scene3d-array-strip-count" type="number" min="0.1" step="0.1" placeholder="auto"
+                                   [ngModel]="scene3dArrayToolRadius"
+                                   (ngModelChange)="scene3dSetArrayToolRadius($event != null && $event !== '' ? +$event : null)">
+                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Arc°</span>
+                            <input class="scene3d-array-strip-count" type="number" min="1" max="360" step="1"
+                                   [ngModel]="scene3dArrayToolArc"
+                                   (ngModelChange)="scene3dSetArrayToolArc(+$event)">
+                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Axis</span>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'x'" (click)="scene3dSetArrayToolAxis('x')">X</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'y'" (click)="scene3dSetArrayToolAxis('y')">Y</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'z'" (click)="scene3dSetArrayToolAxis('z')">Z</button>
+                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Orient</span>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && scene3dToggleGizmoOrientation()">W</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && scene3dToggleGizmoOrientation()">L</button>
+                        </ng-container>
+                    </div>
+
+                    <!-- Array Group panel (shown instead of normal mesh panel) -->
+                    <details *ngIf="scene3dSelectedMeshId && scene3dIsArrayGroup && !scene3dIsEditingMesh" class="scene3d-section-group" open>
+                        <summary class="scene3d-major-header">REPEAT</summary>
+
+                        <!-- Mode strip -->
+                        <div class="scene3d-row scene3d-array-mode-row">
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'linear'" (click)="scene3dSetArrayMode('linear')">Linear</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'grid'"   (click)="scene3dSetArrayMode('grid')">Grid</button>
+                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'radial'" (click)="scene3dSetArrayMode('radial')">Radial</button>
+                        </div>
+
+                        <!-- Linear params -->
+                        <ng-container *ngIf="scene3dArrayMode === 'linear'">
+                            <div class="scene3d-material-row">
+                                <label>Count</label>
+                                <input type="number" min="1" max="32" class="scene3d-short-input"
+                                       [ngModel]="scene3dArrayCountX" (ngModelChange)="scene3dUpdateArrayCountX($event)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Spacing</label>
+                                <input type="number" min="0.01" step="0.1" class="scene3d-short-input"
+                                       [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Axis</label>
+                                <div class="scene3d-axis-btns">
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')">X</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')">Y</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')">Z</button>
+                                </div>
+                            </div>
+                        </ng-container>
+
+                        <!-- Grid params -->
+                        <ng-container *ngIf="scene3dArrayMode === 'grid'">
+                            <div class="scene3d-material-row"><label>Count X</label>
+                                <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayCountX" (ngModelChange)="scene3dUpdateArrayCountX($event)">
+                            </div>
+                            <div class="scene3d-material-row"><label>Count Y</label>
+                                <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayCountY" (ngModelChange)="scene3dUpdateArrayCountY($event)">
+                            </div>
+                            <div class="scene3d-material-row"><label>Spacing X</label>
+                                <input type="number" min="0.01" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Axis X</label>
+                                <div class="scene3d-axis-btns">
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')">X</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')">Y</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')">Z</button>
+                                </div>
+                            </div>
+                            <div class="scene3d-material-row"><label>Spacing Y</label>
+                                <input type="number" min="0.01" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArraySpacingY" (ngModelChange)="scene3dUpdateArraySpacingY($event)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Axis Y</label>
+                                <div class="scene3d-axis-btns">
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'x'" (click)="scene3dSetArrayAxisY('x')">X</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'y'" (click)="scene3dSetArrayAxisY('y')">Y</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'z'" (click)="scene3dSetArrayAxisY('z')">Z</button>
+                                </div>
+                            </div>
+                        </ng-container>
+
+                        <!-- Radial params -->
+                        <ng-container *ngIf="scene3dArrayMode === 'radial'">
+                            <div class="scene3d-material-row"><label>Count</label>
+                                <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayRadialCount" (ngModelChange)="scene3dUpdateArrayRadialCount($event)">
+                            </div>
+                            <div class="scene3d-material-row"><label>Radius</label>
+                                <input type="number" min="0.1" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArrayRadius" (ngModelChange)="scene3dUpdateArrayRadius($event)">
+                            </div>
+                            <div class="scene3d-material-row"><label>Arc °</label>
+                                <input type="number" min="1" max="360" step="1" class="scene3d-short-input" [ngModel]="scene3dArrayArc" (ngModelChange)="scene3dUpdateArrayArc($event)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Axis</label>
+                                <div class="scene3d-axis-btns">
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'x'" (click)="scene3dSetArrayRadialAxis('x')">X</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'y'" (click)="scene3dSetArrayRadialAxis('y')">Y</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'z'" (click)="scene3dSetArrayRadialAxis('z')">Z</button>
+                                </div>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Orient</label>
+                                <div class="scene3d-axis-btns">
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && scene3dToggleGizmoOrientation()">World</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && scene3dToggleGizmoOrientation()">Local</button>
+                                </div>
+                            </div>
+                        </ng-container>
+
+                        <!-- Edit Source / Bake -->
+                        <div class="scene3d-array-actions">
+                            <button class="scene3d-btn" (click)="scene3dEditArraySource()">Edit Source</button>
+                            <button class="scene3d-btn scene3d-btn-danger" (click)="scene3dBakeArray()">Bake</button>
+                        </div>
+                    </details>
+
+                    <!-- Normal mesh panel (hidden for array groups) -->
+                    <details *ngIf="scene3dSelectedMeshId && !scene3dIsArrayGroup" class="scene3d-section-group" open>
                     <summary class="scene3d-major-header">SELECTED MESH</summary>
 
                     <div class="scene3d-edit-mesh-row" *ngIf="scene3dSelectedMeshId">
@@ -2662,9 +2794,21 @@
 
         <!-- 3D transform tools — rendered after 2D tools have exited -->
         <div class="tools-3d" *ngIf="tools3dVisible" [class.tools-exiting]="tools3dExiting">
+            <!-- Repeat / Array Tool -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dArrayToolActive"
+                 (click)="scene3dToggleArrayTool()"
+                 title="Repeat / Array Tool">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="8" height="8" rx="1"/>
+                    <rect x="14" y="2" width="8" height="8" rx="1"/>
+                    <rect x="2" y="14" width="8" height="8" rx="1"/>
+                    <rect x="14" y="14" width="8" height="8" rx="1"/>
+                </svg>
+            </div>
             <!-- Move -->
             <div class="vertical-tool-button"
-                 [class.selected]="scene3dGizmoMode === 'move'"
+                 [class.selected]="scene3dGizmoMode === 'move' && !scene3dIsArrayGroup"
                  (click)="scene3dSetGizmoMode('move')"
                  title="Move mesh (W)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2677,7 +2821,7 @@
             </div>
             <!-- Rotate -->
             <div class="vertical-tool-button"
-                 [class.selected]="scene3dGizmoMode === 'rotate'"
+                 [class.selected]="scene3dGizmoMode === 'rotate' && !scene3dIsArrayGroup"
                  (click)="scene3dSetGizmoMode('rotate')"
                  title="Rotate mesh (E)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2687,7 +2831,7 @@
             </div>
             <!-- Scale -->
             <div class="vertical-tool-button"
-                 [class.selected]="scene3dGizmoMode === 'scale'"
+                 [class.selected]="scene3dGizmoMode === 'scale' && !scene3dIsArrayGroup"
                  (click)="scene3dSetGizmoMode('scale')"
                  title="Scale mesh (R)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

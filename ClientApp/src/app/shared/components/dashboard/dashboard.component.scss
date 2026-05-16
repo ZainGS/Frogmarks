@@ -204,6 +204,13 @@ $enable-negative-margins: true;
   padding-left: 0px;
 }
 
+.nav-module-item label {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
 li {
   display: flex; /* Use flexbox */
   align-items: center; /* Center items vertically */

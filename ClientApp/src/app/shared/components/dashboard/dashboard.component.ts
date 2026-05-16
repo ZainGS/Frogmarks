@@ -460,6 +460,7 @@ onKeydown(e: KeyboardEvent) {
 
   // Filtering
   isFrogmarksGalaxyActive: boolean = false;
+  isFrogPlayerActive: boolean = false;
   isTemplatesActive: boolean = false;
   isDesignCenterActive: boolean = true;
   isFavoritesFilterActive: boolean = false;
@@ -1207,12 +1208,27 @@ onKeydown(e: KeyboardEvent) {
     }
   }
 
+  frogPlayerClicked(): void {
+    if (!this.isFrogPlayerActive) {
+      this.clearData();
+      this.isFrogPlayerActive = true;
+      this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
+      this.isDesignCenterActive = false;
+      this.isFavoritesFilterActive = false;
+      this.isArchivedFilterActive = false;
+      this.isUpdatesActive = false;
+      this.isTemplatesActive = false;
+    }
+  }
+
   designCenterClicked(): void {
     if (!this.isDesignCenterActive) {
       this.clearData();
       this.isDesignCenterActive = true;
       this.isFavoritesFilterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
       this.isArchivedFilterActive = false;
       this.isUpdatesActive = false;
       this.isTemplatesActive = false;
@@ -1244,6 +1260,7 @@ onKeydown(e: KeyboardEvent) {
       this.isFavoritesFilterActive = true;
       this.isDesignCenterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
       this.isArchivedFilterActive = false;
       this.isUpdatesActive = false;
       this.isTemplatesActive = false;
@@ -1276,6 +1293,7 @@ onKeydown(e: KeyboardEvent) {
       this.isFavoritesFilterActive = false;
       this.isDesignCenterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
       this.isArchivedFilterActive = false;
       this.isUpdatesActive = false;
       this.isTemplatesActive = true;
@@ -1896,6 +1914,7 @@ onKeydown(e: KeyboardEvent) {
       this.isFavoritesFilterActive = false;
       this.isDesignCenterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
       this.isUpdatesActive = false;
       this.isTemplatesActive = false;
 
@@ -1924,6 +1943,7 @@ onKeydown(e: KeyboardEvent) {
       this.isFavoritesFilterActive = false;
       this.isDesignCenterActive = false;
       this.isFrogmarksGalaxyActive = false;
+      this.isFrogPlayerActive = false;
       this.isUpdatesActive = true;
       this.isTemplatesActive = false;
     }

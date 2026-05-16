@@ -1152,7 +1152,7 @@ export class IllustrationComponent implements OnInit {
   tools3dExiting = false;
   private _toolsSwapTimer: ReturnType<typeof setTimeout> | null = null;
 
-  scene3dGizmoMode: 'move' | 'rotate' | 'scale' = 'move';
+  scene3dGizmoMode: 'move' | 'rotate' | 'scale' | null = 'move';
   scene3dGizmoOrientation: 'world' | 'local' = 'world';
   scene3dOrbitEnabled = false;
   scene3dCameraMode: 'perspective' | 'orthographic' = 'perspective';
@@ -1193,6 +1193,27 @@ export class IllustrationComponent implements OnInit {
   scene3dIsEditingMesh = false;
   scene3dEditTool: 'select' | 'knife' = 'select';
   private _knifeStart: { x: number; y: number } | null = null;
+
+  // ── Array Tool (Repeat) ─────────────────────────────────────
+  scene3dArrayToolActive = false;
+  scene3dArrayToolMode: 'line' | 'grid' | 'radial' = 'line';
+  scene3dArrayToolCount = 3;
+  scene3dArrayToolRadius: number | null = null;
+  scene3dArrayToolArc = 360;
+  scene3dArrayToolAxis: 'x' | 'y' | 'z' = 'y';
+  // Array Group panel state
+  scene3dIsArrayGroup = false;
+  scene3dArrayMode: 'linear' | 'grid' | 'radial' = 'linear';
+  scene3dArrayCountX = 3;
+  scene3dArraySpacingX = 2.0;
+  scene3dArrayAxisX: 'x' | 'y' | 'z' = 'x';
+  scene3dArrayCountY = 3;
+  scene3dArraySpacingY = 2.0;
+  scene3dArrayAxisY: 'x' | 'y' | 'z' = 'z';
+  scene3dArrayRadialCount = 6;
+  scene3dArrayRadius = 3.0;
+  scene3dArrayArc = 360;
+  scene3dArrayRadialAxis: 'x' | 'y' | 'z' = 'y';
 
   enterMeshEditMode(): void {
     if (!this.scene3dSelectedMeshId) return;
@@ -1751,6 +1772,7 @@ export class IllustrationComponent implements OnInit {
     this.scene3dSelectedMeshId = id;
     // Reset per-mesh state so switching between mesh types clears the flags
     this.scene3dSelectedIsGroup = false;
+    this.scene3dIsArrayGroup = false;
     this.scene3dIsCloth = false;
     this.clothLiveEnabled = false;
     this.clothWindEnabled = false;
@@ -1766,6 +1788,13 @@ export class IllustrationComponent implements OnInit {
     const s3d = (this.shapeManager as any).scene3d;
     if (!s3d) return;
     (this.shapeManager as any).setSelectedNode?.(id);
+    // Detect array group before normal mesh loading — array groups use a separate panel
+    if ((this.shapeManager as any).isArrayGroup3D?.(id)) {
+      this.scene3dIsArrayGroup = true;
+      this.scene3dSelectedIsGroup = true;
+      this._scene3dSyncArrayPanel(id);
+      return;
+    }
     this.scene3dSelectedIsGroup = !!s3d.getMeshGroup?.(id);
     const mesh = s3d.getMesh(id);
     if (mesh) {
@@ -2953,15 +2982,216 @@ export class IllustrationComponent implements OnInit {
   }
 
   scene3dSetGizmoMode(mode: 'move' | 'rotate' | 'scale'): void {
-    this.scene3dGizmoMode = mode;
+    this.scene3dDeactivateArrayTool();
+    const next = this.scene3dGizmoMode === mode ? null : mode;
+    this.scene3dGizmoMode = next;
     const sm = this.shapeManager as any;
-    sm.scene3d?.setGizmoMode?.(mode);
-    sm.setGizmoMode3D?.(mode);
+    sm.scene3d?.setGizmoMode?.(next);
+    sm.setGizmoMode3D?.(next);
   }
 
   scene3dToggleGizmoOrientation(): void {
     this.scene3dGizmoOrientation = this.scene3dGizmoOrientation === 'world' ? 'local' : 'world';
-    (this.shapeManager as any).setGizmoOrientation3D?.(this.scene3dGizmoOrientation);
+    const sm = this.shapeManager as any;
+    console.log('[gizmo-orientation] method exists:', typeof sm.setGizmoOrientation3D);
+    console.log('[gizmo-orientation] before:', sm.getGizmoOrientation3D?.());
+    sm.setGizmoOrientation3D?.(this.scene3dGizmoOrientation);
+    console.log('[gizmo-orientation] after:', sm.getGizmoOrientation3D?.());
+  }
+
+  // ── Array Tool (Repeat) methods ─────────────────────────────
+
+  scene3dToggleArrayTool(): void {
+    if (this.scene3dArrayToolActive) { this.scene3dDeactivateArrayTool(); return; }
+    this.scene3dArrayToolActive = true;
+    this.scene3dGizmoMode = null;
+    const sm = this.shapeManager as any;
+    sm.scene3d?.setGizmoMode?.(null);
+    sm.setGizmoMode3D?.(null);
+    sm.enableArrayTool?.(this.scene3dArrayToolMode, this.scene3dArrayToolCount);
+    if (this.scene3dArrayToolMode === 'radial') this._scene3dSyncRadialToolStrip();
+  }
+
+  scene3dDeactivateArrayTool(): void {
+    if (!this.scene3dArrayToolActive) return;
+    this.scene3dArrayToolActive = false;
+    (this.shapeManager as any).disableArrayTool?.();
+  }
+
+  scene3dSetArrayToolMode(mode: 'line' | 'grid' | 'radial'): void {
+    this.scene3dArrayToolMode = mode;
+    if (this.scene3dArrayToolActive) {
+      (this.shapeManager as any).setArrayToolMode?.(mode);
+      if (mode === 'radial') this._scene3dSyncRadialToolStrip();
+    }
+  }
+
+  scene3dSetArrayToolCount(count: number): void {
+    this.scene3dArrayToolCount = count;
+    if (this.scene3dArrayToolActive) (this.shapeManager as any).setArrayToolCount?.(count);
+  }
+
+  scene3dSetArrayToolRadius(r: number | null): void {
+    this.scene3dArrayToolRadius = r;
+    (this.shapeManager as any).setArrayToolRadius?.(r);
+  }
+
+  scene3dSetArrayToolArc(deg: number): void {
+    this.scene3dArrayToolArc = deg;
+    (this.shapeManager as any).setArrayToolArc?.(deg);
+  }
+
+  scene3dSetArrayToolAxis(axis: 'x' | 'y' | 'z'): void {
+    this.scene3dArrayToolAxis = axis;
+    (this.shapeManager as any).setArrayToolAxis?.(axis);
+  }
+
+  private _scene3dSyncRadialToolStrip(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dArrayToolAxis   = sm.getArrayToolAxis?.()   ?? 'y';
+    this.scene3dArrayToolRadius = sm.getArrayToolRadius?.() ?? null;
+    this.scene3dArrayToolArc    = sm.getArrayToolArc?.()    ?? 360;
+  }
+
+  private _scene3dGetActiveAxis(s: [number, number, number]): 'x' | 'y' | 'z' | null {
+    if (Math.abs(s[1]) < 1e-4 && Math.abs(s[2]) < 1e-4) return 'x';
+    if (Math.abs(s[0]) < 1e-4 && Math.abs(s[2]) < 1e-4) return 'y';
+    if (Math.abs(s[0]) < 1e-4 && Math.abs(s[1]) < 1e-4) return 'z';
+    return null;
+  }
+
+  private _scene3dSyncArrayPanel(groupId: string): void {
+    const sm = this.shapeManager as any;
+    const params = sm.getArrayParams3D?.(groupId);
+    if (!params) return;
+    this.scene3dArrayMode = params.mode ?? 'linear';
+    if (params.mode === 'radial') {
+      this.scene3dArrayRadialCount = params.count ?? 6;
+      this.scene3dArrayRadius = params.radius ?? 3;
+      this.scene3dArrayArc = params.arcDeg ?? 360;
+      this.scene3dArrayRadialAxis = params.axis ?? 'y';
+    } else if (params.mode === 'grid') {
+      this.scene3dArrayCountX = params.countX ?? 3;
+      this.scene3dArrayCountY = params.countY ?? 3;
+      const sx: [number,number,number] = params.spacingX ?? [2, 0, 0];
+      const sy: [number,number,number] = params.spacingY ?? [0, 0, 2];
+      this.scene3dArraySpacingX = Math.sqrt(sx[0]**2 + sx[1]**2 + sx[2]**2);
+      this.scene3dArraySpacingY = Math.sqrt(sy[0]**2 + sy[1]**2 + sy[2]**2);
+      this.scene3dArrayAxisX = this._scene3dGetActiveAxis(sx) ?? 'x';
+      this.scene3dArrayAxisY = this._scene3dGetActiveAxis(sy) ?? 'z';
+    } else {
+      this.scene3dArrayCountX = params.countX ?? 3;
+      const s: [number,number,number] = params.spacing ?? [2, 0, 0];
+      this.scene3dArraySpacingX = Math.sqrt(s[0]**2 + s[1]**2 + s[2]**2);
+      this.scene3dArrayAxisX = this._scene3dGetActiveAxis(s) ?? 'x';
+    }
+  }
+
+  scene3dUpdateArrayCountX(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayCountX = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { countX: v });
+  }
+
+  scene3dUpdateArrayCountY(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayCountY = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { countY: v });
+  }
+
+  scene3dUpdateArraySpacingX(mag: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArraySpacingX = mag;
+    const sm = this.shapeManager as any;
+    const params = sm.getArrayParams3D?.(this.scene3dSelectedMeshId);
+    if (!params) return;
+    const s: [number,number,number] = params.mode === 'grid' ? (params.spacingX ?? [2,0,0]) : (params.spacing ?? [2,0,0]);
+    const oldMag = Math.sqrt(s[0]**2 + s[1]**2 + s[2]**2) || 1;
+    const scale = mag / oldMag;
+    const newS: [number,number,number] = [s[0]*scale, s[1]*scale, s[2]*scale];
+    sm.updateArrayParams3D?.(this.scene3dSelectedMeshId, params.mode === 'grid' ? { spacingX: newS } : { spacing: newS });
+  }
+
+  scene3dUpdateArraySpacingY(mag: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArraySpacingY = mag;
+    const sm = this.shapeManager as any;
+    const params = sm.getArrayParams3D?.(this.scene3dSelectedMeshId);
+    if (!params || params.mode !== 'grid') return;
+    const s: [number,number,number] = params.spacingY ?? [0, 0, 2];
+    const oldMag = Math.sqrt(s[0]**2 + s[1]**2 + s[2]**2) || 1;
+    const scale = mag / oldMag;
+    sm.updateArrayParams3D?.(this.scene3dSelectedMeshId, { spacingY: [s[0]*scale, s[1]*scale, s[2]*scale] as [number,number,number] });
+  }
+
+  scene3dSetArrayAxisX(axis: 'x' | 'y' | 'z'): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayAxisX = axis;
+    const mag = this.scene3dArraySpacingX || 2;
+    const vec: [number,number,number] = axis === 'x' ? [mag,0,0] : axis === 'y' ? [0,mag,0] : [0,0,mag];
+    const params = (this.shapeManager as any).getArrayParams3D?.(this.scene3dSelectedMeshId);
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId,
+      params?.mode === 'grid' ? { spacingX: vec } : { spacing: vec });
+  }
+
+  scene3dSetArrayAxisY(axis: 'x' | 'y' | 'z'): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayAxisY = axis;
+    const mag = this.scene3dArraySpacingY || 2;
+    const vec: [number,number,number] = axis === 'x' ? [mag,0,0] : axis === 'y' ? [0,mag,0] : [0,0,mag];
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { spacingY: vec });
+  }
+
+  scene3dUpdateArrayRadialCount(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayRadialCount = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { count: Math.max(1, v) });
+  }
+
+  scene3dUpdateArrayRadius(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayRadius = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { radius: Math.max(0.1, v) });
+  }
+
+  scene3dUpdateArrayArc(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayArc = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { arcDeg: Math.min(360, Math.max(1, v)) });
+  }
+
+  scene3dSetArrayRadialAxis(axis: 'x' | 'y' | 'z'): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayRadialAxis = axis;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { axis });
+  }
+
+  scene3dSetArrayMode(mode: 'linear' | 'grid' | 'radial'): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayMode = mode;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { mode });
+    this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
+  }
+
+  scene3dEditArraySource(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    const sourceId = sm.getArraySourceId?.(this.scene3dSelectedMeshId);
+    if (!sourceId) return;
+    const canvas = this.canvasRef?.nativeElement;
+    sm.enterMeshEditMode3D?.(sourceId);
+    this.scene3dIsEditingMesh = true;
+    if (canvas) sm.attachMeshEditPointerHandlers?.(canvas, sourceId, () => this.ngZone.run(() => {}));
+  }
+
+  scene3dBakeArray(): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    const confirmed = window.confirm(
+      'Convert to independent meshes? The copies will no longer update when the source changes. (Undo will restore the linked array.)'
+    );
+    if (!confirmed) return;
+    (this.shapeManager as any).bakeArray3D?.(this.scene3dSelectedMeshId);
+    this.scene3dIsArrayGroup = false;
   }
 
   scene3dResetCamera(): void {
@@ -3860,6 +4090,30 @@ export class IllustrationComponent implements OnInit {
       this.layerTree = this.buildLayerTree(parsed.root);
       this.refreshRasterLayers();
       this.sceneChanged$.next(currentSceneJSON);
+
+      // Array panel: re-sync params when gizmo drags update an active array group
+      if (this.scene3dIsArrayGroup && this.scene3dSelectedMeshId) {
+        this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
+      }
+
+      // Array tool: sync count drift from scroll wheel; sync radial params if in radial mode
+      if (this.scene3dArrayToolActive) {
+        const liveCount = (this.shapeManager as any).getArrayToolCount?.();
+        if (typeof liveCount === 'number') this.scene3dArrayToolCount = liveCount;
+        if (this.scene3dArrayToolMode === 'radial') this._scene3dSyncRadialToolStrip();
+      }
+
+      // Array tool: detect post-commit — ArrayToolController internally creates & selects an ArrayGroup3D
+      if (this.scene3dArrayToolActive) {
+        const sm = this.shapeManager as any;
+        const selectedId: string | null = sm.getSelectedNode3D?.() ?? sm.getSelectedMeshId3D?.() ?? null;
+        if (selectedId && sm.isArrayGroup3D?.(selectedId)) {
+          this.scene3dArrayToolActive = false;
+          sm.disableArrayTool?.();
+          this.scene3dRefreshMeshes();
+          this.scene3dSelectMesh(selectedId);
+        }
+      }
     });
 
     this.rasterBrushService.layers$.subscribe(layers => {

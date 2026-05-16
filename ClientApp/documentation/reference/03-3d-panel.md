@@ -61,7 +61,7 @@ scene3dRefreshHierarchy(): void {
 }
 ```
 
-Hierarchy node types: `'mesh'` and `'3DMeshGroup'`. Group nodes have a `children` array.
+Hierarchy node types: `'mesh'`, `'3DMeshGroup'`, and `'3DArrayGroup'`. Group nodes have a `children` array; `3DArrayGroup` nodes are **leaves** (no children — instances are GPU-only). Array group nodes include an `instanceCount: number` field populated by Salsa — no extra API call is needed for the outliner badge.
 
 ### Outliner operations
 
@@ -540,6 +540,174 @@ scene3dRedo():  sm.redo3D?.()   // requires sm.canRedo3D === true
 ```
 
 After undo/redo, `scene3dRefreshMeshes()` is called to re-sync the outliner.
+
+---
+
+## Array Tool (Repeat)
+
+The Repeat tool lets the user select a mesh and stamp N GPU-instanced copies along a linear axis, across a 2D grid, or around a radial ring. Instances are not separate scene nodes — they are computed each frame from `arrayParams` and drawn in a single WebGPU draw call.
+
+### Terminology
+
+| Term | Meaning |
+|------|---------|
+| **Source mesh** | The original `Mesh3D` the array is derived from — stays as a sibling in scene root |
+| **ArrayGroup3D** | The scene node that owns the array params (`type === '3DArrayGroup'`) |
+| **Pre-commit** | Array tool is active but no array has been created yet |
+| **Post-commit** | User clicked a handle; `ArrayGroup3D` is now selected and the Repeat panel shows |
+
+### Component State
+
+#### Tool-active state (pre-commit)
+
+```typescript
+scene3dArrayToolActive = false;
+scene3dArrayToolMode: 'line' | 'grid' | 'radial' = 'line';
+scene3dArrayToolCount = 3;
+// Radial-specific pre-commit state (synced from engine):
+scene3dArrayToolRadius: number | null = null;  // null = auto from source AABB
+scene3dArrayToolArc = 360;
+scene3dArrayToolAxis: 'x' | 'y' | 'z' = 'y';
+```
+
+#### Array Group panel state (post-commit)
+
+```typescript
+scene3dIsArrayGroup = false;
+scene3dArrayMode: 'linear' | 'grid' | 'radial' = 'linear';
+// Linear / Grid:
+scene3dArrayCountX = 3;   scene3dArraySpacingX = 2.0;  scene3dArrayAxisX: 'x'|'y'|'z' = 'x';
+scene3dArrayCountY = 3;   scene3dArraySpacingY = 2.0;  scene3dArrayAxisY: 'x'|'y'|'z' = 'z';
+// Radial:
+scene3dArrayRadialCount = 6;  scene3dArrayRadius = 3.0;
+scene3dArrayArc = 360;        scene3dArrayRadialAxis: 'x'|'y'|'z' = 'y';
+```
+
+### Pre-commit: Tool Options Strip
+
+Shown at the top of the 3D panel while `scene3dArrayToolActive` is true. The Mode + Count controls are always visible; Radius / Arc° / Axis / Orient appear only when Mode is Radial.
+
+```
+Mode: [●Line] [Grid] [Radial]   Count: 3
+// Radial only:
+Radius: [____auto]   Arc°: [360]   Axis: [X][Y][Z]   Orient: [W][L]
+```
+
+**Activation / deactivation:**
+
+```typescript
+scene3dToggleArrayTool()
+// Calls sm.enableArrayTool(mode, count); syncs radial strip state if mode === 'radial'
+
+scene3dDeactivateArrayTool()
+// Calls sm.disableArrayTool(); clears scene3dArrayToolActive
+```
+
+**Mode switch:**
+
+```typescript
+scene3dSetArrayToolMode(mode)
+// → sm.setArrayToolMode(mode); syncs radial strip if switching to 'radial'
+```
+
+**Radial pre-commit setters (live — update ghost immediately):**
+
+| Method | Salsa call | Notes |
+|--------|-----------|-------|
+| `scene3dSetArrayToolCount(n)` | `sm.setArrayToolCount(n)` | 1–32 |
+| `scene3dSetArrayToolRadius(r)` | `sm.setArrayToolRadius(r)` | `null` restores auto-AABB |
+| `scene3dSetArrayToolArc(deg)` | `sm.setArrayToolArc(deg)` | 1–360 |
+| `scene3dSetArrayToolAxis(axis)` | `sm.setArrayToolAxis(axis)` | `'x'|'y'|'z'` |
+
+**`_scene3dSyncRadialToolStrip()`** — private — reads `getArrayToolAxis/Radius/Arc` back from engine and updates component state. Called on activation and on mode switch to radial. Also called from `onSceneGraphChanged` when the tool is active in radial mode (syncs scroll-wheel count and live param changes).
+
+### Post-commit: Repeat Panel
+
+Shown in the right panel when `scene3dSelectedMeshId && scene3dIsArrayGroup && !scene3dIsEditingMesh`.
+
+**Selection detection** — `scene3dSelectMesh(id)` calls `sm.isArrayGroup3D(id)`. If true:
+- Sets `scene3dIsArrayGroup = true`, `scene3dSelectedIsGroup = true`
+- Calls `_scene3dSyncArrayPanel(id)` to populate panel state from `sm.getArrayParams3D(id)`
+- Returns early (skips normal mesh inspector)
+
+**`_scene3dSyncArrayPanel(groupId)`** — reads `params.mode` and fills all panel state variables. Also called from `onSceneGraphChanged` whenever `scene3dIsArrayGroup` is true, keeping the panel in sync with gizmo-drag spacing changes.
+
+**`onSceneGraphChanged` post-commit detection** — when the tool is active, queries `sm.getSelectedNode3D?.()` for a newly committed array group. If detected: deactivates the tool, calls `scene3dRefreshMeshes()` and `scene3dSelectMesh(id)` to switch the panel.
+
+#### Linear Mode
+
+| Control | Binding | Method | Salsa call |
+|---------|---------|--------|-----------|
+| Count | `scene3dArrayCountX` | `scene3dUpdateArrayCountX(v)` | `updateArrayParams3D(id, { countX: v })` |
+| Spacing | `scene3dArraySpacingX` (magnitude) | `scene3dUpdateArraySpacingX(mag)` | rescales spacing vector, calls `updateArrayParams3D` |
+| Axis X/Y/Z | `scene3dArrayAxisX` | `scene3dSetArrayAxisX(axis)` | sets spacing vector to cardinal `[mag,0,0]` etc. |
+
+#### Grid Mode
+
+Same pattern as linear but with a second axis:
+
+| Control | Binding | Method |
+|---------|---------|--------|
+| Count X / Y | `scene3dArrayCountX/Y` | `scene3dUpdateArrayCountX/Y(v)` |
+| Spacing X / Y | `scene3dArraySpacingX/Y` (magnitude) | `scene3dUpdateArraySpacingX/Y(mag)` |
+| Axis X / Y | `scene3dArrayAxisX/Y` | `scene3dSetArrayAxisX/Y(axis)` |
+
+#### Radial Mode
+
+| Control | Binding | Method | Salsa call |
+|---------|---------|--------|-----------|
+| Count | `scene3dArrayRadialCount` | `scene3dUpdateArrayRadialCount(v)` | `updateArrayParams3D(id, { count: max(1,v) })` |
+| Radius | `scene3dArrayRadius` | `scene3dUpdateArrayRadius(v)` | `updateArrayParams3D(id, { radius: max(0.1,v) })` |
+| Arc° | `scene3dArrayArc` | `scene3dUpdateArrayArc(v)` | `updateArrayParams3D(id, { arcDeg: clamp(1,360,v) })` |
+| Axis | `scene3dArrayRadialAxis` | `scene3dSetArrayRadialAxis(axis)` | `updateArrayParams3D(id, { axis })` |
+| Orient | `scene3dGizmoOrientation` | `scene3dToggleGizmoOrientation()` | `sm.setGizmoOrientation3D(mode)` |
+
+**Orient (World / Local)**: Radial instances orbit around a world axis by default. In Local mode the ring plane follows the source mesh's `localMatrix` rotation, so a tilted mesh gets a tilted ring. This is the same toggle as the Move/Rotate/Scale gizmo orientation (shared state: `scene3dGizmoOrientation`).
+
+#### Edit Source / Bake
+
+```typescript
+scene3dEditArraySource()
+// → sm.getArraySourceId(groupId) → sm.enterMeshEditMode3D(sourceId)
+// Hides Repeat panel; shows edit-mesh controls while editing
+
+scene3dBakeArray()
+// → window.confirm(...) → sm.bakeArray3D(groupId)
+// Converts ArrayGroup3D + source into MeshGroup3D of N+1 independent meshes
+// Pushes undo internally; baked group auto-selected
+```
+
+### Outliner Behavior
+
+`3DArrayGroup` nodes appear as **leaves** in the outliner — no expand/collapse arrow. The `⊞` icon is shown. An instance count badge (`×N`) is rendered from `node.instanceCount` (included in `getScene3DHierarchy()` output; no extra call needed):
+
+```
+⊞  Repeat  ×4
+```
+
+Clicking the node calls `scene3dSelectMesh(node.id)` which routes to the array group panel.
+
+### Salsa API Reference
+
+| Method | Description |
+|--------|-------------|
+| `sm.enableArrayTool(mode?, count?)` | Activates hover-handle mode. `mode`: `'line'|'grid'|'radial'`, default `'line'` |
+| `sm.disableArrayTool()` | Clears ghost/handle visuals |
+| `sm.setArrayToolMode(mode)` | Switch mode while tool is active |
+| `sm.setArrayToolCount(n)` | Set ghost count (1–32) |
+| `sm.getArrayToolCount()` | Read back count (for scroll-wheel sync) |
+| `sm.setArrayToolRadius(r)` | Pre-commit radial radius (`null` = auto-AABB) |
+| `sm.getArrayToolRadius()` | Read back radius |
+| `sm.setArrayToolArc(deg)` | Pre-commit arc (1–360) |
+| `sm.getArrayToolArc()` | Read back arc |
+| `sm.setArrayToolAxis(axis)` | Pre-commit radial axis |
+| `sm.getArrayToolAxis()` | Read back axis |
+| `sm.isArrayGroup3D(nodeId)` | `true` if the node is an `ArrayGroup3D` |
+| `sm.getArrayParams3D(groupId)` | Returns `LinearArrayParams \| GridArrayParams \| RadialArrayParams \| null` |
+| `sm.updateArrayParams3D(groupId, partial)` | Live-update params; triggers `onSceneGraphChanged`; does **not** push undo |
+| `sm.getArraySourceId(groupId)` | Returns the source mesh ID |
+| `sm.bakeArray3D(groupId)` | Bake to N+1 independent meshes; pushes undo |
+| `sm.scene3d.pushCommand3D({ description, undo, redo })` | Push manual undo step for panel-driven param changes |
 
 ---
 

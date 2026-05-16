@@ -2479,6 +2479,12 @@ svg {
     white-space: nowrap;
 }
 
+.scene3d-array-badge {
+    font-size: 9px;
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+}
+
 .scene3d-mesh-delete {
     background: none;
     border: none;
@@ -2556,6 +2562,12 @@ svg {
 .scene3d-btn-sm {
     font-size: 10px;
     padding: 1px 6px;
+}
+
+.scene3d-btn-active {
+    background: rgba(#9B59B6, 0.35) !important;
+    border-color: #9B59B6 !important;
+    color: #d4aaef !important;
 }
 
 // ── Phase Buckets ─────────────────────────────────────────────────────────────
@@ -3638,6 +3650,61 @@ svg {
     border-radius: 3px;
     padding: 2px 5px;
     white-space: nowrap;
+}
+
+// ── Array Tool ─────────────────────────────────────────────────
+.scene3d-array-tool-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(100, 180, 255, 0.06);
+    border-bottom: 1px solid rgba(100, 180, 255, 0.15);
+    margin-bottom: 4px;
+}
+
+.scene3d-array-strip-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    white-space: nowrap;
+}
+
+.scene3d-array-strip-count {
+    width: 42px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    color: #ccc;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 11px;
+    text-align: center;
+}
+
+.scene3d-array-mode-row {
+    display: flex;
+    gap: 4px;
+    padding: 4px 0 6px;
+}
+
+.scene3d-axis-btns {
+    display: flex;
+    gap: 3px;
+}
+
+.scene3d-array-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+
+    .scene3d-btn { flex: 1; }
+    .scene3d-btn-danger {
+        border-color: rgba(200, 80, 80, 0.5);
+        color: #e88;
+        &:hover { background: rgba(200, 80, 80, 0.15); border-color: #c85050; }
+    }
 }
 
 // ── Undo/redo in header ───────────────────────────────────────────────────────
