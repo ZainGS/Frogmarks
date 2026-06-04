@@ -11,6 +11,7 @@
         <div *ngIf="showAddMenu" class="rl-add-dropdown">
           <button (click)="addLayer(); showAddMenu = false">2D Layer</button>
           <button (click)="add3DScene(); showAddMenu = false" [disabled]="has3DScene">3D Scene</button>
+          <button (click)="addVectorLayer()">✦ Vector Layer</button>
           <button (click)="addFolder(); showAddMenu = false">Folder</button>
           <button (click)="triggerReferenceImagePicker()">📷 Reference Image</button>
         </div>
@@ -21,6 +22,23 @@
   <!-- Search -->
   <div class="rl-search">
     <input type="text" placeholder="Search layers…" [(ngModel)]="searchTerm">
+  </div>
+
+  <!-- Vector layers — pinned above raster layers, always render on top -->
+  <div *ngIf="vectorLayers.length > 0" class="rl-vector-section">
+    <div *ngFor="let vl of vectorLayers"
+         class="rl-vector-row"
+         [class.active]="activeVectorLayerId === vl.id"
+         [class.invisible-layer]="!vl.visible"
+         (click)="selectVectorLayer(vl.id)">
+      <span class="rl-icon rl-eye" (click)="toggleVectorVisibility(vl, $event)"
+            [title]="vl.visible ? 'Hide layer' : 'Show layer'">
+        <mat-icon class="rl-mat-icon">{{ vl.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
+      </span>
+      <span class="rl-vector-icon">✦</span>
+      <span class="rl-name">{{ vl.name }}</span>
+      <button class="rl-vector-remove" (click)="removeVectorLayer(vl.id, $event)" title="Remove vector layer">✕</button>
+    </div>
   </div>
 
   <!-- Layer list -->

@@ -17,6 +17,7 @@ $enable-negative-margins: true;
   overflow-y: overlay;
   height: 100%;
   padding-bottom: 76px;
+  position: relative;
   // min-width: 0; /* Allows shrinking */
   // max-width: calc(100vw - 250px); /* Ensures it never exceeds the screen */
   //overflow-x: auto; /* Prevents horizontal scrolling */
@@ -40,7 +41,9 @@ $enable-negative-margins: true;
   max-height: none !important;
   display: flex !important;
   flex-direction: column !important;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 10;
   padding-top: 0 !important;
   transition: width 0.2s ease, max-width 0.2s ease, min-width 0.2s ease, flex-basis 0.2s ease !important;
 
@@ -257,6 +260,147 @@ li {
 .row-padding-right-negation {
   padding-right: 0px !important;
 }
+
+// ── Local Inference compact (collapsed sidebar) ───────────────────────
+.li-compact-icon--connected {
+  color: rgba(60,230,140,0.85);
+  opacity: 0.85 !important;
+}
+
+.li-compact-popup {
+  width: 210px;
+}
+
+.li-compact-stat {
+  font-family: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+
+  &--connected { color: rgba(60,230,140,0.85); }
+}
+
+.li-compact-action {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+// ── Docs embedded panel ──────────────────────────────────────────────
+.docs-panel-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #050505;
+  z-index: 5;
+}
+
+// ── Local Inference sidebar widget ───────────────────────────────────
+.li-sidenav {
+  border-top: 1px solid rgba(137,124,255,0.12);
+}
+
+.li-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+  font-family: inherit;
+  opacity: 0.5;
+
+  &--connected {
+    color: rgba(60,230,140,0.9);
+    opacity: 1;
+  }
+}
+
+.li-disconnect-btn {
+  background: rgba(220,80,60,0.12) !important;
+  border-color: rgba(220,80,60,0.35) !important;
+  color: #e07060 !important;
+
+  &:hover { background: rgba(220,80,60,0.22) !important; }
+}
+
+// ── Local Inference panel ─────────────────────────────────────────────
+.local-ai-info {
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.45);
+  margin: 0 0 4px;
+}
+
+.local-ai-code {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 10.5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: rgba(137,124,255,0.9);
+}
+
+.local-ai-url-row {
+  display: flex;
+  gap: 6px;
+}
+
+.local-ai-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  font-family: inherit;
+
+  &:focus { border-color: rgba(137,124,255,0.6); }
+  &::placeholder { color: rgba(255,255,255,0.3); }
+}
+
+.local-ai-connect-btn {
+  background: rgba(137,124,255,0.2);
+  border: 1px solid rgba(137,124,255,0.4);
+  border-radius: 6px;
+  color: #c4bcff;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms;
+
+  &:hover:not(:disabled) { background: rgba(137,124,255,0.35); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+
+.local-ai-status {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+
+  &--connected { color: rgba(60,230,140,0.85); }
+  &--error { color: rgba(255,100,80,0.85); font-size: 10px; line-height: 1.4; }
+}
+
+.local-ai-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 10px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+
+  option { background: #1a1a2e; }
+}
+
 
 .header-action-button-first {
   margin-top: -5px;
@@ -1745,7 +1889,10 @@ img:active:not(.selected)
 
 .base-sidenav-column.frogmarks-galaxy-compact {
   width: 70px !important;
-  
+  overflow: visible !important;
+  position: relative;
+  z-index: 10;
+
   .sidebar-logo-area {
     padding-top: 10px;
   }
@@ -1922,6 +2069,52 @@ img:active:not(.selected)
   font-family: monospace;
 }
 
+.dash-info-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: help;
+  color: rgba(255,255,255,0.5);
+  transition: color 120ms;
+
+  &:hover { color: rgba(255,255,255,0.85); }
+
+  .dash-info-tip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 230px;
+    background: #1e1c2a;
+    border: 1px solid rgba(137,124,255,0.4);
+    border-radius: 8px;
+    padding: 10px 13px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.82);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    white-space: normal;
+    text-align: left;
+    pointer-events: none;
+    z-index: 10000;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: rgba(137,124,255,0.4);
+    }
+  }
+
+  &:hover .dash-info-tip { display: block; }
+}
+
 .opfs-info-icon {
   font-size: 16px;
   width: 16px;
@@ -2019,7 +2212,7 @@ img:active:not(.selected)
   background: #1e1e22;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 14px 16px;
   box-shadow: 0 6px 24px rgba(0,0,0,0.6);
   opacity: 0;
   pointer-events: none;

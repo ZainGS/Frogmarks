@@ -3652,6 +3652,11 @@ svg {
     white-space: nowrap;
 }
 
+.scene3d-mode-hint {
+    min-width: 34px;
+    text-align: center;
+}
+
 // ── Array Tool ─────────────────────────────────────────────────
 .scene3d-array-tool-strip {
     display: flex;

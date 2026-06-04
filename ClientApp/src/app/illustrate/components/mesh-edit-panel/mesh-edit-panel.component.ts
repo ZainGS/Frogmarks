@@ -39,6 +39,15 @@ export class MeshEditPanelComponent implements OnChanges {
   loopCutT = 0.5;
   bevelAmount = 0.3;
 
+  // Phase 2 — mesh cleanup
+  mergeThreshold = 0.001;
+  mergeRemovedCount: number | null = null;
+
+  // Phase 2 — proportional edit
+  proportionalEnabled = false;
+  proportionalRadius = 1.0;
+  proportionalFalloff: 'smooth' | 'linear' | 'sharp' = 'smooth';
+
   private get sm(): any { return this.shapeManager; }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -127,6 +136,57 @@ export class MeshEditPanelComponent implements OnChanges {
       this.sm?.deleteEditFace3D?.(this.meshId, fi);
     }
     this.sm?.clearEditSelection3D?.(this.meshId);
+  }
+
+  // ── Phase 2 face ops ────────────────────────────────────────────
+
+  flipNormals(): void {
+    if (!this.meshId || this.selectedFaces.length === 0) return;
+    this.sm?.flipFaces3D?.(this.meshId, new Set(this.selectedFaces));
+    this.sm?.clearEditSelection3D?.(this.meshId);
+  }
+
+  subdivideFaceSelected(): void {
+    if (!this.meshId || this.selectedFaces.length === 0) return;
+    for (const fi of this.selectedFaces) {
+      this.sm?.subdivideFace3D?.(this.meshId, fi);
+    }
+    this.sm?.clearEditSelection3D?.(this.meshId);
+  }
+
+  separateFaces(): void {
+    if (!this.meshId || this.selectedFaces.length === 0) return;
+    this.sm?.separateFaces3D?.(this.meshId, new Set(this.selectedFaces));
+    this.sm?.clearEditSelection3D?.(this.meshId);
+  }
+
+  // ── Phase 2 mesh cleanup ─────────────────────────────────────────
+
+  mergeByDistance(): void {
+    if (!this.meshId) return;
+    const removed = this.sm?.mergeByDistance3D?.(this.meshId, this.mergeThreshold);
+    this.mergeRemovedCount = typeof removed === 'number' ? removed : null;
+  }
+
+  fillHole(): void {
+    if (!this.meshId) return;
+    const em = this.sm?.getMesh3D?.(this.meshId)?.editMesh;
+    if (!em) return;
+    const boundaryIdx = (em.halfEdges as any[]).findIndex((he: any) => he.twin === -1);
+    if (boundaryIdx === -1) return;
+    this.sm?.fillHole3D?.(this.meshId, boundaryIdx);
+  }
+
+  // ── Phase 2 proportional edit ────────────────────────────────────
+
+  toggleProportional(): void {
+    this.proportionalEnabled = !this.proportionalEnabled;
+    this.sm?.setProportionalEdit3D?.(this.meshId, this.proportionalEnabled, this.proportionalRadius, this.proportionalFalloff);
+  }
+
+  applyProportionalSettings(): void {
+    if (!this.proportionalEnabled) return;
+    this.sm?.setProportionalEdit3D?.(this.meshId, true, this.proportionalRadius, this.proportionalFalloff);
   }
 
   weldVertices(): void {

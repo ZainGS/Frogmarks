@@ -237,6 +237,61 @@ $radius: 6px;
   &:hover { color: #f77; }
 }
 
+/* ── Vector layer section ────────────────────────────────── */
+
+$vector-accent: #3dbfa8;
+
+.rl-vector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid $border;
+  margin-bottom: 4px;
+}
+
+.rl-vector-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 80ms;
+
+  &:hover { background: rgba($vector-accent, 0.08); }
+
+  &.active {
+    background: rgba($vector-accent, 0.14);
+    border-color: rgba($vector-accent, 0.4);
+
+    .rl-name { color: lighten($vector-accent, 12%); }
+    .rl-vector-icon { color: $vector-accent; }
+  }
+
+  &.invisible-layer { opacity: 0.45; }
+}
+
+.rl-vector-icon {
+  font-size: 10px;
+  color: rgba($vector-accent, 0.8);
+  flex-shrink: 0;
+}
+
+.rl-vector-remove {
+  background: none;
+  border: none;
+  color: $muted;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+  margin-left: auto;
+
+  &:hover { color: #f77; }
+}
+
 /* ── Row 1: eye, name, clip, lock ────────────────────────── */
 
 .rl-row-top {

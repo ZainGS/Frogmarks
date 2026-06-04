@@ -1188,7 +1188,39 @@ export class IllustrationComponent implements OnInit {
   scene3dAllGroupBuckets: Record<string, string[][]> = {};
   scene3dBucketSelections: string[] = []; // per-bucket dropdown selection (transient)
 
+  // ── Vector / Ephemera state ────────────────────────────────
+  activeVectorLayerId: string | null = null;
+
+  onVectorLayerSelected(id: string | null): void {
+    this.activeVectorLayerId = id;
+    const sm = this.shapeManager as any;
+    sm?.webgpuRenderer?.setActiveVectorLayerId?.(id);
+  }
+
+  closeEphemeraPanel(): void {
+    this.activeVectorLayerId = null;
+    const sm = this.shapeManager as any;
+    sm?.setActiveVectorLayer?.(null);
+    sm?.webgpuRenderer?.setActiveVectorLayerId?.(null);
+  }
+
   // Ribbon mesh
+  // ── Armature state ─────────────────────────────────────────
+  scene3dArmaturePanelOpen = false;
+
+  openArmaturePanel(): void {
+    this.scene3dArmaturePanelOpen = true;
+    this.scene3dDeactivateArrayTool();
+    this.scene3dGizmoMode = null;
+    const sm = this.shapeManager as any;
+    sm.scene3d?.setGizmoMode?.(null);
+    sm.setGizmoMode3D?.(null);
+  }
+
+  closeArmaturePanel(): void {
+    this.scene3dArmaturePanelOpen = false;
+  }
+
   // ── Mesh Edit state ────────────────────────────────────────
   scene3dIsEditingMesh = false;
   scene3dEditTool: 'select' | 'knife' = 'select';
@@ -1399,6 +1431,21 @@ export class IllustrationComponent implements OnInit {
   scene3dPS1Snap = 160;
   scene3dPS1Affine = 0.5;
   scene3dPS1ColorDepth = 32;
+
+  // Scene background / skybox
+  scene3dBgMode: 'none' | 'solid' | 'gradient' | 'wavy' = 'none';
+  scene3dBgColor1 = '#1a1a2e';
+  scene3dBgColor2 = '#99aabb';
+
+  // Fog
+  scene3dFogMode: 'off' | 'linear' | 'exponential' = 'off';
+  scene3dFogColor = '#cccccc';
+  scene3dFogNear = 5;
+  scene3dFogFar = 20;
+  scene3dFogDensity = 0.08;
+
+  // Texture sampling
+  scene3dTextureFilter: 'nearest' | 'linear' = 'nearest';
 
   // Lighting (spec defaults)
   scene3dLightDirX = 0.3;
@@ -1717,6 +1764,7 @@ export class IllustrationComponent implements OnInit {
       case 'plane':    mesh = s3d.createPlane(cx, cy, cz); break;
       case 'cylinder': mesh = s3d.createCylinder(cx, cy, cz); break;
       case 'torus':    mesh = s3d.createTorus(cx, cy, cz); break;
+      case 'sprite':   mesh = sm.createSprite3D?.(cx, cy, cz, 1, 1); break;
       default: return;
     }
     this.scene3dRefreshMeshes();
@@ -3289,6 +3337,32 @@ export class IllustrationComponent implements OnInit {
     this.scene3dMarkDirty();
   }
 
+  scene3dApplySceneBg(): void {
+    const c1 = this._hexToRgba01(this.scene3dBgColor1);
+    const c2 = this._hexToRgba01(this.scene3dBgColor2);
+    (this.shapeManager as any).setSceneBg3D?.({
+      mode: this.scene3dBgMode,
+      color1: [c1.r, c1.g, c1.b, 1],
+      color2: [c2.r, c2.g, c2.b, 1],
+    });
+  }
+
+  scene3dApplyFog(): void {
+    const c = this._hexToRgba01(this.scene3dFogColor);
+    (this.shapeManager as any).setFog3D?.({
+      mode: this.scene3dFogMode,
+      color: [c.r, c.g, c.b],
+      near: +this.scene3dFogNear,
+      far: +this.scene3dFogFar,
+      density: +this.scene3dFogDensity,
+    });
+  }
+
+  scene3dSetTextureFilter(filter: 'nearest' | 'linear'): void {
+    this.scene3dTextureFilter = filter;
+    (this.shapeManager as any).setTextureFilterMode3D?.(filter);
+  }
+
   scene3dEnsureAnimationPlayer(): void {
     const sm = this.shapeManager as any;
     if (!sm.getAnimationPlayer3D?.()) {
@@ -4440,13 +4514,23 @@ export class IllustrationComponent implements OnInit {
         }
         return;
       case 'Tab':
-        if (this.scene3dPanelVisible && this.scene3dSelectedMeshId) {
-          if (this.scene3dIsEditingMesh) {
-            this.exitMeshEditMode();
-          } else {
-            this.enterMeshEditMode();
+        if (this.scene3dPanelVisible) {
+          if (event.shiftKey) {
+            if (this.scene3dArmaturePanelOpen) {
+              this.closeArmaturePanel();
+            } else {
+              this.openArmaturePanel();
+            }
+            break;
           }
-          break;
+          if (this.scene3dSelectedMeshId) {
+            if (this.scene3dIsEditingMesh) {
+              this.exitMeshEditMode();
+            } else {
+              this.enterMeshEditMode();
+            }
+            break;
+          }
         }
         return;
       default: return;

@@ -77,6 +77,46 @@
         </div>
       </div> -->
     </div>
+    <!-- Local Inference Panel -->
+    <div *ngIf="showLocalAiPanel" class="notification-panel ps-4 pt-3 pe-4">
+      <div class="row">
+        <div class="col-8"><b>Local Inference</b></div>
+        <div class="col-4 text-end pe-4">
+          <fm-icon name="close" class="close-icon type-icon" (click)="closeLocalAiPanel()"></fm-icon>
+        </div>
+      </div>
+      <div class="settings-section">
+        <p class="local-ai-info">
+          Frogmarks uses your local GPU exclusively — no data leaves your machine.
+          Before connecting, allow cross-origin requests from Ollama by running:<br>
+          <code class="local-ai-code">OLLAMA_ORIGINS=* ollama serve</code><br>
+          Or set <code class="local-ai-code">OLLAMA_ORIGINS=*</code> as a system environment variable and restart Ollama.
+        </p>
+        <div class="settings-section-label">Server URL</div>
+        <div class="local-ai-url-row">
+          <input class="local-ai-input" type="text" [(ngModel)]="localAiUrlInput" placeholder="http://localhost:11434" (keyup.enter)="applyLocalAiUrl()">
+          <button class="local-ai-connect-btn" (click)="applyLocalAiUrl()" [disabled]="(localInference.connectionStatus$ | async) === 'connecting'">
+            {{ (localInference.connectionStatus$ | async) === 'connecting' ? '…' : 'Connect' }}
+          </button>
+        </div>
+        <div class="local-ai-status"
+             [class.local-ai-status--connected]="(localInference.connectionStatus$ | async) === 'connected'"
+             [class.local-ai-status--error]="(localInference.connectionStatus$ | async) === 'error'">
+          <ng-container [ngSwitch]="localInference.connectionStatus$ | async">
+            <span *ngSwitchCase="'connected'">Connected</span>
+            <span *ngSwitchCase="'connecting'">Connecting…</span>
+            <span *ngSwitchCase="'error'">{{ localInference.lastError$ | async }}</span>
+            <span *ngSwitchDefault>Disconnected</span>
+          </ng-container>
+        </div>
+        <ng-container *ngIf="(localInference.availableModels$ | async)?.length">
+          <div class="settings-section-label" style="margin-top:12px">Model</div>
+          <select class="local-ai-select" [ngModel]="localInference.selectedModel" (ngModelChange)="localInference.setSelectedModel($event)">
+            <option *ngFor="let m of (localInference.availableModels$ | async)" [value]="m.name">{{ m.name }}</option>
+          </select>
+        </ng-container>
+      </div>
+    </div>
     <!-- Base Row -->
     <div class="row flex-nowrap" style="height: -webkit-fill-available;">
         <!-- Base Sidenav Column -->
@@ -212,6 +252,15 @@
                     <fm-icon *ngIf="!isLoading" name="newspaper" class="list-item-icon" data-fm-token="--fm-nav-item-icon"></fm-icon>
                     <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text">Updates</label>
                   </li>
+                  <li class="list-item"
+                      [attr.data-fm-token]="isDocsActive ? '--fm-nav-item-active-bg' : '--fm-nav-item-hover-bg'"
+                      (click)="docsClicked()"
+                      [ngClass]="{ 'loading-container': isLoading }">
+                    <fm-icon *ngIf="!isLoading" name="menu_book" class="list-item-icon"
+                             [attr.data-fm-token]="isDocsActive ? '--fm-nav-item-active-icon' : '--fm-nav-item-icon'"></fm-icon>
+                    <label *ngIf="!isLoading" class="ms-1"
+                           [attr.data-fm-token]="isDocsActive ? '--fm-nav-item-active-text' : '--fm-nav-item-text'">Documentation</label>
+                  </li>
                   <li class="list-item" data-fm-token="--fm-nav-item-hover-bg" [ngClass]="{ 'loading-container': isLoading }">
                     <fm-icon *ngIf="!isLoading" name="help" class="list-item-icon" data-fm-token="--fm-nav-item-icon"></fm-icon>
                     <label *ngIf="!isLoading" class="ms-1" data-fm-token="--fm-nav-item-text">Help & Feedback</label>
@@ -238,10 +287,10 @@
                   <div class="opfs-sidenav-header">
                     <fm-icon name="save" class="opfs-icon"></fm-icon>
                     <span class="opfs-label" data-fm-token="--fm-storage-label-color">OPFS Local Storage</span>
-                    <fm-icon name="info" class="opfs-info-icon"
-                      matTooltip="Your work is auto-saved locally in your browser (OPFS). Browsers may evict this data if disk space runs critically low. Safari on iOS may clear it after 7 days of inactivity. Make regular backups!"
-                      matTooltipPosition="above"
-                      matTooltipClass="opfs-tooltip"></fm-icon>
+                    <span class="dash-info-icon">
+                      <fm-icon name="info" class="opfs-info-icon"></fm-icon>
+                      <span class="dash-info-tip">Your work is auto-saved locally in your browser (OPFS). Browsers may evict this data if disk space runs critically low. Safari on iOS may clear it after 7 days of inactivity. Make regular backups!</span>
+                    </span>
                   </div>
                   <div class="opfs-track opfs-track-full" data-fm-token="--fm-storage-track-bg">
                     <div class="opfs-fill" data-fm-token="--fm-storage-fill-bg" [style.width.%]="opfsUsagePct" [class.opfs-warn]="opfsUsagePct > 75"></div>
@@ -269,12 +318,36 @@
                     <span class="opfs-stat">{{ cloudUsedMb | number:'1.0-0' }} MB / {{ cloudQuotaGb | number:'1.0-0' }} GB</span>
                   </div>
                 </div>
+                <!-- Local Inference Widget -->
+                <div class="opfs-sidenav li-sidenav ms-1 me-2 mt-2">
+                  <div class="opfs-sidenav-header">
+                    <fm-icon name="memory" class="opfs-icon"></fm-icon>
+                    <span class="opfs-label">Local GPU Inference</span>
+                    <span class="dash-info-icon">
+                      <fm-icon name="info" class="opfs-info-icon"></fm-icon>
+                      <span class="dash-info-tip">Local GPU Inference uses only your local GPU to ensure no data ever leaves your machine. Requires Ollama with OLLAMA_ORIGINS=* set before connecting.</span>
+                    </span>
+                  </div>
+                  <div class="opfs-sidenav-footer">
+                    <span class="opfs-stat li-status"
+                          [class.li-status--connected]="(localInference.connectionStatus$ | async) === 'connected'">
+                      <ng-container *ngIf="(localInference.connectionStatus$ | async) === 'connected'; else liNotConnected">{{ localInference.selectedModel }}</ng-container>
+                      <ng-template #liNotConnected>Not Connected</ng-template>
+                    </span>
+                    <ng-container [ngSwitch]="localInference.connectionStatus$ | async">
+                      <button *ngSwitchCase="'connected'" class="opfs-backup-btn li-disconnect-btn" (click)="disconnectLocalInference()">Disconnect</button>
+                      <button *ngSwitchCase="'connecting'" class="opfs-backup-btn" disabled>…</button>
+                      <button *ngSwitchDefault class="opfs-backup-btn" (click)="openLocalAiPanel()">Connect</button>
+                    </ng-container>
+                  </div>
+                </div>
               </ng-container>
 
               <!-- Left chevrons (expanded sidebar → collapse) -->
               <div *ngIf="!isFrogmarksGalaxyActive && !isSidenavCollapsed"
                    class="sidebar-collapse-row"
                    (click)="toggleSidenavCollapsed()">
+                <span class="sidebar-chev sidebar-chev--left"></span>
                 <span class="sidebar-chev sidebar-chev--left"></span>
                 <span class="sidebar-chev sidebar-chev--left"></span>
                 <span class="sidebar-chev sidebar-chev--left"></span>
@@ -314,6 +387,28 @@
                     <div class="opfs-compact-track">
                       <div class="opfs-compact-fill opfs-compact-fill--cloud" [style.width.%]="cloudUsagePct" [class.opfs-warn]="cloudUsagePct > 85"></div>
                     </div>
+                  </ng-container>
+                </div>
+              </div>
+
+              <!-- Compact Local Inference icon (collapsed sidebar) -->
+              <div *ngIf="isSidenavCollapsed" class="opfs-compact li-compact">
+                <fm-icon name="memory" class="opfs-compact-icon"
+                         [class.li-compact-icon--connected]="(localInference.connectionStatus$ | async) === 'connected'"></fm-icon>
+                <div class="opfs-compact-popup li-compact-popup">
+                  <div class="opfs-compact-row">
+                    <fm-icon name="memory" class="opfs-compact-row-icon"></fm-icon>
+                    <span class="opfs-compact-label">Local Inference</span>
+                    <span class="opfs-compact-stat li-compact-stat"
+                          [class.li-compact-stat--connected]="(localInference.connectionStatus$ | async) === 'connected'">
+                      <ng-container *ngIf="(localInference.connectionStatus$ | async) === 'connected'; else liPopupNotConn">{{ localInference.selectedModel }}</ng-container>
+                      <ng-template #liPopupNotConn>Not Connected</ng-template>
+                    </span>
+                  </div>
+                  <ng-container [ngSwitch]="localInference.connectionStatus$ | async">
+                    <button *ngSwitchCase="'connected'" class="opfs-backup-btn li-disconnect-btn li-compact-action" (click)="disconnectLocalInference()">Disconnect</button>
+                    <button *ngSwitchCase="'connecting'" class="opfs-backup-btn li-compact-action" disabled>…</button>
+                    <button *ngSwitchDefault class="opfs-backup-btn li-compact-action" (click)="openLocalAiPanel()">Connect</button>
                   </ng-container>
                 </div>
               </div>
@@ -988,6 +1083,11 @@
           <!-- <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" [ngClass]="{ 'loading-container': isLoading }">
             <app-explore-feed></app-explore-feed>
           </div> -->
+
+          <!-- Documentation -->
+          <div *ngIf="isDocsActive" class="docs-panel-container">
+            <app-docs [embedded]="true" (closed)="isDocsActive = false"></app-docs>
+          </div>
 
           <!-- FrogPlayer -->
           <div class="frog-player-container" *ngIf="isFrogPlayerActive">

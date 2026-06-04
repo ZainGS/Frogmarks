@@ -70,6 +70,22 @@
         <button class="me-op-btn me-op-full me-op-danger"
                 [disabled]="selectedFaces.length === 0"
                 (click)="deleteSelected()">Delete Face</button>
+
+        <div class="me-op-sep"></div>
+
+        <button class="me-op-btn me-op-full me-op-secondary"
+                [disabled]="selectedFaces.length === 0"
+                (click)="flipNormals()">Flip Normals</button>
+
+        <button class="me-op-btn me-op-full me-op-secondary"
+                style="margin-top:4px"
+                [disabled]="selectedFaces.length === 0"
+                (click)="subdivideFaceSelected()">Subdivide Face</button>
+
+        <button class="me-op-btn me-op-full me-op-secondary"
+                style="margin-top:4px"
+                [disabled]="selectedFaces.length === 0"
+                (click)="separateFaces()">Separate Faces</button>
       </ng-container>
 
       <!-- Vertex ops: weld -->
@@ -86,6 +102,54 @@
         <button class="me-op-btn me-op-full"
                 [disabled]="!weldV1Input || !weldV2Input"
                 (click)="weldVertices()">Weld V2 into V1</button>
+      </ng-container>
+    </div>
+
+    <!-- ── Mesh Cleanup ──────────────────────────────────────── -->
+    <div class="me-section">
+      <div class="me-section-title">Mesh Cleanup</div>
+
+      <div class="me-op-inline" style="margin-bottom:6px">
+        <button class="me-op-btn" (click)="mergeByDistance()">Merge by Distance</button>
+        <span class="me-label">Threshold</span>
+        <input type="number" class="me-num" step="0.0001" min="0.00001"
+               [(ngModel)]="mergeThreshold">
+      </div>
+      <div *ngIf="mergeRemovedCount !== null" class="me-hint me-hint-ok">
+        {{ mergeRemovedCount }} vertex/vertices merged
+      </div>
+
+      <button class="me-op-btn me-op-full me-op-secondary" style="margin-top:6px"
+              (click)="fillHole()"
+              title="Detect boundary and fill first open hole">Fill Hole</button>
+    </div>
+
+    <!-- ── Proportional Edit ──────────────────────────────── -->
+    <div class="me-section">
+      <div class="me-section-title">Proportional Edit</div>
+
+      <button class="me-op-btn me-op-full"
+              [class.me-tool-knife-active]="proportionalEnabled"
+              (click)="toggleProportional()">
+        {{ proportionalEnabled ? '✓ Proportional On' : 'Proportional Off' }}
+      </button>
+
+      <ng-container *ngIf="proportionalEnabled">
+        <div class="me-op-inline" style="margin-top:8px">
+          <span class="me-label">Radius</span>
+          <input type="number" class="me-num" min="0.01" step="0.1"
+                 [(ngModel)]="proportionalRadius"
+                 (change)="applyProportionalSettings()">
+        </div>
+        <div class="me-op-inline" style="margin-top:6px">
+          <span class="me-label">Falloff</span>
+          <select class="me-select" [(ngModel)]="proportionalFalloff"
+                  (change)="applyProportionalSettings()">
+            <option value="smooth">Smooth</option>
+            <option value="linear">Linear</option>
+            <option value="sharp">Sharp</option>
+          </select>
+        </div>
       </ng-container>
     </div>
 

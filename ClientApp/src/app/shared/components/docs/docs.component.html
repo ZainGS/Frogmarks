@@ -1,0 +1,54 @@
+<div class="fd-docs" [class.fd-docs--embedded]="embedded">
+
+  <button *ngIf="!embedded" class="fd-back-btn" (click)="goBack()">← Dashboard</button>
+
+  <div class="fd-layout">
+
+    <!-- ── Left Nav ── -->
+    <nav class="fd-nav">
+      <div *ngFor="let section of sections"
+           class="fd-nav-section"
+           [ngClass]="'fd-nav-section--' + section.theme">
+
+        <div class="fd-nav-section-hdr"
+             [class.fd-nav-section-hdr--active]="activeSectionId === section.id"
+             (click)="toggleSection(section.id)">
+          <span class="fd-nav-dot"></span>
+          <span class="fd-nav-tag">{{ section.tag }}</span>
+          <span class="fd-nav-chevron" [class.fd-nav-chevron--open]="activeSectionId === section.id">›</span>
+        </div>
+
+        <div *ngIf="activeSectionId === section.id" class="fd-nav-topics">
+          <div *ngFor="let topic of section.topics"
+               class="fd-nav-topic"
+               [class.fd-nav-topic--active]="selectedTopicId === topic.id"
+               (click)="selectTopic(topic.id)">
+            {{ topic.label }}
+          </div>
+        </div>
+
+      </div>
+    </nav>
+
+    <!-- ── Right Detail ── -->
+    <div class="fd-detail">
+      <ng-container *ngIf="getSelectedTopic() as topic">
+
+        <div class="fd-detail-hdr" [ngClass]="'fd-detail-hdr--' + (getSelectedSection()?.theme || '')">
+          <span class="fd-detail-badge">{{ getSelectedSection()?.tag }}</span>
+          <h2 class="fd-detail-title">{{ topic.label }}</h2>
+        </div>
+
+        <div class="fd-detail-body">
+          <p *ngFor="let para of topic.paras" class="fd-p" [innerHTML]="para"></p>
+          <ul *ngIf="topic.items?.length" class="fd-list">
+            <li *ngFor="let item of topic.items" [innerHTML]="item"></li>
+          </ul>
+        </div>
+
+      </ng-container>
+    </div>
+
+  </div>
+
+</div>

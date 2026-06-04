@@ -1,0 +1,306 @@
+<div class="ar-panel">
+
+  <!-- Header -->
+  <div class="ar-header">
+    <button class="ar-exit-btn" (click)="close()">&#8592; Close</button>
+    <span class="ar-title">Armature</span>
+    <select class="ar-bg-select" [(ngModel)]="bgMode" (change)="updateBgMode()"
+            title="Background style">
+      <option value="wavy">Wavy</option>
+      <option value="gradient">Gradient</option>
+      <option value="dim">Dim</option>
+      <option value="solid">Solid</option>
+      <option value="none">None</option>
+    </select>
+    <button class="ar-refresh-btn" (click)="refreshAll()" title="Refresh">↺</button>
+  </div>
+
+  <div class="ar-body">
+
+    <!-- ── Placement mode banner ───────────────────────────── -->
+    <div *ngIf="placementModeActive" class="ar-placement-banner">
+      <span>📍 {{ placementHint }}</span>
+      <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="cancelPlacement()">Cancel</button>
+    </div>
+
+    <!-- ── Skeletons ────────────────────────────────────────── -->
+    <div class="ar-section">
+      <div class="ar-section-title ar-section-title-toggle" (click)="skeletonsCollapsed = !skeletonsCollapsed">
+        <span class="ar-chevron">{{ skeletonsCollapsed ? '▸' : '▾' }}</span>Skeletons
+      </div>
+
+      <ng-container *ngIf="!skeletonsCollapsed">
+        <div class="ar-op-inline" style="margin-bottom:6px">
+          <input type="text" class="ar-text" placeholder="Name"
+                 [(ngModel)]="newSkeletonName">
+          <button class="ar-op-btn" (click)="createSkeleton()">+ New</button>
+        </div>
+
+        <div class="ar-list" *ngIf="skeletons.length > 0; else noSkeletons">
+          <div *ngFor="let sk of skeletons"
+               class="ar-list-row"
+               [class.active]="activeSkeleton?.id === sk.id"
+               (click)="selectSkeleton(sk)">
+            {{ sk.name }}
+          </div>
+        </div>
+        <ng-template #noSkeletons>
+          <div class="ar-hint">No skeletons — create one above.</div>
+        </ng-template>
+      </ng-container>
+    </div>
+
+    <!-- ── Joints ───────────────────────────────────────────── -->
+    <div class="ar-section" *ngIf="activeSkeleton">
+      <div class="ar-section-title ar-section-title-toggle" (click)="jointsCollapsed = !jointsCollapsed">
+        <span class="ar-chevron">{{ jointsCollapsed ? '▸' : '▾' }}</span>Joints — {{ activeSkeleton.name }}
+      </div>
+
+      <ng-container *ngIf="!jointsCollapsed">
+
+        <!-- Primary: place in viewport -->
+        <div class="ar-btn-pair" style="margin-bottom:6px">
+          <button class="ar-op-btn" [class.ar-active]="placementModeActive"
+                  [title]="selectedJointIdx === null ? 'Two clicks on mesh: head then tail' : (selectedJointIsTail ? 'Continues chain from this joint\'s tail' : 'Branches from this joint\'s head')"
+                  (click)="placementModeActive ? cancelPlacement() : enterPlacement()">
+            {{ placementModeActive ? '✓ Placing…' : addBoneLabel }}
+          </button>
+          <button class="ar-op-btn ar-op-secondary"
+                  [disabled]="selectedJointIdx === null"
+                  (click)="extrudeJoint()"
+                  title="Extrude child from selected joint, then click viewport to position">
+            Extrude
+          </button>
+        </div>
+
+        <!-- Secondary: add at explicit coordinates -->
+        <details class="ar-details" style="margin-bottom:6px">
+          <summary class="ar-details-summary">Add at coordinates</summary>
+          <div style="margin-top:6px">
+            <div class="ar-op-inline" style="margin-bottom:4px">
+              <input type="text" class="ar-text" placeholder="Name" [(ngModel)]="newJointName">
+              <span class="ar-label">Par</span>
+              <input type="number" class="ar-num ar-num-sm" min="-1" [(ngModel)]="newJointParent"
+                     title="-1 = root">
+            </div>
+            <div class="ar-xyz-row" style="margin-bottom:4px">
+              <span class="ar-label">Pos</span>
+              <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="newJointX">
+              <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="newJointY">
+              <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="newJointZ">
+              <button class="ar-op-btn" (click)="addBoneNumeric()">Add</button>
+            </div>
+            <div class="ar-hint">Parent −1 = root · pos relative to parent</div>
+          </div>
+        </details>
+
+        <!-- Joint list -->
+        <div class="ar-list">
+          <div *ngFor="let j of joints; let i = index"
+               class="ar-list-row ar-joint-row"
+               [class.active]="selectedJointIdx === i"
+               (click)="selectJoint(i)"
+               (mouseenter)="hoverJoint(i)"
+               (mouseleave)="hoverJoint(null)">
+
+            <ng-container *ngIf="renamingIdx === i; else viewJoint">
+              <input type="text" class="ar-text ar-text-inline"
+                     [(ngModel)]="renameValue"
+                     (keyup.enter)="confirmRename()"
+                     (keyup.escape)="cancelRename()"
+                     (click)="$event.stopPropagation()">
+              <button class="ar-op-btn ar-op-xs" (click)="confirmRename(); $event.stopPropagation()">✓</button>
+              <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="cancelRename(); $event.stopPropagation()">✕</button>
+            </ng-container>
+
+            <ng-template #viewJoint>
+              <span class="ar-joint-idx">{{ i }}</span>
+              <span class="ar-joint-name"
+                    [title]="'par:' + j.parentIdx + ' pos:' + (j.x|number:'1.1-1') + ',' + (j.y|number:'1.1-1') + ',' + (j.z|number:'1.1-1')">
+                {{ j.name }}<span *ngIf="j.isLeaf" class="ar-leaf-tag">leaf</span>
+              </span>
+              <span class="ar-joint-pos">{{ j.x|number:'1.1-1' }}, {{ j.y|number:'1.1-1' }}, {{ j.z|number:'1.1-1' }}</span>
+              <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="startRename(i, $event)" title="Rename">✎</button>
+              <button class="ar-op-btn ar-op-xs ar-op-danger" (click)="removeBone(i, $event)" title="Remove + descendants">✕</button>
+            </ng-template>
+          </div>
+          <div *ngIf="joints.length === 0" class="ar-hint">No bones yet — click + Add Bone above.</div>
+        </div>
+
+        <!-- Selected joint editor -->
+        <ng-container *ngIf="selectedJointIdx !== null && joints[selectedJointIdx] as selJoint">
+          <div class="ar-op-sep"></div>
+          <div class="ar-section-sub">{{ selJoint.name }} (joint {{ selectedJointIdx }})</div>
+
+          <div class="ar-xyz-row" style="margin-bottom:4px">
+            <span class="ar-label">Head</span>
+            <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveX">
+            <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveY">
+            <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveZ">
+            <button class="ar-op-btn" (click)="applyMove()">Set</button>
+          </div>
+
+          <div *ngIf="selJoint.isLeaf" class="ar-xyz-row" style="margin-bottom:4px">
+            <span class="ar-label">Tail</span>
+            <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailX">
+            <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailY">
+            <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailZ">
+            <button class="ar-op-btn" (click)="applyTailOffset()">Set</button>
+          </div>
+          <div *ngIf="selJoint.isLeaf" class="ar-hint">Tail is visual only — drag sphere in viewport or set numerically</div>
+        </ng-container>
+
+      </ng-container><!-- /jointsCollapsed -->
+    </div>
+
+    <!-- ── Bind Mesh ─────────────────────────────────────────── -->
+    <div class="ar-section">
+      <div class="ar-section-title ar-section-title-toggle" (click)="bindCollapsed = !bindCollapsed">
+        <span class="ar-chevron">{{ bindCollapsed ? '▸' : '▾' }}</span>Bind Mesh to Skeleton
+      </div>
+
+      <ng-container *ngIf="!bindCollapsed">
+        <div class="ar-hint" style="margin-bottom:6px">
+          Mesh: <strong>{{ bindMeshName }}</strong>
+          &nbsp;→&nbsp;
+          Skeleton: <strong>{{ activeSkeleton?.name ?? '—' }}</strong>
+        </div>
+        <div class="ar-btn-pair">
+          <button class="ar-op-btn" style="flex:2"
+                  [disabled]="!canBind"
+                  [title]="joints.length === 0 ? 'Add at least one joint first' : 'Auto-weight vertices to nearest joints'"
+                  (click)="bindMesh()">Bind Mesh</button>
+          <button class="ar-op-btn ar-op-secondary" [disabled]="!bindMeshId"
+                  (click)="focusMesh()" title="Center camera on mesh">Focus</button>
+        </div>
+        <div *ngIf="joints.length === 0" class="ar-hint" style="margin-top:4px">
+          Add joints to the skeleton before binding.
+        </div>
+        <div *ngIf="bindResult" class="ar-hint ar-hint-ok" style="margin-top:4px">{{ bindResult }}</div>
+      </ng-container>
+    </div>
+
+    <!-- ── Weight Paint ──────────────────────────────────────── -->
+    <div class="ar-section" *ngIf="bindMeshId && bindSkeletonId">
+      <div class="ar-section-title ar-section-title-toggle" (click)="weightPaintCollapsed = !weightPaintCollapsed">
+        <span class="ar-chevron">{{ weightPaintCollapsed ? '▸' : '▾' }}</span>Weight Paint
+      </div>
+
+      <ng-container *ngIf="!weightPaintCollapsed">
+        <div class="ar-form-row">
+          <span class="ar-label">Joint #</span>
+          <input type="number" class="ar-num" readonly
+                 [value]="selectedJointIdx ?? 0"
+                 title="Select a joint in the Joints list above">
+        </div>
+        <div class="ar-form-row" style="margin-top:5px">
+          <span class="ar-label">Radius</span>
+          <input type="range" class="ar-range" min="0.02" max="0.5" step="0.01"
+                 [(ngModel)]="wpRadius" (ngModelChange)="onWpBrushChange()">
+          <span class="ar-val">{{ wpRadius | number:'1.2-2' }}</span>
+        </div>
+        <div class="ar-form-row" style="margin-top:5px">
+          <span class="ar-label">Strength</span>
+          <input type="range" class="ar-range" min="0" max="1" step="0.01"
+                 [(ngModel)]="wpStrength" (ngModelChange)="onWpBrushChange()">
+          <span class="ar-val">{{ wpStrength | number:'1.2-2' }}</span>
+        </div>
+        <div class="ar-form-row" style="margin-top:5px">
+          <span class="ar-label">Weight</span>
+          <input type="range" class="ar-range" min="0" max="1" step="0.01"
+                 [(ngModel)]="wpTargetWeight" (ngModelChange)="onWpBrushChange()">
+          <span class="ar-val">{{ wpTargetWeight | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="ar-btn-pair" style="margin-top:8px">
+          <button class="ar-op-btn" [class.ar-active]="wpActive"
+                  (click)="wpActive ? exitWeightPaint() : enterWeightPaint()">
+            {{ wpActive ? '✓ Painting' : 'Enter Paint' }}
+          </button>
+          <button class="ar-op-btn ar-op-secondary" (click)="normalizeWeights()">Normalize</button>
+        </div>
+        <div *ngIf="wpActive" class="ar-hint ar-hint-active" style="margin-top:4px">
+          🖌 Paint on mesh · Blue = 0 · Green = 0.5 · Red = full
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── Animation Clips ───────────────────────────────────── -->
+    <div class="ar-section" *ngIf="activeSkeleton">
+      <div class="ar-section-title ar-section-title-toggle" (click)="clipsCollapsed = !clipsCollapsed">
+        <span class="ar-chevron">{{ clipsCollapsed ? '▸' : '▾' }}</span>Animation Clips
+      </div>
+
+      <ng-container *ngIf="!clipsCollapsed">
+        <div class="ar-op-inline" style="margin-bottom:4px">
+          <input type="text" class="ar-text" placeholder="Clip name" [(ngModel)]="newClipName">
+        </div>
+        <div class="ar-op-inline" style="margin-bottom:6px">
+          <span class="ar-label">FPS</span>
+          <input type="number" class="ar-num" min="1" [(ngModel)]="newClipFps">
+          <span class="ar-label">Frames</span>
+          <input type="number" class="ar-num" min="1" [(ngModel)]="newClipEndFrame">
+          <button class="ar-op-btn" (click)="createClip()">+ New</button>
+        </div>
+
+        <div class="ar-list">
+          <div *ngFor="let c of clips; let i = index"
+               class="ar-list-row ar-clip-row"
+               [class.active]="activeClipIdx === i"
+               (click)="selectClip(i)">
+            <span class="ar-clip-name">{{ c.name }}</span>
+            <button class="ar-op-btn ar-op-xs ar-op-danger"
+                    (click)="deleteClip(i, $event)" title="Delete clip">✕</button>
+          </div>
+          <div *ngIf="clips.length === 0" class="ar-hint">No clips yet.</div>
+        </div>
+
+        <ng-container *ngIf="activeClipIdx !== null">
+          <div class="ar-op-sep"></div>
+
+          <div class="ar-form-row" style="margin-bottom:6px">
+            <span class="ar-label">Frame</span>
+            <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="recordFrame">
+            <button class="ar-op-btn" (click)="recordPose()">Record Pose</button>
+          </div>
+
+          <div class="ar-btn-pair">
+            <button class="ar-op-btn" [class.ar-active]="isPlaying"
+                    (click)="isPlaying ? stopClip() : playClip()">
+              {{ isPlaying ? '⏹ Stop' : '▶ Play' }}
+            </button>
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <!-- ── Retarget ──────────────────────────────────────────── -->
+    <div class="ar-section" *ngIf="activeSkeleton && clips.length > 0 && skeletons.length > 1">
+      <div class="ar-section-title ar-section-title-toggle" (click)="retargetCollapsed = !retargetCollapsed">
+        <span class="ar-chevron">{{ retargetCollapsed ? '▸' : '▾' }}</span>Retarget Clip
+      </div>
+
+      <ng-container *ngIf="!retargetCollapsed">
+        <div class="ar-form-row">
+          <span class="ar-label">Clip</span>
+          <select class="ar-select" [(ngModel)]="retargetSrcClipIdx">
+            <option *ngFor="let c of clips; let i = index" [value]="i">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="ar-form-row" style="margin-top:5px">
+          <span class="ar-label">To rig</span>
+          <select class="ar-select" [(ngModel)]="retargetTgtSkeletonId">
+            <option *ngFor="let sk of skeletons" [value]="sk.id"
+                    [disabled]="sk.id === activeSkeleton?.id">{{ sk.name }}</option>
+          </select>
+        </div>
+        <button class="ar-op-btn ar-op-full" style="margin-top:8px"
+                [disabled]="!retargetTgtSkeletonId || retargetTgtSkeletonId === activeSkeleton?.id"
+                (click)="retarget()">Retarget</button>
+        <div class="ar-hint" style="margin-top:4px">Matches joints by name — unmatched joints are skipped.</div>
+      </ng-container>
+    </div>
+
+  </div><!-- /ar-body -->
+
+</div>

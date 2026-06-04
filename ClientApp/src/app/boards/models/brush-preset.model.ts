@@ -87,7 +87,7 @@ export interface BrushPreset {
 }
 
 /** Raster layer entry type */
-export type RasterLayerType = 'layer' | 'folder' | '3d-scene' | 'reference';
+export type RasterLayerType = 'layer' | 'folder' | '3d-scene' | 'reference' | 'vector' | 'ephemera';
 
 /** Raster layer descriptor */
 export interface RasterLayer {

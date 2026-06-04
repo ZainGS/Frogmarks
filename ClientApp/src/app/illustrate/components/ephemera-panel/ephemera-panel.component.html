@@ -1,0 +1,183 @@
+<div class="ep-panel">
+
+  <!-- Header -->
+  <div class="ep-header">
+    <button class="ep-exit-btn" (click)="close()">&#8592; Close</button>
+    <span class="ep-title">Vector / Ephemera</span>
+    <button class="ep-refresh-btn" (click)="refresh()" title="Refresh">↺</button>
+  </div>
+
+  <div class="ep-body">
+
+    <!-- ── Generator Browser ──────────────────────────────── -->
+    <div class="ep-section">
+      <div class="ep-section-title">Generator</div>
+
+      <!-- Category tabs -->
+      <div class="ep-tab-row">
+        <button *ngFor="let cat of categories"
+                class="ep-tab"
+                [class.active]="activeCategoryId === cat.id"
+                (click)="selectCategory(cat.id)">
+          {{ cat.displayName }}
+        </button>
+        <div *ngIf="categories.length === 0" class="ep-hint">No generators available.</div>
+      </div>
+
+      <!-- Generator list -->
+      <div class="ep-list" *ngIf="generators.length > 0">
+        <div *ngFor="let g of generators"
+             class="ep-list-row"
+             [class.active]="activeGeneratorTypeId === g.typeId"
+             (click)="selectGenerator(g.typeId)">
+          {{ g.displayName }}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Preview ───────────────────────────────────────── -->
+    <div class="ep-section" *ngIf="activeGeneratorTypeId">
+      <div class="ep-section-title">Preview</div>
+      <div class="ep-preview" [innerHTML]="previewSvg"></div>
+    </div>
+
+    <!-- ── Params ────────────────────────────────────────── -->
+    <div class="ep-section" *ngIf="paramKeys().length > 0">
+      <div class="ep-section-title">Parameters</div>
+
+      <div *ngFor="let key of paramKeys()" class="ep-form-row">
+        <span class="ep-label" [title]="key">{{ paramLabel(key) }}</span>
+
+        <select *ngIf="paramType(key) === 'select'" class="ep-text"
+                [value]="params[key]"
+                (change)="onParamChange(key, $any($event.target).value, 'select')">
+          <option *ngFor="let opt of paramOptions(key)" [value]="opt.value">{{ opt.label }}</option>
+        </select>
+
+        <input *ngIf="paramType(key) === 'text'" type="text" class="ep-text"
+               [value]="params[key]"
+               (input)="onParamChange(key, $any($event.target).value, 'text')">
+
+        <ng-container *ngIf="paramType(key) === 'range'">
+          <input type="range" class="ep-range"
+                 [min]="paramMin(key)" [max]="paramMax(key)" [step]="paramStep(key)"
+                 [value]="params[key]"
+                 (input)="onParamChange(key, $any($event.target).value, 'range')">
+          <span class="ep-val">{{ params[key] }}</span>
+        </ng-container>
+
+        <input *ngIf="paramType(key) === 'toggle'" type="checkbox"
+               [checked]="params[key]"
+               (change)="onParamChange(key, $any($event.target).checked, 'toggle')">
+
+        <input *ngIf="paramType(key) === 'color'" type="color" class="ep-color"
+               [value]="params[key]"
+               (input)="onParamChange(key, $any($event.target).value, 'color')">
+
+        <input *ngIf="paramType(key) === 'seed'" type="number" class="ep-num"
+               [value]="params[key]"
+               (input)="onParamChange(key, $any($event.target).value, 'seed')">
+      </div>
+    </div>
+
+    <!-- ── Placement position ────────────────────────────── -->
+    <div class="ep-section" *ngIf="activeGeneratorTypeId">
+      <div class="ep-section-title">Place</div>
+
+      <div class="ep-form-row">
+        <span class="ep-label">X</span>
+        <input type="number" class="ep-num" [(ngModel)]="placeX">
+        <span class="ep-label">Y</span>
+        <input type="number" class="ep-num" [(ngModel)]="placeY">
+      </div>
+      <div class="ep-form-row" style="margin-top:4px">
+        <span class="ep-label">W</span>
+        <input type="number" class="ep-num" min="1" [(ngModel)]="placeWidth">
+        <span class="ep-label">H</span>
+        <input type="number" class="ep-num" min="1" [(ngModel)]="placeHeight">
+      </div>
+      <div class="ep-form-row" style="margin-top:4px">
+        <span class="ep-label">Rot°</span>
+        <input type="number" class="ep-num" [(ngModel)]="placeRotation">
+        <span class="ep-label">Opacity</span>
+        <input type="range" class="ep-range" min="0" max="1" step="0.01" [(ngModel)]="placeOpacity">
+      </div>
+      <button class="ep-btn ep-btn-primary ep-btn-full" style="margin-top:8px"
+              [disabled]="!activeGeneratorTypeId"
+              (click)="placeCurrent()">
+        ✦ Place on Canvas
+      </button>
+    </div>
+
+    <!-- ── Placements on this layer ──────────────────────── -->
+    <div class="ep-section">
+      <div class="ep-section-title">Placements</div>
+
+      <div *ngIf="placements.length === 0" class="ep-hint">No placements yet.</div>
+
+      <div *ngFor="let p of placements" class="ep-placement-row">
+
+        <!-- View mode -->
+        <ng-container *ngIf="editingPlacementId !== p.id">
+          <span class="ep-placement-name">{{ p.typeId }}</span>
+          <span class="ep-placement-info">{{ p.width | number:'1.0-0' }}×{{ p.height | number:'1.0-0' }}</span>
+          <button class="ep-btn ep-btn-xs ep-btn-ghost" (click)="startEdit(p)" title="Edit params">✎</button>
+          <button class="ep-btn ep-btn-xs ep-btn-danger" (click)="deletePlacement(p.id, $event)" title="Delete">✕</button>
+        </ng-container>
+
+        <!-- Edit mode -->
+        <ng-container *ngIf="editingPlacementId === p.id">
+          <div class="ep-edit-block">
+            <div *ngFor="let key of editParamKeys()" class="ep-form-row">
+              <span class="ep-label" [title]="key">{{ editParamLabel(key) }}</span>
+
+              <select *ngIf="editParamType(key) === 'select'" class="ep-text"
+                      [value]="editParams[key]"
+                      (change)="onEditParamChange(key, $any($event.target).value, 'select')">
+                <option *ngFor="let opt of editParamOptions(key)" [value]="opt.value">{{ opt.label }}</option>
+              </select>
+
+              <input *ngIf="editParamType(key) === 'text'" type="text" class="ep-text"
+                     [value]="editParams[key]"
+                     (input)="onEditParamChange(key, $any($event.target).value, 'text')">
+
+              <ng-container *ngIf="editParamType(key) === 'range'">
+                <input type="range" class="ep-range"
+                       [min]="editParamMin(key)" [max]="editParamMax(key)" [step]="editParamStep(key)"
+                       [value]="editParams[key]"
+                       (input)="onEditParamChange(key, $any($event.target).value, 'range')">
+                <span class="ep-val">{{ editParams[key] }}</span>
+              </ng-container>
+
+              <input *ngIf="editParamType(key) === 'toggle'" type="checkbox"
+                     [checked]="editParams[key]"
+                     (change)="onEditParamChange(key, $any($event.target).checked, 'toggle')">
+
+              <input *ngIf="editParamType(key) === 'color'" type="color" class="ep-color"
+                     [value]="editParams[key]"
+                     (input)="onEditParamChange(key, $any($event.target).value, 'color')">
+
+              <input *ngIf="editParamType(key) === 'seed'" type="number" class="ep-num"
+                     [value]="editParams[key]"
+                     (input)="onEditParamChange(key, $any($event.target).value, 'seed')">
+            </div>
+            <div class="ep-btn-pair" style="margin-top:6px">
+              <button class="ep-btn ep-btn-xs" (click)="commitEdit()">✓ Apply</button>
+              <button class="ep-btn ep-btn-xs ep-btn-ghost" (click)="cancelEdit()">✕</button>
+            </div>
+          </div>
+        </ng-container>
+
+      </div>
+
+      <button *ngIf="placements.length > 0"
+              class="ep-btn ep-btn-full ep-btn-secondary" style="margin-top:8px"
+              (click)="rasterize()"
+              title="Flatten all placements onto a raster layer">
+        Rasterize Layer
+      </button>
+    </div>
+
+  </div><!-- /ep-body -->
+
+</div>

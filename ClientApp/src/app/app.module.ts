@@ -50,6 +50,9 @@ import { FmIconComponent } from './shared/components/fm-icon/fm-icon.component';
 import { ClothBuilderComponent } from './illustrate/components/cloth-builder/cloth-builder.component';
 import { ParticleEmittersComponent } from './illustrate/components/particle-emitters/particle-emitters.component';
 import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/mesh-edit-panel.component';
+import { ArmaturePanelComponent } from './illustrate/components/armature-panel/armature-panel.component';
+import { EphemeraPanel } from './illustrate/components/ephemera-panel/ephemera-panel.component';
+import { DocsComponent } from './shared/components/docs/docs.component';
 
 // Define MSAL configuration
 /*
@@ -90,8 +93,11 @@ export function MSALInstanceFactory(): PublicClientApplication {
     ClothBuilderComponent,
     ParticleEmittersComponent,
     MeshEditPanelComponent,
+    ArmaturePanelComponent,
+    EphemeraPanel,
     SkinBuilderComponent,
     FmIconComponent,
+    DocsComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
@@ -125,6 +131,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
       { path: 'illustration/local/:id', component: IllustrationComponent, data: { local: true } },
       { path: 'illustration/:id', component: IllustrationComponent},
       { path: 'view/:id', component: IllustrationComponent, data: { viewer: true } },
+      { path: 'docs', component: DocsComponent },
     ])
   ],
   exports: [RouterModule],

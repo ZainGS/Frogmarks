@@ -70,6 +70,21 @@
             (toolChange)="scene3dEditTool = $event">
         </app-mesh-edit-panel>
 
+        <!-- Armature Panel overlay -->
+        <app-armature-panel
+            *ngIf="scene3dArmaturePanelOpen"
+            [shapeManager]="$any(shapeManager)"
+            (closeRequest)="closeArmaturePanel()">
+        </app-armature-panel>
+
+        <!-- Ephemera Panel overlay -->
+        <app-ephemera-panel
+            *ngIf="activeVectorLayerId"
+            [shapeManager]="$any(shapeManager)"
+            [vectorLayerId]="activeVectorLayerId"
+            (closeRequest)="closeEphemeraPanel()">
+        </app-ephemera-panel>
+
         <!-- Screencast Keys overlay -->
         <div *ngIf="screenscastKeysEnabled" class="screencast-keys-overlay">
             <div *ngFor="let entry of screenscastKeyEntries; trackBy: trackScreencastKey"
@@ -994,7 +1009,11 @@
 
             <!-- Raster layers — Phase 2 compositor panel -->
             <div *ngIf="rasterLayers?.length > 0" class="raster-layers-inline">
-                <app-raster-layers (scene3dSelected)="onScene3dSelected($event)"></app-raster-layers>
+                <app-raster-layers
+                    [shapeManager]="$any(shapeManager)"
+                    (scene3dSelected)="onScene3dSelected($event)"
+                    (vectorLayerSelected)="onVectorLayerSelected($event)">
+                </app-raster-layers>
 
                 <!-- ═══ 3D Scene Panel (shown when 3D scene entry is selected) ═══ -->
                 <div *ngIf="scene3dPanelVisible && has3DScene" class="scene3d-section">
@@ -1019,6 +1038,7 @@
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('plane'); scene3dShowAddMeshMenu=false">Plane</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('cylinder'); scene3dShowAddMeshMenu=false">Cylinder</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('torus'); scene3dShowAddMeshMenu=false">Torus</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('sprite'); scene3dShowAddMeshMenu=false" title="Flat textured quad — apply a texture to show an image">Sprite</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dShowPolygonForm=!scene3dShowPolygonForm; scene3dShowCircleForm=false"
                                          title="Editable polygon from 2D silhouette">Polygon…</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dShowCircleForm=!scene3dShowCircleForm; scene3dShowPolygonForm=false"
@@ -1269,7 +1289,17 @@
                                 title="Toggle mesh edit mode (Tab)">
                             {{ scene3dIsEditingMesh ? '✓ In Edit Mode' : 'Edit Mesh' }}
                         </button>
-                        <span class="scene3d-edit-mesh-hint">Tab</span>
+                        <span class="scene3d-edit-mesh-hint scene3d-mode-hint">Tab</span>
+                    </div>
+
+                    <div class="scene3d-edit-mesh-row">
+                        <button class="scene3d-edit-mesh-btn"
+                                [class.active]="scene3dArmaturePanelOpen"
+                                (click)="scene3dArmaturePanelOpen ? closeArmaturePanel() : openArmaturePanel()"
+                                title="Open Armature &amp; Skeleton panel (Shift+Tab)">
+                            {{ scene3dArmaturePanelOpen ? '✓ Armature' : 'Armature' }}
+                        </button>
+                        <span class="scene3d-edit-mesh-hint scene3d-mode-hint">⇧Tab</span>
                     </div>
 
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId" open>
@@ -1979,6 +2009,72 @@
                                 <input type="range" min="0.0001" max="0.02" step="0.0001" [(ngModel)]="scene3dShadowBias" (input)="scene3dApplyShadowsSettings()">
                                 <span class="scene3d-val">{{ scene3dShadowBias | number:'1.4-4' }}</span>
                             </div>
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Skybox / Background</summary>
+                        <div class="scene3d-material-row">
+                            <label>Mode</label>
+                            <select class="scene3d-select" [(ngModel)]="scene3dBgMode" (ngModelChange)="scene3dApplySceneBg()">
+                                <option value="none">None</option>
+                                <option value="solid">Solid</option>
+                                <option value="gradient">Gradient</option>
+                                <option value="wavy">Wavy</option>
+                            </select>
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dBgMode !== 'none'">
+                            <label>{{ scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy' ? 'Color 1' : 'Color' }}</label>
+                            <input type="color" [(ngModel)]="scene3dBgColor1" (input)="scene3dApplySceneBg()">
+                        </div>
+                        <div class="scene3d-material-row" *ngIf="scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy'">
+                            <label>Color 2</label>
+                            <input type="color" [(ngModel)]="scene3dBgColor2" (input)="scene3dApplySceneBg()">
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Fog</summary>
+                        <div class="scene3d-material-row">
+                            <label>Mode</label>
+                            <select class="scene3d-select" [(ngModel)]="scene3dFogMode" (ngModelChange)="scene3dApplyFog()">
+                                <option value="off">Off</option>
+                                <option value="linear">Linear</option>
+                                <option value="exponential">Exponential</option>
+                            </select>
+                        </div>
+                        <ng-container *ngIf="scene3dFogMode !== 'off'">
+                            <div class="scene3d-material-row">
+                                <label>Color</label>
+                                <input type="color" [(ngModel)]="scene3dFogColor" (input)="scene3dApplyFog()">
+                            </div>
+                            <div class="scene3d-material-row" *ngIf="scene3dFogMode === 'linear'">
+                                <label>Near</label>
+                                <input type="range" min="0" max="100" step="0.5" [(ngModel)]="scene3dFogNear" (input)="scene3dApplyFog()">
+                                <span class="scene3d-val">{{ scene3dFogNear }}</span>
+                            </div>
+                            <div class="scene3d-material-row" *ngIf="scene3dFogMode === 'linear'">
+                                <label>Far</label>
+                                <input type="range" min="1" max="200" step="1" [(ngModel)]="scene3dFogFar" (input)="scene3dApplyFog()">
+                                <span class="scene3d-val">{{ scene3dFogFar }}</span>
+                            </div>
+                            <div class="scene3d-material-row" *ngIf="scene3dFogMode === 'exponential'">
+                                <label>Density</label>
+                                <input type="range" min="0.001" max="0.5" step="0.001" [(ngModel)]="scene3dFogDensity" (input)="scene3dApplyFog()">
+                                <span class="scene3d-val">{{ scene3dFogDensity | number:'1.3-3' }}</span>
+                            </div>
+                        </ng-container>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Texture Sampling</summary>
+                        <div class="scene3d-toggle-row">
+                            <label>Nearest (PS1)</label>
+                            <input type="radio" name="texFilter" [checked]="scene3dTextureFilter === 'nearest'" (change)="scene3dSetTextureFilter('nearest')">
+                        </div>
+                        <div class="scene3d-toggle-row">
+                            <label>Bilinear (smooth)</label>
+                            <input type="radio" name="texFilter" [checked]="scene3dTextureFilter === 'linear'" (change)="scene3dSetTextureFilter('linear')">
                         </div>
                     </details>
 
@@ -2793,7 +2889,7 @@
         </div><!-- /.tools-2d -->
 
         <!-- 3D transform tools — rendered after 2D tools have exited -->
-        <div class="tools-3d" *ngIf="tools3dVisible" [class.tools-exiting]="tools3dExiting">
+        <div class="tools-3d" *ngIf="tools3dVisible && !scene3dArmaturePanelOpen" [class.tools-exiting]="tools3dExiting">
             <!-- Repeat / Array Tool -->
             <div class="vertical-tool-button"
                  [class.selected]="scene3dArrayToolActive"

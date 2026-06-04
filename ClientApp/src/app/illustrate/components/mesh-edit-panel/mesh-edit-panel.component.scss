@@ -325,6 +325,30 @@ $danger:  #c0392b;
   margin-bottom: 6px;
 }
 
+.me-hint-ok {
+  font-size: 9px;
+  color: rgba(60, 220, 120, 0.8);
+  margin-bottom: 6px;
+}
+
+.me-num-wide {
+  width: 90px;
+}
+
+.me-select {
+  flex: 1;
+  background: #252525;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+  option { background: #252525; }
+}
+
 // ── Weld row ──────────────────────────────────────────────────────
 
 .me-weld-row {

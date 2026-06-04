@@ -28,6 +28,7 @@ import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import JSZip from 'jszip';
 import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-illustration-dialog.component';
+import { LocalInferenceService } from '../../services/inference/local-inference.service';
 
 type DashboardItem = Board | Illustration;
 
@@ -467,6 +468,7 @@ onKeydown(e: KeyboardEvent) {
   isArchivedFilterActive: boolean = false;
   deleteAllPending: boolean = false;
   isUpdatesActive: boolean = false;
+  isDocsActive: boolean = false;
   currentRecentCreationsTab = 1;
   sortBy: number = SortByOptions.LastViewed;
   orderBy: number = OrderByOptions.Descending;
@@ -477,6 +479,8 @@ onKeydown(e: KeyboardEvent) {
   showNotificationPanel: boolean = false;
   showSettingsPanel: boolean = false;
   showProfilePanel: boolean = false;
+  showLocalAiPanel: boolean = false;
+  localAiUrlInput: string = '';
   sortOrderDropdownText: string[] = ['Alphabetical', 'Date created', 'Last viewed'];
   fileTypeDropdownText: string[] = ['All file types', 'Boards', 'Illustrations', 'Animations'];
   storageFilterText: string[] = ['All storage', 'Local-Only', 'No-Cloud', 'Cloud-Only'];
@@ -591,7 +595,8 @@ onKeydown(e: KeyboardEvent) {
     private localIllustrationService: LocalIllustrationService,
     public skinService: FroguiSkinService,
     private skinInspector: SkinInspectorService,
-    private opfsMetadataService: OpfsMetadataService) {
+    private opfsMetadataService: OpfsMetadataService,
+    public localInference: LocalInferenceService) {
       this._boardService = boardService;
       this._illustrationService = illustrationService;
       this._teamService = teamService;
@@ -725,6 +730,37 @@ onKeydown(e: KeyboardEvent) {
 
   closeSettingsPanel() {
     this.showSettingsPanel = false;
+  }
+
+  openLocalAiPanel(): void {
+    this.showLocalAiPanel = true;
+    this.localAiUrlInput = this.localInference.baseUrl;
+  }
+
+  closeLocalAiPanel(): void {
+    this.showLocalAiPanel = false;
+  }
+
+  async applyLocalAiUrl(): Promise<void> {
+    this.localInference.setBaseUrl(this.localAiUrlInput);
+    await this.localInference.testConnection();
+  }
+
+  disconnectLocalInference(): void {
+    this.localInference.disconnect();
+  }
+
+  docsClicked(): void {
+    if (this.isDocsActive) return;
+    this.isDocsActive = true;
+    this.isFrogmarksGalaxyActive = false;
+    this.isFrogPlayerActive = false;
+    this.isDesignCenterActive = false;
+    this.isFavoritesFilterActive = false;
+    this.isArchivedFilterActive = false;
+    this.isUpdatesActive = false;
+    this.isTemplatesActive = false;
+    if (!this.isSidenavCollapsed) this.toggleSidenavCollapsed();
   }
 
   toggleDarkMode() {
@@ -1190,6 +1226,7 @@ onKeydown(e: KeyboardEvent) {
     this.listItems = [];
     this.filteredListItems = [];
     this.favorites.clear();
+    this.isDocsActive = false;
   }
 
   recentsClicked(): void {
@@ -2422,6 +2459,11 @@ onKeydown(e: KeyboardEvent) {
   }
 
   private loadAllItems() {
+    if (!this.currentTeam?.id) {
+      this.isLoadingItems = false;
+      this._loadLocalItemsOnly();
+      return;
+    }
     const cloudPromises = [
       this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
         .pipe(catchError(err => { console.error('[Dashboard] boards fetch failed:', err); return of(null); })),

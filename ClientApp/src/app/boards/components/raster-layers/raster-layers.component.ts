@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import {
@@ -30,8 +30,16 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   selected3DSceneId: string | null = null;
   searchTerm = '';
 
+  @Input() shapeManager: any = null;
+
   /** Emitted when the 3D scene entry is selected/deselected in the layer list */
   @Output() scene3dSelected = new EventEmitter<boolean>();
+
+  /** Emitted when a vector layer is selected (null = deselected) */
+  @Output() vectorLayerSelected = new EventEmitter<string | null>();
+
+  vectorLayers: RasterLayer[] = [];
+  activeVectorLayerId: string | null = null;
 
   /** Track layers by id for stable DOM nodes */
   trackById = (_: number, layer: RasterLayer) => layer.id;
@@ -65,7 +73,10 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.rasterService.refreshLayers();
     this.subs.push(
-      this.rasterService.layers$.subscribe(l => (this.layers = l)),
+      this.rasterService.layers$.subscribe(l => {
+        this.vectorLayers = l.filter(x => x.type === 'vector');
+        this.layers = l.filter(x => x.type !== 'vector');
+      }),
       this.rasterService.activeLayerId$.subscribe(id => (this.activeLayerId = id))
     );
   }
@@ -192,10 +203,15 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     // Folders are not selectable
     if (layer?.type === 'folder') return;
-    // Deselect 3D scene when switching to a raster layer
+    // Deselect 3D scene and vector layer when switching to a raster layer
     if (this.selected3DSceneId) {
       this.selected3DSceneId = null;
       this.scene3dSelected.emit(false);
+    }
+    if (this.activeVectorLayerId) {
+      this.activeVectorLayerId = null;
+      this.shapeManager?.setActiveVectorLayer?.(null);
+      this.vectorLayerSelected.emit(null);
     }
     this.rasterService.selectLayer(id);
   }
@@ -277,6 +293,47 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   get has3DScene(): boolean {
     return this.layers.some(l => l.type === '3d-scene');
+  }
+
+  // ── Vector Layers ─────────────────────────────────────────────
+
+  addVectorLayer(): void {
+    const id: string | undefined = this.shapeManager?.addVectorLayer?.('Vector');
+    if (id) {
+      this.shapeManager?.setActiveVectorLayer?.(id);
+      this.activeVectorLayerId = id;
+      this.vectorLayerSelected.emit(id);
+    }
+    this.showAddMenu = false;
+  }
+
+  selectVectorLayer(id: string): void {
+    this.activeVectorLayerId = id;
+    this.activeLayerId = null;
+    this.selected3DSceneId = null;
+    this.scene3dSelected.emit(false);
+    this.shapeManager?.setActiveVectorLayer?.(id);
+    this.vectorLayerSelected.emit(id);
+  }
+
+  deselectVectorLayer(): void {
+    this.activeVectorLayerId = null;
+    this.shapeManager?.setActiveVectorLayer?.(null);
+    this.vectorLayerSelected.emit(null);
+  }
+
+  removeVectorLayer(id: string, e: MouseEvent): void {
+    e.stopPropagation();
+    this.shapeManager?.removeVectorLayer?.(id);
+    if (this.activeVectorLayerId === id) {
+      this.activeVectorLayerId = null;
+      this.vectorLayerSelected.emit(null);
+    }
+  }
+
+  toggleVectorVisibility(layer: RasterLayer, e: MouseEvent): void {
+    e.stopPropagation();
+    this.shapeManager?.setLayerVisibility?.(layer.id, !layer.visible);
   }
 
   // ── Visibility ────────────────────────────────────────────────
