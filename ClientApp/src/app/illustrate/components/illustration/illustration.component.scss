@@ -3712,6 +3712,147 @@ svg {
     }
 }
 
+.scene3d-short-input {
+    width: 48px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #e0e0e0;
+    padding: 2px 4px;
+    font-size: 10px;
+    text-align: center;
+    flex-shrink: 0;
+    &:focus { outline: 1px solid #9B59B6; border-color: transparent; }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.scene3d-offset-input {
+    flex: 1;
+    min-width: 0;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #e0e0e0;
+    padding: 2px 5px;
+    font-size: 10px;
+    font-family: monospace;
+    &:focus { outline: 1px solid #9B59B6; border-color: transparent; }
+}
+
+.scene3d-row-muted {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.scene3d-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #aaa;
+    cursor: pointer;
+    user-select: none;
+    input[type="checkbox"] { accent-color: #9B59B6; }
+}
+
+.scene3d-linked-arrays-badge {
+    font-size: 10px;
+    color: #f0a040;
+    background: rgba(240, 160, 64, 0.1);
+    border: 1px solid rgba(240, 160, 64, 0.3);
+    border-radius: 3px;
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    text-align: center;
+}
+
+.scene3d-ibl-active-badge {
+    font-size: 10px;
+    color: #7ec8e3;
+    background: rgba(126, 200, 227, 0.1);
+    border: 1px solid rgba(126, 200, 227, 0.3);
+    border-radius: 3px;
+    padding: 3px 8px;
+    text-align: center;
+}
+
+.scene3d-hint {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1.4;
+}
+
+.scene3d-override-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 10px;
+    color: #aaa;
+    cursor: pointer;
+    user-select: none;
+    &:hover { color: #ddd; }
+}
+
+.scene3d-override-badge {
+    font-size: 9px;
+    background: rgba(155, 89, 182, 0.35);
+    border: 1px solid rgba(155, 89, 182, 0.5);
+    border-radius: 8px;
+    padding: 0 5px;
+    color: #d4aaef;
+}
+
+.scene3d-override-row {
+    margin-top: 6px;
+    padding: 6px 6px 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px;
+}
+
+.scene3d-override-row-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.scene3d-override-idx {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9B59B6;
+    min-width: 24px;
+}
+
+.scene3d-override-vis-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: #aaa;
+    flex: 1;
+    cursor: pointer;
+    input[type="checkbox"] { accent-color: #9B59B6; }
+}
+
+.scene3d-override-add-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.scene3d-override-add-label {
+    font-size: 10px;
+    color: #888;
+    white-space: nowrap;
+}
+
 // ── Undo/redo in header ───────────────────────────────────────────────────────
 .scene3d-undo-btns {
     display: flex;

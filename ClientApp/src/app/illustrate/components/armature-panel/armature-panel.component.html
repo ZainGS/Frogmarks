@@ -58,6 +58,16 @@
 
       <ng-container *ngIf="!jointsCollapsed">
 
+        <!-- Tool mode toggle -->
+        <div class="ar-btn-pair" style="margin-bottom:8px">
+          <button class="ar-op-btn" style="flex:1"
+                  [class.ar-active]="armatureToolMode === 'move'"
+                  (click)="setToolMode('move')">Move</button>
+          <button class="ar-op-btn" style="flex:1"
+                  [class.ar-active]="armatureToolMode === 'rotate'"
+                  (click)="setToolMode('rotate')">Rotate</button>
+        </div>
+
         <!-- Primary: place in viewport -->
         <div class="ar-btn-pair" style="margin-bottom:6px">
           <button class="ar-op-btn" [class.ar-active]="placementModeActive"
@@ -117,7 +127,7 @@
               <span class="ar-joint-idx">{{ i }}</span>
               <span class="ar-joint-name"
                     [title]="'par:' + j.parentIdx + ' pos:' + (j.x|number:'1.1-1') + ',' + (j.y|number:'1.1-1') + ',' + (j.z|number:'1.1-1')">
-                {{ j.name }}<span *ngIf="j.isLeaf" class="ar-leaf-tag">leaf</span>
+                {{ j.name }}<span *ngIf="j.isLeaf" class="ar-leaf-tag">leaf</span><span *ngIf="ikEndSet.has(i)" class="ar-ik-badge">&#9670;IK</span>
               </span>
               <span class="ar-joint-pos">{{ j.x|number:'1.1-1' }}, {{ j.y|number:'1.1-1' }}, {{ j.z|number:'1.1-1' }}</span>
               <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="startRename(i, $event)" title="Rename">✎</button>
@@ -132,22 +142,105 @@
           <div class="ar-op-sep"></div>
           <div class="ar-section-sub">{{ selJoint.name }} (joint {{ selectedJointIdx }})</div>
 
-          <div class="ar-xyz-row" style="margin-bottom:4px">
-            <span class="ar-label">Head</span>
-            <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveX">
-            <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveY">
-            <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveZ">
-            <button class="ar-op-btn" (click)="applyMove()">Set</button>
-          </div>
+          <!-- Move mode -->
+          <ng-container *ngIf="armatureToolMode === 'move'">
+            <div class="ar-xyz-row" style="margin-bottom:4px">
+              <span class="ar-label">Head</span>
+              <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveX">
+              <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveY">
+              <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="moveZ">
+              <button class="ar-op-btn" (click)="applyMove()">Set</button>
+            </div>
+            <div *ngIf="selJoint.isLeaf" class="ar-xyz-row" style="margin-bottom:4px">
+              <span class="ar-label">Tail</span>
+              <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailX">
+              <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailY">
+              <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailZ">
+              <button class="ar-op-btn" (click)="applyTailOffset()">Set</button>
+            </div>
+            <div *ngIf="selJoint.isLeaf" class="ar-hint">Tail is visual only — drag sphere in viewport or set numerically</div>
+          </ng-container>
 
-          <div *ngIf="selJoint.isLeaf" class="ar-xyz-row" style="margin-bottom:4px">
-            <span class="ar-label">Tail</span>
-            <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailX">
-            <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailY">
-            <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.1" [(ngModel)]="tailZ">
-            <button class="ar-op-btn" (click)="applyTailOffset()">Set</button>
-          </div>
-          <div *ngIf="selJoint.isLeaf" class="ar-hint">Tail is visual only — drag sphere in viewport or set numerically</div>
+          <!-- Rotate mode (FK) -->
+          <ng-container *ngIf="armatureToolMode === 'rotate'">
+            <div class="ar-xyz-row" style="margin-bottom:4px">
+              <span class="ar-label">Rot°</span>
+              <span class="ar-axis ar-axis-x">X</span><input type="number" class="ar-num" step="1" [(ngModel)]="rotX" (change)="applyRotation()">
+              <span class="ar-axis ar-axis-y">Y</span><input type="number" class="ar-num" step="1" [(ngModel)]="rotY" (change)="applyRotation()">
+              <span class="ar-axis ar-axis-z">Z</span><input type="number" class="ar-num" step="1" [(ngModel)]="rotZ" (change)="applyRotation()">
+            </div>
+            <div class="ar-btn-pair" style="margin-top:4px">
+              <button class="ar-op-btn ar-op-secondary" (click)="resetRotation()">Reset Joint</button>
+              <button class="ar-op-btn ar-op-secondary" (click)="resetAllRotations()">Reset All</button>
+            </div>
+          </ng-container>
+
+          <!-- IK section (Case A/B — hidden for intermediate chain members) -->
+          <ng-container *ngIf="!isIKIntermediate">
+            <div class="ar-op-sep"></div>
+            <div class="ar-section-sub">IK</div>
+
+            <!-- Case A — no chain on this joint -->
+            <ng-container *ngIf="!selectedJointIKChain">
+              <button class="ar-op-btn ar-op-secondary ar-op-full" (click)="addIKChain()">+ Set as IK Target</button>
+            </ng-container>
+
+            <!-- Case B — this joint IS an IK end-effector -->
+            <ng-container *ngIf="selectedJointIKChain as ikChain">
+              <!-- Chain length -->
+              <div class="ar-form-row" style="margin-bottom:4px">
+                <span class="ar-label">Length</span>
+                <input type="number" class="ar-num" min="2" step="1"
+                       [(ngModel)]="ikChainLength" (change)="setIKLength()"
+                       title="Number of bones in the IK chain (min 2)">
+                <span class="ar-hint" style="flex:1;margin:0 0 0 4px;line-height:1.8">bones</span>
+              </div>
+              <!-- FK / IK blend -->
+              <div class="ar-form-row" style="margin-bottom:4px">
+                <span class="ar-label">FK→IK</span>
+                <input type="range" class="ar-range" min="0" max="1" step="0.01"
+                       [(ngModel)]="ikBlendWeight" (ngModelChange)="onIKBlendChange()">
+                <span class="ar-val">{{ ikBlendWeight | number:'1.2-2' }}</span>
+              </div>
+              <!-- Target XYZ -->
+              <div class="ar-section-sub" style="margin-bottom:3px;margin-top:4px">Target</div>
+              <div class="ar-xyz-row" style="margin-bottom:4px">
+                <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikTargetX" (change)="onIKTargetChange()">
+                <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikTargetY" (change)="onIKTargetChange()">
+                <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikTargetZ" (change)="onIKTargetChange()">
+              </div>
+              <!-- Pole XYZ (shown only when poleTarget is set) -->
+              <ng-container *ngIf="ikChain.poleTarget">
+                <div class="ar-form-row" style="margin-bottom:3px;margin-top:4px">
+                  <span class="ar-section-sub" style="margin-bottom:0">Pole</span>
+                  <button class="ar-op-btn ar-op-xs ar-op-ghost" style="margin-left:auto"
+                          (click)="clearPoleTarget()" title="Remove pole vector">✕</button>
+                </div>
+                <div class="ar-xyz-row" style="margin-bottom:4px">
+                  <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikPoleX" (change)="onIKPoleChange()">
+                  <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikPoleY" (change)="onIKPoleChange()">
+                  <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="ikPoleZ" (change)="onIKPoleChange()">
+                </div>
+              </ng-container>
+              <!-- Add Pole (shown when no pole set) -->
+              <button *ngIf="!ikChain.poleTarget"
+                      class="ar-op-btn ar-op-secondary ar-op-full"
+                      style="margin-bottom:4px"
+                      (click)="addPoleTarget()"
+                      title="Add pole vector to pin the bend direction (cyan sphere)">
+                + Add Pole
+              </button>
+              <!-- Enable / Remove -->
+              <div class="ar-btn-pair" style="margin-top:4px">
+                <button class="ar-op-btn" [class.ar-active]="ikChain.enabled"
+                        (click)="setIKEnabled(!ikChain.enabled)">
+                  {{ ikChain.enabled ? '✓ Enabled' : 'Disabled' }}
+                </button>
+                <button class="ar-op-btn ar-op-danger" (click)="removeIKChain()">Remove IK</button>
+              </div>
+            </ng-container>
+          </ng-container>
+
         </ng-container>
 
       </ng-container><!-- /jointsCollapsed -->
@@ -210,6 +303,16 @@
           <input type="range" class="ar-range" min="0" max="1" step="0.01"
                  [(ngModel)]="wpTargetWeight" (ngModelChange)="onWpBrushChange()">
           <span class="ar-val">{{ wpTargetWeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="ar-form-row" style="margin-top:6px; gap:14px">
+          <label class="ar-checkbox-row">
+            <input type="checkbox" [(ngModel)]="wpShowSkeleton" (ngModelChange)="onWpShowSkeletonChange()">
+            <span class="ar-label" style="min-width:unset">Show skeleton</span>
+          </label>
+          <label class="ar-checkbox-row">
+            <input type="checkbox" [(ngModel)]="wpUnlit" (ngModelChange)="onWpUnlitChange()">
+            <span class="ar-label" style="min-width:unset">Unlit</span>
+          </label>
         </div>
 
         <div class="ar-btn-pair" style="margin-top:8px">

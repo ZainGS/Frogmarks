@@ -59,6 +59,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   weightPaintCollapsed = false;
   clipsCollapsed = false;
   retargetCollapsed = false;
+  armatureToolMode: 'move' | 'rotate' = 'move';
   selectedJointIdx: number | null = null;
   renamingIdx: number | null = null;
   renameValue = '';
@@ -68,6 +69,28 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   tailX = 0;
   tailY = 0.3;
   tailZ = 0;
+  rotX = 0;
+  rotY = 0;
+  rotZ = 0;
+
+  // ── IK ───────────────────────────────────────────────────────────
+  ikChains: any[] = [];
+  ikEndSet = new Set<number>();
+  ikIntermediateSet = new Set<number>();
+  ikChainLength = 3;
+  ikBlendWeight = 1;
+  ikTargetX = 0; ikTargetY = 0; ikTargetZ = 0;
+  ikPoleX = 0; ikPoleY = 0; ikPoleZ = 0;
+
+  get selectedJointIKChain(): any | null {
+    if (this.selectedJointIdx === null) return null;
+    return this.ikChains.find((c: any) => c.endJointIdx === this.selectedJointIdx) ?? null;
+  }
+
+  get isIKIntermediate(): boolean {
+    if (this.selectedJointIdx === null) return false;
+    return this.ikIntermediateSet.has(this.selectedJointIdx);
+  }
 
   // ── Bind ─────────────────────────────────────────────────────────
   meshes: Array<{ id: string; name: string }> = [];
@@ -80,6 +103,8 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   wpRadius = 0.15;
   wpStrength = 0.5;
   wpTargetWeight = 1.0;
+  wpShowSkeleton = true;
+  wpUnlit = false;
   wpActive = false;
 
   // ── Clips ────────────────────────────────────────────────────────
@@ -151,7 +176,11 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.selectedJointIsTail = this.sm?.getSelectedJointIsTail3D?.() ?? false;
     if (idx !== null && idx !== this.selectedJointIdx) {
       this._applyJointSelection(idx);
+    } else if (idx !== null && this.armatureToolMode === 'rotate') {
+      this._syncRotationInputs(idx);
     }
+    // Always sync IK inputs — handles viewport drag updating chain.target/poleTarget
+    this._syncIKInputs();
   }
 
   private _applyJointSelection(idx: number): void {
@@ -162,6 +191,48 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
       this.moveX = j.x; this.moveY = j.y; this.moveZ = j.z;
       this.tailX = j.tailOffset[0]; this.tailY = j.tailOffset[1]; this.tailZ = j.tailOffset[2];
     }
+    this._syncRotationInputs(idx);
+    this._syncIKInputs();
+  }
+
+  private _syncIKInputs(): void {
+    const chain = this.selectedJointIKChain;
+    if (!chain) return;
+    this.ikChainLength = chain.chainLength ?? 3;
+    this.ikBlendWeight = chain.blendWeight ?? 1;
+    const t = chain.target ?? [0, 0, 0];
+    this.ikTargetX = t[0]; this.ikTargetY = t[1]; this.ikTargetZ = t[2];
+    if (chain.poleTarget) {
+      const p = chain.poleTarget;
+      this.ikPoleX = p[0]; this.ikPoleY = p[1]; this.ikPoleZ = p[2];
+    }
+  }
+
+  private _syncRotationInputs(idx: number): void {
+    if (!this.activeSkeleton) return;
+    const q: [number,number,number,number] = this.sm?.getJointRotation3D?.(this.activeSkeleton.id, idx) ?? [0,0,0,1];
+    [this.rotX, this.rotY, this.rotZ] = this._quatToEulerDeg(q);
+  }
+
+  private _quatToEulerDeg(q: [number,number,number,number]): [number,number,number] {
+    const [x, y, z, w] = q;
+    const rx = Math.atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y));
+    const sinp = 2*(w*y - z*x);
+    const ry = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp);
+    const rz = Math.atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z));
+    return [rx * 180/Math.PI, ry * 180/Math.PI, rz * 180/Math.PI];
+  }
+
+  private _eulerDegToQuat(rx: number, ry: number, rz: number): [number,number,number,number] {
+    const [cx, sx] = [Math.cos(rx*Math.PI/360), Math.sin(rx*Math.PI/360)];
+    const [cy, sy] = [Math.cos(ry*Math.PI/360), Math.sin(ry*Math.PI/360)];
+    const [cz, sz] = [Math.cos(rz*Math.PI/360), Math.sin(rz*Math.PI/360)];
+    return [
+      sx*cy*cz + cx*sy*sz,
+      cx*sy*cz - sx*cy*sz,
+      cx*cy*sz + sx*sy*cz,
+      cx*cy*cz - sx*sy*sz,
+    ];
   }
 
   close(): void {
@@ -179,6 +250,32 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
 
   updateBgMode(): void {
     this.sm?.setArmatureBgMode3D?.({ mode: this.bgMode });
+  }
+
+  setToolMode(mode: 'move' | 'rotate'): void {
+    this.armatureToolMode = mode;
+    this.sm?.setArmatureToolMode3D?.(mode);
+    if (mode === 'rotate' && this.selectedJointIdx !== null) {
+      this._syncRotationInputs(this.selectedJointIdx);
+    }
+  }
+
+  applyRotation(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    const q = this._eulerDegToQuat(this.rotX, this.rotY, this.rotZ);
+    this.sm?.setJointRotation3D?.(this.activeSkeleton.id, this.selectedJointIdx, q);
+  }
+
+  resetRotation(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    this.sm?.resetJointRotation3D?.(this.activeSkeleton.id, this.selectedJointIdx);
+    this._syncRotationInputs(this.selectedJointIdx);
+  }
+
+  resetAllRotations(): void {
+    if (!this.activeSkeleton) return;
+    this.sm?.resetAllJointRotations3D?.(this.activeSkeleton.id);
+    if (this.selectedJointIdx !== null) this._syncRotationInputs(this.selectedJointIdx);
   }
 
   focusMesh(): void {
@@ -241,7 +338,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   // ── Joint ops ────────────────────────────────────────────────────
 
   refreshJoints(): void {
-    if (!this.activeSkeleton) { this.joints = []; return; }
+    if (!this.activeSkeleton) { this.joints = []; this._clearIKState(); return; }
     const raw: any[] = this.sm?.getSkeletonJoints3D?.(this.activeSkeleton.id) ?? [];
     this.joints = raw.map((j: any) => ({
       name: j.name ?? 'Bone',
@@ -255,6 +352,30 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     if (this.selectedJointIdx !== null && this.selectedJointIdx >= this.joints.length) {
       this.selectedJointIdx = null;
     }
+    this._refreshIKChains();
+  }
+
+  private _clearIKState(): void {
+    this.ikChains = [];
+    this.ikEndSet = new Set();
+    this.ikIntermediateSet = new Set();
+  }
+
+  private _refreshIKChains(): void {
+    if (!this.activeSkeleton) { this._clearIKState(); return; }
+    this.ikChains = this.sm?.getIKChains3D?.(this.activeSkeleton.id) ?? [];
+    this.ikEndSet = new Set(this.ikChains.filter((c: any) => c.enabled).map((c: any) => c.endJointIdx));
+    this.ikIntermediateSet = new Set<number>();
+    for (const chain of this.ikChains) {
+      let idx: number = this.joints[chain.endJointIdx]?.parentIdx ?? -1;
+      let steps = (chain.chainLength ?? 2) - 1;
+      while (idx >= 0 && steps > 0) {
+        this.ikIntermediateSet.add(idx);
+        idx = this.joints[idx]?.parentIdx ?? -1;
+        steps--;
+      }
+    }
+    this._syncIKInputs();
   }
 
   get placementHint(): string {
@@ -402,6 +523,14 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  onWpShowSkeletonChange(): void {
+    this.sm?.setWeightPaintShowSkeleton?.(this.wpShowSkeleton);
+  }
+
+  onWpUnlitChange(): void {
+    this.sm?.setWeightPaintUnlit3D?.(this.wpUnlit);
+  }
+
   normalizeWeights(): void {
     if (!this.bindMeshId) return;
     this.sm?.normalizeWeights3D?.(this.bindMeshId);
@@ -449,6 +578,9 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     const clip = this._clipObjects[this.activeClipIdx];
     if (!clip) return;
     this.sm?.recordSkeletonPose3D?.(this.activeSkeleton.id, clip.id, this.recordFrame);
+    if (this.ikChains.length > 0) {
+      this.sm?.recordIKPose3D?.(this.activeSkeleton.id, clip.id, this.recordFrame);
+    }
   }
 
   playClip(): void {
@@ -464,6 +596,62 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this._clipPlayer?.stop?.();
     this._clipPlayer = null;
     this.isPlaying = false;
+  }
+
+  // ── IK ops ───────────────────────────────────────────────────────
+
+  addIKChain(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    this.sm?.addIKChain3D?.(this.activeSkeleton.id, this.selectedJointIdx, 3);
+  }
+
+  removeIKChain(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.removeIKChain3D?.(this.activeSkeleton.id, chain.id);
+  }
+
+  setIKEnabled(enabled: boolean): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.setIKChainEnabled3D?.(this.activeSkeleton.id, chain.id, enabled);
+  }
+
+  setIKLength(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.setIKChainLength3D?.(this.activeSkeleton.id, chain.id, Math.max(2, this.ikChainLength));
+  }
+
+  onIKBlendChange(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.setIKBlendWeight3D?.(this.activeSkeleton.id, chain.id, this.ikBlendWeight);
+  }
+
+  onIKTargetChange(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.setIKTarget3D?.(this.activeSkeleton.id, chain.id, this.ikTargetX, this.ikTargetY, this.ikTargetZ);
+  }
+
+  onIKPoleChange(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.setPoleTarget3D?.(this.activeSkeleton.id, chain.id, this.ikPoleX, this.ikPoleY, this.ikPoleZ);
+  }
+
+  addPoleTarget(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    const t: [number, number, number] = chain.target ?? [0, 0, 0];
+    this.sm?.setPoleTarget3D?.(this.activeSkeleton.id, chain.id, t[0], t[1] + 0.5, t[2] + 0.5);
+  }
+
+  clearPoleTarget(): void {
+    const chain = this.selectedJointIKChain;
+    if (!this.activeSkeleton || !chain) return;
+    this.sm?.clearPoleTarget3D?.(this.activeSkeleton.id, chain.id);
   }
 
   // ── Retarget ─────────────────────────────────────────────────────

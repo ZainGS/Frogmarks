@@ -77,6 +77,14 @@
             (closeRequest)="closeArmaturePanel()">
         </app-armature-panel>
 
+        <!-- Grease Pencil Panel overlay -->
+        <app-grease-pencil-panel
+            *ngIf="gpPanelVisible"
+            [shapeManager]="$any(shapeManager)"
+            (closeRequest)="closeGpPanel()"
+            (drawSettingsChange)="onGpDrawSettingsChange($event)">
+        </app-grease-pencil-panel>
+
         <!-- Ephemera Panel overlay -->
         <app-ephemera-panel
             *ngIf="activeVectorLayerId"
@@ -1196,18 +1204,40 @@
                                 <input type="number" min="1" max="32" class="scene3d-short-input"
                                        [ngModel]="scene3dArrayCountX" (ngModelChange)="scene3dUpdateArrayCountX($event)">
                             </div>
-                            <div class="scene3d-material-row">
+                            <div class="scene3d-material-row" [class.scene3d-row-muted]="scene3dArrayObjectOffsetId">
                                 <label>Spacing</label>
                                 <input type="number" min="0.01" step="0.1" class="scene3d-short-input"
-                                       [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)">
+                                       [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)"
+                                       [disabled]="!!scene3dArrayObjectOffsetId">
                             </div>
-                            <div class="scene3d-material-row">
+                            <div class="scene3d-material-row" [class.scene3d-row-muted]="scene3dArrayObjectOffsetId">
                                 <label>Axis</label>
                                 <div class="scene3d-axis-btns">
-                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')">X</button>
-                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')">Y</button>
-                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')">Z</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')" [disabled]="!!scene3dArrayObjectOffsetId">X</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')" [disabled]="!!scene3dArrayObjectOffsetId">Y</button>
+                                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')" [disabled]="!!scene3dArrayObjectOffsetId">Z</button>
                                 </div>
+                            </div>
+                            <!-- Object offset: drives per-step transform instead of spacing -->
+                            <div class="scene3d-material-row">
+                                <label title="Offset mesh ID — each copy inherits the relative transform of this mesh">Offset</label>
+                                <input type="text" class="scene3d-offset-input" placeholder="mesh ID…"
+                                       [(ngModel)]="scene3dArrayObjectOffsetId"
+                                       (change)="scene3dSetObjectOffset(scene3dArrayObjectOffsetId)">
+                                <button *ngIf="scene3dArrayObjectOffsetId" class="scene3d-btn scene3d-btn-sm" (click)="scene3dClearObjectOffset()" title="Clear offset">✕</button>
+                            </div>
+                            <!-- Gap Fill + Weld Threshold (for Bake Merged) -->
+                            <div class="scene3d-material-row">
+                                <label class="scene3d-checkbox-row" title="Bridge geometry between adjacent copies before merged bake">
+                                    <input type="checkbox" [ngModel]="scene3dArrayGapFill" (ngModelChange)="scene3dSetArrayGapFill($event)">
+                                    Gap Fill
+                                </label>
+                            </div>
+                            <div class="scene3d-material-row" *ngIf="scene3dArrayGapFill">
+                                <label>Weld</label>
+                                <input type="number" step="0.001" min="0.0001" class="scene3d-short-input"
+                                       [ngModel]="scene3dArrayWeldThreshold" (ngModelChange)="scene3dSetArrayWeldThreshold($event)"
+                                       title="Vertex weld distance (world units)">
                             </div>
                         </ng-container>
 
@@ -1271,16 +1301,58 @@
                             </div>
                         </ng-container>
 
-                        <!-- Edit Source / Bake -->
+                        <!-- Edit Source / Bake / Bake Merged -->
                         <div class="scene3d-array-actions">
                             <button class="scene3d-btn" (click)="scene3dEditArraySource()">Edit Source</button>
                             <button class="scene3d-btn scene3d-btn-danger" (click)="scene3dBakeArray()">Bake</button>
                         </div>
+                        <div class="scene3d-array-actions" *ngIf="scene3dArrayMode === 'linear'">
+                            <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="scene3dBakeArrayMerged()" title="Weld all copies into one unified mesh">Bake Merged</button>
+                        </div>
+
+                        <!-- Instance Overrides -->
+                        <div class="scene3d-override-header" (click)="scene3dOverridesPanelOpen = !scene3dOverridesPanelOpen">
+                            <span>{{ scene3dOverridesPanelOpen ? '▾' : '▸' }} Instance Overrides</span>
+                            <span *ngIf="scene3dInstanceOverrides.length > 0" class="scene3d-override-badge">{{scene3dInstanceOverrides.length}}</span>
+                        </div>
+                        <ng-container *ngIf="scene3dOverridesPanelOpen">
+                            <div *ngFor="let ov of scene3dInstanceOverrides" class="scene3d-override-row">
+                                <div class="scene3d-override-row-header">
+                                    <span class="scene3d-override-idx">#{{ov.index}}</span>
+                                    <label class="scene3d-override-vis-label">
+                                        <input type="checkbox" [(ngModel)]="ov.visible" (ngModelChange)="scene3dApplyInstanceOverride(ov.index)"> vis
+                                    </label>
+                                    <button class="scene3d-btn scene3d-btn-sm scene3d-btn-danger" (click)="scene3dClearInstanceOverride(ov.index)" title="Remove override">✕</button>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Rot°</label>
+                                    <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotX" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation X">
+                                    <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotY" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation Y">
+                                    <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotZ" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation Z">
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Scale</label>
+                                    <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleX" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale X">
+                                    <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleY" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale Y">
+                                    <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleZ" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale Z">
+                                </div>
+                            </div>
+                            <div class="scene3d-override-add-row">
+                                <label class="scene3d-override-add-label">Index</label>
+                                <input type="number" min="0" step="1" class="scene3d-short-input" [(ngModel)]="scene3dNewOverrideIdx">
+                                <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dAddInstanceOverride()">+ Add</button>
+                            </div>
+                        </ng-container>
                     </details>
 
                     <!-- Normal mesh panel (hidden for array groups) -->
                     <details *ngIf="scene3dSelectedMeshId && !scene3dIsArrayGroup" class="scene3d-section-group" open>
                     <summary class="scene3d-major-header">SELECTED MESH</summary>
+
+                    <!-- Linked arrays badge: mesh is a source for N array groups -->
+                    <div class="scene3d-linked-arrays-badge" *ngIf="scene3dLinkedArrayCount > 0">
+                        &#9679; Source of {{scene3dLinkedArrayCount}} linked array{{scene3dLinkedArrayCount === 1 ? '' : 's'}}
+                    </div>
 
                     <div class="scene3d-edit-mesh-row" *ngIf="scene3dSelectedMeshId">
                         <button class="scene3d-edit-mesh-btn"
@@ -1300,6 +1372,15 @@
                             {{ scene3dArmaturePanelOpen ? '✓ Armature' : 'Armature' }}
                         </button>
                         <span class="scene3d-edit-mesh-hint scene3d-mode-hint">⇧Tab</span>
+                    </div>
+
+                    <div class="scene3d-edit-mesh-row">
+                        <button class="scene3d-edit-mesh-btn"
+                                [class.active]="gpPanelVisible"
+                                (click)="gpPanelVisible ? closeGpPanel() : openGpPanel()"
+                                title="Open Grease Pencil panel — draw 2D strokes in 3D space">
+                            {{ gpPanelVisible ? '✓ Grease Pencil' : 'Grease Pencil' }}
+                        </button>
                     </div>
 
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId" open>
@@ -1337,6 +1418,16 @@
                                 <label>Opacity</label>
                                 <input type="range" min="0" max="100" step="1" [value]="scene3dMeshOpacity * 100" (input)="scene3dMeshOpacity = +$any($event.target).value / 100; scene3dUpdateMeshOpacity()">
                                 <span class="scene3d-val">{{ mathRound(scene3dMeshOpacity * 100) }}%</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Roughness</label>
+                                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dMeshRoughness" (input)="scene3dUpdateMeshRoughness()">
+                                <span class="scene3d-val">{{ scene3dMeshRoughness | number:'1.2-2' }}</span>
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Metalness</label>
+                                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dMeshMetalness" (input)="scene3dUpdateMeshMetalness()">
+                                <span class="scene3d-val">{{ scene3dMeshMetalness | number:'1.2-2' }}</span>
                             </div>
                             <div class="scene3d-material-row">
                                 <label>Style</label>
@@ -2064,6 +2155,24 @@
                                 <span class="scene3d-val">{{ scene3dFogDensity | number:'1.3-3' }}</span>
                             </div>
                         </ng-container>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Environment / IBL</summary>
+                        <div *ngIf="scene3dIblEnabled" class="scene3d-ibl-active-badge">&#9679; IBL active</div>
+                        <div class="scene3d-material-row" style="margin-top:4px">
+                            <label>Intensity</label>
+                            <input type="range" min="0" max="4" step="0.05" [(ngModel)]="scene3dIblIntensity">
+                            <span class="scene3d-val">{{ scene3dIblIntensity | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-row" style="margin-top:6px;gap:6px">
+                            <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                                Upload HDR / Equirect
+                                <input type="file" accept="image/*" style="display:none" (change)="scene3dUploadEnvironmentMap($event)">
+                            </label>
+                            <button class="scene3d-btn" [disabled]="!scene3dIblEnabled" (click)="scene3dClearEnvironmentMap()">Clear</button>
+                        </div>
+                        <div class="scene3d-hint" style="margin-top:4px">Equirectangular image projected to spherical harmonics for diffuse IBL. Cel/ink/sketch styles unaffected.</div>
                     </details>
 
                     <details class="scene3d-details">

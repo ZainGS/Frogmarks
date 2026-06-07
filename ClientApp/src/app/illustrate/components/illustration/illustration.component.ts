@@ -17,6 +17,7 @@ import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } fro
 import { ShapeType } from '../../../shared/enums/shape-type';
 import { auditTime, debounceTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
 import { ColorPickerComponent } from 'app/shared/components/color-picker/color-picker.component';
+import { GpDrawSettings } from '../grease-pencil-panel/grease-pencil-panel.component';
 
 import { AuthService } from 'app/shared/services/auth/auth.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
@@ -1193,15 +1194,11 @@ export class IllustrationComponent implements OnInit {
 
   onVectorLayerSelected(id: string | null): void {
     this.activeVectorLayerId = id;
-    const sm = this.shapeManager as any;
-    sm?.webgpuRenderer?.setActiveVectorLayerId?.(id);
   }
 
   closeEphemeraPanel(): void {
     this.activeVectorLayerId = null;
-    const sm = this.shapeManager as any;
-    sm?.setActiveVectorLayer?.(null);
-    sm?.webgpuRenderer?.setActiveVectorLayerId?.(null);
+    (this.shapeManager as any)?.setActiveVectorLayer?.(null);
   }
 
   // Ribbon mesh
@@ -1246,6 +1243,16 @@ export class IllustrationComponent implements OnInit {
   scene3dArrayRadius = 3.0;
   scene3dArrayArc = 360;
   scene3dArrayRadialAxis: 'x' | 'y' | 'z' = 'y';
+  // Phase 5: linked arrays badge (shown on source mesh)
+  scene3dLinkedArrayCount = 0;
+  // Phase 5: per-instance overrides (array group panel)
+  scene3dInstanceOverrides: Array<{index: number; rotX: number; rotY: number; rotZ: number; scaleX: number; scaleY: number; scaleZ: number; visible: boolean}> = [];
+  scene3dOverridesPanelOpen = false;
+  scene3dNewOverrideIdx = 0;
+  // Object offset and merge-bake options (linear arrays only)
+  scene3dArrayObjectOffsetId = '';
+  scene3dArrayGapFill = false;
+  scene3dArrayWeldThreshold = 0.001;
 
   enterMeshEditMode(): void {
     if (!this.scene3dSelectedMeshId) return;
@@ -1467,6 +1474,11 @@ export class IllustrationComponent implements OnInit {
   scene3dMeshScaleX = 1; scene3dMeshScaleY = 1; scene3dMeshScaleZ = 1;
   scene3dMeshColor = '#ffffff';
   scene3dMeshOpacity = 1.0;
+  scene3dMeshRoughness = 0.5;
+  scene3dMeshMetalness = 0.0;
+  // IBL / Environment Map (global scene)
+  scene3dIblEnabled = false;
+  scene3dIblIntensity = 1.0;
 
   // -- Multi-material submesh slots
   scene3dSubmeshes: Array<{ label: string; color: string; opacity: number; renderStyle: string }> = [];
@@ -1821,6 +1833,8 @@ export class IllustrationComponent implements OnInit {
     // Reset per-mesh state so switching between mesh types clears the flags
     this.scene3dSelectedIsGroup = false;
     this.scene3dIsArrayGroup = false;
+    this.scene3dLinkedArrayCount = 0;
+    this.scene3dInstanceOverrides = [];
     this.scene3dIsCloth = false;
     this.clothLiveEnabled = false;
     this.clothWindEnabled = false;
@@ -1844,6 +1858,9 @@ export class IllustrationComponent implements OnInit {
       return;
     }
     this.scene3dSelectedIsGroup = !!s3d.getMeshGroup?.(id);
+    // Phase 5: count how many array groups reference this mesh as their source
+    const linkedGroups = (this.shapeManager as any).getArrayGroupsForSource3D?.(id) ?? [];
+    this.scene3dLinkedArrayCount = linkedGroups.length;
     const mesh = s3d.getMesh(id);
     if (mesh) {
       this.scene3dMeshPosX = mesh.x ?? mesh.position?.x ?? 0;
@@ -1865,6 +1882,8 @@ export class IllustrationComponent implements OnInit {
       this.scene3dDiffuseTextureSet = !!(mesh.textureLibraryId ?? mesh.diffuseTextureId ?? mesh.texture);
       this.scene3dNormalMapSet = !!mesh.normalMapLibraryId;
       this.scene3dRenderStyle = (mesh.material?.renderStyle ?? 'default') as any;
+      this.scene3dMeshRoughness = mesh.material?.roughness ?? 0.5;
+      this.scene3dMeshMetalness = mesh.material?.metalness ?? 0.0;
       // Load submesh slots
       const sm2 = this.shapeManager as any;
       this._scene3dReloadSubmeshes();
@@ -2757,6 +2776,48 @@ export class IllustrationComponent implements OnInit {
     this.scene3dMarkDirty();
   }
 
+  scene3dUpdateMeshRoughness(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    const mesh = sm.scene3d?.getMesh?.(this.scene3dSelectedMeshId);
+    if (!mesh) return;
+    mesh.material = { ...(mesh.material ?? {}), roughness: this.scene3dMeshRoughness };
+    sm.scene3d?.updateMeshMaterial?.(this.scene3dSelectedMeshId, mesh.material);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshMetalness(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    const mesh = sm.scene3d?.getMesh?.(this.scene3dSelectedMeshId);
+    if (!mesh) return;
+    mesh.material = { ...(mesh.material ?? {}), metalness: this.scene3dMeshMetalness };
+    sm.scene3d?.updateMeshMaterial?.(this.scene3dSelectedMeshId, mesh.material);
+    this.scene3dMarkDirty();
+  }
+
+  async scene3dUploadEnvironmentMap(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    const sm = this.shapeManager as any;
+    sm.setEnvironmentMap3D?.(imageData, this.scene3dIblIntensity);
+    this.scene3dIblEnabled = true;
+    this.scene3dMarkDirty();
+  }
+
+  scene3dClearEnvironmentMap(): void {
+    (this.shapeManager as any).clearEnvironmentMap3D?.();
+    this.scene3dIblEnabled = false;
+    this.scene3dMarkDirty();
+  }
+
   scene3dDeleteMesh(id: string): void {
     (this.shapeManager as any).scene3d?.deleteMesh?.(id);
     this.scene3dRefreshMeshes();
@@ -3133,6 +3194,25 @@ export class IllustrationComponent implements OnInit {
       this.scene3dArraySpacingX = Math.sqrt(s[0]**2 + s[1]**2 + s[2]**2);
       this.scene3dArrayAxisX = this._scene3dGetActiveAxis(s) ?? 'x';
     }
+    // Object offset and merge-bake options (linear mode only)
+    this.scene3dArrayObjectOffsetId = params.objectOffsetId ?? '';
+    this.scene3dArrayGapFill = params.gapFill ?? false;
+    this.scene3dArrayWeldThreshold = params.weldThreshold ?? 0.001;
+    // Phase 5: sync per-instance overrides
+    const rawOverrides: Array<{index: number; override: any}> = sm.getInstanceOverrides3D?.(groupId) ?? [];
+    this.scene3dInstanceOverrides = rawOverrides.map(e => {
+      const sc: [number,number,number] = e.override.scale ?? [1, 1, 1];
+      return {
+        index: e.index,
+        rotX: e.override.rotationEulerDeg?.[0] ?? 0,
+        rotY: e.override.rotationEulerDeg?.[1] ?? 0,
+        rotZ: e.override.rotationEulerDeg?.[2] ?? 0,
+        scaleX: sc[0] ?? 1,
+        scaleY: sc[1] ?? 1,
+        scaleZ: sc[2] ?? 1,
+        visible: e.override.visible ?? true,
+      };
+    });
   }
 
   scene3dUpdateArrayCountX(v: number): void {
@@ -3235,11 +3315,74 @@ export class IllustrationComponent implements OnInit {
   scene3dBakeArray(): void {
     if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
     const confirmed = window.confirm(
-      'Convert to independent meshes? The copies will no longer update when the source changes. (Undo will restore the linked array.)'
+      'Convert to independent meshes? The source and all instances will become separate, editable meshes in one group. Changes to one mesh will no longer affect the others. (Undo will restore the linked array.)'
     );
     if (!confirmed) return;
     (this.shapeManager as any).bakeArray3D?.(this.scene3dSelectedMeshId);
     this.scene3dIsArrayGroup = false;
+  }
+
+  scene3dBakeArrayMerged(): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup || this.scene3dArrayMode !== 'linear') return;
+    const confirmed = window.confirm(
+      'Merge all copies into a single mesh with welded vertices? (Undo will restore the linked array.)'
+    );
+    if (!confirmed) return;
+    (this.shapeManager as any).bakeArrayMerged3D?.(this.scene3dSelectedMeshId);
+    this.scene3dIsArrayGroup = false;
+  }
+
+  scene3dSetArrayGapFill(v: boolean): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayGapFill = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { gapFill: v });
+  }
+
+  scene3dSetArrayWeldThreshold(v: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayWeldThreshold = v;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { weldThreshold: v });
+  }
+
+  scene3dApplyInstanceOverride(idx: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    const o = this.scene3dInstanceOverrides.find(x => x.index === idx);
+    if (!o) return;
+    (this.shapeManager as any).setInstanceOverride3D?.(this.scene3dSelectedMeshId, idx, {
+      rotationEulerDeg: [o.rotX, o.rotY, o.rotZ] as [number, number, number],
+      scale: [o.scaleX, o.scaleY, o.scaleZ] as [number, number, number],
+      visible: o.visible,
+    });
+  }
+
+  scene3dAddInstanceOverride(): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    const idx = Math.max(0, Math.floor(this.scene3dNewOverrideIdx));
+    if (this.scene3dInstanceOverrides.some(x => x.index === idx)) return;
+    (this.shapeManager as any).setInstanceOverride3D?.(this.scene3dSelectedMeshId, idx, {
+      visible: true,
+      scale: [1, 1, 1] as [number, number, number],
+      rotationEulerDeg: [0, 0, 0] as [number, number, number],
+    });
+    this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
+  }
+
+  scene3dSetObjectOffset(id: string): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayObjectOffsetId = id;
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { objectOffsetId: id || undefined });
+  }
+
+  scene3dClearObjectOffset(): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    this.scene3dArrayObjectOffsetId = '';
+    (this.shapeManager as any).updateArrayParams3D?.(this.scene3dSelectedMeshId, { objectOffsetId: undefined });
+  }
+
+  scene3dClearInstanceOverride(idx: number): void {
+    if (!this.scene3dSelectedMeshId || !this.scene3dIsArrayGroup) return;
+    (this.shapeManager as any).clearInstanceOverride3D?.(this.scene3dSelectedMeshId, idx);
+    this.scene3dInstanceOverrides = this.scene3dInstanceOverrides.filter(x => x.index !== idx);
   }
 
   scene3dResetCamera(): void {
@@ -3830,6 +3973,50 @@ export class IllustrationComponent implements OnInit {
   isViewerMode = false;
   viewerTitle = '';
   isPublishing = false;
+
+  // ── Grease Pencil ──────────────────────────────────────────────
+  gpPanelVisible = false;
+  private _gpActiveModeKey: string | null = null; // '<gpId>/<layerId>/<tool>' to detect re-entry
+
+  openGpPanel(): void  { this.gpPanelVisible = true; }
+
+  closeGpPanel(): void {
+    this.gpPanelVisible = false;
+    this._gpActiveModeKey = null;
+    (this.shapeManager as any).exitGpDrawMode3D?.();
+  }
+
+  onGpDrawSettingsChange(s: GpDrawSettings): void {
+    if (!s.gpId || !s.layerId) return;
+    const sm = this.shapeManager as any;
+    const opts = this._buildGpOpts(s);
+    const modeKey = `${s.gpId}/${s.layerId}/${s.tool}`;
+    if (modeKey !== this._gpActiveModeKey) {
+      // gpId, layerId, or tool changed — re-enter draw mode
+      if (this._gpActiveModeKey) sm.exitGpDrawMode3D?.();
+      sm.enterGpDrawMode3D?.(s.gpId, s.layerId, opts);
+      this._gpActiveModeKey = modeKey;
+    } else {
+      // Same session — live-update stroke settings without re-hooking
+      sm.setGpDrawSettings3D?.(opts);
+    }
+  }
+
+  private _buildGpOpts(s: GpDrawSettings): object {
+    return {
+      tool: s.tool,
+      depthMode: 'surface' as const,
+      color: s.color,
+      strokeWidth: s.width,
+      strokeOpacity: s.strokeOpacity,
+      filled: s.filled,
+      fillColor: s.fillColor,
+      closed: s.closed,
+      parentJoint: s.parentJoint || undefined,
+      eraserRadius: s.eraserRadius,
+      frame: s.frame,
+    };
+  }
   showPublishShareDialog = false;
   publishShareViewUrl = '';
   publishShareEmbedCode = '';

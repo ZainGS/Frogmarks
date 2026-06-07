@@ -333,7 +333,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleVectorVisibility(layer: RasterLayer, e: MouseEvent): void {
     e.stopPropagation();
-    this.shapeManager?.setLayerVisibility?.(layer.id, !layer.visible);
+    this.shapeManager?.setVectorLayerVisible?.(layer.id, !layer.visible);
   }
 
   // ── Visibility ────────────────────────────────────────────────

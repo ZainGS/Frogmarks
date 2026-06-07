@@ -167,6 +167,13 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: rgba(60, 220, 120, 0.8);
 }
 
+.ar-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
 .ar-hint-active {
   font-size: 9px;
   color: rgba($accent, 0.85);
@@ -467,4 +474,18 @@ $muted:   rgba(255, 255, 255, 0.45);
   vertical-align: middle;
   font-weight: 600;
   letter-spacing: 0.3px;
+}
+
+// ── IK badge ──────────────────────────────────────────────────────
+
+.ar-ik-badge {
+  font-size: 8px;
+  color: #f0c040;
+  border: 1px solid rgba(240, 192, 64, 0.45);
+  border-radius: 3px;
+  padding: 0 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }

@@ -52,6 +52,7 @@ import { ParticleEmittersComponent } from './illustrate/components/particle-emit
 import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/mesh-edit-panel.component';
 import { ArmaturePanelComponent } from './illustrate/components/armature-panel/armature-panel.component';
 import { EphemeraPanel } from './illustrate/components/ephemera-panel/ephemera-panel.component';
+import { GreasePencilPanelComponent } from './illustrate/components/grease-pencil-panel/grease-pencil-panel.component';
 import { DocsComponent } from './shared/components/docs/docs.component';
 
 // Define MSAL configuration
@@ -95,6 +96,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     MeshEditPanelComponent,
     ArmaturePanelComponent,
     EphemeraPanel,
+    GreasePencilPanelComponent,
     SkinBuilderComponent,
     FmIconComponent,
     DocsComponent,
