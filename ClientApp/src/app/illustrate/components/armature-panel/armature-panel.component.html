@@ -241,6 +241,58 @@
             </ng-container>
           </ng-container>
 
+          <!-- ── Constraints ── -->
+          <ng-container *ngIf="selectedJointIdx !== null">
+            <div class="ar-op-sep"></div>
+            <div class="ar-section-title ar-section-title-toggle"
+                 (click)="constraintsCollapsed = !constraintsCollapsed"
+                 style="margin-bottom:4px">
+              <span class="ar-chevron">{{ constraintsCollapsed ? '▸' : '▾' }}</span>Constraints
+            </div>
+
+            <ng-container *ngIf="!constraintsCollapsed">
+              <!-- Existing constraints list -->
+              <div *ngFor="let c of constraints; let ci = index" class="ar-clip-row" style="margin-bottom:4px">
+                <span class="ar-clip-name" style="font-size:10px;color:#bbb">{{ constraintLabel(c) }}</span>
+                <span class="ar-val" style="font-size:9px">{{ c.influence | number:'1.2-2' }}</span>
+                <button class="ar-op-btn ar-op-xs ar-op-danger" (click)="removeConstraint(ci, $event)" title="Remove">✕</button>
+              </div>
+              <div *ngIf="constraints.length === 0" class="ar-hint" style="margin-bottom:4px">No constraints.</div>
+
+              <!-- Add constraint form -->
+              <div class="ar-form-row" style="margin-bottom:3px">
+                <select class="ar-select" [(ngModel)]="newConstraintType">
+                  <option value="lookAt">Look At</option>
+                  <option value="copyRotation">Copy Rotation</option>
+                  <option value="stretchTo">Stretch To</option>
+                </select>
+              </div>
+              <div class="ar-form-row" style="margin-bottom:3px">
+                <span class="ar-label">{{ newConstraintType === 'copyRotation' ? 'Source' : 'Target' }} j#</span>
+                <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="newConstraintTarget">
+                <ng-container *ngIf="newConstraintType === 'lookAt'">
+                  <span class="ar-label" style="min-width:24px">Axis</span>
+                  <select class="ar-select-sm" [(ngModel)]="newConstraintAxis">
+                    <option value="x">X</option>
+                    <option value="y">Y</option>
+                    <option value="z">Z</option>
+                  </select>
+                </ng-container>
+              </div>
+              <div class="ar-form-row" style="margin-bottom:3px">
+                <span class="ar-label">Inf</span>
+                <input type="range" class="ar-range" min="0" max="1" step="0.01" [(ngModel)]="newConstraintInfluence">
+                <span class="ar-val">{{ newConstraintInfluence | number:'1.2-2' }}</span>
+              </div>
+              <div *ngIf="newConstraintType === 'stretchTo'" class="ar-form-row" style="margin-bottom:3px">
+                <span class="ar-label">Vol</span>
+                <input type="range" class="ar-range" min="0" max="1" step="0.01" [(ngModel)]="newConstraintVolumePreserve">
+                <span class="ar-val">{{ newConstraintVolumePreserve | number:'1.2-2' }}</span>
+              </div>
+              <button class="ar-op-btn ar-op-full" (click)="addConstraint()">+ Add Constraint</button>
+            </ng-container>
+          </ng-container>
+
         </ng-container>
 
       </ng-container><!-- /jointsCollapsed -->
@@ -375,6 +427,161 @@
           </div>
         </ng-container>
       </ng-container>
+    </div>
+
+    <!-- ── Pose Library ──────────────────────────────────────── -->
+    <div class="ar-section" *ngIf="activeSkeleton">
+      <div class="ar-section-title ar-section-title-toggle" (click)="poseLibraryCollapsed = !poseLibraryCollapsed">
+        <span class="ar-chevron">{{ poseLibraryCollapsed ? '▸' : '▾' }}</span>Pose Library
+      </div>
+
+      <ng-container *ngIf="!poseLibraryCollapsed">
+        <!-- Capture row -->
+        <div class="ar-form-row" style="margin-bottom:6px">
+          <input type="text" class="ar-text ar-text-inline" placeholder="Pose name…"
+                 [(ngModel)]="newPoseName"
+                 (keydown.enter)="capturePose()">
+          <button class="ar-op-btn" (click)="capturePose()">+ Capture</button>
+        </div>
+
+        <!-- Pose list -->
+        <div class="ar-list">
+          <div *ngFor="let p of poses" class="ar-list-row">
+            <ng-container *ngIf="renamingPoseId !== p.id; else poseRenameRow">
+              <span class="ar-clip-name">{{ p.name }}</span>
+              <button class="ar-op-btn ar-op-xs" (click)="applyPose(p.id)" title="Apply pose">Apply</button>
+              <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                      (click)="startRenamePose(p.id, p.name, $event)" title="Rename">✎</button>
+              <button class="ar-op-btn ar-op-xs ar-op-danger"
+                      (click)="deletePose(p.id, $event)" title="Delete">✕</button>
+            </ng-container>
+            <ng-template #poseRenameRow>
+              <input type="text" class="ar-text ar-text-inline" [(ngModel)]="renamePoseValue"
+                     (keydown.enter)="confirmRenamePose()"
+                     (keydown.escape)="cancelRenamePose()">
+              <button class="ar-op-btn ar-op-xs" (click)="confirmRenamePose()">✓</button>
+              <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="cancelRenamePose()">✕</button>
+            </ng-template>
+          </div>
+          <div *ngIf="poses.length === 0" class="ar-hint">No poses captured yet.</div>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── NLA Tracks ─────────────────────────────────────────── -->
+    <div class="ar-section" *ngIf="activeSkeleton">
+      <div class="ar-section-title ar-section-title-toggle" (click)="nlaCollapsed = !nlaCollapsed">
+        <span class="ar-chevron">{{ nlaCollapsed ? '▸' : '▾' }}</span>NLA — Multi-Clip Blend
+      </div>
+
+      <ng-container *ngIf="!nlaCollapsed">
+
+        <!-- Create track -->
+        <div class="ar-op-inline" style="margin-bottom:4px">
+          <input type="text" class="ar-text" placeholder="Track name" [(ngModel)]="nlaNewTrackName">
+        </div>
+        <div class="ar-op-inline" style="margin-bottom:6px">
+          <span class="ar-label">FPS</span>
+          <input type="number" class="ar-num ar-num-sm" min="1" [(ngModel)]="nlaNewTrackFps">
+          <label class="ar-checkbox-row">
+            <input type="checkbox" [(ngModel)]="nlaNewTrackLoop">
+            <span class="ar-label" style="min-width:unset">Loop</span>
+          </label>
+          <button class="ar-op-btn" (click)="createNLATrack()">+ Track</button>
+        </div>
+
+        <!-- Track list -->
+        <div class="ar-list">
+          <div *ngFor="let t of nlaTracks; let ti = index"
+               class="ar-list-row ar-nla-track-row"
+               [class.active]="selectedNLATrackIdx === ti"
+               (click)="selectNLATrack(ti)">
+            <span class="ar-clip-name">{{ t.name }}</span>
+            <span class="ar-nla-seg-count">{{ t.segments.length }}seg</span>
+            <button class="ar-op-btn ar-op-xs"
+                    [class.ar-active]="t.isPlaying"
+                    (click)="t.isPlaying ? stopNLATrack(ti) : playNLATrack(ti); $event.stopPropagation()"
+                    title="{{ t.isPlaying ? 'Stop' : 'Play' }}">
+              {{ t.isPlaying ? '⏹' : '▶' }}
+            </button>
+          </div>
+          <div *ngIf="nlaTracks.length === 0" class="ar-hint">No NLA tracks — create one above.</div>
+        </div>
+
+        <!-- Selected track body -->
+        <ng-container *ngIf="selectedNLATrackIdx !== null && nlaTracks[selectedNLATrackIdx] as selTrack">
+          <div class="ar-op-sep"></div>
+          <div class="ar-section-sub">{{ selTrack.name }}</div>
+
+          <!-- Seek -->
+          <div class="ar-form-row" style="margin-bottom:6px">
+            <span class="ar-label">Seek</span>
+            <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="nlaSeekFrame">
+            <button class="ar-op-btn ar-op-xs" (click)="seekNLATrack()">Go</button>
+          </div>
+
+          <!-- Segment list -->
+          <div class="ar-list" style="margin-bottom:6px">
+            <div *ngFor="let seg of selTrack.segments; let si = index"
+                 class="ar-list-row ar-seg-row">
+              <span class="ar-seg-blend-badge" [class.additive]="seg.blendMode === 'additive'"
+                    [title]="seg.blendMode">{{ seg.blendMode === 'additive' ? '+' : '→' }}</span>
+              <span class="ar-seg-clip-name" [title]="seg.clipName">{{ seg.clipName }}</span>
+              <span class="ar-nla-seg-count">&#64;{{ seg.startFrame }}</span>
+              <input type="range" class="ar-range ar-range-sm" min="0" max="1" step="0.01"
+                     [value]="seg.weight"
+                     (input)="seg.weight = +$any($event.target).value; updateNLASegmentWeight(selectedNLATrackIdx!, si, seg.weight)"
+                     title="Blend weight">
+              <span class="ar-val ar-val-sm">{{ seg.weight | number:'1.1-1' }}</span>
+              <button class="ar-op-btn ar-op-xs ar-op-danger"
+                      (click)="removeNLASegment(si, $event)" title="Remove">✕</button>
+            </div>
+            <div *ngIf="selTrack.segments.length === 0" class="ar-hint">No segments yet.</div>
+          </div>
+
+          <!-- Add segment form -->
+          <div class="ar-section-sub" style="margin-bottom:4px">Add Segment</div>
+          <div class="ar-form-row" style="margin-bottom:4px">
+            <span class="ar-label">Clip</span>
+            <select class="ar-select" [(ngModel)]="nlaNewSegClipIdx">
+              <option *ngFor="let c of clips; let i = index" [value]="i">{{ c.name }}</option>
+            </select>
+          </div>
+          <div class="ar-op-inline" style="margin-bottom:4px">
+            <span class="ar-label">Start</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="nlaNewSegStart">
+            <span class="ar-label">W</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" max="1" step="0.05" [(ngModel)]="nlaNewSegWeight">
+            <select class="ar-select ar-select-sm" [(ngModel)]="nlaNewSegBlendMode">
+              <option value="replace">Replace</option>
+              <option value="additive">Additive</option>
+            </select>
+          </div>
+          <div class="ar-op-inline" style="margin-bottom:6px">
+            <span class="ar-label">In</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="nlaNewSegFadeIn">
+            <span class="ar-label">Out</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="nlaNewSegFadeOut">
+            <button class="ar-op-btn" (click)="addNLASegment()" [disabled]="clips.length === 0">+ Add</button>
+          </div>
+
+          <!-- Crossfade -->
+          <div class="ar-op-sep"></div>
+          <div class="ar-section-sub" style="margin-bottom:4px">Crossfade</div>
+          <div class="ar-op-inline" style="margin-bottom:4px">
+            <span class="ar-label">From</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="nlaCfFromSeg">
+            <span class="ar-label">To</span>
+            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="nlaCfToSeg">
+            <span class="ar-label">Dur</span>
+            <input type="number" class="ar-num ar-num-sm" min="1" step="1" [(ngModel)]="nlaCfDur">
+            <button class="ar-op-btn" (click)="crossfadeNLA()"
+                    [disabled]="selTrack.segments.length < 2">Fade</button>
+          </div>
+          <div class="ar-hint">Segment indices (0-based). Duration in frames.</div>
+
+        </ng-container><!-- /selTrack -->
+      </ng-container><!-- /nlaCollapsed -->
     </div>
 
     <!-- ── Retarget ──────────────────────────────────────────── -->

@@ -36,7 +36,19 @@
         </div>
 
         <!-- Snap indicator — shown while Ctrl is held during a drag -->
-        <div *ngIf="scene3dSnapActive" class="scene3d-snap-badge">🔲 SNAP</div>
+        <div *ngIf="scene3dSnapActive" class="scene3d-snap-badge">🔲 SNAP: {{ scene3dSnapMode | uppercase }}</div>
+
+        <!-- Viewport transform shortcut HUD (G/R/S state machine) -->
+        <div *ngIf="scene3dShortcutActive" class="scene3d-shortcut-hud">
+          <span class="scene3d-sh-mode">{{ scene3dShortcutMode | uppercase }}</span>
+          <ng-container *ngIf="scene3dShortcutAxis">
+            <span class="scene3d-sh-sep">›</span>
+            <span class="scene3d-sh-axis" [class]="'scene3d-sh-axis-' + scene3dShortcutAxis">{{ scene3dShortcutAxis | uppercase }}</span>
+          </ng-container>
+          <span *ngIf="scene3dShortcutNumeric" class="scene3d-sh-value">{{ scene3dShortcutNumeric }}</span>
+          <span *ngIf="!scene3dShortcutAxis" class="scene3d-sh-hint">x / y / z to constrain</span>
+          <span class="scene3d-sh-confirm">↵ confirm · Esc cancel</span>
+        </div>
 
         <!-- Artboard bounded-mode overlay: shadow vignette + dimension label -->
         <div *ngIf="artboardShadowStyle && artboardShadowStyle['width']"
@@ -1432,7 +1444,8 @@
                             <div class="scene3d-material-row">
                                 <label>Style</label>
                                 <select class="scene3d-select" [ngModel]="scene3dRenderStyle" (ngModelChange)="scene3dSetRenderStyle($event)">
-                                    <option value="default">Default</option>
+                                    <option value="default">Default (PBR)</option>
+                                    <option value="gouraud">Gouraud (PS1)</option>
                                     <option value="cel">Cel / Toon</option>
                                     <option value="sketch">Sketch</option>
                                     <option value="ink">Ink / Manga</option>
@@ -1509,6 +1522,20 @@
                         <div *ngIf="scene3dNormalMapSet" class="scene3d-normal-badge">Per-pixel lighting active</div>
                     </details>
 
+                    <details class="scene3d-details" *ngIf="scene3dSelectedMeshId && scene3dBlendShapes.length > 0">
+                        <summary>Blend Shapes</summary>
+                        <div *ngFor="let shape of scene3dBlendShapes; let i = index" class="scene3d-material-row">
+                            <label class="scene3d-blend-name" [title]="shape.name">{{ shape.name }}</label>
+                            <input type="range" min="0" max="1" step="0.001"
+                                   [(ngModel)]="shape.weight"
+                                   (input)="scene3dSetBlendWeight(i, shape.weight)"
+                                   class="scene3d-range">
+                            <input type="number" min="0" max="1" step="0.01"
+                                   class="scene3d-short-input"
+                                   [(ngModel)]="shape.weight"
+                                   (change)="shape.weight = +$any($event.target).value; scene3dSetBlendWeight(i, shape.weight)">
+                        </div>
+                    </details>
 
                     <!-- Cloth inspector — only visible when selected mesh is ClothMesh3D -->
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId && scene3dIsCloth" open>
@@ -2033,6 +2060,13 @@
 
                     <details class="scene3d-details">
                         <summary>PS1 Retro Style</summary>
+                        <!-- Presets -->
+                        <div class="scene3d-btn-row" style="margin-bottom:8px">
+                            <button class="scene3d-btn" (click)="scene3dApplyRetroPreset('wobble')">Wobble</button>
+                            <button class="scene3d-btn" (click)="scene3dApplyRetroPreset('pocket')">Pocket</button>
+                            <button class="scene3d-btn" (click)="scene3dApplyRetroPreset('off')">Off</button>
+                        </div>
+                        <!-- Core vertex / color params -->
                         <div class="scene3d-material-row">
                             <label>Vertex Jitter</label>
                             <input type="range" min="0" max="200" step="1" [value]="scene3dPS1Jitter * 100" (input)="scene3dPS1Jitter = +$any($event.target).value / 100; scene3dApplyPS1()">
@@ -2052,6 +2086,44 @@
                             <label>Color Depth</label>
                             <input type="range" min="8" max="256" step="8" [(ngModel)]="scene3dPS1ColorDepth" (input)="scene3dApplyPS1()">
                             <span class="scene3d-val">{{ scene3dPS1ColorDepth }}</span>
+                        </div>
+                        <!-- Lo-res buffer -->
+                        <div class="scene3d-ps1-sep"></div>
+                        <div class="scene3d-toggle-row">
+                            <label>Lo-Res Buffer</label>
+                            <input type="checkbox" [(ngModel)]="scene3dPS1LoRes" (ngModelChange)="scene3dApplyPS1()">
+                        </div>
+                        <div *ngIf="scene3dPS1LoRes" class="scene3d-material-row">
+                            <label>Resolution</label>
+                            <input type="number" min="64" max="1920" step="1" class="scene3d-short-input"
+                                   [(ngModel)]="scene3dPS1ResW" (change)="scene3dApplyPS1()">
+                            <span class="scene3d-val">×</span>
+                            <input type="number" min="64" max="1080" step="1" class="scene3d-short-input"
+                                   [(ngModel)]="scene3dPS1ResH" (change)="scene3dApplyPS1()">
+                        </div>
+                        <!-- Dither -->
+                        <div class="scene3d-ps1-sep"></div>
+                        <div class="scene3d-toggle-row">
+                            <label>Dither</label>
+                            <input type="checkbox" [(ngModel)]="scene3dPS1Dither" (ngModelChange)="scene3dApplyPS1()">
+                        </div>
+                        <div *ngIf="scene3dPS1Dither" class="scene3d-material-row">
+                            <label>Strength</label>
+                            <input type="range" min="0" max="100" step="1"
+                                   [value]="scene3dPS1DitherStrength * 100"
+                                   (input)="scene3dPS1DitherStrength = +$any($event.target).value / 100; scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ mathRound(scene3dPS1DitherStrength * 100) }}%</span>
+                        </div>
+                        <!-- UV Quantize -->
+                        <div class="scene3d-toggle-row">
+                            <label>UV Quantize</label>
+                            <input type="checkbox" [(ngModel)]="scene3dPS1UVQuantize" (ngModelChange)="scene3dApplyPS1()">
+                        </div>
+                        <div *ngIf="scene3dPS1UVQuantize" class="scene3d-material-row">
+                            <label>Steps</label>
+                            <input type="range" min="8" max="256" step="8"
+                                   [(ngModel)]="scene3dPS1UVSteps" (input)="scene3dApplyPS1()">
+                            <span class="scene3d-val">{{ scene3dPS1UVSteps }}</span>
                         </div>
                     </details>
 
@@ -2188,6 +2260,92 @@
                     </details>
 
                     <details class="scene3d-details">
+                        <summary>Post-Processing</summary>
+
+                        <div class="scene3d-pp-group">
+                            <div class="scene3d-pp-group-header">
+                                <label class="scene3d-checkbox-row">
+                                    <input type="checkbox" [(ngModel)]="scene3dBloomEnabled" (ngModelChange)="scene3dApplyPostProcessing()">
+                                    Bloom
+                                </label>
+                            </div>
+                            <ng-container *ngIf="scene3dBloomEnabled">
+                                <div class="scene3d-material-row">
+                                    <label>Threshold</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dBloomThreshold" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dBloomThreshold | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Intensity</label>
+                                    <input type="range" min="0" max="4" step="0.05" [(ngModel)]="scene3dBloomIntensity" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dBloomIntensity | number:'1.2-2' }}</span>
+                                </div>
+                            </ng-container>
+                        </div>
+
+                        <div class="scene3d-pp-sep"></div>
+
+                        <div class="scene3d-pp-group">
+                            <div class="scene3d-pp-group-header">
+                                <label class="scene3d-checkbox-row">
+                                    <input type="checkbox" [(ngModel)]="scene3dColorGradeEnabled" (ngModelChange)="scene3dApplyPostProcessing()">
+                                    Color Grade
+                                </label>
+                            </div>
+                            <ng-container *ngIf="scene3dColorGradeEnabled">
+                                <div class="scene3d-material-row">
+                                    <label>Brightness</label>
+                                    <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="scene3dColorGradeBrightness" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dColorGradeBrightness | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Contrast</label>
+                                    <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="scene3dColorGradeContrast" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dColorGradeContrast | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Saturation</label>
+                                    <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="scene3dColorGradeSaturation" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dColorGradeSaturation | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Tint</label>
+                                    <input type="color" [(ngModel)]="scene3dColorGradeTint" (input)="scene3dApplyPostProcessing()">
+                                </div>
+                            </ng-container>
+                        </div>
+
+                        <div class="scene3d-pp-sep"></div>
+
+                        <div class="scene3d-pp-group">
+                            <div class="scene3d-pp-group-header">
+                                <label class="scene3d-checkbox-row">
+                                    <input type="checkbox" [(ngModel)]="scene3dVignetteEnabled" (ngModelChange)="scene3dApplyPostProcessing()">
+                                    Vignette
+                                </label>
+                            </div>
+                            <ng-container *ngIf="scene3dVignetteEnabled">
+                                <div class="scene3d-material-row">
+                                    <label>Intensity</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dVignetteIntensity" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dVignetteIntensity | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Radius</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dVignetteRadius" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dVignetteRadius | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="scene3d-material-row">
+                                    <label>Softness</label>
+                                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dVignetteSoftness" (input)="scene3dApplyPostProcessing()">
+                                    <span class="scene3d-val">{{ scene3dVignetteSoftness | number:'1.2-2' }}</span>
+                                </div>
+                            </ng-container>
+                        </div>
+
+                    </details>
+
+                    <details class="scene3d-details">
                         <summary>3D Animation</summary>
                         <div class="scene3d-toggle-row">
                             <label>Auto-Key</label>
@@ -2240,6 +2398,16 @@
                     <details class="scene3d-details">
                         <summary>Snap Settings</summary>
                         <div class="scene3d-material-row">
+                            <label>Mode</label>
+                            <select class="scene3d-select"
+                                    [(ngModel)]="scene3dSnapMode"
+                                    (ngModelChange)="scene3dSetSnapMode($event)">
+                                <option value="none">None</option>
+                                <option value="grid">Grid</option>
+                                <option value="vertex">Vertex</option>
+                            </select>
+                        </div>
+                        <div *ngIf="scene3dSnapMode === 'grid'" class="scene3d-material-row">
                             <label>Grid size</label>
                             <input type="number" step="0.1" min="0.01" class="scene3d-input-small"
                                    [(ngModel)]="scene3dSnapGridSize" (input)="scene3dUpdateSnapSettings()">
@@ -2255,6 +2423,19 @@
                             <label>Scale step</label>
                             <input type="number" step="0.05" min="0.01" class="scene3d-input-small"
                                    [(ngModel)]="scene3dSnapScaleStep" (input)="scene3dUpdateSnapSettings()">
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Export</summary>
+                        <div *ngIf="scene3dExportStats" class="scene3d-export-stats">
+                            &#10003; {{ scene3dExportStats }}
+                        </div>
+                        <button class="scene3d-btn scene3d-export-btn" (click)="scene3dExportGlb()">
+                            &#8595; Export GLB
+                        </button>
+                        <div class="scene3d-hint" style="margin-top:6px">
+                            Exports all meshes, skeletons, animation clips, and blend shapes. Textures export as color only (no image data).
                         </div>
                     </details>
 

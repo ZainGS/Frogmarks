@@ -21,6 +21,25 @@ export interface ArmatureClip {
   name: string;
 }
 
+export interface NLASegmentDisplay {
+  clipId: string;
+  clipName: string;
+  startFrame: number;
+  weight: number;
+  blendMode: 'replace' | 'additive';
+  fadeIn: number;
+  fadeOut: number;
+}
+
+export interface NLATrackDisplay {
+  id: string;
+  name: string;
+  fps: number;
+  loop: boolean;
+  isPlaying: boolean;
+  segments: NLASegmentDisplay[];
+}
+
 @Component({
   selector: 'app-armature-panel',
   templateUrl: './armature-panel.component.html',
@@ -123,6 +142,41 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   retargetSrcClipIdx = 0;
   retargetTgtSkeletonId = '';
 
+  // ── Bone Constraints ─────────────────────────────────────────────
+  constraintsCollapsed = false;
+  constraints: any[] = [];
+  newConstraintType: 'lookAt' | 'copyRotation' | 'stretchTo' = 'lookAt';
+  newConstraintTarget = 0;
+  newConstraintAxis: 'x' | 'y' | 'z' = 'y';
+  newConstraintInfluence = 1.0;
+  newConstraintVolumePreserve = 0.5;
+
+  // ── Pose Library ──────────────────────────────────────────────────
+  poseLibraryCollapsed = false;
+  poses: Array<{ id: string; name: string }> = [];
+  newPoseName = '';
+  renamingPoseId: string | null = null;
+  renamePoseValue = '';
+
+  // ── NLA ───────────────────────────────────────────────────────────
+  nlaCollapsed = true;
+  nlaTracks: NLATrackDisplay[] = [];
+  selectedNLATrackIdx: number | null = null;
+  nlaNewTrackName = 'Track';
+  nlaNewTrackFps = 24;
+  nlaNewTrackLoop = true;
+  nlaSeekFrame = 0;
+  nlaNewSegClipIdx = 0;
+  nlaNewSegStart = 0;
+  nlaNewSegWeight = 1.0;
+  nlaNewSegBlendMode: 'replace' | 'additive' = 'replace';
+  nlaNewSegFadeIn = 0;
+  nlaNewSegFadeOut = 0;
+  nlaCfFromSeg = 0;
+  nlaCfToSeg = 1;
+  nlaCfDur = 8;
+  private _nlaPlayers = new Map<string, any>();
+
   ngOnInit(): void {
     if (this.shapeManager) {
       this._subscribeScene();
@@ -145,6 +199,10 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   ngOnDestroy(): void {
     this._unsubscribeScene();
     if (this.wpActive) this.sm?.exitWeightPaintMode3D?.();
+    for (const [trackId] of this._nlaPlayers) {
+      this.sm?.stopNLATrack3D?.(trackId);
+    }
+    this._nlaPlayers.clear();
   }
 
   private _subscribeScene(): void {
@@ -193,6 +251,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     }
     this._syncRotationInputs(idx);
     this._syncIKInputs();
+    this.refreshConstraints();
   }
 
   private _syncIKInputs(): void {
@@ -319,6 +378,8 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.sm?.showBoneOverlay3D?.(sk.id, this.bindMeshId || undefined);
     this.refreshJoints();
     this.refreshClips();
+    this.selectedNLATrackIdx = null;
+    this.refreshNLATracks();
   }
 
   createSkeleton(): void {
@@ -353,6 +414,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
       this.selectedJointIdx = null;
     }
     this._refreshIKChains();
+    this.refreshConstraints();
   }
 
   private _clearIKState(): void {
@@ -545,6 +607,8 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     if (this.activeClipIdx !== null && this.activeClipIdx >= this.clips.length) {
       this.activeClipIdx = null;
     }
+    this.refreshNLATracks();
+    this.refreshPoses();
   }
 
   createClip(): void {
@@ -661,5 +725,198 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     const clip = this._clipObjects[this.retargetSrcClipIdx];
     if (!clip) return;
     this.sm?.retargetSkeletonClip3D?.(clip.id, this.retargetTgtSkeletonId);
+  }
+
+  // ── NLA ──────────────────────────────────────────────────────────
+
+  refreshNLATracks(): void {
+    if (!this.activeSkeleton) { this.nlaTracks = []; return; }
+    const raw: any[] = this.sm?.getNLATracks3D?.(this.activeSkeleton.id) ?? [];
+    this.nlaTracks = raw.map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      fps: t.fps ?? 24,
+      loop: t.loop ?? true,
+      isPlaying: this._nlaPlayers.has(t.id),
+      segments: (t.segments ?? []).map((seg: any) => ({
+        clipId: seg.clipId,
+        clipName: this._clipNameById(seg.clipId),
+        startFrame: seg.startFrame ?? 0,
+        weight: seg.weight ?? 1,
+        blendMode: seg.blendMode ?? 'replace',
+        fadeIn: seg.fadeIn ?? 0,
+        fadeOut: seg.fadeOut ?? 0,
+      })),
+    }));
+    if (this.selectedNLATrackIdx !== null && this.selectedNLATrackIdx >= this.nlaTracks.length) {
+      this.selectedNLATrackIdx = null;
+    }
+  }
+
+  private _clipNameById(id: string): string {
+    return this._clipObjects.find((c: any) => c.id === id)?.name ?? id;
+  }
+
+  createNLATrack(): void {
+    if (!this.activeSkeleton || !this.nlaNewTrackName.trim()) return;
+    this.sm?.createNLATrack3D?.(
+      this.activeSkeleton.id,
+      this.nlaNewTrackName.trim(),
+      this.nlaNewTrackFps,
+      this.nlaNewTrackLoop,
+    );
+    this.nlaNewTrackName = 'Track';
+    this.refreshNLATracks();
+  }
+
+  selectNLATrack(idx: number): void {
+    this.selectedNLATrackIdx = this.selectedNLATrackIdx === idx ? null : idx;
+    this.nlaNewSegClipIdx = 0;
+    this.nlaNewSegStart = 0;
+  }
+
+  addNLASegment(): void {
+    if (this.selectedNLATrackIdx === null) return;
+    const track = this.nlaTracks[this.selectedNLATrackIdx];
+    const clip = this._clipObjects[this.nlaNewSegClipIdx];
+    if (!track || !clip) return;
+    this.sm?.addNLASegment3D?.(track.id, clip.id, this.nlaNewSegStart, {
+      weight: this.nlaNewSegWeight,
+      blendMode: this.nlaNewSegBlendMode,
+      fadeIn: this.nlaNewSegFadeIn,
+      fadeOut: this.nlaNewSegFadeOut,
+    });
+    this.nlaNewSegStart += 24;
+    this.refreshNLATracks();
+  }
+
+  removeNLASegment(segIdx: number, event: Event): void {
+    event.stopPropagation();
+    if (this.selectedNLATrackIdx === null) return;
+    const track = this.nlaTracks[this.selectedNLATrackIdx];
+    if (!track) return;
+    this.sm?.removeNLASegment3D?.(track.id, segIdx);
+    this.refreshNLATracks();
+  }
+
+  updateNLASegmentWeight(trackIdx: number, segIdx: number, weight: number): void {
+    const track = this.nlaTracks[trackIdx];
+    if (!track) return;
+    this.sm?.updateNLASegment3D?.(track.id, segIdx, { weight });
+  }
+
+  playNLATrack(idx: number): void {
+    const track = this.nlaTracks[idx];
+    if (!track) return;
+    const player = this.sm?.playNLATrack3D?.(track.id);
+    if (player) {
+      this._nlaPlayers.set(track.id, player);
+      player.play?.();
+      this.nlaTracks[idx].isPlaying = true;
+    }
+  }
+
+  stopNLATrack(idx: number): void {
+    const track = this.nlaTracks[idx];
+    if (!track) return;
+    this.sm?.stopNLATrack3D?.(track.id);
+    this._nlaPlayers.delete(track.id);
+    this.nlaTracks[idx].isPlaying = false;
+  }
+
+  seekNLATrack(): void {
+    if (this.selectedNLATrackIdx === null) return;
+    const track = this.nlaTracks[this.selectedNLATrackIdx];
+    if (!track) return;
+    this.sm?.seekNLATrack3D?.(track.id, this.nlaSeekFrame);
+  }
+
+  crossfadeNLA(): void {
+    if (this.selectedNLATrackIdx === null) return;
+    const track = this.nlaTracks[this.selectedNLATrackIdx];
+    if (!track || track.segments.length < 2) return;
+    this.sm?.crossfade3D?.(track.id, this.nlaCfFromSeg, this.nlaCfToSeg, this.nlaCfDur);
+  }
+
+  // ── Bone Constraints ─────────────────────────────────────────────
+
+  refreshConstraints(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) {
+      this.constraints = [];
+      return;
+    }
+    this.constraints = this.sm?.getJointConstraints3D?.(this.activeSkeleton.id, this.selectedJointIdx) ?? [];
+  }
+
+  addConstraint(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    let c: any;
+    if (this.newConstraintType === 'lookAt') {
+      c = { type: 'lookAt', targetJointIdx: +this.newConstraintTarget, axis: this.newConstraintAxis, influence: this.newConstraintInfluence };
+    } else if (this.newConstraintType === 'copyRotation') {
+      c = { type: 'copyRotation', sourceJointIdx: +this.newConstraintTarget, influence: this.newConstraintInfluence };
+    } else {
+      c = { type: 'stretchTo', targetJointIdx: +this.newConstraintTarget, influence: this.newConstraintInfluence, volumePreserve: this.newConstraintVolumePreserve };
+    }
+    this.sm?.addJointConstraint3D?.(this.activeSkeleton.id, this.selectedJointIdx, c);
+    this.refreshConstraints();
+  }
+
+  removeConstraint(constraintIdx: number, event: Event): void {
+    event.stopPropagation();
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    this.sm?.removeJointConstraint3D?.(this.activeSkeleton.id, this.selectedJointIdx, constraintIdx);
+    this.refreshConstraints();
+  }
+
+  constraintLabel(c: any): string {
+    if (c.type === 'lookAt')       return `Look At → j${c.targetJointIdx} (${c.axis?.toUpperCase()})`;
+    if (c.type === 'copyRotation') return `Copy Rot ← j${c.sourceJointIdx}`;
+    if (c.type === 'stretchTo')    return `Stretch → j${c.targetJointIdx}`;
+    return c.type;
+  }
+
+  // ── Pose Library ──────────────────────────────────────────────────
+
+  refreshPoses(): void {
+    if (!this.activeSkeleton) { this.poses = []; return; }
+    this.poses = this.sm?.getPoses3D?.(this.activeSkeleton.id) ?? [];
+  }
+
+  capturePose(): void {
+    if (!this.activeSkeleton) return;
+    const name = this.newPoseName.trim() || `Pose ${this.poses.length + 1}`;
+    this.sm?.capturePose3D?.(this.activeSkeleton.id, name);
+    this.newPoseName = '';
+    this.refreshPoses();
+  }
+
+  applyPose(poseId: string): void {
+    if (!this.activeSkeleton) return;
+    this.sm?.applyPose3D?.(this.activeSkeleton.id, poseId);
+  }
+
+  startRenamePose(poseId: string, currentName: string, event: Event): void {
+    event.stopPropagation();
+    this.renamingPoseId = poseId;
+    this.renamePoseValue = currentName;
+  }
+
+  confirmRenamePose(): void {
+    if (!this.activeSkeleton || !this.renamingPoseId || !this.renamePoseValue.trim()) return;
+    this.sm?.renamePose3D?.(this.activeSkeleton.id, this.renamingPoseId, this.renamePoseValue.trim());
+    this.renamingPoseId = null;
+    this.refreshPoses();
+  }
+
+  cancelRenamePose(): void {
+    this.renamingPoseId = null;
+  }
+
+  deletePose(poseId: string, event: Event): void {
+    event.stopPropagation();
+    if (!this.activeSkeleton) return;
+    this.sm?.deletePose3D?.(this.activeSkeleton.id, poseId);
+    this.refreshPoses();
   }
 }

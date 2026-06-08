@@ -151,8 +151,47 @@ export class IllustrationComponent implements OnInit {
   @HostListener('window:scroll') onWinScroll() { this.closeContextMenu(); }
   @HostListener('window:resize') onWinResize() { this.closeContextMenu(); }
   @HostListener('document:keydown.escape') onEsc() { this.closeContextMenu(); }
+  // Viewport transform shortcut HUD (synced from Salsa getters)
+  scene3dShortcutActive = false;
+  scene3dShortcutMode: string | null = null;
+  scene3dShortcutAxis: string | null = null;
+  scene3dShortcutNumeric = '';
+
+  private _syncShortcutHud(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dShortcutActive = sm?.isShortcutActive3D ?? false;
+    this.scene3dShortcutMode   = sm?.shortcutMode3D ?? null;
+    this.scene3dShortcutAxis   = sm?.shortcutAxis3D ?? null;
+    this.scene3dShortcutNumeric = sm?.shortcutNumericDisplay3D ?? '';
+  }
+
   @HostListener('document:keydown', ['$event']) onCtrlSnapKeyDown(e: KeyboardEvent) {
     if (e.key === 'Control') this.scene3dSnapActive = true;
+
+    if (this.scene3dPanelVisible && this.scene3dSelectedMeshId) {
+      const active = document.activeElement;
+      const inInput = active instanceof HTMLInputElement
+        || active instanceof HTMLTextAreaElement
+        || (active as HTMLElement)?.isContentEditable;
+      if (!inInput) {
+        const sm = this.shapeManager as any;
+        const key = e.key.toLowerCase();
+
+        if (key === 'g') { sm.beginTransform3D?.('grab');   e.preventDefault(); this._syncShortcutHud(); return; }
+        if (key === 'r') { sm.beginTransform3D?.('rotate');  e.preventDefault(); this._syncShortcutHud(); return; }
+        if (key === 's' && !e.ctrlKey && !e.metaKey) { sm.beginTransform3D?.('scale'); e.preventDefault(); this._syncShortcutHud(); return; }
+
+        if (sm.isShortcutActive3D) {
+          if (key === 'x') { sm.constrainAxis3D?.('x'); e.preventDefault(); this._syncShortcutHud(); return; }
+          if (key === 'y') { sm.constrainAxis3D?.('y'); e.preventDefault(); this._syncShortcutHud(); return; }
+          if (key === 'z') { sm.constrainAxis3D?.('z'); e.preventDefault(); this._syncShortcutHud(); return; }
+          if (key === 'enter') { sm.commitTransform3D?.(); e.preventDefault(); this._syncShortcutHud(); return; }
+          if (/^[\d.\-]$/.test(e.key)) { sm.appendNumericInput?.(e.key); e.preventDefault(); this._syncShortcutHud(); return; }
+        }
+
+        if (key === 'escape') { sm.cancelTransform3D?.(); e.preventDefault(); this._syncShortcutHud(); return; }
+      }
+    }
   }
   @HostListener('document:keyup', ['$event']) onCtrlSnapKeyUp(e: KeyboardEvent) {
     if (e.key === 'Control') this.scene3dSnapActive = false;
@@ -1438,6 +1477,13 @@ export class IllustrationComponent implements OnInit {
   scene3dPS1Snap = 160;
   scene3dPS1Affine = 0.5;
   scene3dPS1ColorDepth = 32;
+  scene3dPS1LoRes = false;
+  scene3dPS1ResW = 320;
+  scene3dPS1ResH = 240;
+  scene3dPS1Dither = false;
+  scene3dPS1DitherStrength = 0.45;
+  scene3dPS1UVQuantize = false;
+  scene3dPS1UVSteps = 64;
 
   // Scene background / skybox
   scene3dBgMode: 'none' | 'solid' | 'gradient' | 'wavy' = 'none';
@@ -1480,11 +1526,29 @@ export class IllustrationComponent implements OnInit {
   scene3dIblEnabled = false;
   scene3dIblIntensity = 1.0;
 
+  // GLB export
+  scene3dExportStats: string | null = null;
+
+  // Post-processing (global scene)
+  scene3dBloomEnabled = false;
+  scene3dBloomThreshold = 0.8;
+  scene3dBloomIntensity = 1.0;
+  scene3dColorGradeEnabled = false;
+  scene3dColorGradeBrightness = 0.0;
+  scene3dColorGradeContrast = 0.0;
+  scene3dColorGradeSaturation = 0.0;
+  scene3dColorGradeTint = '#ffffff';
+  scene3dVignetteEnabled = false;
+  scene3dVignetteIntensity = 0.45;
+  scene3dVignetteRadius = 0.75;
+  scene3dVignetteSoftness = 0.45;
+
   // -- Multi-material submesh slots
   scene3dSubmeshes: Array<{ label: string; color: string; opacity: number; renderStyle: string }> = [];
 
   // -- Snap indicator
   scene3dSnapActive = false;
+  scene3dSnapMode: 'none' | 'grid' | 'vertex' = 'grid';
   scene3dSnapGridSize = 1.0;
   scene3dSnapAngleDeg = 15;
   scene3dSnapScaleStep = 0.25;
@@ -1498,6 +1562,9 @@ export class IllustrationComponent implements OnInit {
   // -- Texture state for selected mesh
   scene3dDiffuseTextureSet = false;
   scene3dNormalMapSet = false;
+
+  // -- Blend shapes (morph targets) for selected mesh
+  scene3dBlendShapes: Array<{name: string; weight: number}> = [];
 
   // -- Keyframe recording feedback
   scene3dKeyframeFlash = false;
@@ -1835,6 +1902,7 @@ export class IllustrationComponent implements OnInit {
     this.scene3dIsArrayGroup = false;
     this.scene3dLinkedArrayCount = 0;
     this.scene3dInstanceOverrides = [];
+    this.scene3dBlendShapes = [];
     this.scene3dIsCloth = false;
     this.clothLiveEnabled = false;
     this.clothWindEnabled = false;
@@ -1881,6 +1949,7 @@ export class IllustrationComponent implements OnInit {
         : '#ffffff';
       this.scene3dDiffuseTextureSet = !!(mesh.textureLibraryId ?? mesh.diffuseTextureId ?? mesh.texture);
       this.scene3dNormalMapSet = !!mesh.normalMapLibraryId;
+      this.scene3dBlendShapes = (this.shapeManager as any).getBlendShapes3D?.(id) ?? [];
       this.scene3dRenderStyle = (mesh.material?.renderStyle ?? 'default') as any;
       this.scene3dMeshRoughness = mesh.material?.roughness ?? 0.5;
       this.scene3dMeshMetalness = mesh.material?.metalness ?? 0.0;
@@ -2371,6 +2440,20 @@ export class IllustrationComponent implements OnInit {
     if (!ctx) return;
     ctx.clearRect(0, 0, cw, ch);
     const sm = this.shapeManager as any;
+
+    // Vertex snap target dot
+    const snapTarget = sm.getSnapTarget3D?.() as [number, number, number] | null;
+    if (snapTarget) {
+      const scr = sm.worldToScreen3D?.(snapTarget) as [number, number] | null;
+      if (scr) {
+        ctx.beginPath();
+        ctx.arc(scr[0], scr[1], 6, 0, Math.PI * 2);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
     if (sm.getRibbonData3D?.(this.scene3dSelectedMeshId)?.showHandles === false) return;
     const positions: { x: number; y: number; depth: number; index: number }[] =
       sm.getRibbonHandleScreenPositions3D?.(this.scene3dSelectedMeshId, cw, ch) ?? [];
@@ -2818,6 +2901,48 @@ export class IllustrationComponent implements OnInit {
     this.scene3dMarkDirty();
   }
 
+  scene3dExportGlb(): void {
+    const result = (this.shapeManager as any).exportSceneGltf3D?.();
+    if (!result?.blob) return;
+    const url = URL.createObjectURL(result.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'scene.glb';
+    a.click();
+    URL.revokeObjectURL(url);
+    this.scene3dExportStats =
+      `${result.meshCount ?? 0} mesh, ${result.skeletonCount ?? 0} skel, ` +
+      `${result.animationCount ?? 0} anim, ${result.vertexCount ?? 0} verts`;
+  }
+
+  scene3dApplyPostProcessing(): void {
+    const tint = this.scene3dColorGradeTint;
+    const tr = parseInt(tint.slice(1, 3), 16) / 255;
+    const tg = parseInt(tint.slice(3, 5), 16) / 255;
+    const tb = parseInt(tint.slice(5, 7), 16) / 255;
+    (this.shapeManager as any).setPostProcessing3D?.({
+      bloom: {
+        enabled: this.scene3dBloomEnabled,
+        threshold: this.scene3dBloomThreshold,
+        intensity: this.scene3dBloomIntensity,
+      },
+      colorGrade: {
+        enabled: this.scene3dColorGradeEnabled,
+        brightness: this.scene3dColorGradeBrightness,
+        contrast: this.scene3dColorGradeContrast,
+        saturation: this.scene3dColorGradeSaturation,
+        tint: [tr, tg, tb] as [number, number, number],
+      },
+      vignette: {
+        enabled: this.scene3dVignetteEnabled,
+        intensity: this.scene3dVignetteIntensity,
+        radius: this.scene3dVignetteRadius,
+        softness: this.scene3dVignetteSoftness,
+      },
+    });
+    this.scene3dMarkDirty();
+  }
+
   scene3dDeleteMesh(id: string): void {
     (this.shapeManager as any).scene3d?.deleteMesh?.(id);
     this.scene3dRefreshMeshes();
@@ -2943,9 +3068,9 @@ export class IllustrationComponent implements OnInit {
   }
 
   // ── Render style ──────────────────────────────────────────────────────────
-  scene3dRenderStyle: 'default' | 'cel' | 'sketch' | 'ink' = 'default';
+  scene3dRenderStyle: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud' = 'default';
 
-  scene3dSetRenderStyle(style: 'default' | 'cel' | 'sketch' | 'ink'): void {
+  scene3dSetRenderStyle(style: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud'): void {
     if (!this.scene3dSelectedMeshId) return;
     this.scene3dRenderStyle = style;
     (this.shapeManager as any).setRenderStyle3D?.(this.scene3dSelectedMeshId, style);
@@ -3037,9 +3162,15 @@ export class IllustrationComponent implements OnInit {
 
   private _scene3dLoadSnapSettings(): void {
     const sm = this.shapeManager as any;
-    this.scene3dSnapGridSize = sm.snapGridSize3D ?? 1.0;
-    this.scene3dSnapAngleDeg = Math.round(((sm.snapAngle3D ?? (Math.PI / 12)) * 180 / Math.PI) * 10) / 10;
+    this.scene3dSnapMode      = sm.snapMode3D ?? 'grid';
+    this.scene3dSnapGridSize  = sm.snapGridSize3D ?? 1.0;
+    this.scene3dSnapAngleDeg  = Math.round(((sm.snapAngle3D ?? (Math.PI / 12)) * 180 / Math.PI) * 10) / 10;
     this.scene3dSnapScaleStep = sm.snapScaleStep3D ?? 0.25;
+  }
+
+  scene3dSetSnapMode(mode: 'none' | 'grid' | 'vertex'): void {
+    this.scene3dSnapMode = mode;
+    (this.shapeManager as any).snapMode3D = mode;
   }
 
   scene3dUpdateSnapSettings(): void {
@@ -3084,6 +3215,12 @@ export class IllustrationComponent implements OnInit {
     (this.shapeManager as any).clearMeshNormalMap3D?.(this.scene3dSelectedMeshId);
     this.scene3dNormalMapSet = false;
     this.scene3dMarkTexLibDirty();
+  }
+
+  scene3dSetBlendWeight(index: number, weight: number): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setBlendWeight3D?.(this.scene3dSelectedMeshId, index, weight);
+    this.scene3dMarkDirty();
   }
 
   scene3dFrameAllMeshes(): void {
@@ -3458,13 +3595,42 @@ export class IllustrationComponent implements OnInit {
     this.scene3dMarkDirty();
   }
 
+  scene3dApplyRetroPreset(preset: 'wobble' | 'pocket' | 'off'): void {
+    (this.shapeManager as any).setRetroPreset3D?.(preset);
+    const cfg = (this.shapeManager as any).scene3d?.getPS1Config?.() ?? {};
+    this.scene3dPS1Jitter        = cfg.vertexJitter        ?? this.scene3dPS1Jitter;
+    this.scene3dPS1Snap          = cfg.snapGridSize        ?? this.scene3dPS1Snap;
+    this.scene3dPS1Affine        = cfg.affineStrength ?? cfg.affineWarp ?? this.scene3dPS1Affine;
+    this.scene3dPS1ColorDepth    = cfg.colorDepth          ?? this.scene3dPS1ColorDepth;
+    this.scene3dPS1Dither        = cfg.dither              ?? false;
+    this.scene3dPS1DitherStrength = cfg.ditherStrength     ?? 0.45;
+    this.scene3dPS1UVQuantize    = cfg.uvQuantize          ?? false;
+    this.scene3dPS1UVSteps       = cfg.uvQuantizeSteps     ?? 64;
+    if (cfg.renderResolution) {
+      this.scene3dPS1LoRes = true;
+      this.scene3dPS1ResW  = cfg.renderResolution[0];
+      this.scene3dPS1ResH  = cfg.renderResolution[1];
+    } else {
+      this.scene3dPS1LoRes = false;
+    }
+    this.scene3dMarkDirty();
+  }
+
   scene3dApplyPS1(): void {
-    (this.shapeManager as any).scene3d?.setPS1Config({
-      vertexJitter: +this.scene3dPS1Jitter,
-      snapGridSize: +this.scene3dPS1Snap,
-      affineWarp: +this.scene3dPS1Affine,
-      colorDepth: +this.scene3dPS1ColorDepth,
-    });
+    const cfg: any = {
+      vertexJitter:    +this.scene3dPS1Jitter,
+      snapGridSize:    +this.scene3dPS1Snap,
+      affineStrength:  +this.scene3dPS1Affine,
+      colorDepth:      +this.scene3dPS1ColorDepth,
+      dither:          this.scene3dPS1Dither,
+      ditherStrength:  +this.scene3dPS1DitherStrength,
+      uvQuantize:      this.scene3dPS1UVQuantize,
+      uvQuantizeSteps: +this.scene3dPS1UVSteps,
+      renderResolution: this.scene3dPS1LoRes
+        ? [+this.scene3dPS1ResW, +this.scene3dPS1ResH] as [number, number]
+        : null,
+    };
+    (this.shapeManager as any).scene3d?.setPS1Config(cfg);
     this.scene3dMarkDirty();
   }
 
@@ -4355,6 +4521,12 @@ export class IllustrationComponent implements OnInit {
       // Array panel: re-sync params when gizmo drags update an active array group
       if (this.scene3dIsArrayGroup && this.scene3dSelectedMeshId) {
         this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
+      }
+
+      // Blend shapes: keep weights in sync when mesh is selected
+      if (this.scene3dSelectedMeshId && !this.scene3dIsArrayGroup) {
+        const freshShapes = (this.shapeManager as any).getBlendShapes3D?.(this.scene3dSelectedMeshId);
+        if (freshShapes) this.scene3dBlendShapes = freshShapes;
       }
 
       // Array tool: sync count drift from scroll wheel; sync radial params if in radial mode
