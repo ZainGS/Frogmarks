@@ -18,6 +18,7 @@ export interface GpDrawSettings {
 
 interface GpObject { id: string; name: string; skeletonId?: string; }
 interface GpLayer  { id: string; name: string; visible: boolean; opacity: number; }
+interface GpDrawPlane { meshId: string; triangleIndex: number; offset: number; }
 
 @Component({
   selector: 'app-grease-pencil-panel',
@@ -31,6 +32,8 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   private get sm(): any { return this.shapeManager; }
   private _sub: Subscription | null = null;
+  private _drawPlanePollId: any = null;
+  private _activeModeKey: string | null = null;
 
   // ── GP objects ───────────────────────────────────────────────────
   gpObjects:    GpObject[] = [];
@@ -51,8 +54,14 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   renameLayerValue = '';
   jointList:       { name: string }[] = [];
 
+  // ── Drawing plane ─────────────────────────────────────────────────
+  gpDrawPlane:          GpDrawPlane | null = null;
+  planeOffset         = 0.003;
+  drawingPlaneCollapsed = false;
+
   // ── Stroke settings ──────────────────────────────────────────────
   gpTool:        'draw' | 'erase' = 'draw';
+  isDrawActive   = false;
   strokeColorHex = '#000000';
   strokeOpacity  = 1.0;
   strokeWidth    = 0.02;
@@ -75,22 +84,35 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   settingsCollapsed = false;
   keyframeCollapsed = false;
 
+  get canDraw(): boolean { return this.gpDrawPlane !== null; }
+
   ngOnInit(): void {
     if (this.shapeManager) {
       this._subscribe();
       this.refreshAll();
+      this.sm?.enterGpFaceSelectMode3D?.();
+      this._startDrawPlanePoll();
     }
   }
 
   ngOnChanges(): void {
     if (this.shapeManager) {
       this._unsubscribe();
+      this._stopDrawPlanePoll();
       this._subscribe();
       this.refreshAll();
+      this.sm?.enterGpFaceSelectMode3D?.();
+      this._startDrawPlanePoll();
     }
   }
 
-  ngOnDestroy(): void { this._unsubscribe(); }
+  ngOnDestroy(): void {
+    this._unsubscribe();
+    this._stopDrawPlanePoll();
+    this.sm?.exitGpDrawMode3D?.();
+    this.sm?.exitGpFaceSelectMode3D?.();
+    this.sm?.clearGpDrawPlane3D?.();
+  }
 
   private _subscribe(): void {
     const obs = this.shapeManager?.interactionService?.onSceneGraphChanged;
@@ -101,9 +123,39 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   private _unsubscribe(): void { this._sub?.unsubscribe(); this._sub = null; }
 
+  private _startDrawPlanePoll(): void {
+    this._drawPlanePollId = setInterval(() => this.refreshDrawPlane(), 250);
+  }
+
+  private _stopDrawPlanePoll(): void {
+    if (this._drawPlanePollId != null) {
+      clearInterval(this._drawPlanePollId);
+      this._drawPlanePollId = null;
+    }
+  }
+
   refreshAll(): void {
     this._refreshSkeletons();
     this._refreshGpObjects();
+  }
+
+  refreshDrawPlane(): void {
+    const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D?.() ?? null;
+    this.gpDrawPlane = plane;
+    if (plane) this.planeOffset = plane.offset;
+  }
+
+  clearDrawPlane(): void {
+    this.sm?.clearGpDrawPlane3D?.();
+    this.gpDrawPlane = null;
+    // After clearing, re-enter face-select so user can pick a new face
+    if (!this.isDrawActive) {
+      this.sm?.enterGpFaceSelectMode3D?.();
+    }
+  }
+
+  onPlaneOffsetChange(): void {
+    this.sm?.setGpDrawPlaneOffset3D?.(this.planeOffset);
   }
 
   private _refreshSkeletons(): void {
@@ -163,6 +215,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   selectGpObject(id: string): void {
+    this._exitDrawIfActive();
     this.activeGpId = id;
     this.activeLayerId = null;
     this._refreshLayers();
@@ -172,7 +225,12 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   removeGpObject(id: string, event: Event): void {
     event.stopPropagation();
     this.sm?.removeGpObject3D?.(id);
-    if (this.activeGpId === id) { this.activeGpId = null; this.gpLayers = []; this.activeLayerId = null; }
+    if (this.activeGpId === id) {
+      this._exitDrawIfActive();
+      this.activeGpId = null;
+      this.gpLayers = [];
+      this.activeLayerId = null;
+    }
   }
 
   startRenameGp(id: string, current: string, event: Event): void {
@@ -203,6 +261,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   selectLayer(id: string): void {
+    this._exitDrawIfActive();
     this.activeLayerId = id;
     this._emitSettings();
   }
@@ -211,7 +270,10 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     event.stopPropagation();
     if (!this.activeGpId) return;
     this.sm?.removeGpLayer3D?.(this.activeGpId, id);
-    if (this.activeLayerId === id) this.activeLayerId = null;
+    if (this.activeLayerId === id) {
+      this._exitDrawIfActive();
+      this.activeLayerId = null;
+    }
   }
 
   toggleLayerVisible(layer: GpLayer, event: Event): void {
@@ -253,14 +315,70 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     this.sm?.clearGpKeyframe3D?.(this.activeGpId, this.activeLayerId, this.gpFrame);
   }
 
-  // ── Settings ──────────────────────────────────────────────────────
+  // ── Draw mode lifecycle ───────────────────────────────────────────
 
   setTool(tool: 'draw' | 'erase'): void {
+    if (this.isDrawActive && this.gpTool === tool) {
+      // Toggle off — exit draw, return to face-select
+      this._exitDrawIfActive();
+      return;
+    }
     this.gpTool = tool;
+    if (this.canDraw && this.activeGpId && this.activeLayerId) {
+      this._enterDrawMode();
+    }
     this._emitSettings();
   }
 
-  onStrokeSettingChange(): void { this._emitSettings(); }
+  private _enterDrawMode(): void {
+    if (!this.activeGpId || !this.activeLayerId || !this.canDraw) return;
+    const modeKey = `${this.activeGpId}/${this.activeLayerId}/${this.gpTool}`;
+    const opts = this._buildGpOpts();
+    if (this.isDrawActive && modeKey !== this._activeModeKey) {
+      this.sm?.exitGpDrawMode3D?.();
+    }
+    if (!this.isDrawActive || modeKey !== this._activeModeKey) {
+      this.sm?.exitGpFaceSelectMode3D?.();
+      this.sm?.enterGpDrawMode3D?.(this.activeGpId, this.activeLayerId, opts);
+      this._activeModeKey = modeKey;
+      this.isDrawActive = true;
+    } else {
+      this.sm?.setGpDrawSettings3D?.(opts);
+    }
+  }
+
+  private _exitDrawIfActive(): void {
+    if (!this.isDrawActive) return;
+    this.sm?.exitGpDrawMode3D?.();
+    this.sm?.enterGpFaceSelectMode3D?.();
+    this.isDrawActive = false;
+    this._activeModeKey = null;
+  }
+
+  onStrokeSettingChange(): void {
+    if (this.isDrawActive) {
+      this.sm?.setGpDrawSettings3D?.(this._buildGpOpts());
+    }
+    this._emitSettings();
+  }
+
+  private _buildGpOpts(): object {
+    return {
+      mode:          this.gpTool,
+      depthMode:     'surface' as const,
+      color:         this._hexToRgba(this.strokeColorHex, this.strokeOpacity),
+      baseWidth:     this.strokeWidth,
+      strokeOpacity: this.strokeOpacity,
+      filled:        this.filled,
+      fillColor:     this._hexToRgba(this.fillColorHex, this.fillOpacity),
+      closed:        this.closed,
+      parentJoint:   this.parentJoint || undefined,
+      eraseRadius:   this.eraserRadius,
+      frame:         this.gpFrame,
+    };
+  }
+
+  // ── Settings (informational emit to parent) ───────────────────────
 
   private _emitSettings(): void {
     this.drawSettingsChange.emit({

@@ -1,0 +1,197 @@
+<div class="uv-panel">
+
+  <!-- Header -->
+  <div class="uv-header">
+    <button class="uv-exit-btn" (click)="close()">&#8592; Close</button>
+    <span class="uv-title">UV Editor</span>
+  </div>
+
+  <div class="uv-body">
+
+    <!-- ── Selection mode ──────────────────────────────────────── -->
+    <div class="uv-sel-tabs">
+      <button class="uv-tab" [class.active]="selectionMode === 'vertex'" (click)="setSelectionMode('vertex')">Vertex</button>
+      <button class="uv-tab" [class.active]="selectionMode === 'edge'"   (click)="setSelectionMode('edge')">Edge</button>
+      <button class="uv-tab" [class.active]="selectionMode === 'face'"   (click)="setSelectionMode('face')">Face</button>
+    </div>
+
+    <!-- ── Display ─────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="displayCollapsed = !displayCollapsed">
+        <span class="uv-chevron">{{ displayCollapsed ? '▸' : '▾' }}</span>Display
+      </div>
+      <ng-container *ngIf="!displayCollapsed">
+        <label class="uv-check-row"><input type="checkbox" [checked]="showWireframe"   (change)="toggleWireframe()">   Wireframe</label>
+        <label class="uv-check-row"><input type="checkbox" [checked]="showIslands"     (change)="toggleIslands()">     Islands</label>
+        <label class="uv-check-row"><input type="checkbox" [checked]="showStretch"     (change)="toggleStretch()">     Stretch</label>
+        <label class="uv-check-row"><input type="checkbox" [checked]="islandHoverMode" (change)="toggleIslandHoverMode()"> Island Hover</label>
+      </ng-container>
+    </div>
+
+    <!-- ── Seams ───────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="seamsCollapsed = !seamsCollapsed">
+        <span class="uv-chevron">{{ seamsCollapsed ? '▸' : '▾' }}</span>Seams
+      </div>
+      <ng-container *ngIf="!seamsCollapsed">
+        <div class="uv-btn-row">
+          <button class="uv-btn" (click)="markSeam()">Mark</button>
+          <button class="uv-btn" (click)="clearSeam()">Clear</button>
+          <button class="uv-btn" (click)="clearAllSeams()">Clear All</button>
+        </div>
+        <div class="uv-field-row">
+          <span class="uv-label">Angle°</span>
+          <input class="uv-num" type="number" min="1" max="180" step="1" [(ngModel)]="seamAngle">
+          <button class="uv-btn" (click)="suggestSeams()">Suggest</button>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── Unwrap ──────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="unwrapCollapsed = !unwrapCollapsed">
+        <span class="uv-chevron">{{ unwrapCollapsed ? '▸' : '▾' }}</span>Unwrap
+      </div>
+      <ng-container *ngIf="!unwrapCollapsed">
+        <button class="uv-btn uv-btn-full" (click)="unwrapSmart()">Smart Project</button>
+        <button class="uv-btn uv-btn-full" (click)="unwrapIslands()">Unwrap Islands</button>
+        <button class="uv-btn uv-btn-full" (click)="followActive()">Follow Active Face</button>
+      </ng-container>
+    </div>
+
+    <!-- ── Layout ──────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="layoutCollapsed = !layoutCollapsed">
+        <span class="uv-chevron">{{ layoutCollapsed ? '▸' : '▾' }}</span>Layout
+      </div>
+      <ng-container *ngIf="!layoutCollapsed">
+        <div class="uv-field-row">
+          <span class="uv-label">Margin</span>
+          <input class="uv-num" type="number" min="0" max="0.1" step="0.001" [(ngModel)]="packMargin">
+        </div>
+        <button class="uv-btn uv-btn-full" (click)="packIslands()">Pack Islands</button>
+      </ng-container>
+    </div>
+
+    <!-- ── Transform ───────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="transformCollapsed = !transformCollapsed">
+        <span class="uv-chevron">{{ transformCollapsed ? '▸' : '▾' }}</span>Transform
+      </div>
+      <ng-container *ngIf="!transformCollapsed">
+        <div class="uv-field-row">
+          <span class="uv-label">Move</span>
+          <input class="uv-num uv-num-sm" type="number" step="0.01" [(ngModel)]="moveU" title="Δu">
+          <input class="uv-num uv-num-sm" type="number" step="0.01" [(ngModel)]="moveV" title="Δv">
+          <button class="uv-btn" (click)="move()">Apply</button>
+        </div>
+        <div class="uv-field-row">
+          <span class="uv-label">Scale</span>
+          <input class="uv-num uv-num-sm" type="number" step="0.1" min="0.01" [(ngModel)]="scaleU" title="su">
+          <input class="uv-num uv-num-sm" type="number" step="0.1" min="0.01" [(ngModel)]="scaleV" title="sv">
+          <button class="uv-btn" (click)="scale()">Apply</button>
+        </div>
+        <div class="uv-field-row">
+          <span class="uv-label">Rotate°</span>
+          <input class="uv-num" type="number" step="1" [(ngModel)]="rotateDeg">
+          <button class="uv-btn" (click)="rotate()">Apply</button>
+        </div>
+        <div class="uv-btn-row">
+          <button class="uv-btn" style="flex:1" (click)="mirror('U')">Mirror U</button>
+          <button class="uv-btn" style="flex:1" (click)="mirror('V')">Mirror V</button>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── Weld / Split ────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="weldCollapsed = !weldCollapsed">
+        <span class="uv-chevron">{{ weldCollapsed ? '▸' : '▾' }}</span>Weld / Split
+      </div>
+      <ng-container *ngIf="!weldCollapsed">
+        <div class="uv-field-row">
+          <span class="uv-label">Threshold</span>
+          <input class="uv-num" type="number" step="0.001" min="0" [(ngModel)]="weldThreshold">
+          <button class="uv-btn" (click)="weld()">Weld</button>
+        </div>
+        <button class="uv-btn uv-btn-full" (click)="split()">Split Edges</button>
+      </ng-container>
+    </div>
+
+    <!-- ── Pin ─────────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="pinCollapsed = !pinCollapsed">
+        <span class="uv-chevron">{{ pinCollapsed ? '▸' : '▾' }}</span>Pin
+      </div>
+      <ng-container *ngIf="!pinCollapsed">
+        <div class="uv-btn-row">
+          <button class="uv-btn" style="flex:1" (click)="pin()">Pin</button>
+          <button class="uv-btn" style="flex:1" (click)="unpinSelected()">Unpin Sel</button>
+          <button class="uv-btn" style="flex:1" (click)="unpinAll()">Unpin All</button>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── UV Paint ────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="paintCollapsed = !paintCollapsed">
+        <span class="uv-chevron">{{ paintCollapsed ? '▸' : '▾' }}</span>UV Paint
+        <span *ngIf="paintMode" class="uv-active-badge">ON</span>
+      </div>
+      <ng-container *ngIf="!paintCollapsed">
+        <label class="uv-check-row" style="margin-bottom:8px">
+          <input type="checkbox" [checked]="paintMode" (change)="togglePaintMode()">
+          Paint mode
+        </label>
+        <ng-container *ngIf="paintMode">
+          <div class="uv-field-row">
+            <span class="uv-label">Color</span>
+            <input type="color" [(ngModel)]="brushColor" (ngModelChange)="onPaintSettingChange()"
+                   style="width:36px;height:24px;padding:0;border:none;cursor:pointer;background:none;flex-shrink:0">
+            <span class="uv-label" style="margin-left:6px">Size</span>
+            <input class="uv-num" type="number" min="1" max="200" step="1"
+                   [(ngModel)]="brushRadius" (ngModelChange)="onPaintSettingChange()">
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <!-- ── Live Texture ────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="liveTexCollapsed = !liveTexCollapsed">
+        <span class="uv-chevron">{{ liveTexCollapsed ? '▸' : '▾' }}</span>Live Texture
+      </div>
+      <ng-container *ngIf="!liveTexCollapsed">
+        <select class="uv-select" [(ngModel)]="linkedLayerId" style="margin-bottom:6px">
+          <option value="">— None —</option>
+          <option *ngFor="let l of layers" [value]="l.id">{{ l.name }}</option>
+        </select>
+        <div class="uv-btn-row">
+          <button class="uv-btn" style="flex:1" (click)="linkTexture()">Link</button>
+          <button class="uv-btn" style="flex:1" (click)="unlinkTexture()">Unlink</button>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- ── Export ──────────────────────────────────────────────── -->
+    <div class="uv-section">
+      <div class="uv-section-title uv-section-toggle" (click)="exportCollapsed = !exportCollapsed">
+        <span class="uv-chevron">{{ exportCollapsed ? '▸' : '▾' }}</span>Export
+      </div>
+      <ng-container *ngIf="!exportCollapsed">
+        <div class="uv-field-row" style="margin-bottom:6px">
+          <span class="uv-label">Size</span>
+          <select class="uv-select" [(ngModel)]="exportSize">
+            <option [ngValue]="512">512</option>
+            <option [ngValue]="1024">1024</option>
+            <option [ngValue]="2048">2048</option>
+            <option [ngValue]="4096">4096</option>
+          </select>
+        </div>
+        <button class="uv-btn uv-btn-full" (click)="exportLayout()">Export UV Layout</button>
+      </ng-container>
+    </div>
+
+  </div><!-- /uv-body -->
+
+</div>

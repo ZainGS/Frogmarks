@@ -20,12 +20,17 @@
 
     <div #boardShell class="board-shell" [class.ui-hidden]="uiHidden" [class.viewer-mode]="isViewerMode">
         <canvas #webgpuCanvas id="webgpuCanvas"
+                [style.width]="uvEditorOpen ? '50vw' : ''"
                 (dragover)="onCanvasDragOver($event)"
                 (drop)="onCanvasDrop($event)"
                 (pointerdown)="scene3dCanvasPointerDown($event)"
                 (pointermove)="scene3dCanvasPointerMove($event)"
                 (pointerup)="scene3dCanvasPointerUp($event)"></canvas>
-        <canvas #handleCanvas style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
+        <canvas #handleCanvas [style.width]="uvEditorOpen ? '50vw' : ''" style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
+
+        <!-- UV Editor canvas — right half of the split viewport -->
+        <canvas #uvCanvas id="uvCanvas" *ngIf="uvEditorOpen"
+                style="position:absolute;top:0;left:50vw;width:calc(50vw - 280px);height:100vh;z-index:1;background:#111;border-left:1px solid #333;"></canvas>
 
         <!-- 3D rotation drag degree readout -->
         <div *ngIf="scene3dDragAngleDeg !== null && scene3dDragLabelPos"
@@ -97,6 +102,18 @@
             (drawSettingsChange)="onGpDrawSettingsChange($event)">
         </app-grease-pencil-panel>
 
+        <!-- UV Editor Panel overlay -->
+        <app-uv-editor-panel
+            *ngIf="uvEditorOpen"
+            [shapeManager]="$any(shapeManager)"
+            [meshId]="scene3dSelectedMeshId"
+            [session]="uvSession"
+            [layers]="uvLayers"
+            (closeRequest)="closeUVEditor()"
+            (redrawRequested)="uvDraw()"
+            (paintSettingsChange)="onUvPaintSettingsChange($event)">
+        </app-uv-editor-panel>
+
         <!-- Ephemera Panel overlay -->
         <app-ephemera-panel
             *ngIf="activeVectorLayerId"
@@ -115,7 +132,7 @@
         <div *ngIf="showExportReminder" class="export-reminder">
           <span class="export-reminder-icon">💾</span>
           <span class="export-reminder-text">
-            Back up your work — export a <strong>.frogmarks</strong> file to keep a portable copy.
+            Back up your work<ng-container *ngIf="opfsSizeLabel"> — scene is <strong>{{ opfsSizeLabel }}</strong> in browser storage</ng-container> — export a <strong>.frogmarks</strong> file to keep a portable copy.
           </span>
           <button class="export-reminder-btn" (click)="exportNowFromReminder()">Export now</button>
           <button class="export-reminder-dismiss" (click)="dismissExportReminder()" title="Remind me later">✕</button>
@@ -179,6 +196,11 @@
                     </span>
                   </div>
                   <span class="smp-btn-desc">Zero cloud. Everything stored locally in this browser only.</span>
+                </div>
+
+                <div *ngIf="opfsSizeLabel" class="smp-size-row">
+                  <span class="smp-size-icon">💾</span>
+                  <span>Scene uses <strong>{{ opfsSizeLabel }}</strong> of browser storage</span>
                 </div>
 
               </div>
@@ -784,6 +806,9 @@
                           <span *ngIf="autoSaveState === 'error'" style="color: #fa0;">⚠️</span>
                           <span *ngIf="autoSaveState === 'unavailable'" style="opacity:.4">—</span>
                         </span>
+                        <span *ngIf="opfsSizeLabel && syncMode > 0"
+                              class="opfs-size-chip"
+                              title="Scene data stored in browser storage (OPFS)">{{ opfsSizeLabel }}</span>
                     </div>
                 </div>
 
@@ -800,6 +825,7 @@
                                 <div class="edit-menu-divider"></div>
                                 <div class="edit-menu-item" [class.disabled]="frogmarksSaving" (click)="frogmarksSave(); closeAllMenus()">
                                     <span>{{ frogmarksSaving ? 'Saving…' : 'Save .frogmarks…' }}</span>
+                                    <span *ngIf="!frogmarksSaving && opfsSizeLabel" class="shortcut">{{ opfsSizeLabel }}</span>
                                 </div>
                                 <div class="edit-menu-item" (click)="frogmarksLoadInput.click(); closeAllMenus()">
                                     <span>Open .frogmarks…</span>
@@ -1015,9 +1041,31 @@
                                 <span style="min-width: 30px; text-align: right; color:#aaa; font-size: 11px;">{{ paperGrainStrength }}</span>
                             </div>
                         </div>
+
+                        <!-- Storage / layer compression -->
+                        <div class="mt-3 storage-settings-section">
+                            <label style="color:#cecece; font-size: 13px; display: block; margin-bottom: 6px;">Storage</label>
+                            <div class="storage-format-row" *ngFor="let opt of storageFormatOptions">
+                                <ng-container *ngIf="opt.id !== 'webp' || webpSupported">
+                                    <label class="storage-format-label">
+                                        <input type="radio" name="pixelFormat"
+                                               [value]="opt.id"
+                                               [checked]="pixelFormat === opt.id"
+                                               (change)="onPixelFormatChange(opt.id)">
+                                        <span class="storage-format-name">{{ opt.label }}</span>
+                                        <span class="storage-format-desc">{{ opt.desc }}</span>
+                                    </label>
+                                </ng-container>
+                            </div>
+                            <div class="storage-format-note">Takes effect on next save</div>
+                            <div *ngIf="opfsSizeLabel" class="storage-size-label">
+                                <span>Scene: </span><strong>{{ opfsSizeLabel }}</strong>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
-                
+
                 <!-- Vector object properties removed — Illustration is raster-only.
                      Vector shape properties (Transform, Text, Fill, Stroke, etc.) live in Board component. -->
                 
@@ -1395,6 +1443,19 @@
                         </button>
                     </div>
 
+                    <div class="scene3d-edit-mesh-row">
+                        <button class="scene3d-edit-mesh-btn"
+                                [class.active]="uvEditorOpen"
+                                (click)="uvEditorOpen ? closeUVEditor() : openUVEditor()"
+                                title="Open UV editor — unwrap and edit UV coordinates">
+                            {{ uvEditorOpen ? '✓ UV Editor' : 'UV Editor' }}
+                        </button>
+                    </div>
+
+
+                    <!-- Normal mesh sections (hidden while UV editor is open) -->
+                    <ng-container *ngIf="!uvEditorOpen">
+
                     <details class="scene3d-details" *ngIf="scene3dSelectedMeshId" open>
                         <summary>Transform</summary>
                         <div class="scene3d-vec3-row">
@@ -1534,6 +1595,10 @@
                                    class="scene3d-short-input"
                                    [(ngModel)]="shape.weight"
                                    (change)="shape.weight = +$any($event.target).value; scene3dSetBlendWeight(i, shape.weight)">
+                            <button class="scene3d-blend-kf-btn"
+                                    [class.has-kf]="scene3dBlendShapeHasKeyframe(shape.name)"
+                                    (click)="scene3dToggleBlendShapeKeyframe(shape.name, shape.weight)"
+                                    [title]="(scene3dBlendShapeHasKeyframe(shape.name) ? 'Remove' : 'Set') + ' keyframe for ' + shape.name + ' at current frame'">◆</button>
                         </div>
                     </details>
 
@@ -2022,6 +2087,8 @@
                             4. Press Play ▶
                         </div>
                     </details>
+
+                    </ng-container><!-- /normal mesh sections -->
 
                     </details><!-- /SELECTED MESH section-group -->
 

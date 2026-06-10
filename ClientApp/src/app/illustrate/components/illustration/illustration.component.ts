@@ -136,6 +136,7 @@ export class IllustrationComponent implements OnInit {
 
   @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('handleCanvas') handleCanvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('uvCanvas') uvCanvasRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild('titleInput') titleInputRef!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInput') imageFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInputLayer') imageFileInputLayer!: ElementRef<HTMLInputElement>;
@@ -409,6 +410,15 @@ export class IllustrationComponent implements OnInit {
   paperGrainScale = 1.0;
   paperGrainStrength = 0.3;
   paperGrainOptions: CanvasGrainOption[] = CANVAS_GRAIN_OPTIONS;
+
+  // Pixel codec / layer compression
+  pixelFormat: string = 'png';
+  webpSupported = false;
+  readonly storageFormatOptions = [
+    { id: 'raw',  label: 'Raw',  desc: 'Fastest saves, largest files' },
+    { id: 'png',  label: 'PNG',  desc: 'Recommended — lossless, ~10–50× smaller' },
+    { id: 'webp', label: 'WebP', desc: 'Smaller than PNG — browser-dependent' },
+  ];
 
   showShapeColorPicker = false;
   shapeColor = '#fff';
@@ -1010,6 +1020,7 @@ export class IllustrationComponent implements OnInit {
     if (ext === 'glb' || ext === 'gltf') {
       const meshes: any[] = await sm.importGltfFile3D?.(0, 0, 0, file) ?? [];
       if (meshes.length) {
+        this._instanceGroupRegister(crypto.randomUUID(), meshes.map((m: any) => m.id ?? m.nodeId));
         this._scene3dAutoScale(meshes);
         this.scene3dRefreshMeshes();
         this.scene3dSelectMesh(meshes[0].id ?? meshes[0].nodeId);
@@ -1018,6 +1029,7 @@ export class IllustrationComponent implements OnInit {
     } else if (ext === 'obj') {
       const mesh = await sm.importObjFile3D?.(0, 0, 0, file);
       if (mesh) {
+        this._instanceGroupRegister(crypto.randomUUID(), [mesh.id ?? mesh.nodeId]);
         this._scene3dAutoScale([mesh]);
         this.scene3dRefreshMeshes();
         this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
@@ -1160,6 +1172,19 @@ export class IllustrationComponent implements OnInit {
       this.paperGrainScale = grain.scale ?? 1.0;
       this.paperGrainStrength = grain.strength ?? 0.3;
     }
+  }
+
+  // ── Pixel codec / layer compression ───────────────────────
+  async _initPixelFormat(): Promise<void> {
+    const sm = this.shapeManager as any;
+    if (!sm?.getPixelFormat) return;
+    this.pixelFormat = sm.getPixelFormat() ?? 'png';
+    this.webpSupported = await sm.isPixelFormatSupported?.('webp') ?? false;
+  }
+
+  onPixelFormatChange(fmt: string): void {
+    this.pixelFormat = fmt;
+    (this.shapeManager as any).setPixelFormat?.(fmt);
   }
 
   // ── SDF Text max width ─────────────────────────────────────
@@ -1316,6 +1341,171 @@ export class IllustrationComponent implements OnInit {
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
     this._clearKnifePreview();
+  }
+
+  // ── Instance groups (UV texture sharing) ───────────────────────
+  // groupId → Set<meshId>; rebuilt each session from import/duplicate history
+  private _instanceGroups = new Map<string, Set<string>>();
+  // meshId → groupId (reverse lookup)
+  private _meshGroupId = new Map<string, string>();
+
+  private _instanceGroupRegister(groupId: string, meshIds: string[]): void {
+    if (!this._instanceGroups.has(groupId)) this._instanceGroups.set(groupId, new Set());
+    const group = this._instanceGroups.get(groupId)!;
+    for (const id of meshIds) { group.add(id); this._meshGroupId.set(id, groupId); }
+  }
+
+  private _instanceGroupRemove(meshId: string): void {
+    const groupId = this._meshGroupId.get(meshId);
+    if (!groupId) return;
+    this._meshGroupId.delete(meshId);
+    const group = this._instanceGroups.get(groupId);
+    if (group) { group.delete(meshId); if (group.size === 0) this._instanceGroups.delete(groupId); }
+  }
+
+  private _instanceGroupSiblings(meshId: string): string[] {
+    const groupId = this._meshGroupId.get(meshId);
+    if (!groupId) return [];
+    return [...(this._instanceGroups.get(groupId) ?? [])].filter(id => id !== meshId);
+  }
+
+  // ── UV Editor ──────────────────────────────────────────────────
+  uvEditorOpen = false;
+  private _uvSession: any = null;
+  private _uvRenderer: any = null;
+  private _uvPaintCanvas: HTMLCanvasElement | null = null;
+  uvPaintMode = false;
+  uvBrushColor = '#ffffff';
+  uvBrushRadius = 8;
+  uvLayers: Array<{id: string; name: string}> = [];
+
+  get uvSession(): any { return this._uvSession; }
+
+  openUVEditor(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    // openUVEditor3D handles orbit setup internally — no enterMeshEditMode3D needed
+    this._uvSession = sm.openUVEditor3D?.(this.scene3dSelectedMeshId);
+    if (!this._uvSession) return;
+    this.uvEditorOpen = true;
+    setTimeout(() => {
+      const uvCanvas = this.uvCanvasRef?.nativeElement;
+      if (!uvCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      uvCanvas.width  = Math.round((window.innerWidth * 0.5 - 280) * dpr);
+      uvCanvas.height = Math.round(window.innerHeight * dpr);
+      this._uvRenderer = sm.createUVCanvasRenderer?.(uvCanvas);
+      this._uvPaintCanvas = sm.ensureUVPaintCanvas3D?.(this.scene3dSelectedMeshId) ?? null;
+      this.uvLayers = (sm.getLayers?.() ?? []).map((l: any) => ({ id: l.id, name: l.name }));
+      this._uvDraw();
+      this._attachUVPointerHandlers(uvCanvas);
+    });
+  }
+
+  closeUVEditor(): void {
+    const sm = this.shapeManager as any;
+    // closeUVEditor3D restores camera orbit and cleans up session + paint canvas
+    sm.closeUVEditor3D?.(this.scene3dSelectedMeshId);
+    this._uvSession = null;
+    this._uvRenderer = null;
+    this._uvPaintCanvas = null;
+    this.uvEditorOpen = false;
+    this.uvPaintMode = false;
+  }
+
+  uvDraw(): void { this._uvDraw(); }
+
+  onUvPaintSettingsChange(e: { paintMode: boolean; color: string; radius: number }): void {
+    this.uvPaintMode = e.paintMode;
+    this.uvBrushColor = e.color;
+    this.uvBrushRadius = e.radius;
+  }
+
+  private _uvDraw(): void {
+    if (!this._uvRenderer || !this._uvSession) return;
+    const em = (this.shapeManager as any).getEditMesh3D?.(this.scene3dSelectedMeshId);
+    if (!em) return;
+    this._uvRenderer.draw(this._uvSession, em, this._uvPaintCanvas ?? undefined);
+  }
+
+  private _uvCssCoords(canvas: HTMLCanvasElement, e: PointerEvent): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  private _attachUVPointerHandlers(canvas: HTMLCanvasElement): void {
+    const sm = this.shapeManager as any;
+    let isPainting = false;
+
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!this._uvRenderer || !this._uvSession) return;
+      const { x, y } = this._uvCssCoords(canvas, e);
+      if (this.uvPaintMode && isPainting && this._uvPaintCanvas) {
+        const [u, v] = this._uvRenderer.canvasToUV?.(x, y, this._uvSession) ?? [0, 0];
+        const ctx = this._uvPaintCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = this.uvBrushColor;
+          ctx.beginPath();
+          ctx.arc(u * this._uvPaintCanvas.width, v * this._uvPaintCanvas.height, this.uvBrushRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        this._uvDraw();
+        return;
+      }
+      const em = sm.getEditMesh3D?.(this.scene3dSelectedMeshId);
+      const fi = em ? this._uvRenderer.hitTestFace?.(x, y, this._uvSession, em) : null;
+      sm.setUVHoverFace3D?.(this.scene3dSelectedMeshId, fi ?? null);
+      this._uvDraw();
+    });
+
+    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (!this._uvRenderer || !this._uvSession) return;
+      const { x, y } = this._uvCssCoords(canvas, e);
+      if (this.uvPaintMode && this._uvPaintCanvas) {
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
+        const [u, v] = this._uvRenderer.canvasToUV?.(x, y, this._uvSession) ?? [0, 0];
+        const ctx = this._uvPaintCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = this.uvBrushColor;
+          ctx.beginPath();
+          ctx.arc(u * this._uvPaintCanvas.width, v * this._uvPaintCanvas.height, this.uvBrushRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        this._uvDraw();
+        return;
+      }
+      const em = sm.getEditMesh3D?.(this.scene3dSelectedMeshId);
+      if (!em) return;
+      const fi = this._uvRenderer.hitTestFace?.(x, y, this._uvSession, em);
+      if (fi != null) {
+        this._uvSession.selectFace?.(fi, e.shiftKey);
+        this.ngZone.run(() => this._uvDraw());
+      }
+    });
+
+    canvas.addEventListener('pointerup', () => {
+      if (isPainting) {
+        isPainting = false;
+        const meshId = this.scene3dSelectedMeshId;
+        sm.commitUVTexture3D?.(meshId);
+        const siblings = this._instanceGroupSiblings(meshId);
+        if (siblings.length) sm.shareUVTexture3D?.(meshId, siblings);
+        this._uvDraw();
+      }
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      sm.setUVHoverFace3D?.(this.scene3dSelectedMeshId, null);
+      this._uvDraw();
+    });
+
+    canvas.addEventListener('wheel', (e: WheelEvent) => {
+      if (!this._uvSession) return;
+      e.preventDefault();
+      this._uvSession.zoom = Math.max(0.1, Math.min(20, (this._uvSession.zoom ?? 1) * (1 - e.deltaY * 0.001)));
+      this._uvDraw();
+    }, { passive: false });
   }
 
   private _drawKnifePreview(x0: number, y0: number, x1: number, y1: number): void {
@@ -1950,6 +2140,7 @@ export class IllustrationComponent implements OnInit {
       this.scene3dDiffuseTextureSet = !!(mesh.textureLibraryId ?? mesh.diffuseTextureId ?? mesh.texture);
       this.scene3dNormalMapSet = !!mesh.normalMapLibraryId;
       this.scene3dBlendShapes = (this.shapeManager as any).getBlendShapes3D?.(id) ?? [];
+      this._refreshBlendKeyframeTracks();
       this.scene3dRenderStyle = (mesh.material?.renderStyle ?? 'default') as any;
       this.scene3dMeshRoughness = mesh.material?.roughness ?? 0.5;
       this.scene3dMeshMetalness = mesh.material?.metalness ?? 0.0;
@@ -2944,6 +3135,7 @@ export class IllustrationComponent implements OnInit {
   }
 
   scene3dDeleteMesh(id: string): void {
+    this._instanceGroupRemove(id);
     (this.shapeManager as any).scene3d?.deleteMesh?.(id);
     this.scene3dRefreshMeshes();
     if (this.scene3dSelectedMeshId === id) {
@@ -2958,8 +3150,15 @@ export class IllustrationComponent implements OnInit {
     const sm = this.shapeManager as any;
     const copy = sm.duplicateMesh3D?.(id);
     if (copy) {
+      const copyId = copy.id ?? copy.nodeId;
+      const existingGroupId = this._meshGroupId.get(id);
+      if (existingGroupId) {
+        this._instanceGroupRegister(existingGroupId, [copyId]);
+      } else {
+        this._instanceGroupRegister(crypto.randomUUID(), [id, copyId]);
+      }
       this.scene3dRefreshMeshes();
-      this.scene3dSelectMesh(copy.id ?? copy.nodeId);
+      this.scene3dSelectMesh(copyId);
       this.scene3dMarkDirty();
     }
   }
@@ -3220,6 +3419,33 @@ export class IllustrationComponent implements OnInit {
   scene3dSetBlendWeight(index: number, weight: number): void {
     if (!this.scene3dSelectedMeshId) return;
     (this.shapeManager as any).setBlendWeight3D?.(this.scene3dSelectedMeshId, index, weight);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dBlendKeyframeTracks: Record<string, {frame: number; value: number; easing?: string}[]> | null = null;
+
+  private _refreshBlendKeyframeTracks(): void {
+    if (!this.scene3dSelectedMeshId) { this.scene3dBlendKeyframeTracks = null; return; }
+    this.scene3dBlendKeyframeTracks = (this.shapeManager as any).getBlendShapeKeyframeTracks3D?.(this.scene3dSelectedMeshId) ?? null;
+  }
+
+  scene3dBlendShapeHasKeyframe(shapeName: string): boolean {
+    const track = this.scene3dBlendKeyframeTracks?.[shapeName];
+    if (!track?.length) return false;
+    const frame = this.animationService.getCurrentFrame?.() ?? 1;
+    return track.some((kf: any) => kf.frame === frame);
+  }
+
+  scene3dToggleBlendShapeKeyframe(shapeName: string, weight: number): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const sm = this.shapeManager as any;
+    const frame = this.animationService.getCurrentFrame?.() ?? 1;
+    if (this.scene3dBlendShapeHasKeyframe(shapeName)) {
+      sm.removeBlendShapeKeyframe3D?.(this.scene3dSelectedMeshId, shapeName, frame);
+    } else {
+      sm.setBlendShapeKeyframe3D?.(this.scene3dSelectedMeshId, shapeName, frame, weight);
+    }
+    this._refreshBlendKeyframeTracks();
     this.scene3dMarkDirty();
   }
 
@@ -3792,6 +4018,7 @@ export class IllustrationComponent implements OnInit {
       this.scene3dSelectedMeshTracks = null;
       this.scene3dSelectedMeshName = '';
     }
+    this._refreshBlendKeyframeTracks();
   }
 
   get scene3dAutoKey(): boolean {
@@ -4142,46 +4369,21 @@ export class IllustrationComponent implements OnInit {
 
   // ── Grease Pencil ──────────────────────────────────────────────
   gpPanelVisible = false;
-  private _gpActiveModeKey: string | null = null; // '<gpId>/<layerId>/<tool>' to detect re-entry
 
   openGpPanel(): void  { this.gpPanelVisible = true; }
 
   closeGpPanel(): void {
     this.gpPanelVisible = false;
-    this._gpActiveModeKey = null;
-    (this.shapeManager as any).exitGpDrawMode3D?.();
-  }
-
-  onGpDrawSettingsChange(s: GpDrawSettings): void {
-    if (!s.gpId || !s.layerId) return;
+    // Panel's ngOnDestroy handles draw mode / face-select cleanup; belt-and-suspenders here.
     const sm = this.shapeManager as any;
-    const opts = this._buildGpOpts(s);
-    const modeKey = `${s.gpId}/${s.layerId}/${s.tool}`;
-    if (modeKey !== this._gpActiveModeKey) {
-      // gpId, layerId, or tool changed — re-enter draw mode
-      if (this._gpActiveModeKey) sm.exitGpDrawMode3D?.();
-      sm.enterGpDrawMode3D?.(s.gpId, s.layerId, opts);
-      this._gpActiveModeKey = modeKey;
-    } else {
-      // Same session — live-update stroke settings without re-hooking
-      sm.setGpDrawSettings3D?.(opts);
-    }
+    sm.exitGpDrawMode3D?.();
+    sm.exitGpFaceSelectMode3D?.();
+    sm.clearGpDrawPlane3D?.();
   }
 
-  private _buildGpOpts(s: GpDrawSettings): object {
-    return {
-      tool: s.tool,
-      depthMode: 'surface' as const,
-      color: s.color,
-      strokeWidth: s.width,
-      strokeOpacity: s.strokeOpacity,
-      filled: s.filled,
-      fillColor: s.fillColor,
-      closed: s.closed,
-      parentJoint: s.parentJoint || undefined,
-      eraserRadius: s.eraserRadius,
-      frame: s.frame,
-    };
+  onGpDrawSettingsChange(_s: GpDrawSettings): void {
+    // The panel component now owns the full GP draw lifecycle (face-select → draw mode).
+    // This handler is kept as a no-op so the template binding compiles without changes.
   }
   showPublishShareDialog = false;
   publishShareViewUrl = '';
@@ -4234,6 +4436,7 @@ export class IllustrationComponent implements OnInit {
   syncModePanelSelection = 0;
   syncModePanelStep: 'select' | 'confirm' = 'select';
   showExportReminder = false;
+  opfsSizeLabel = '';
 
   constructor(
     private route: ActivatedRoute,
@@ -7500,6 +7703,7 @@ export class IllustrationComponent implements OnInit {
     if (Object.values(this.loadingState).every(Boolean)) {
       this.isLoading = false;
       this._startExportReminder();
+      void this._initPixelFormat();
       if (this._startAnimationOnLoad) {
         this._startAnimationOnLoad = false;
         this.animationService.setAnimationEnabled(true);
@@ -7728,9 +7932,26 @@ export class IllustrationComponent implements OnInit {
   private _startExportReminder(): void {
     if (this.syncMode === 0) return;
     this._clearExportReminder();
+    void this._refreshOpfsSize();
     this._exportReminderTimer = setTimeout(() => {
       this.showExportReminder = true;
     }, this._exportReminderIntervalMs);
+  }
+
+  private async _refreshOpfsSize(): Promise<void> {
+    const salsaKey = this.syncMode === 2
+      ? 'local-' + (this.illustrationUid ?? '')
+      : (this.illustration?.id?.toString() ?? '');
+    if (!salsaKey) return;
+    const bytes = await this.opfsMetadataService.getSceneSizeBytes(salsaKey);
+    if (bytes <= 0) { this.opfsSizeLabel = ''; return; }
+    if (bytes >= 1024 * 1024) {
+      this.opfsSizeLabel = (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    } else if (bytes >= 1024) {
+      this.opfsSizeLabel = Math.round(bytes / 1024) + ' KB';
+    } else {
+      this.opfsSizeLabel = bytes + ' B';
+    }
   }
 
   private _clearExportReminder(): void {

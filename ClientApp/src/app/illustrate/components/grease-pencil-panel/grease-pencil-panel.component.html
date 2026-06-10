@@ -120,6 +120,34 @@
       </ng-container>
     </div>
 
+    <!-- ── Drawing Plane ─────────────────────────────────────────── -->
+    <div class="gp-section" *ngIf="activeGpId">
+      <div class="gp-section-title gp-section-title-toggle"
+           (click)="drawingPlaneCollapsed = !drawingPlaneCollapsed">
+        <span class="gp-chevron">{{ drawingPlaneCollapsed ? '▸' : '▾' }}</span>Drawing Plane
+      </div>
+
+      <ng-container *ngIf="!drawingPlaneCollapsed">
+        <ng-container *ngIf="!gpDrawPlane; else planeSelected">
+          <div class="gp-hint gp-plane-prompt">
+            ✦ Click a mesh face to set the drawing plane
+          </div>
+        </ng-container>
+        <ng-template #planeSelected>
+          <div class="gp-form-row gp-plane-row" style="margin-bottom:6px">
+            <span class="gp-plane-label">face {{ gpDrawPlane!.triangleIndex }}</span>
+            <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="clearDrawPlane()" title="Clear plane">✕</button>
+          </div>
+          <div class="gp-form-row">
+            <span class="gp-label">Offset</span>
+            <input type="range" class="gp-range" min="0" max="0.05" step="0.0005"
+                   [(ngModel)]="planeOffset" (ngModelChange)="onPlaneOffsetChange()">
+            <span class="gp-val">{{ planeOffset | number:'1.4-4' }}</span>
+          </div>
+        </ng-template>
+      </ng-container>
+    </div>
+
     <!-- ── Stroke Settings ─────────────────────────────────────── -->
     <div class="gp-section" *ngIf="activeGpId && activeLayerId">
       <div class="gp-section-title gp-section-title-toggle"
@@ -132,10 +160,14 @@
         <!-- Tool toggle -->
         <div class="gp-btn-pair" style="margin-bottom:8px">
           <button class="gp-op-btn" style="flex:1"
-                  [class.gp-active]="gpTool === 'draw'"
+                  [class.gp-active]="isDrawActive && gpTool === 'draw'"
+                  [disabled]="!canDraw"
+                  title="{{ canDraw ? '' : 'Select a mesh face first' }}"
                   (click)="setTool('draw')">✏ Draw</button>
           <button class="gp-op-btn" style="flex:1"
-                  [class.gp-active]="gpTool === 'erase'"
+                  [class.gp-active]="isDrawActive && gpTool === 'erase'"
+                  [disabled]="!canDraw"
+                  title="{{ canDraw ? '' : 'Select a mesh face first' }}"
                   (click)="setTool('erase')">◻ Erase</button>
         </div>
 

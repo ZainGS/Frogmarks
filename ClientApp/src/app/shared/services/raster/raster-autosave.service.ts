@@ -101,7 +101,7 @@ export class RasterAutoSaveService {
     this.sm?.enableAutoSave?.(docId, name, {
       intervalMs: this._intervalMs,
       strokeDebounceMs: this._strokeDebounceMs,
-      pixelFormat: 'raw',
+      pixelFormat: 'png',
     });
 
     // Subscribe to Salsa save events for UI indicator

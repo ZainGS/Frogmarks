@@ -53,6 +53,7 @@ import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/
 import { ArmaturePanelComponent } from './illustrate/components/armature-panel/armature-panel.component';
 import { EphemeraPanel } from './illustrate/components/ephemera-panel/ephemera-panel.component';
 import { GreasePencilPanelComponent } from './illustrate/components/grease-pencil-panel/grease-pencil-panel.component';
+import { UvEditorPanelComponent } from './illustrate/components/uv-editor-panel/uv-editor-panel.component';
 import { DocsComponent } from './shared/components/docs/docs.component';
 
 // Define MSAL configuration
@@ -97,6 +98,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     ArmaturePanelComponent,
     EphemeraPanel,
     GreasePencilPanelComponent,
+    UvEditorPanelComponent,
     SkinBuilderComponent,
     FmIconComponent,
     DocsComponent,

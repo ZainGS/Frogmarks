@@ -1745,11 +1745,18 @@ onKeydown(e: KeyboardEvent) {
       snapshots.set(el.dataset['itemId']!, el.getBoundingClientRect());
     });
 
-    // Open overflow so items animating from outside the new (shorter) layout aren't clipped
+    // Open overflow so items animating from outside the new (shorter) layout aren't clipped.
+    // Also hold the content width steady by compensating for the scrollbar-gutter reservation
+    // that disappears when overflow changes to visible.
     const workPane = (this.el.nativeElement as HTMLElement).querySelector<HTMLElement>('.base-work-pane');
-    if (workPane) workPane.style.overflow = 'visible';
+    if (workPane) {
+      const gutterWidth = workPane.offsetWidth - workPane.clientWidth;
+      const basePR = parseFloat(getComputedStyle(workPane).paddingRight) || 0;
+      workPane.style.overflow = 'visible';
+      if (gutterWidth > 0) workPane.style.paddingRight = `${basePR + gutterWidth}px`;
+    }
     // Max stagger (160ms) + animation duration (300ms) + small buffer
-    setTimeout(() => { if (workPane) workPane.style.overflow = ''; }, 480);
+    setTimeout(() => { if (workPane) { workPane.style.overflow = ''; workPane.style.paddingRight = ''; } }, 480);
 
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
@@ -1827,10 +1834,16 @@ onKeydown(e: KeyboardEvent) {
       });
     }
 
-    // Open work-pane overflow for the full animation window
+    // Open work-pane overflow for the full animation window; hold content width
+    // steady with padding so the scrollbar-gutter reservation disappearing doesn't shift the grid.
     const workPane = root.querySelector<HTMLElement>('.base-work-pane');
-    if (workPane) workPane.style.overflow = 'visible';
-    setTimeout(() => { if (workPane) workPane.style.overflow = ''; }, 600);
+    if (workPane) {
+      const gutterWidth = workPane.offsetWidth - workPane.clientWidth;
+      const basePR = parseFloat(getComputedStyle(workPane).paddingRight) || 0;
+      workPane.style.overflow = 'visible';
+      if (gutterWidth > 0) workPane.style.paddingRight = `${basePR + gutterWidth}px`;
+    }
+    setTimeout(() => { if (workPane) { workPane.style.overflow = ''; workPane.style.paddingRight = ''; } }, 600);
 
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
