@@ -3,6 +3,12 @@
     <div *ngIf="!hideInput" class="color-input-container">
         <!-- <button (click)="openEyedropper()" class="eyedropper-btn">🔍</button> -->
         <input type="text" [(ngModel)]="hexColor" (input)="updateFromHex()" class="color-input" />
+        <ng-container *ngIf="showOpacity">
+            <input type="number" class="opacity-input" min="0" max="100" step="1"
+                   [value]="opacity"
+                   (change)="onOpacityInput($event)" />
+            <span class="opacity-pct">%</span>
+        </ng-container>
     </div>
 
     <!-- Hue Slider -->

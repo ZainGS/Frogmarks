@@ -44,9 +44,12 @@ import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRe
 })
 export class ColorPickerComponent implements OnInit {
   @Output() colorSelected = new EventEmitter<string>();
-  @Output() close = new EventEmitter<void>(); // Emit when clicking outside
-  @Input() hideInput = false; // Option to hide the HEX input field
-  @Input() color: string = "#1E1E1E"; // Default color
+  @Output() close = new EventEmitter<void>();
+  @Output() opacityChange = new EventEmitter<number>();
+  @Input() hideInput = false;
+  @Input() showOpacity = false;
+  @Input() opacity = 100;
+  @Input() color: string = "#1E1E1E";
   hexColor: string = "#1E1E1E"; // Default color
   hue: number = 0; // Default hue
   sbX: number = 0; // Saturation (X Position)
@@ -214,7 +217,13 @@ private sbYToLightness(sbY: number, s: number): number {
     //     });
     // }
 
-    openEyedropper() {
+  onOpacityInput(event: Event): void {
+    const val = Math.min(100, Math.max(0, +(event.target as HTMLInputElement).value));
+    this.opacity = val;
+    this.opacityChange.emit(val);
+  }
+
+  openEyedropper() {
       if (!(window as any).Eyedropper) {
           alert("Eyedropper API not supported in this browser.");
           return;

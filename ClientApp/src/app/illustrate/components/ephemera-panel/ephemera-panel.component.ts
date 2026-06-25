@@ -29,6 +29,19 @@ export interface EphemeraParamSchemaEntry {
   group?: string;
 }
 
+export interface EphemeraGlow {
+  radius: number;
+  color: string;
+  opacity: number;
+}
+
+export interface EphemeraFeather {
+  mode: 'radial' | 'linear';
+  start: number;
+  end: number;
+  angle?: number;
+}
+
 export interface EphemeraPlacement {
   id: string;
   typeId: string;
@@ -39,6 +52,9 @@ export interface EphemeraPlacement {
   height: number;
   rotation: number;
   opacity: number;
+  blendMode?: string;
+  glow?: EphemeraGlow | null;
+  feather?: EphemeraFeather | null;
 }
 
 @Component({
@@ -59,6 +75,17 @@ export class EphemeraPanel implements OnInit, OnChanges {
   activeCategoryId = '';
   activeGeneratorTypeId = '';
 
+  readonly blendModeOptions = [
+    { value: 'source-over', label: 'Normal' },
+    { value: 'multiply',    label: 'Multiply' },
+    { value: 'screen',      label: 'Screen' },
+    { value: 'overlay',     label: 'Overlay' },
+    { value: 'darken',      label: 'Darken' },
+    { value: 'lighten',     label: 'Lighten' },
+    { value: 'color-dodge', label: 'Color Dodge' },
+    { value: 'color-burn',  label: 'Color Burn' },
+  ];
+
   // ── New placement params ─────────────────────────────────────
   params: Record<string, any> = {};
   paramSchemaList: EphemeraParamSchemaEntry[] = [];
@@ -69,12 +96,27 @@ export class EphemeraPanel implements OnInit, OnChanges {
   placeHeight = 100;
   placeRotation = 0;
   placeOpacity = 1;
+  placeBlendMode = 'source-over';
 
   // ── Existing placements ──────────────────────────────────────
   placements: EphemeraPlacement[] = [];
   editingPlacementId: string | null = null;
   editParams: Record<string, any> = {};
   editParamSchemaList: EphemeraParamSchemaEntry[] = [];
+  editBlendMode = 'source-over';
+
+  // ── Edit glow ────────────────────────────────────────────────
+  editGlowEnabled = false;
+  editGlowRadius = 6;
+  editGlowColor = '#ffffff';
+  editGlowOpacity = 0.8;
+
+  // ── Edit feather ─────────────────────────────────────────────
+  editFeatherEnabled = false;
+  editFeatherMode: 'radial' | 'linear' = 'radial';
+  editFeatherStart = 0.6;
+  editFeatherEnd = 1.0;
+  editFeatherAngle = 0;
 
   constructor(private sanitizer: DomSanitizer) {}
 
@@ -171,6 +213,45 @@ export class EphemeraPanel implements OnInit, OnChanges {
     this.editParams[key] = type === 'range' || type === 'seed' ? +value : value;
   }
 
+  // ── Color + alpha helpers ─────────────────────────────────────
+
+  getColorHex(key: string): string { return this._hex6(this.params[key]); }
+  getColorAlpha(key: string): number { return this._alpha(this.params[key]); }
+  onColorChange(key: string, hex6: string): void {
+    this.params[key] = this._hex8(hex6, this._alpha(this.params[key]));
+    this.updatePreview();
+  }
+  onColorAlphaChange(key: string, alpha: number): void {
+    this.params[key] = this._hex8(this._hex6(this.params[key]), alpha);
+    this.updatePreview();
+  }
+
+  getEditColorHex(key: string): string { return this._hex6(this.editParams[key]); }
+  getEditColorAlpha(key: string): number { return this._alpha(this.editParams[key]); }
+  onEditColorChange(key: string, hex6: string): void {
+    this.editParams[key] = this._hex8(hex6, this._alpha(this.editParams[key]));
+  }
+  onEditColorAlphaChange(key: string, alpha: number): void {
+    this.editParams[key] = this._hex8(this._hex6(this.editParams[key]), alpha);
+  }
+
+  private _hex6(val: string): string {
+    if (!val || !val.startsWith('#')) return '#000000';
+    return val.slice(0, 7);
+  }
+
+  private _alpha(val: string): number {
+    if (!val || val.length < 9) return 1;
+    const n = parseInt(val.slice(7, 9), 16);
+    return isNaN(n) ? 1 : +(n / 255).toFixed(2);
+  }
+
+  private _hex8(hex6: string, alpha: number): string {
+    const aa = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+      .toString(16).padStart(2, '0');
+    return (hex6 || '#000000').slice(0, 7) + aa;
+  }
+
   // ── Place ─────────────────────────────────────────────────────
 
   placeCurrent(): void {
@@ -183,6 +264,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
       this.placeWidth, this.placeHeight,
       this.placeRotation,
       this.placeOpacity,
+      { blendMode: this.placeBlendMode },
     );
     this.refreshPlacements();
   }
@@ -197,13 +279,34 @@ export class EphemeraPanel implements OnInit, OnChanges {
   startEdit(p: EphemeraPlacement): void {
     this.editingPlacementId = p.id;
     this.editParams = { ...p.params };
+    this.editBlendMode = p.blendMode ?? 'source-over';
+    this.editGlowEnabled = !!p.glow;
+    this.editGlowRadius = p.glow?.radius ?? 6;
+    this.editGlowColor = p.glow?.color ?? '#ffffff';
+    this.editGlowOpacity = p.glow?.opacity ?? 0.8;
+    this.editFeatherEnabled = !!p.feather;
+    this.editFeatherMode = p.feather?.mode ?? 'radial';
+    this.editFeatherStart = p.feather?.start ?? 0.6;
+    this.editFeatherEnd = p.feather?.end ?? 1.0;
+    this.editFeatherAngle = p.feather?.angle ?? 0;
     const gen = this.sm?.getEphemeraGenerator?.(p.typeId);
     this.editParamSchemaList = gen?.getParamSchema?.() ?? [];
   }
 
   commitEdit(): void {
     if (!this.editingPlacementId || !this.vectorLayerId) return;
-    this.sm?.updateEphemeraPlacement?.(this.vectorLayerId, this.editingPlacementId, { params: { ...this.editParams } });
+    const glow = this.editGlowEnabled
+      ? { radius: this.editGlowRadius, color: this.editGlowColor, opacity: this.editGlowOpacity }
+      : null;
+    const feather = this.editFeatherEnabled
+      ? { mode: this.editFeatherMode, start: this.editFeatherStart, end: this.editFeatherEnd, ...(this.editFeatherMode === 'linear' ? { angle: this.editFeatherAngle } : {}) }
+      : null;
+    this.sm?.updateEphemeraPlacement?.(this.vectorLayerId, this.editingPlacementId, {
+      params: { ...this.editParams },
+      blendMode: this.editBlendMode,
+      glow,
+      feather,
+    });
     this.editingPlacementId = null;
     this.refreshPlacements();
   }

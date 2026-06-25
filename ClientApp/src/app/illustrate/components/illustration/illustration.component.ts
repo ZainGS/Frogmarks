@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, HostListener, ElementRef, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, HostListener, ElementRef, NgZone } from '@angular/core';
 import JSZip from 'jszip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
@@ -128,9 +128,13 @@ async function gunzipFromBase64(b64: string): Promise<unknown> {
   templateUrl: './illustration.component.html',
   styleUrl: './illustration.component.scss'
 })
-export class IllustrationComponent implements OnInit {
+export class IllustrationComponent implements OnInit, OnDestroy {
 
   private routeSub?: Subscription;
+  private _sceneGraphChangedSub: any = null;
+  private _rasterLayersSub: any = null;
+  private _rasterActiveLayerSub: any = null;
+  private _currentFrameSub: any = null;
   private _scene3dViewportSub: any = null;
   private _scene3dResizeObserver: ResizeObserver | null = null;
 
@@ -167,7 +171,14 @@ export class IllustrationComponent implements OnInit {
   }
 
   @HostListener('document:keydown', ['$event']) onCtrlSnapKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Control') this.scene3dSnapActive = true;
+    if (e.key === 'Control') {
+      if (this._snapFadeTimer) { clearTimeout(this._snapFadeTimer); this._snapFadeTimer = null; }
+      this.ngZone.run(() => {
+        this.scene3dSnapActive = true;
+        this.scene3dSnapFadingOut = false;
+        this.scene3dSnapBadgeVisible = true;
+      });
+    }
 
     if (this.scene3dPanelVisible && this.scene3dSelectedMeshId) {
       const active = document.activeElement;
@@ -195,7 +206,19 @@ export class IllustrationComponent implements OnInit {
     }
   }
   @HostListener('document:keyup', ['$event']) onCtrlSnapKeyUp(e: KeyboardEvent) {
-    if (e.key === 'Control') this.scene3dSnapActive = false;
+    if (e.key === 'Control') {
+      this.ngZone.run(() => { this.scene3dSnapActive = false; });
+      this._snapFadeTimer = setTimeout(() => {
+        this.ngZone.run(() => { this.scene3dSnapFadingOut = true; });
+        this._snapFadeTimer = setTimeout(() => {
+          this.ngZone.run(() => {
+            this.scene3dSnapBadgeVisible = false;
+            this.scene3dSnapFadingOut = false;
+            this._snapFadeTimer = null;
+          });
+        }, 1000);
+      }, 1000);
+    }
   }
 
   // State flags
@@ -223,6 +246,7 @@ export class IllustrationComponent implements OnInit {
   showEditMenu = false;
   showFileMenu = false;
   showAnimationMenu = false;
+  showViewMenu = false;
   scene3dShowAddMeshMenu = false;
   scene3dShowKeyframeHint = false;
 
@@ -330,6 +354,7 @@ export class IllustrationComponent implements OnInit {
   isCommentPanelActive = false;
 
   selectedPenColor = '#9B59B6';
+  secondaryPenColor = '#000000';
   selectedShapeColor = '#FFFFFF';
   selectedTextColor = '#FFFFFF';
   selectedHighlightColor = '#DAB6FC';
@@ -411,6 +436,53 @@ export class IllustrationComponent implements OnInit {
   paperGrainStrength = 0.3;
   paperGrainOptions: CanvasGrainOption[] = CANVAS_GRAIN_OPTIONS;
 
+  // Info tooltip (fixed-position, escapes overflow:hidden)
+  infoTooltipVisible = false;
+  infoTooltipText = '';
+  infoTooltipX = 0;
+  infoTooltipY = 0;
+
+  readonly infoTips = {
+    gridVisibility:  'Toggles the ground grid overlay.\nPurely visual — does not affect snapping.',
+    snapMode:        'What Ctrl-drag snaps to.\n\nNone — free movement, no snapping.\nGrid — snaps position / rotation / scale to the increments below.\nVertex — snaps the dragged pivot onto the nearest vertex of another mesh. Great for exact part-to-part alignment.',
+    snapGridSize:    'Cell size: distance between snap points in 3D world units.\nMove operations snap to multiples of this value.',
+    snapRotate:      'Rotate step: rotation snaps to this angle increment\n(e.g. 15° → snaps to 0°, 15°, 30°…).',
+    snapScaleStep:   'Scale snaps to this factor\n(e.g. 0.25 → snaps to 0.25×, 0.5×, 0.75×, 1×…).\n1 = whole multiples only. Smaller = finer control.',
+  };
+
+  showInfoTooltip(event: MouseEvent, text: string): void {
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    this.infoTooltipText = text;
+    this.infoTooltipX = rect.left - 256; // 240px tooltip + 16px gap, appears to the left
+    this.infoTooltipY = rect.top;
+    this.infoTooltipVisible = true;
+  }
+
+  hideInfoTooltip(): void {
+    this.infoTooltipVisible = false;
+  }
+
+  // 3D Ground Grid
+  scene3dGridVisible = true;
+  scene3dGridOpacity = 0.30;
+  scene3dGridColor: [number, number, number] = [64/255, 64/255, 64/255];
+
+  get scene3dGridColorHex(): string {
+    const [r, g, b] = this.scene3dGridColor;
+    return '#' + [r, g, b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  }
+
+  // Canvas Grid
+  canvasGridVisible = true;
+  canvasGridCells = 64;
+  canvasGridOpacity = 0.15;
+  canvasGridColor: [number, number, number] = [128/255, 128/255, 128/255];
+
+  get canvasGridColorHex(): string {
+    const [r, g, b] = this.canvasGridColor;
+    return '#' + [r, g, b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  }
+
   // Pixel codec / layer compression
   pixelFormat: string = 'png';
   webpSupported = false;
@@ -422,7 +494,7 @@ export class IllustrationComponent implements OnInit {
 
   showShapeColorPicker = false;
   shapeColor = '#fff';
-  shapeHexInputDraft: string = this.bgColor.replace('#', '');
+  shapeHexInputDraft: string = 'ffffff';
 
   // SDF text props
   selectedSDFTextColor = '#FFFFFF';
@@ -1105,8 +1177,12 @@ export class IllustrationComponent implements OnInit {
   liveTextColor: string = '#ffffff';
   liveTextMaxWidth: number = 0;
   liveTextPadding: number = 16;
+  liveTextArcAngle: number = 0;
   liveTextEffectChain: TextEffectEntry[] = [];
   liveTextIsEditing: boolean = false;
+  liveTextAlign: 'left' | 'center' | 'right' = 'left';
+  liveTextBgColor: string = '#ffffff';
+  liveTextBgAlpha: number = 0;
   hasHtmlInCanvas: boolean = false;
 
   // ── Custom Shader ──────────────────────────────────────────
@@ -1119,6 +1195,7 @@ export class IllustrationComponent implements OnInit {
   customShaderParamB: number = 0;
   customShaderParamC: number = 0;
   customShaderParamD: number = 0;
+  customShaderParamCount: number = 1;
 
   // ── Balloon presets ────────────────────────────────────────
   balloonPresets = BALLOON_PRESETS;
@@ -1205,10 +1282,27 @@ export class IllustrationComponent implements OnInit {
   /** Whether the 3D scene entry is currently selected in the layer panel */
   scene3dPanelVisible = false;
 
+  /** Right-panel tab: 'scene' = layers + outliner/mesh, 'global' = global scene settings */
+  rightPanelTab: 'scene' | 'global' = 'scene';
+
   // Rotation drag readout
   scene3dDragAngleDeg: number | null = null;
   scene3dDragLabelPos: { x: number; y: number } | null = null;
   private _scene3dGizmoRafId: number | null = null;
+
+  // ── Theme ──────────────────────────────────────────────────────
+  retroThemeActive = localStorage.getItem('fm-theme') === 'retro-chrome';
+
+  toggleRetroTheme(): void {
+    this.retroThemeActive = !this.retroThemeActive;
+    if (this.retroThemeActive) {
+      document.body.classList.add('theme-retro-chrome');
+      localStorage.setItem('fm-theme', 'retro-chrome');
+    } else {
+      document.body.classList.remove('theme-retro-chrome');
+      localStorage.removeItem('fm-theme');
+    }
+  }
 
   // Sidebar tool-swap animation state
   tools2dVisible = true;
@@ -1255,14 +1349,20 @@ export class IllustrationComponent implements OnInit {
 
   // ── Vector / Ephemera state ────────────────────────────────
   activeVectorLayerId: string | null = null;
+  showEphemeraPanel = false;
 
   onVectorLayerSelected(id: string | null): void {
     this.activeVectorLayerId = id;
+    (this.shapeManager as any)?.setActiveVectorLayer?.(id);
+    if (!id) this.showEphemeraPanel = false;
+  }
+
+  openEphemeraPanel(): void {
+    this.showEphemeraPanel = true;
   }
 
   closeEphemeraPanel(): void {
-    this.activeVectorLayerId = null;
-    (this.shapeManager as any)?.setActiveVectorLayer?.(null);
+    this.showEphemeraPanel = false;
   }
 
   // Ribbon mesh
@@ -1363,21 +1463,20 @@ export class IllustrationComponent implements OnInit {
     if (group) { group.delete(meshId); if (group.size === 0) this._instanceGroups.delete(groupId); }
   }
 
-  private _instanceGroupSiblings(meshId: string): string[] {
-    const groupId = this._meshGroupId.get(meshId);
-    if (!groupId) return [];
-    return [...(this._instanceGroups.get(groupId) ?? [])].filter(id => id !== meshId);
-  }
+  // ── Ephemera overlay (reinit path) ─────────────────────────────
+  private _ephemeraOverlay: HTMLCanvasElement | null = null;
+  private _ephemeraOverlayObserver: ResizeObserver | null = null;
 
   // ── UV Editor ──────────────────────────────────────────────────
   uvEditorOpen = false;
   private _uvSession: any = null;
   private _uvRenderer: any = null;
-  private _uvPaintCanvas: HTMLCanvasElement | null = null;
+  private _uvHandlersBound = false;
   uvPaintMode = false;
-  uvBrushColor = '#ffffff';
-  uvBrushRadius = 8;
+  showUVPane  = false;
   uvLayers: Array<{id: string; name: string}> = [];
+
+  get uvRendererRef(): any { return this._uvRenderer; }
 
   get uvSession(): any { return this._uvSession; }
 
@@ -1395,8 +1494,8 @@ export class IllustrationComponent implements OnInit {
       uvCanvas.width  = Math.round((window.innerWidth * 0.5 - 280) * dpr);
       uvCanvas.height = Math.round(window.innerHeight * dpr);
       this._uvRenderer = sm.createUVCanvasRenderer?.(uvCanvas);
-      this._uvPaintCanvas = sm.ensureUVPaintCanvas3D?.(this.scene3dSelectedMeshId) ?? null;
       this.uvLayers = (sm.getLayers?.() ?? []).map((l: any) => ({ id: l.id, name: l.name }));
+      this.uvPaintMode = true;  // paint is always active in UV Editor
       this._uvDraw();
       this._attachUVPointerHandlers(uvCanvas);
     });
@@ -1404,28 +1503,35 @@ export class IllustrationComponent implements OnInit {
 
   closeUVEditor(): void {
     const sm = this.shapeManager as any;
-    // closeUVEditor3D restores camera orbit and cleans up session + paint canvas
-    sm.closeUVEditor3D?.(this.scene3dSelectedMeshId);
+    // If closing while a clothing slot is in paint mode, exit that mesh specifically
+    if (this.scene3dClothingPaintActive) {
+      const bodyId = this.scene3dEditCharBodyId;
+      const clothingMeshId = bodyId ? sm.getClothingMeshId3D?.(bodyId, this.scene3dClothingPaintActive) : null;
+      if (clothingMeshId) sm.exitUVPaintMode3D?.(clothingMeshId);
+      this.scene3dClothingPaintActive = null;
+    } else {
+      sm.closeUVEditor3D?.(this.scene3dSelectedMeshId);
+    }
     this._uvSession = null;
     this._uvRenderer = null;
-    this._uvPaintCanvas = null;
+    this._uvHandlersBound = false;
     this.uvEditorOpen = false;
-    this.uvPaintMode = false;
+    this.uvPaintMode  = false;
+    this.showUVPane   = false;
   }
 
   uvDraw(): void { this._uvDraw(); }
 
-  onUvPaintSettingsChange(e: { paintMode: boolean; color: string; radius: number }): void {
-    this.uvPaintMode = e.paintMode;
-    this.uvBrushColor = e.color;
-    this.uvBrushRadius = e.radius;
+  onShowUVPaneChange(show: boolean): void {
+    this.showUVPane = show;
   }
 
   private _uvDraw(): void {
     if (!this._uvRenderer || !this._uvSession) return;
+    if (this.uvPaintMode) return;  // Salsa redraws after every dab; don't stomp it
     const em = (this.shapeManager as any).getEditMesh3D?.(this.scene3dSelectedMeshId);
     if (!em) return;
-    this._uvRenderer.draw(this._uvSession, em, this._uvPaintCanvas ?? undefined);
+    this._uvRenderer.draw(this._uvSession, em);
   }
 
   private _uvCssCoords(canvas: HTMLCanvasElement, e: PointerEvent): { x: number; y: number } {
@@ -1434,24 +1540,13 @@ export class IllustrationComponent implements OnInit {
   }
 
   private _attachUVPointerHandlers(canvas: HTMLCanvasElement): void {
+    if (this._uvHandlersBound) return;
+    this._uvHandlersBound = true;
     const sm = this.shapeManager as any;
-    let isPainting = false;
 
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
       if (!this._uvRenderer || !this._uvSession) return;
       const { x, y } = this._uvCssCoords(canvas, e);
-      if (this.uvPaintMode && isPainting && this._uvPaintCanvas) {
-        const [u, v] = this._uvRenderer.canvasToUV?.(x, y, this._uvSession) ?? [0, 0];
-        const ctx = this._uvPaintCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = this.uvBrushColor;
-          ctx.beginPath();
-          ctx.arc(u * this._uvPaintCanvas.width, v * this._uvPaintCanvas.height, this.uvBrushRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        this._uvDraw();
-        return;
-      }
       const em = sm.getEditMesh3D?.(this.scene3dSelectedMeshId);
       const fi = em ? this._uvRenderer.hitTestFace?.(x, y, this._uvSession, em) : null;
       sm.setUVHoverFace3D?.(this.scene3dSelectedMeshId, fi ?? null);
@@ -1461,37 +1556,12 @@ export class IllustrationComponent implements OnInit {
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       if (!this._uvRenderer || !this._uvSession) return;
       const { x, y } = this._uvCssCoords(canvas, e);
-      if (this.uvPaintMode && this._uvPaintCanvas) {
-        isPainting = true;
-        canvas.setPointerCapture(e.pointerId);
-        const [u, v] = this._uvRenderer.canvasToUV?.(x, y, this._uvSession) ?? [0, 0];
-        const ctx = this._uvPaintCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = this.uvBrushColor;
-          ctx.beginPath();
-          ctx.arc(u * this._uvPaintCanvas.width, v * this._uvPaintCanvas.height, this.uvBrushRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        this._uvDraw();
-        return;
-      }
       const em = sm.getEditMesh3D?.(this.scene3dSelectedMeshId);
       if (!em) return;
       const fi = this._uvRenderer.hitTestFace?.(x, y, this._uvSession, em);
       if (fi != null) {
         this._uvSession.selectFace?.(fi, e.shiftKey);
         this.ngZone.run(() => this._uvDraw());
-      }
-    });
-
-    canvas.addEventListener('pointerup', () => {
-      if (isPainting) {
-        isPainting = false;
-        const meshId = this.scene3dSelectedMeshId;
-        sm.commitUVTexture3D?.(meshId);
-        const siblings = this._instanceGroupSiblings(meshId);
-        if (siblings.length) sm.shareUVTexture3D?.(meshId, siblings);
-        this._uvDraw();
       }
     });
 
@@ -1676,7 +1746,7 @@ export class IllustrationComponent implements OnInit {
   scene3dPS1UVSteps = 64;
 
   // Scene background / skybox
-  scene3dBgMode: 'none' | 'solid' | 'gradient' | 'wavy' = 'none';
+  scene3dBgMode: 'none' | 'solid' | 'gradient' | 'wavy' | 'checkers' = 'none';
   scene3dBgColor1 = '#1a1a2e';
   scene3dBgColor2 = '#99aabb';
 
@@ -1738,8 +1808,11 @@ export class IllustrationComponent implements OnInit {
 
   // -- Snap indicator
   scene3dSnapActive = false;
+  scene3dSnapBadgeVisible = false;
+  scene3dSnapFadingOut = false;
+  private _snapFadeTimer: any = null;
   scene3dSnapMode: 'none' | 'grid' | 'vertex' = 'grid';
-  scene3dSnapGridSize = 1.0;
+  scene3dSnapGridSize = 0.05;
   scene3dSnapAngleDeg = 15;
   scene3dSnapScaleStep = 0.25;
 
@@ -1798,10 +1871,14 @@ export class IllustrationComponent implements OnInit {
   /** Called by layer panel's (scene3dSelected) event */
   onScene3dSelected(selected: boolean): void {
     this.scene3dPanelVisible = selected;
+    const sm = this.shapeManager as any;
+    sm.canvasGridVisibleOverride  = !selected;
+    sm.sceneGridVisible3DOverride =  selected;
 
     if (this._toolsSwapTimer) { clearTimeout(this._toolsSwapTimer); this._toolsSwapTimer = null; }
     if (selected) {
       this._scene3dLoadSnapSettings();
+      this._loadScene3dGrid();
       // 2D exits first, then 3D enters
       this.tools3dExiting = false;
       this.tools2dExiting = true;
@@ -1936,6 +2013,9 @@ export class IllustrationComponent implements OnInit {
     this.rasterBrushService.remove3DScene();
     this.scene3dPanelVisible = false;
     this.scene3dSelectedMeshId = null;
+    const sm = this.shapeManager as any;
+    sm.canvasGridVisibleOverride  = true;
+    sm.sceneGridVisible3DOverride = false;
   }
 
   scene3dSyncIllustrationCamera(): void {
@@ -2007,9 +2087,118 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
-  // Polygon / circle creation forms
+  // Polygon / circle / character creation forms
   scene3dShowPolygonForm = false;
   scene3dShowCircleForm = false;
+  scene3dShowCharacterForm = false;
+  scene3dCharHeight = 0.5;
+  scene3dCharLegLength = 1.0;
+  scene3dCharLimbThick = 0.85;
+  scene3dCharTorsoThick = 0.9;
+  scene3dCharTorsoLength = 1.0;
+  scene3dCharHeadSize = 1.25;
+  private _charPreviewTimer: any = null;
+
+  // Edit Character panel
+  scene3dEditCharPanelOpen = false;
+  scene3dSelectedIsCharacter = false;
+  scene3dEditCharBodyId: string | null = null;
+  eyeDrawMode = false;
+  eyeDrawExprId: string | null = null;
+  scene3dFaceExpressions: Array<{ id: string; name: string; isBlink?: boolean }> = [];
+  scene3dFaceActiveExprId: string | null = null;
+  scene3dFaceBlinkExprId: string | null = null;
+  scene3dFaceBlinkMode: 'fixed' | 'random' = 'random';
+  scene3dFaceBlinkMin = 2.5;
+  scene3dFaceBlinkMax = 6.0;
+  scene3dFaceBlinkHold = 110;
+
+  // Body shape + skin tone (live editing of existing character)
+  scene3dBodyParams: any = null;
+  scene3dSkinTone = '#f5c5a3';
+  private _bodyParamTimer: any = null;
+
+  // Procedural eye params per expression
+  scene3dEyeModeMap: Record<string, 'draw' | 'procedural'> = {};
+  scene3dEyeParamsMap: Record<string, any> = {};
+  private _eyeParamTimers: Record<string, any> = {};
+  scene3dGazeX = 0;
+  scene3dGazeY = 0;
+  private _gazePointerActive = false;
+
+  // Hair
+  scene3dHairParams: any = null;
+  private _hairParamTimer: any = null;
+
+  // Clothing
+  scene3dClothingTab: 'top' | 'bottom' = 'top';
+  charSection: 'menu' | 'body' | 'eyes' | 'hair' | 'top' | 'bottom' = 'menu';
+  charRenderStyle = 'cel';
+  charPartTextureSet: Record<string, boolean> = { body: false, eyes: false, hair: false, top: false, bottom: false };
+  scene3dClothingPaintActive: 'top' | 'bottom' | null = null;
+  scene3dTopParams: any = null;
+  scene3dBottomParams: any = null;
+  scene3dTopPresets: string[] = [];
+  scene3dBottomPresets: string[] = [];
+  scene3dTopPresetName = '';
+  scene3dBottomPresetName = '';
+  private _clothingParamTopTimer: any = null;
+  private _clothingParamBottomTimer: any = null;
+  private readonly _hairParamDefaults = {
+    verticalOffset: 0.62,
+    capThickness: 0.00,
+    backLength: 4.0,
+    crownRound: 0.00,
+    hairlineFront: 0.11,
+    partingStyle: 'parted',
+    partingPosition: 0.10,
+    partingWidth: 0.25,
+    bangCount: 12,
+    bangLength: 0.60,
+    bangCurve: 1.00,
+    bangPointiness: 1.00,
+    bangOffset: -0.18,
+    sideLock: false,
+    tailStyle: 'twin',
+    tailHeight: 0.80,
+    tailSpread: 0.70,
+    tailLength: 4.2,
+    tailThickness: 0.60,
+    tailTaper: 1.00,
+    tailCurl: 1.00,
+    tailTip: 'point',
+    rootColor: '#80bc80',
+    tipColor: '#000000',
+    gradient: true,
+    tipFade: 1.00,
+    chunkiness: 1.00,
+  };
+  private readonly _eyeParamDefaults = {
+    pixelResolution: 50,
+    spacing: 0.40,
+    verticalPos: 0.60,
+    width: 0.50,
+    height: 0.34,
+    tilt: 0.50,
+    roundness: 1.0,
+    irisRadius: 0.90,
+    irisGradient: true,
+    irisColorTop: '#6d523b',
+    irisColorBottom: '#b8853d',
+    irisColor: '#96693c',
+    pupilRadius: 0.60,
+    pupilColor: '#3a2010',
+    upperLashThickness: 0.08,
+    upperLashColor: '#111111',
+    outerLashLength: 0.25,
+    lowerLash: false,
+    doubleEyelid: false,
+    underDeco: true,
+    underDecoColor: '#80bc80',
+    underDecoCount: 3,
+    closed: false,
+  };
+
   scene3dPolygonSides = 6;
   scene3dPolygonRadius = 0.5;
   scene3dPolygonHeight = 0.2;
@@ -2078,6 +2267,481 @@ export class IllustrationComponent implements OnInit {
     }
     this.scene3dShowCircleForm = false;
     this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dOpenCharacterForm(): void {
+    this.scene3dShowCharacterForm = !this.scene3dShowCharacterForm;
+    this.scene3dShowPolygonForm = false;
+    this.scene3dShowCircleForm = false;
+    if (this.scene3dShowCharacterForm) {
+      this._fireCharPreview();
+    } else {
+      (this.shapeManager as any).clearProceduralBodyPreview3D?.();
+    }
+  }
+
+  scene3dPreviewCharacter(): void {
+    this._fireCharPreview();
+  }
+
+  private _fireCharPreview(): void {
+    (this.shapeManager as any).previewProceduralBody3D?.({
+      height:      this.scene3dCharHeight,
+      legLength:   this.scene3dCharLegLength,
+      limbThick:   this.scene3dCharLimbThick,
+      torsoThick:  this.scene3dCharTorsoThick,
+      torsoLength: this.scene3dCharTorsoLength,
+      headSize:    this.scene3dCharHeadSize,
+    });
+  }
+
+  scene3dCancelCharacter(): void {
+    clearTimeout(this._charPreviewTimer);
+    (this.shapeManager as any).clearProceduralBodyPreview3D?.();
+    this.scene3dShowCharacterForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  async scene3dGenerateCharacter(): Promise<void> {
+    clearTimeout(this._charPreviewTimer);
+    const sm = this.shapeManager as any;
+    const result = await sm.createProceduralBody3D?.({
+      height:      this.scene3dCharHeight,
+      legLength:   this.scene3dCharLegLength,
+      limbThick:   this.scene3dCharLimbThick,
+      torsoThick:  this.scene3dCharTorsoThick,
+      torsoLength: this.scene3dCharTorsoLength,
+      headSize:    this.scene3dCharHeadSize,
+      waist:       0.90,
+      hipFront:    0.75,
+    });
+    this.scene3dRefreshMeshes();
+    this.scene3dEnsureAnimationPlayer();
+    if (result?.meshId) {
+      this.scene3dSelectMesh(result.meshId);
+      this.scene3dEditCharBodyId = result.meshId;
+      this._autoEquipCharacter(result.meshId);
+    }
+    this.scene3dShowCharacterForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  private _autoEquipCharacter(bodyId: string): void {
+    const sm = this.shapeManager as any;
+
+    // Eyes — one default expression, procedural
+    sm.ensureFace3D?.(bodyId);
+    const exprId = sm.createFaceExpression3D?.(bodyId, 'Neutral');
+    if (exprId) {
+      const base = sm.getDefaultEyeParams3D?.() ?? {};
+      const eyeParams = { ...base, ...this._eyeParamDefaults };
+      sm.setFaceExpressionProcedural3D?.(bodyId, exprId, eyeParams);
+      this.scene3dEyeModeMap[exprId] = 'procedural';
+      this.scene3dEyeParamsMap[exprId] = eyeParams;
+      this._refreshFaceExpressions();
+    }
+
+    // Hair
+    const hairBase = sm.getDefaultHairParams3D?.() ?? {};
+    this.scene3dHairParams = { ...hairBase, ...this._hairParamDefaults };
+    sm.setHairParams3D?.(bodyId, this.scene3dHairParams);
+
+    // Top
+    this.scene3dTopPresets = sm.getClothingPresetNames3D?.('top') ?? [];
+    this.scene3dTopParams = { ...(sm.getDefaultClothingParams3D?.('top') ?? { slot: 'top' }), hemHeight: 0.65, gradient: true, trimWidth: 0.50, baseColor: '#419041', trimColor: '#315e31' };
+    sm.setClothingParams3D?.(bodyId, this.scene3dTopParams);
+
+    // Bottom
+    this.scene3dBottomPresets = sm.getClothingPresetNames3D?.('bottom') ?? [];
+    this.scene3dBottomParams = { ...(sm.getDefaultClothingParams3D?.('bottom') ?? { slot: 'bottom' }), bottomStyle: 'pants', waistWidth: 0.32, waistHeight: 0.50, length: 1.00, gradient: true, trimWidth: 0.50, baseColor: '#404763', trimColor: '#030407' };
+    sm.setClothingParams3D?.(bodyId, this.scene3dBottomParams);
+
+    // Body shape params + skin tone
+    this.scene3dBodyParams = sm.getBodyParams3D?.(bodyId) ?? { bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1 };
+    const tone = sm.getSkinTone3D?.(bodyId);
+    if (tone) this.scene3dSkinTone = tone;
+
+    // Apply default render style
+    this.scene3dSetCharRenderStyle('cel');
+  }
+
+  scene3dToggleEditCharPanel(): void {
+    this.scene3dEditCharPanelOpen = !this.scene3dEditCharPanelOpen;
+    if (this.scene3dEditCharPanelOpen) {
+      this.scene3dEditCharBodyId = this.scene3dSelectedMeshId;
+      this._refreshFaceExpressions();
+      this.scene3dInitBodyParams();
+    } else {
+      if (this.eyeDrawMode) this.scene3dExitEyeDraw();
+      if (this.scene3dClothingPaintActive) this.scene3dToggleClothingPaint(this.scene3dClothingPaintActive);
+    }
+  }
+
+  private _refreshFaceExpressions(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) { this.scene3dFaceExpressions = []; return; }
+    const face = sm.getFaceExpressions3D?.(id);
+    if (!face) { this.scene3dFaceExpressions = []; return; }
+    this.scene3dFaceExpressions = face.expressions ?? [];
+    this.scene3dFaceActiveExprId = face.activeId ?? null;
+    this.scene3dFaceBlinkExprId  = face.blinkId  ?? null;
+    if (face.blink) {
+      this.scene3dFaceBlinkMode = face.blink.mode   ?? 'random';
+      this.scene3dFaceBlinkMin  = face.blink.minSec ?? 2.5;
+      this.scene3dFaceBlinkMax  = face.blink.maxSec ?? 6.0;
+      this.scene3dFaceBlinkHold = face.blink.holdMs ?? 110;
+    }
+  }
+
+  scene3dAddFaceExpression(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.ensureFace3D?.(id);
+    sm.createFaceExpression3D?.(id, 'New');
+    this._refreshFaceExpressions();
+  }
+
+  scene3dSetActiveFaceExpr(exprId: string): void {
+    const sm = this.shapeManager as any;
+    if (!this.scene3dEditCharBodyId) return;
+    sm.setActiveFaceExpression3D?.(this.scene3dEditCharBodyId, exprId);
+    this.scene3dFaceActiveExprId = exprId;
+  }
+
+  scene3dToggleBlinkExpr(exprId: string): void {
+    const newBlink = this.scene3dFaceBlinkExprId === exprId ? null : exprId;
+    const sm = this.shapeManager as any;
+    if (!this.scene3dEditCharBodyId) return;
+    sm.setFaceBlinkExpression3D?.(this.scene3dEditCharBodyId, newBlink);
+    this.scene3dFaceBlinkExprId = newBlink;
+  }
+
+  scene3dDeleteFaceExpr(exprId: string): void {
+    const sm = this.shapeManager as any;
+    if (!this.scene3dEditCharBodyId) return;
+    sm.deleteFaceExpression3D?.(this.scene3dEditCharBodyId, exprId);
+    delete this.scene3dEyeModeMap[exprId];
+    delete this.scene3dEyeParamsMap[exprId];
+    clearTimeout(this._eyeParamTimers[exprId]);
+    delete this._eyeParamTimers[exprId];
+    this._refreshFaceExpressions();
+  }
+
+  scene3dApplyFaceBlinkConfig(): void {
+    const sm = this.shapeManager as any;
+    if (!this.scene3dEditCharBodyId) return;
+    sm.setFaceBlinkConfig3D?.(this.scene3dEditCharBodyId, {
+      mode:    this.scene3dFaceBlinkMode,
+      minSec:  this.scene3dFaceBlinkMin,
+      maxSec:  this.scene3dFaceBlinkMax,
+      holdMs:  this.scene3dFaceBlinkHold,
+    });
+  }
+
+  scene3dDrawEyes(exprId: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.ensureFace3D?.(id);
+    this.eyeDrawMode  = true;
+    this.eyeDrawExprId = exprId;
+    setTimeout(() => {
+      const uvCanvas = this.uvCanvasRef?.nativeElement;
+      if (!uvCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      uvCanvas.width  = Math.round((window.innerWidth * 0.5 - 280) * dpr);
+      uvCanvas.height = Math.round(window.innerHeight * dpr);
+      const renderer = sm.createUVCanvasRenderer?.(uvCanvas);
+      sm.enterEyeDrawMode3D?.(id, exprId, renderer);
+      sm.frameFace3D?.(id);
+    });
+  }
+
+  scene3dSwitchEyeDrawExpr(exprId: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    const uvCanvas = this.uvCanvasRef?.nativeElement;
+    if (!uvCanvas) return;
+    const renderer = sm.createUVCanvasRenderer?.(uvCanvas);
+    sm.enterEyeDrawMode3D?.(id, exprId, renderer);
+    this.eyeDrawExprId = exprId;
+  }
+
+  scene3dReframeFace(): void {
+    if (this.scene3dEditCharBodyId) {
+      (this.shapeManager as any).frameFace3D?.(this.scene3dEditCharBodyId);
+    }
+  }
+
+  scene3dExitEyeDraw(): void {
+    (this.shapeManager as any).exitEyeDrawMode3D?.();
+    this.eyeDrawMode   = false;
+    this.eyeDrawExprId = null;
+  }
+
+  scene3dSetEyeMode(exprId: string, mode: 'draw' | 'procedural'): void {
+    this.scene3dEyeModeMap[exprId] = mode;
+    if (mode === 'procedural') {
+      if (this.eyeDrawMode && this.eyeDrawExprId === exprId) {
+        (this.shapeManager as any).exitEyeDrawMode3D?.();
+        this.eyeDrawMode = false;
+        this.eyeDrawExprId = null;
+      }
+      const sm = this.shapeManager as any;
+      const id = this.scene3dEditCharBodyId;
+      if (!id) return;
+      const existing = sm.getFaceExpressionParams3D?.(id, exprId);
+      const base = sm.getDefaultEyeParams3D?.() ?? {};
+      this.scene3dEyeParamsMap[exprId] = existing ?? { ...base, ...this._eyeParamDefaults };
+      this._applyProceduralEyes(exprId);
+    }
+  }
+
+  scene3dEyeParamChanged(exprId: string): void {
+    clearTimeout(this._eyeParamTimers[exprId]);
+    this._eyeParamTimers[exprId] = setTimeout(() => this._applyProceduralEyes(exprId), 50);
+  }
+
+  private _applyProceduralEyes(exprId: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    const p = this.scene3dEyeParamsMap[exprId];
+    if (!id || !p) return;
+    sm.setFaceExpressionProcedural3D?.(id, exprId, p);
+  }
+
+  scene3dGazePadPointerDown(event: PointerEvent, el: HTMLElement): void {
+    this._gazePointerActive = true;
+    el.setPointerCapture(event.pointerId);
+    this._updateGaze(event, el);
+  }
+
+  scene3dGazePadPointerMove(event: PointerEvent, el: HTMLElement): void {
+    if (!this._gazePointerActive) return;
+    this._updateGaze(event, el);
+  }
+
+  scene3dGazePadPointerUp(): void {
+    this._gazePointerActive = false;
+  }
+
+  scene3dGazeCenter(): void {
+    this.scene3dGazeX = 0;
+    this.scene3dGazeY = 0;
+    (this.shapeManager as any).setFaceGaze3D?.(this.scene3dEditCharBodyId, 0, 0);
+  }
+
+  private _updateGaze(event: PointerEvent, el: HTMLElement): void {
+    const rect = el.getBoundingClientRect();
+    this.scene3dGazeX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
+    this.scene3dGazeY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
+    (this.shapeManager as any).setFaceGaze3D?.(this.scene3dEditCharBodyId, this.scene3dGazeX, this.scene3dGazeY);
+  }
+
+  scene3dInitBodyParams(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.scene3dBodyParams = sm.getBodyParams3D?.(id) ?? { bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1 };
+    const tone = sm.getSkinTone3D?.(id);
+    if (tone) this.scene3dSkinTone = tone;
+  }
+
+  scene3dBodyParamChanged(): void {
+    clearTimeout(this._bodyParamTimer);
+    this._bodyParamTimer = setTimeout(() => {
+      const sm = this.shapeManager as any;
+      const id = this.scene3dEditCharBodyId;
+      if (!id || !this.scene3dBodyParams) return;
+      sm.setBodyParams3D?.(id, this.scene3dBodyParams);
+    }, 10);
+  }
+
+  scene3dSkinToneChanged(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.setSkinTone3D?.(id, this.scene3dSkinTone);
+  }
+
+  scene3dBakeHair(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.bakeHairToPart3D?.(id);
+  }
+
+  scene3dInitHair(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    const existing = sm.getHairParams3D?.(id);
+    const base = sm.getDefaultHairParams3D?.() ?? {};
+    this.scene3dHairParams = existing ?? { ...base, ...this._hairParamDefaults };
+    sm.setHairParams3D?.(id, this.scene3dHairParams);
+  }
+
+  scene3dHairParamChanged(): void {
+    clearTimeout(this._hairParamTimer);
+    this._hairParamTimer = setTimeout(() => {
+      const sm = this.shapeManager as any;
+      const id = this.scene3dEditCharBodyId;
+      if (!id || !this.scene3dHairParams) return;
+      sm.setHairParams3D?.(id, this.scene3dHairParams);
+    }, 10);
+  }
+
+  scene3dRemoveHair(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.removeHair3D?.(id);
+    this.scene3dHairParams = null;
+  }
+
+  scene3dInitClothing(slot: 'top' | 'bottom'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    if (slot === 'top') {
+      this.scene3dTopPresets = sm.getClothingPresetNames3D?.('top') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'top');
+      this.scene3dTopParams = existing ?? { ...(sm.getDefaultClothingParams3D?.('top') ?? { slot: 'top' }), hemHeight: 0.65, gradient: true, trimWidth: 0.50, baseColor: '#419041', trimColor: '#315e31' };
+      sm.setClothingParams3D?.(id, this.scene3dTopParams);
+    } else {
+      this.scene3dBottomPresets = sm.getClothingPresetNames3D?.('bottom') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'bottom');
+      this.scene3dBottomParams = existing ?? { ...(sm.getDefaultClothingParams3D?.('bottom') ?? { slot: 'bottom' }), bottomStyle: 'pants', waistWidth: 0.32, waistHeight: 0.50, length: 1.00, gradient: true, trimWidth: 0.50, baseColor: '#404763', trimColor: '#030407' };
+      sm.setClothingParams3D?.(id, this.scene3dBottomParams);
+    }
+  }
+
+  scene3dClothingParamChanged(slot: 'top' | 'bottom'): void {
+    if (slot === 'top') {
+      clearTimeout(this._clothingParamTopTimer);
+      this._clothingParamTopTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dTopParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dTopParams);
+      }, 10);
+    } else {
+      clearTimeout(this._clothingParamBottomTimer);
+      this._clothingParamBottomTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dBottomParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dBottomParams);
+      }, 10);
+    }
+  }
+
+  scene3dApplyClothingPreset(slot: 'top' | 'bottom', name: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id || !name) return;
+    const p = sm.getClothingPreset3D?.(slot, name);
+    if (!p) return;
+    if (slot === 'top') this.scene3dTopParams = p;
+    else this.scene3dBottomParams = p;
+    sm.setClothingParams3D?.(id, p);
+  }
+
+  scene3dRemoveClothing(slot: 'top' | 'bottom'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.removeClothing3D?.(id, slot);
+    if (slot === 'top') this.scene3dTopParams = null;
+    else this.scene3dBottomParams = null;
+  }
+
+  scene3dBakeClothing(slot: 'top' | 'bottom'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.bakeClothingToPart3D?.(id, slot, slot === 'top' ? 'Top 1' : 'Bottom 1');
+  }
+
+  scene3dToggleClothingPaint(slot: 'top' | 'bottom'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+
+    if (this.scene3dClothingPaintActive === slot) {
+      // Exit paint mode
+      const meshId = sm.getClothingMeshId3D?.(id, slot);
+      if (meshId) sm.exitUVPaintMode3D?.(meshId);
+      this.scene3dClothingPaintActive = null;
+      this.uvPaintMode = false;
+      if (this.uvEditorOpen) this.closeUVEditor();
+    } else {
+      // Exit any active paint first
+      if (this.scene3dClothingPaintActive) {
+        const prevMeshId = sm.getClothingMeshId3D?.(id, this.scene3dClothingPaintActive);
+        if (prevMeshId) sm.exitUVPaintMode3D?.(prevMeshId);
+      }
+      const meshId = sm.getClothingMeshId3D?.(id, slot);
+      if (!meshId) return;
+      sm.enterUVPaintMode3D?.(meshId);
+      this.scene3dClothingPaintActive = slot;
+      this.uvPaintMode = true;
+      // Show the UV paint panel on the right for brush controls
+      if (!this.uvEditorOpen) this.uvEditorOpen = true;
+    }
+  }
+
+  scene3dSetCharRenderStyle(style: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.charRenderStyle = style;
+    // Apply to all character parts
+    sm.setRenderStyle3D?.(id, style);
+    const hairId = sm.getHairMeshId3D?.(id);
+    if (hairId) sm.setRenderStyle3D?.(hairId, style);
+    const topId = sm.getClothingMeshId3D?.(id, 'top');
+    if (topId) sm.setRenderStyle3D?.(topId, style);
+    const bottomId = sm.getClothingMeshId3D?.(id, 'bottom');
+    if (bottomId) sm.setRenderStyle3D?.(bottomId, style);
+    const eyesId = sm.getEyesMeshId3D?.(id);
+    if (eyesId) sm.setRenderStyle3D?.(eyesId, style);
+  }
+
+  private _charPartMeshId(part: string): string | null {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return null;
+    switch (part) {
+      case 'body':   return id;
+      case 'hair':   return sm.getHairMeshId3D?.(id) ?? null;
+      case 'top':    return sm.getClothingMeshId3D?.(id, 'top') ?? null;
+      case 'bottom': return sm.getClothingMeshId3D?.(id, 'bottom') ?? null;
+      case 'eyes':   return sm.getEyesMeshId3D?.(id) ?? null;
+      default:       return null;
+    }
+  }
+
+  async scene3dUploadCharPartTexture(part: string, event: Event): Promise<void> {
+    const meshId = this._charPartMeshId(part);
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!meshId || !file) return;
+    const bitmap = await createImageBitmap(file);
+    await (this.shapeManager as any).setPartTexture3D?.(meshId, bitmap);
+    this.charPartTextureSet[part] = true;
+    this.scene3dMarkTexLibDirty();
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  scene3dClearCharPartTexture(part: string): void {
+    const meshId = this._charPartMeshId(part);
+    if (!meshId) return;
+    (this.shapeManager as any).clearPartTexture3D?.(meshId);
+    this.charPartTextureSet[part] = false;
+    this.scene3dMarkTexLibDirty();
   }
 
   scene3dSelectMesh(id: string): void {
@@ -2269,6 +2933,13 @@ export class IllustrationComponent implements OnInit {
       // Restore bucket selections array sized to stored buckets for this group
       const storedBuckets = this.scene3dAllGroupBuckets[id] ?? [];
       this.scene3dBucketSelections = storedBuckets.map(() => '');
+    }
+    this.scene3dSelectedIsCharacter = !!(this.shapeManager as any).isProceduralBody3D?.(id);
+    if (!this.scene3dSelectedIsCharacter) {
+      this.scene3dEditCharPanelOpen = false;
+    } else if (this.scene3dEditCharPanelOpen && this.scene3dEditCharBodyId !== id) {
+      this.scene3dEditCharBodyId = id;
+      this._refreshFaceExpressions();
     }
     this.scene3dRefreshKeyframeTracks();
   }
@@ -2632,10 +3303,10 @@ export class IllustrationComponent implements OnInit {
     ctx.clearRect(0, 0, cw, ch);
     const sm = this.shapeManager as any;
 
-    // Vertex snap target dot
-    const snapTarget = sm.getSnapTarget3D?.() as [number, number, number] | null;
+    // Grid snap target dot (vertex snap viz is rendered engine-side by Salsa)
+    const snapTarget = sm.getSnapTarget3D?.() as [number,number,number] | null;
     if (snapTarget) {
-      const scr = sm.worldToScreen3D?.(snapTarget) as [number, number] | null;
+      const scr = sm.worldToScreen3D?.(snapTarget) as [number,number] | null;
       if (scr) {
         ctx.beginPath();
         ctx.arc(scr[0], scr[1], 6, 0, Math.PI * 2);
@@ -2746,8 +3417,8 @@ export class IllustrationComponent implements OnInit {
       this._clearKnifePreview();
       return;
     }
-    if (this._scene3dActiveDragIndex === null) return;
-    (this.shapeManager as any).endRibbonHandleDrag3D?.(this.scene3dSelectedMeshId!, this._scene3dActiveDragIndex);
+    if (this._scene3dActiveDragIndex === null || !this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).endRibbonHandleDrag3D?.(this.scene3dSelectedMeshId, this._scene3dActiveDragIndex);
     this._scene3dActiveDragIndex = null;
     this.scene3dMarkDirty();
   }
@@ -3362,7 +4033,7 @@ export class IllustrationComponent implements OnInit {
   private _scene3dLoadSnapSettings(): void {
     const sm = this.shapeManager as any;
     this.scene3dSnapMode      = sm.snapMode3D ?? 'grid';
-    this.scene3dSnapGridSize  = sm.snapGridSize3D ?? 1.0;
+    this.scene3dSnapGridSize  = sm.snapGridSize3D ?? 0.1;
     this.scene3dSnapAngleDeg  = Math.round(((sm.snapAngle3D ?? (Math.PI / 12)) * 180 / Math.PI) * 10) / 10;
     this.scene3dSnapScaleStep = sm.snapScaleStep3D ?? 0.25;
   }
@@ -3377,6 +4048,70 @@ export class IllustrationComponent implements OnInit {
     sm.snapGridSize3D   = this.scene3dSnapGridSize;
     sm.snapAngle3D      = this.scene3dSnapAngleDeg * Math.PI / 180;
     sm.snapScaleStep3D  = this.scene3dSnapScaleStep;
+  }
+
+  // ── 3D Ground Grid ─────────────────────────────────────────
+
+  private _loadScene3dGrid(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dGridVisible = sm.sceneGridVisible3D ?? false;
+    this.scene3dGridOpacity = sm.sceneGridOpacity3D ?? 0.5;
+    this.scene3dGridColor   = sm.sceneGridColor3D ? [...sm.sceneGridColor3D] as [number, number, number] : [0.5, 0.5, 0.5];
+  }
+
+  applyScene3dGrid(): void {
+    const sm = this.shapeManager as any;
+    if (!sm) return;
+    sm.sceneGridVisible3D = this.scene3dGridVisible;
+    sm.sceneGridOpacity3D = this.scene3dGridOpacity;
+    sm.sceneGridColor3D   = [...this.scene3dGridColor];
+  }
+
+  onScene3dGridOpacityChange(val: string): void {
+    this.scene3dGridOpacity = +val / 100;
+    this.applyScene3dGrid();
+  }
+
+  onScene3dGridColorChange(hex: string): void {
+    this.scene3dGridColor = [
+      parseInt(hex.slice(1, 3), 16) / 255,
+      parseInt(hex.slice(3, 5), 16) / 255,
+      parseInt(hex.slice(5, 7), 16) / 255,
+    ];
+    this.applyScene3dGrid();
+  }
+
+  // ── Canvas Grid ────────────────────────────────────────────
+
+  private _loadCanvasGrid(): void {
+    const sm = this.shapeManager as any;
+    this.canvasGridVisible = sm.canvasGridVisible ?? true;
+    this.canvasGridCells   = sm.canvasGridCells ?? 64;
+    this.canvasGridOpacity = sm.canvasGridOpacity ?? 0.15;
+    this.canvasGridColor   = sm.canvasGridColor ? [...sm.canvasGridColor] as [number, number, number] : [128/255, 128/255, 128/255];
+  }
+
+  applyCanvasGrid(): void {
+    const sm = this.shapeManager as any;
+    if (!sm) return;
+    sm.canvasGridVisible = this.canvasGridVisible;
+    sm.canvasGridCells   = this.canvasGridCells;
+    sm.canvasGridOpacity = this.canvasGridOpacity;
+    sm.canvasGridColor   = [...this.canvasGridColor];
+  }
+
+  onCanvasGridOpacityChange(val: string): void {
+    this.canvasGridOpacity = +val / 100;
+    this.applyCanvasGrid();
+  }
+
+  onCanvasGridColorChange(hex: string): void {
+    this.canvasGridColor = [
+      parseInt(hex.slice(1, 3), 16) / 255,
+      parseInt(hex.slice(3, 5), 16) / 255,
+      parseInt(hex.slice(5, 7), 16) / 255,
+    ];
+    this.applyCanvasGrid();
   }
 
   async scene3dUploadDiffuseTexture(event: Event): Promise<void> {
@@ -3464,11 +4199,7 @@ export class IllustrationComponent implements OnInit {
 
   scene3dToggleGizmoOrientation(): void {
     this.scene3dGizmoOrientation = this.scene3dGizmoOrientation === 'world' ? 'local' : 'world';
-    const sm = this.shapeManager as any;
-    console.log('[gizmo-orientation] method exists:', typeof sm.setGizmoOrientation3D);
-    console.log('[gizmo-orientation] before:', sm.getGizmoOrientation3D?.());
-    sm.setGizmoOrientation3D?.(this.scene3dGizmoOrientation);
-    console.log('[gizmo-orientation] after:', sm.getGizmoOrientation3D?.());
+    (this.shapeManager as any).setGizmoOrientation3D?.(this.scene3dGizmoOrientation);
   }
 
   // ── Array Tool (Repeat) methods ─────────────────────────────
@@ -4455,6 +5186,7 @@ export class IllustrationComponent implements OnInit {
   ) { }
 
   ngOnInit() {
+    if (this.retroThemeActive) document.body.classList.add('theme-retro-chrome');
     this._loadPaletteFromStorage();
     // React whenever /illustrate/:id changes
     this.routeSub = this.route.paramMap
@@ -4487,9 +5219,11 @@ export class IllustrationComponent implements OnInit {
 
     // WebGPU bootstrap
     if (!isRendererLive) {
-      await startWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot());
+      console.log('[IllustrationInit] cold start — startWebGPURendering');
+      await startWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot(false));
     } else {
-      await reinitializeWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot());
+      console.log('[IllustrationInit] renderer already live — reinitializeWebGPURendering');
+      await reinitializeWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot(true));
     }
 
     this.canvas = this.canvasRef.nativeElement;
@@ -4571,28 +5305,10 @@ export class IllustrationComponent implements OnInit {
         const worldPos = (this.shapeManager as any).interactionService?.toWorldCoords?.(event);
         if (worldPos) this.placeBalloon(worldPos.x, worldPos.y);
       }
-      // Live Text tool — place or re-select LiveTextNode
-      if (this.controlPanelActiveTool === 'live-text') {
-        if (this.liveTextIsEditing) {
-          // Click away — end editing on current node
-          this.endLiveTextEditing();
-        } else {
-          // Check if click hit an existing LiveTextNode (Salsa selects it via
-          // hit-test before this handler runs). If so, enter edit mode on it
-          // instead of creating a new node.
-          const selectedIds = this._getSelectedShapeIds();
-          const hitNodeId = selectedIds.length === 1 ? selectedIds[0] : null;
-          const hitLiveText = hitNodeId ? (this.shapeManager as any).getLiveTextNode?.(hitNodeId) : null;
-          if (hitLiveText) {
-            this.liveTextNodeId = hitNodeId;
-            this._syncLiveTextSidebar(hitNodeId!);
-            (this.shapeManager as any).beginLiveTextEditing?.(hitNodeId);
-            this.liveTextIsEditing = true;
-          } else {
-            const worldPos = (this.shapeManager as any).interactionService?.toWorldCoords?.(event);
-            if (worldPos) this.placeLiveText(worldPos.x, worldPos.y);
-          }
-        }
+      // Live Text tool — canvas interactions are driven by setRectDrawCallback;
+      // document click only handles ending editing when clicking outside the canvas.
+      if (this.controlPanelActiveTool === 'live-text' && this.liveTextIsEditing && event.target !== this.canvas) {
+        this.endLiveTextEditing();
       }
       // Flood Fill tool — fill at click position
       if (this.controlPanelActiveTool === 'fill') {
@@ -4612,7 +5328,7 @@ export class IllustrationComponent implements OnInit {
       if (liveNode && !this.liveTextIsEditing) {
         this.liveTextNodeId = nodeId;
         this._syncLiveTextSidebar(nodeId);
-        sm.beginLiveTextEditing?.(nodeId);
+        sm.enterLiveTextEditingAt?.(nodeId, event.clientX, event.clientY);
         this.liveTextIsEditing = true;
         // Switch to live-text tool so the sidebar panel is visible
         if (this.controlPanelActiveTool !== 'live-text') {
@@ -4641,7 +5357,7 @@ export class IllustrationComponent implements OnInit {
     this.setPenColor('#9B59B6');
   }
 
-  private afterRendererBoot() {
+  private afterRendererBoot(isReinit = false) {
     // Prefer getting WorldManager first so we can extract any renderer/device it holds
     this.worldManager = WorldManager.getInstance();
 
@@ -4659,6 +5375,11 @@ export class IllustrationComponent implements OnInit {
       // Fallback to default singleton
       this.shapeManager = ShapeManager.getInstance();
     }
+
+    // On reinit (shell→illustration nav) startWebGPURendering's overlay is bound to the
+    // old destroyed canvas. Recreate it against the live canvas so ephemera renders.
+    // Must run after shapeManager is assigned above.
+    if (isReinit) this._setupEphemeraOverlay();
 
     this.loadPolygonPresets();
     this.markLoaded('renderer');
@@ -4714,7 +5435,10 @@ export class IllustrationComponent implements OnInit {
       }
     });
 
-    this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
+    this._sceneGraphChangedSub = this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
+      if (this.controlPanelActiveTool.startsWith('drawing') || this.controlPanelActiveTool.startsWith('shape')) {
+        this._addRecentColor(this.selectedPenColor);
+      }
       const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
       const parsed = JSON.parse(currentSceneJSON);
       this.layerTree = this.buildLayerTree(parsed.root);
@@ -4752,7 +5476,7 @@ export class IllustrationComponent implements OnInit {
       }
     });
 
-    this.rasterBrushService.layers$.subscribe(layers => {
+    this._rasterLayersSub = this.rasterBrushService.layers$.subscribe(layers => {
       this.rasterLayers = Array.isArray(layers) ? layers : [];
       const selectedIsRaster = this.rasterLayers.some((layer: any) => layer.id === this.selectedRasterLayerId && layer.type === 'layer');
       if (!selectedIsRaster) {
@@ -4761,12 +5485,12 @@ export class IllustrationComponent implements OnInit {
     });
 
     // Keep selectedRasterLayerId in sync with the raster-layers panel
-    this.rasterBrushService.activeLayerId$.subscribe(id => {
+    this._rasterActiveLayerSub = this.rasterBrushService.activeLayerId$.subscribe(id => {
       this.selectedRasterLayerId = id;
     });
 
     // Keep current animation frame in sync for menu helpers
-    this.animationService.currentFrame$.subscribe(f => {
+    this._currentFrameSub = this.animationService.currentFrame$.subscribe(f => {
       this._currentAnimFrame = f;
     });
 
@@ -4778,6 +5502,7 @@ export class IllustrationComponent implements OnInit {
         if (this.selectedRasterLayerId) {
           this._dirtyLayerIds.add(this.selectedRasterLayerId);
         }
+        this._addRecentColor(this.rasterBrushColor);
         // Notify OPFS auto-save service of stroke end
         this.autoSaveService.notifyStrokeEnd();
         try {
@@ -4810,7 +5535,11 @@ export class IllustrationComponent implements OnInit {
     if (docW > 0 && docH > 0) {
       this._applyDocumentSize({ w: docW, h: docH });
     } else {
-      (this.shapeManager as any).clearDocumentSize?.();
+      // Do NOT call clearDocumentSize here — that call creates the rasterWorldQuadVB with
+      // illustrationMode=false before setDocumentSize can flip it to true, and the VB is
+      // never rebuilt on mode change (Salsa only builds it once per setSize call).
+      // Instead, let setDocumentSize (called later in loadIllustrationV2) create the VB
+      // for the first time with illustrationMode=true already set.
       this.shapeManager.setIllustrationBounds(1, 1.417);
     }
 
@@ -5037,6 +5766,10 @@ export class IllustrationComponent implements OnInit {
           this.rasterSelectionService.deleteSelection();
         } else {
           this.layerTree!.children = this.pruneDeletedLayers(this.layerTree!.children, this.selectedLayerIds);
+          this.selectedLayerIds.forEach(id => {
+            this.layerDitherConfigs.delete(id);
+            this.layerFrameLinkConfigs.delete(id);
+          });
           this.shapeManager.deleteSelectedShapes();
         }
         break;
@@ -5162,14 +5895,25 @@ export class IllustrationComponent implements OnInit {
 
     // sync persistent picker state
     this._syncPersistentPickerFromHex(c);
-    this._addRecentColor(c);
   }
-  onColorPickerSelection(c: string) { this.selectedPenColor = c; this.shapeManager.setStrokeColor(c); this._syncPersistentPickerFromHex(c); this._addRecentColor(c); }
+
+  swapColors(): void {
+    const prev = this.selectedPenColor;
+    this.setPenColor(this.secondaryPenColor);
+    this.secondaryPenColor = prev;
+  }
+
+  resetToDefaultColors(): void {
+    this.secondaryPenColor = '#ffffff';
+    this.setPenColor('#000000');
+  }
+  onColorPickerSelection(c: string) { this.selectedPenColor = c; this.shapeManager.setStrokeColor(c); this._syncPersistentPickerFromHex(c); }
 
   // ── Persistent (always-visible) color picker ──────────────────
   persistentHue = 0;
   persistentSbX = 100;
   persistentSbY = 0;
+  persistentOpacity = 100;
   private _hueSelecting = false;
   private _sbSelecting = false;
 
@@ -5197,7 +5941,7 @@ export class IllustrationComponent implements OnInit {
     this._hueSelecting = true;
     this._updateHueFromEvent(e);
     const moveHandler = (ev: MouseEvent) => { if (this._hueSelecting) this._updateHueFromEvent(ev); };
-    const upHandler = () => { this._hueSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); this._addRecentColor(this.selectedPenColor); };
+    const upHandler = () => { this._hueSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
   }
@@ -5219,7 +5963,7 @@ export class IllustrationComponent implements OnInit {
     this._sbSelecting = true;
     this._updateSbFromEvent(e);
     const moveHandler = (ev: MouseEvent) => { if (this._sbSelecting) this._updateSbFromEvent(ev); };
-    const upHandler = () => { this._sbSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); this._addRecentColor(this.selectedPenColor); };
+    const upHandler = () => { this._sbSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
   }
@@ -5240,8 +5984,13 @@ export class IllustrationComponent implements OnInit {
       this.rasterBrushColor = hex;
       this.shapeManager?.setRasterBrushColor?.(hex);
       this.shapeManager?.setStrokeColor?.(hex);
-      this._addRecentColor(hex);
     }
+  }
+
+  onPersistentOpacityChange(event: Event): void {
+    const val = Math.min(100, Math.max(0, +(event.target as HTMLInputElement).value));
+    this.persistentOpacity = val;
+    this.rasterBrushService.updateOpacity(val / 100);
   }
 
   // Color conversion helpers for persistent picker
@@ -5359,7 +6108,103 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
+  private isSubpanelTool(tool: string): boolean {
+    return tool.startsWith('drawing') || tool.startsWith('shape') ||
+      tool.startsWith('select') || tool.startsWith('polygon') ||
+      tool === 'fill' || tool === 'stamp' || tool === 'arrow' ||
+      tool === 'raster:text' || tool === 'balloon' || tool === 'live-text' ||
+      tool === 'panel-layout' || tool === 'misc';
+  }
+
+  private ditherRevealSubpanel(): void {
+    if (!document.body.classList.contains('theme-retro-chrome')) return;
+    // Find panel without requiring .visible — called synchronously before Angular renders
+    // the class change, so the canvas lands on body before the panel snaps into view.
+    const panel = document.querySelector('.tool-subpanel') as HTMLElement;
+    if (!panel) return;
+
+    const cs = getComputedStyle(panel);
+    const left = parseFloat(cs.left) || 70;
+    const top  = (parseFloat(cs.top) || 0) + (parseFloat(cs.marginTop) || 0);
+    const cellSize = 8;
+    // offsetWidth is layout-based (not affected by translateX transform)
+    const w = panel.offsetWidth || 250;
+    // Use max-height value: calc(100vh - 242px)
+    const h = window.innerHeight - 242;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    Object.assign(canvas.style, {
+      position: 'fixed',
+      top:  top  + 'px',
+      left: left + 'px',
+      width:  w + 'px',
+      height: h + 'px',
+      pointerEvents: 'none',
+      zIndex: '10001',
+    });
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, w, h);
+    document.body.appendChild(canvas);
+
+    const cols = Math.ceil(w / cellSize);
+    const rows = Math.ceil(h / cellSize);
+    const total = cols * rows;
+    const cells = Array.from({length: total}, (_, i) => i);
+    for (let i = total - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+
+    const duration = 300;
+    let revealed = 0;
+    const startTime = performance.now();
+    // r slightly > half-diagonal of cell to overlap corners and avoid seam flashes
+    const r = cellSize * 0.78;
+
+    const frame = (now: number) => {
+      if (!canvas.isConnected) return;
+      const elapsed = now - startTime;
+      const targetRevealed = Math.min(total, Math.floor(total * (elapsed / duration)));
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      while (revealed < targetRevealed) {
+        const cell = cells[revealed];
+        const col = cell % cols;
+        const row = Math.floor(cell / cols);
+        const cx = (col + 0.5) * cellSize;
+        const cy = (row + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(cx,     cy - r);
+        ctx.lineTo(cx + r, cy    );
+        ctx.lineTo(cx,     cy + r);
+        ctx.lineTo(cx - r, cy    );
+        ctx.closePath();
+        ctx.fill();
+        revealed++;
+      }
+      ctx.restore();
+
+      if (revealed < total) {
+        requestAnimationFrame(frame);
+      } else {
+        // Fade out instead of hard-remove to dissolve any inter-diamond seam pixels
+        canvas.style.transition = 'opacity 80ms linear';
+        canvas.style.opacity = '0';
+        setTimeout(() => canvas.remove(), 100);
+      }
+    };
+
+    requestAnimationFrame(frame);
+  }
+
   setActiveTool(activeTool: string, event?: MouseEvent) {
+    const prevTool = this.controlPanelActiveTool;
     if (activeTool !== this.controlPanelActiveTool) {
       this.controlPanelActiveTool = activeTool;
       if (this.controlPanelActiveTool) {
@@ -5491,8 +6336,37 @@ export class IllustrationComponent implements OnInit {
     // ── Live Text tool ──
     if (this.controlPanelActiveTool === 'live-text') {
       this.hasHtmlInCanvas = !!(this.shapeManager as any).isHtmlInCanvasAvailable?.();
+      (this.shapeManager as any).setRectDrawCallback?.((rect: any, clientX: number, clientY: number) => {
+        const sm = this.shapeManager as any;
+        if (this.liveTextIsEditing) {
+          this.endLiveTextEditing();
+          return;
+        }
+        const DRAG_MIN = 0.02;
+        const isClick = rect.w < DRAG_MIN && rect.h < DRAG_MIN;
+        if (isClick) {
+          const selectedIds = this._getSelectedShapeIds();
+          const hitNodeId = selectedIds.length === 1 ? selectedIds[0] : null;
+          const hitNode = hitNodeId ? sm.getLiveTextNode?.(hitNodeId) : null;
+          if (hitNode) {
+            this.liveTextNodeId = hitNodeId;
+            this._syncLiveTextSidebar(hitNodeId!);
+            sm.enterLiveTextEditingAt?.(hitNodeId, clientX, clientY);
+            this.liveTextIsEditing = true;
+            return;
+          }
+        }
+        const node = isClick
+          ? sm.createLiveText?.(rect.x + rect.w / 2, rect.y + rect.h / 2, this._buildLiveTextOptions())
+          : sm.createLiveTextInRect?.(rect, this._buildLiveTextOptions());
+        if (node) {
+          this.liveTextNodeId = node.id ?? node.getId?.();
+          sm.enterLiveTextEditingAt?.(this.liveTextNodeId, clientX, clientY);
+          this.liveTextIsEditing = true;
+        }
+      });
     } else {
-      // End editing when switching away from live text
+      (this.shapeManager as any).setRectDrawCallback?.(null);
       if (this.liveTextIsEditing) this.endLiveTextEditing();
     }
 
@@ -5501,6 +6375,15 @@ export class IllustrationComponent implements OnInit {
       (this.shapeManager as any).enablePanelLayoutTool?.();
     } else {
       (this.shapeManager as any).disablePanelLayoutTool?.();
+    }
+
+    // Diamond dither reveal when subpanel transitions from hidden to visible
+    const subpanelBecameVisible =
+      !this.scene3dPanelVisible &&
+      !this.isSubpanelTool(prevTool) &&
+      this.isSubpanelTool(this.controlPanelActiveTool);
+    if (subpanelBecameVisible) {
+      this.ditherRevealSubpanel();
     }
   }
 
@@ -5547,6 +6430,7 @@ export class IllustrationComponent implements OnInit {
     (this.shapeManager as any).setMagicWandOptions?.({
       tolerance: this.wandTolerance,
       contiguous: this.wandContiguous,
+      mode: this.wandMode,
       referenceLayerId: this.wandReferenceLayerId || undefined,
     });
   }
@@ -5572,6 +6456,22 @@ export class IllustrationComponent implements OnInit {
       b: parseInt(h.substring(4, 6), 16) / 255,
       a: 1,
     };
+  }
+
+  fxColorToHex(color: number[] | undefined | null): string {
+    if (!color || color.length < 3) return '#000000';
+    const toH = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
+    return `#${toH(color[0])}${toH(color[1])}${toH(color[2])}`;
+  }
+
+  fxHexToColor(hex: string, existingAlpha = 1): [number, number, number, number] {
+    const h = hex.replace('#', '');
+    return [
+      parseInt(h.substring(0, 2), 16) / 255,
+      parseInt(h.substring(2, 4), 16) / 255,
+      parseInt(h.substring(4, 6), 16) / 255,
+      existingAlpha,
+    ];
   }
 
   onBalloonStyleChange(style: BalloonStyle): void {
@@ -5859,8 +6759,17 @@ export class IllustrationComponent implements OnInit {
   placeLiveText(worldX: number, worldY: number): void {
     const sm = this.shapeManager as any;
     if (!sm.createLiveText) return;
+    const node = sm.createLiveText(worldX, worldY, this._buildLiveTextOptions());
+    if (node) {
+      this.liveTextNodeId = node.id ?? node.getId?.();
+      sm.beginLiveTextEditing?.(this.liveTextNodeId);
+      this.liveTextIsEditing = true;
+    }
+  }
+
+  private _buildLiveTextOptions(): Record<string, any> {
     const h = this.liveTextColor.replace('#', '');
-    const node = sm.createLiveText(worldX, worldY, {
+    return {
       text: '',
       font: this.liveTextFont,
       fontSize: this.liveTextFontSize,
@@ -5874,13 +6783,35 @@ export class IllustrationComponent implements OnInit {
       italic: this.liveTextItalic,
       writingMode: this.liveTextWritingMode,
       padding: this.liveTextPadding,
+      align: this.liveTextAlign,
+      arcAngle: this.liveTextArcAngle,
+      backgroundColor: this._liveTextBgRgba(),
       effects: this._buildLiveTextEffects(),
-    });
-    if (node) {
-      this.liveTextNodeId = node.id ?? node.getId?.();
-      sm.beginLiveTextEditing?.(this.liveTextNodeId);
-      this.liveTextIsEditing = true;
-    }
+    };
+  }
+
+  private _liveTextBgRgba(): { r: number; g: number; b: number; a: number } | null {
+    if (this.liveTextBgAlpha === 0) return null;
+    const h = this.liveTextBgColor.replace('#', '');
+    return {
+      r: parseInt(h.substring(0, 2), 16) / 255,
+      g: parseInt(h.substring(2, 4), 16) / 255,
+      b: parseInt(h.substring(4, 6), 16) / 255,
+      a: this.liveTextBgAlpha,
+    };
+  }
+
+  onLiveTextBgChange(): void {
+    const sm = this.shapeManager as any;
+    if (!this.liveTextNodeId || !sm.setLiveTextStyle) return;
+    sm.setLiveTextStyle(this.liveTextNodeId, { backgroundColor: this._liveTextBgRgba() });
+  }
+
+  onLiveTextAlignChange(align: 'left' | 'center' | 'right'): void {
+    this.liveTextAlign = align;
+    const sm = this.shapeManager as any;
+    if (!this.liveTextNodeId || !sm.setLiveTextStyle) return;
+    sm.setLiveTextStyle(this.liveTextNodeId, { align });
   }
 
   private _buildLiveTextEffects(): { type: string; params: Record<string, any> }[] {
@@ -5979,8 +6910,17 @@ export class IllustrationComponent implements OnInit {
     this.liveTextItalic = node.italic ?? false;
     this.liveTextWritingMode = node.writingMode ?? 'horizontal-tb';
     this.liveTextPadding = node.padding ?? 16;
+    this.liveTextAlign = node.align ?? 'left';
+    this.liveTextArcAngle = node.arcAngle ?? 0;
     if (node.textColor) this.liveTextColor = this._rgba01ToHex(node.textColor);
     if (node.maxWidth != null) this.liveTextMaxWidth = node.maxWidth;
+    if (node.backgroundColor) {
+      this.liveTextBgColor = this._rgba01ToHex(node.backgroundColor);
+      this.liveTextBgAlpha = node.backgroundColor.a ?? 0;
+    } else {
+      this.liveTextBgColor = '#ffffff';
+      this.liveTextBgAlpha = 0;
+    }
     // Sync effects
     const effects = node.effects;
     if (effects?.length) {
@@ -6038,6 +6978,11 @@ export class IllustrationComponent implements OnInit {
     }
     this.customShaderStatus = '';
     this.customShaderStatusType = '';
+    this.customShaderParamA = 0;
+    this.customShaderParamB = 0;
+    this.customShaderParamC = 0;
+    this.customShaderParamD = 0;
+    this.customShaderParamCount = 1;
   }
 
   onCustomShaderParamChange(): void {
@@ -6231,6 +7176,11 @@ export class IllustrationComponent implements OnInit {
     this.closeAllMenus();
     this.showAnimationMenu = !wasOpen;
   }
+  toggleViewMenu(): void {
+    const wasOpen = this.showViewMenu;
+    this.closeAllMenus();
+    this.showViewMenu = !wasOpen;
+  }
   closeEditMenu(): void {
     this.closeAllMenus();
   }
@@ -6238,6 +7188,7 @@ export class IllustrationComponent implements OnInit {
     this.showFileMenu = false;
     this.showEditMenu = false;
     this.showAnimationMenu = false;
+    this.showViewMenu = false;
     this.scene3dShowAddMeshMenu = false;
     this.closeContextMenu();
   }
@@ -6513,6 +7464,13 @@ export class IllustrationComponent implements OnInit {
       animEndFrame: this.scene3dAnimEndFrame,
       animFps: this.scene3dAnimFps,
       animLoop: this.scene3dAnimLoop,
+      snapMode: this.scene3dSnapMode,
+      snapGridSize: this.scene3dSnapGridSize,
+      snapAngleDeg: this.scene3dSnapAngleDeg,
+      snapScaleStep: this.scene3dSnapScaleStep,
+      gridVisible: this.scene3dGridVisible,
+      gridOpacity: this.scene3dGridOpacity,
+      gridColor: [...this.scene3dGridColor] as [number, number, number],
     };
 
     const sm3d = this.shapeManager as any;
@@ -6790,11 +7748,13 @@ export class IllustrationComponent implements OnInit {
     // Local-only: OPFS is the only source — no SQL state, no blob downloads
     if (this.syncMode === 2) {
       const opfsDocId = 'local-' + (this.illustration?.uuid ?? '');
+      console.log('[V2 Load] local-only — opfsDocId:', opfsDocId);
       try {
         this.animationService.beginBulkRestore();
         const result = await this.autoSaveService.loadDocument(opfsDocId).finally(() => {
           this.animationService.endBulkRestore();
         });
+        console.log('[V2 Load] loadDocument result:', result?.success, 'layers:', result?.layers?.length ?? 'n/a');
         if (result?.success) {
           this.refreshRasterLayers();
           const stillExists = this.rasterLayers.some(l => l.id === this.selectedRasterLayerId);
@@ -6827,7 +7787,10 @@ export class IllustrationComponent implements OnInit {
       } catch (e) {
         console.warn('[V2 Load] local-only OPFS load failed', e);
       }
-      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+      requestAnimationFrame(() => {
+        (this.shapeManager as any).fitArtboard?.();
+        this.markLoaded('sceneApplied');
+      });
       return;
     }
 
@@ -7014,8 +7977,13 @@ export class IllustrationComponent implements OnInit {
               console.warn('[V2 Load] Failed to restore 3D node state from OPFS meta', e);
             }
           }
+          this._scene3dLoadSnapSettings();
+          this._loadScene3dGrid();
           console.timeEnd('[V2 Load] total');
-          requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+          requestAnimationFrame(() => {
+            (this.shapeManager as any).fitArtboard?.();
+            this.markLoaded('sceneApplied');
+          });
           return;
         }
         console.warn('[V2 Load] loadDocument() returned false despite listing — falling through to backend');
@@ -7248,7 +8216,8 @@ export class IllustrationComponent implements OnInit {
           console.warn('[V2 Load] Failed to restore 3D node state', e);
         }
       }
-
+      this._scene3dLoadSnapSettings();
+      this._loadScene3dGrid();
       console.timeEnd('[V2 Load] total');
       requestAnimationFrame(() => this.markLoaded('sceneApplied'));
       return;
@@ -7356,6 +8325,27 @@ export class IllustrationComponent implements OnInit {
     if (s.animFps !== undefined) this.scene3dAnimFps = s.animFps;
     if (s.animLoop !== undefined) this.scene3dAnimLoop = s.animLoop;
     this.scene3dApplyAnimationConfig();
+    // Snap settings
+    if (s.snapMode !== undefined) {
+      this.scene3dSnapMode = s.snapMode as any;
+      (this.shapeManager as any).snapMode3D = s.snapMode;
+    }
+    if (s.snapGridSize !== undefined || s.snapAngleDeg !== undefined || s.snapScaleStep !== undefined) {
+      if (s.snapGridSize !== undefined) this.scene3dSnapGridSize = s.snapGridSize;
+      if (s.snapAngleDeg !== undefined) this.scene3dSnapAngleDeg = s.snapAngleDeg;
+      if (s.snapScaleStep !== undefined) this.scene3dSnapScaleStep = s.snapScaleStep;
+      const smSnap = this.shapeManager as any;
+      smSnap.snapGridSize3D  = this.scene3dSnapGridSize;
+      smSnap.snapAngle3D     = this.scene3dSnapAngleDeg * Math.PI / 180;
+      smSnap.snapScaleStep3D = this.scene3dSnapScaleStep;
+    }
+    // Ground grid
+    if (s.gridVisible !== undefined || s.gridOpacity !== undefined || s.gridColor !== undefined) {
+      if (s.gridVisible !== undefined) this.scene3dGridVisible = s.gridVisible;
+      if (s.gridOpacity !== undefined) this.scene3dGridOpacity = s.gridOpacity;
+      if (s.gridColor !== undefined) this.scene3dGridColor = [...s.gridColor] as [number, number, number];
+      this.applyScene3dGrid();
+    }
   }
 
   /**
@@ -7451,7 +8441,15 @@ export class IllustrationComponent implements OnInit {
     }
   }
 
-  returnToDashboard() { this.router.navigate(['/dashboard']); }
+  async returnToDashboard(): Promise<void> {
+    // Save and refresh the shell project index before going home.
+    // Falls back to the HTML dashboard if the shell isn't available.
+    try {
+      await this.saveThumbnail();
+      if (this.illustrationUid) await (this.shapeManager as any).shell?.recordProjectSave?.(this.illustrationUid);
+    } catch { /* non-fatal */ }
+    this.router.navigate(['/']);
+  }
 
   resetSceneState() {
     if (this.shapeManager) this.shapeManager.clear();
@@ -7642,6 +8640,41 @@ export class IllustrationComponent implements OnInit {
     });
   }
 
+  private _setupEphemeraOverlay(): void {
+    if (this._ephemeraOverlay) {
+      (this.shapeManager as any).setEphemeraOverlayCanvas?.(null);
+      this._ephemeraOverlay.remove();
+      this._ephemeraOverlayObserver?.disconnect();
+      this._ephemeraOverlayObserver = null;
+    }
+
+    const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
+    if (!webgpuCanvas) return;
+
+    const overlay = document.createElement('canvas');
+    overlay.style.position      = 'fixed';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex        = '10';
+    document.body.appendChild(overlay);
+
+    const sync = () => {
+      const r = webgpuCanvas.getBoundingClientRect();
+      overlay.width  = webgpuCanvas.width;
+      overlay.height = webgpuCanvas.height;
+      overlay.style.left   = `${r.left}px`;
+      overlay.style.top    = `${r.top}px`;
+      overlay.style.width  = `${r.width}px`;
+      overlay.style.height = `${r.height}px`;
+    };
+    sync();
+
+    this._ephemeraOverlayObserver = new ResizeObserver(sync);
+    this._ephemeraOverlayObserver.observe(webgpuCanvas);
+
+    (this.shapeManager as any)?.setEphemeraOverlayCanvas?.(overlay);
+    this._ephemeraOverlay = overlay;
+  }
+
   ngOnDestroy(): void {
     this.routeSub?.unsubscribe();
     this.autoSaveSubscription?.unsubscribe();
@@ -7649,7 +8682,29 @@ export class IllustrationComponent implements OnInit {
     this.thumbnailSaveSubscription?.unsubscribe();
     this.selectionChangedSubscription?.unsubscribe();
     this.selectionToolSubscription?.unsubscribe();
+    this._sceneGraphChangedSub?.unsubscribe();
+    this._rasterLayersSub?.unsubscribe();
+    this._rasterActiveLayerSub?.unsubscribe();
+    this._currentFrameSub?.unsubscribe();
+    this._scene3dViewportSub?.unsubscribe?.();
+    this._scene3dResizeObserver?.disconnect();
+    this._artboardViewportSub?.unsubscribe?.();
     this.autoSaveService.disable();
+
+    this._scene3dStopGizmoLoop();
+    this._scene3dStopHandleLoop();
+    if (this._textEffectAnimFrame != null) { cancelAnimationFrame(this._textEffectAnimFrame); this._textEffectAnimFrame = null; }
+
+    clearTimeout(this._snapFadeTimer);
+    clearTimeout(this._charPreviewTimer);
+    clearTimeout(this._bodyParamTimer);
+    clearTimeout(this._hairParamTimer);
+    clearTimeout(this._clothingParamTopTimer);
+    clearTimeout(this._clothingParamBottomTimer);
+    clearTimeout(this._scene3dHtmlDebounce);
+    clearTimeout(this._scene3dFlashTimer);
+    clearTimeout(this._toolsSwapTimer);
+    Object.values(this._eyeParamTimers).forEach(t => clearTimeout(t));
 
     if (this.onMouseMove) document.removeEventListener('mousemove', this.onMouseMove);
     if (this.onClick) document.removeEventListener('click', this.onClick);
@@ -7660,6 +8715,14 @@ export class IllustrationComponent implements OnInit {
 
     this._clearExportReminder();
     this.resetSceneState();
+
+    if (this._ephemeraOverlay) {
+      (this.shapeManager as any).setEphemeraOverlayCanvas?.(null);
+      this._ephemeraOverlay.remove();
+      this._ephemeraOverlayObserver?.disconnect();
+      this._ephemeraOverlay = null;
+      this._ephemeraOverlayObserver = null;
+    }
   }
 
   getNodePosition(nodeId: string) { return this.shapeManager.getNodePosition(nodeId); }
@@ -7704,6 +8767,7 @@ export class IllustrationComponent implements OnInit {
       this.isLoading = false;
       this._startExportReminder();
       void this._initPixelFormat();
+      this._loadCanvasGrid();
       if (this._startAnimationOnLoad) {
         this._startAnimationOnLoad = false;
         this.animationService.setAnimationEnabled(true);
@@ -7716,6 +8780,10 @@ export class IllustrationComponent implements OnInit {
           this.titleInputRef?.nativeElement?.focus();
         }, 150);
       }
+      // Trigger Salsa's resize → setCanvasSize path after document load.
+      // Required when the canvas doesn't physically resize (e.g. fixed full-viewport
+      // placement) so the raster compositor recalculates against the loaded doc.
+      window.dispatchEvent(new Event('resize'));
     }
   }
 

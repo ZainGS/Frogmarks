@@ -1,95 +1,47 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-
-export interface UvPaintSettings {
-  paintMode: boolean;
-  color: string;
-  radius: number;
-}
+import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 
 @Component({
   selector: 'app-uv-editor-panel',
   templateUrl: './uv-editor-panel.component.html',
   styleUrls: ['./uv-editor-panel.component.scss'],
 })
-export class UvEditorPanelComponent implements OnChanges {
+export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   @Input() shapeManager: any = null;
   @Input() meshId: string | null = null;
   @Input() session: any = null;
-  @Input() layers: { id: string; name: string }[] = [];
+  @Input() uvRenderer: any = null;
 
-  @Output() closeRequest        = new EventEmitter<void>();
-  @Output() redrawRequested     = new EventEmitter<void>();
-  @Output() paintSettingsChange = new EventEmitter<UvPaintSettings>();
+  @Output() closeRequest     = new EventEmitter<void>();
+  @Output() redrawRequested  = new EventEmitter<void>();
+  @Output() showUVPaneChange = new EventEmitter<boolean>();
 
   private get sm(): any { return this.shapeManager; }
 
-  // ── Selection ──────────────────────────────────────────────────
-  selectionMode: 'vertex' | 'edge' | 'face' = 'face';
-
   // ── Display ────────────────────────────────────────────────────
-  showWireframe   = true;
-  showIslands     = true;
-  showStretch     = false;
-  islandHoverMode = false;
-
-  // ── Seams ──────────────────────────────────────────────────────
-  seamAngle = 60;
-
-  // ── Layout ─────────────────────────────────────────────────────
-  packMargin = 0.002;
-
-  // ── Transform ──────────────────────────────────────────────────
-  moveU = 0; moveV = 0;
-  scaleU = 1; scaleV = 1;
-  rotateDeg = 0;
-
-  // ── Weld ───────────────────────────────────────────────────────
-  weldThreshold = 0.001;
-
-  // ── Paint ──────────────────────────────────────────────────────
-  paintMode   = false;
-  brushColor  = '#ffffff';
-  brushRadius = 8;
-
-  // ── Live texture ───────────────────────────────────────────────
-  linkedLayerId = '';
+  showWireframe = true;
+  showIslands   = true;
+  showUVPane    = false;
 
   // ── Export ─────────────────────────────────────────────────────
   exportSize = 1024;
 
   // ── Section collapse state ─────────────────────────────────────
-  displayCollapsed   = false;
-  seamsCollapsed     = false;
-  unwrapCollapsed    = false;
-  layoutCollapsed    = false;
-  transformCollapsed = false;
-  weldCollapsed      = false;
-  pinCollapsed       = false;
-  paintCollapsed     = false;
-  liveTexCollapsed   = false;
-  exportCollapsed    = true;
-
-  private get _edges(): number[] {
-    return this.sm?.getEditSelection3D?.(this.meshId)?.edges ?? [];
-  }
+  displayCollapsed = false;
+  exportCollapsed  = true;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['session'] && this.session) {
-      this.showWireframe   = this.session.showWireframe       ?? true;
-      this.showIslands     = this.session.showIslands         ?? true;
-      this.showStretch     = this.session.showStretchOverlay  ?? false;
-      this.islandHoverMode = this.session.islandHoverMode     ?? false;
-      const mode = this.session.selection?.mode;
-      if (mode) this.selectionMode = mode;
+      this.showWireframe = this.session.showWireframe ?? true;
+      this.showIslands   = this.session.showIslands   ?? true;
+    }
+    // Auto-start painting the moment the renderer is ready — no button needed
+    if (changes['uvRenderer'] && this.uvRenderer && this.meshId && this.shapeManager) {
+      this.sm?.enterUVPaintMode3D?.(this.meshId, this.showUVPane ? this.uvRenderer : null);
     }
   }
 
-  // ── Selection ──────────────────────────────────────────────────
-
-  setSelectionMode(mode: 'vertex' | 'edge' | 'face'): void {
-    this.selectionMode = mode;
-    if (this.session) this.session.selection = { ...this.session.selection, mode };
-    this._redraw();
+  ngOnDestroy(): void {
+    this.sm?.exitUVPaintMode3D?.();
   }
 
   // ── Display toggles ────────────────────────────────────────────
@@ -106,68 +58,22 @@ export class UvEditorPanelComponent implements OnChanges {
     this._redraw();
   }
 
-  toggleStretch(): void {
-    this.showStretch = !this.showStretch;
-    if (this.session) this.session.showStretchOverlay = this.showStretch;
-    this._redraw();
-  }
-
-  toggleIslandHoverMode(): void {
-    this.islandHoverMode = !this.islandHoverMode;
-    if (this.session) this.session.islandHoverMode = this.islandHoverMode;
-    this._redraw();
-  }
-
-  // ── Seams ──────────────────────────────────────────────────────
-
-  markSeam(): void    { this.sm?.markSeam3D?.(this.meshId, this._edges); this._redraw(); }
-  clearSeam(): void   { this.sm?.clearSeam3D?.(this.meshId, this._edges); this._redraw(); }
-  clearAllSeams(): void { this.sm?.clearAllSeams3D?.(this.meshId); this._redraw(); }
-  suggestSeams(): void { this.sm?.suggestSeams3D?.(this.meshId, this.seamAngle); this._redraw(); }
-
   // ── Unwrap ─────────────────────────────────────────────────────
 
-  unwrapSmart(): void   { this.sm?.smartProjectUVs3D?.(this.meshId); this._redraw(); }
-  unwrapIslands(): void { this.sm?.unwrapUVIslands3D?.(this.meshId); this._redraw(); }
-  followActive(): void  { this.sm?.followActiveQuadUVs3D?.(this.meshId); this._redraw(); }
-
-  // ── Layout ─────────────────────────────────────────────────────
-
-  packIslands(): void { this.sm?.packUVIslands3D?.(this.meshId, this.packMargin); this._redraw(); }
-
-  // ── Transform ──────────────────────────────────────────────────
-
-  move(): void   { this.sm?.moveSelectedUVs3D?.(this.meshId, this.moveU, this.moveV); this._redraw(); }
-  scale(): void  { this.sm?.scaleSelectedUVs3D?.(this.meshId, this.scaleU, this.scaleV); this._redraw(); }
-  rotate(): void { this.sm?.rotateSelectedUVs3D?.(this.meshId, this.rotateDeg * Math.PI / 180); this._redraw(); }
-  mirror(axis: 'U' | 'V'): void { this.sm?.mirrorUVs3D?.(this.meshId, axis); this._redraw(); }
-
-  // ── Weld / Split ───────────────────────────────────────────────
-
-  weld(): void  { this.sm?.weldSelectedUVs3D?.(this.meshId, this.weldThreshold); this._redraw(); }
-  split(): void { this.sm?.splitSelectedUVs3D?.(this.meshId); this._redraw(); }
-
-  // ── Pin ────────────────────────────────────────────────────────
-
-  pin(): void          { this.sm?.pinSelectedUVs3D?.(this.meshId); this._redraw(); }
-  unpinSelected(): void { this.sm?.unpinSelectedUVs3D?.(this.meshId); this._redraw(); }
-  unpinAll(): void     { this.sm?.unpinAllUVs3D?.(this.meshId); this._redraw(); }
-
-  // ── UV Paint ───────────────────────────────────────────────────
-
-  togglePaintMode(): void {
-    this.paintMode = !this.paintMode;
-    this._emitPaintSettings();
+  unwrap(): void {
+    this.sm?.autoUnwrap3D?.(this.meshId);
+    this._redraw();
   }
 
-  onPaintSettingChange(): void {
-    this._emitPaintSettings();
+  // ── UV Pane toggle ─────────────────────────────────────────────
+
+  toggleUVPane(): void {
+    this.showUVPane = !this.showUVPane;
+    this.showUVPaneChange.emit(this.showUVPane);
+    // Re-enter with/without renderer so Salsa adjusts immediately
+    this.sm?.exitUVPaintMode3D?.();
+    this.sm?.enterUVPaintMode3D?.(this.meshId, this.showUVPane ? this.uvRenderer : null);
   }
-
-  // ── Live Texture ───────────────────────────────────────────────
-
-  linkTexture(): void   { this.sm?.linkLiveTexture3D?.(this.meshId, this.linkedLayerId); }
-  unlinkTexture(): void { this.sm?.unlinkLiveTexture3D?.(this.meshId); }
 
   // ── Export ─────────────────────────────────────────────────────
 
@@ -183,10 +89,6 @@ export class UvEditorPanelComponent implements OnChanges {
   // ── Private helpers ────────────────────────────────────────────
 
   private _redraw(): void { this.redrawRequested.emit(); }
-
-  private _emitPaintSettings(): void {
-    this.paintSettingsChange.emit({ paintMode: this.paintMode, color: this.brushColor, radius: this.brushRadius });
-  }
 
   close(): void { this.closeRequest.emit(); }
 }

@@ -25,8 +25,8 @@ export class NewIllustrationDialogComponent {
     { label: 'Custom',              w:    0, h:    0 },
   ];
 
-  selectedPreset = 'HD 1080p';
-  docW = 1920;
+  selectedPreset = 'Square';
+  docW = 1080;
   docH = 1080;
   aspectLocked = true;
   bounded = true;
@@ -100,11 +100,21 @@ export class NewIllustrationDialogComponent {
     const w = this.docW;
     const h = this.docH;
     if (o === 'portrait') {
-      this.docW = Math.min(w, h);
-      this.docH = Math.max(w, h);
+      if (w === h) {
+        this.docW = w;
+        this.docH = Math.round(w * 4 / 3);
+      } else {
+        this.docW = Math.min(w, h);
+        this.docH = Math.max(w, h);
+      }
     } else if (o === 'landscape') {
-      this.docW = Math.max(w, h);
-      this.docH = Math.min(w, h);
+      if (w === h) {
+        this.docW = Math.round(h * 4 / 3);
+        this.docH = h;
+      } else {
+        this.docW = Math.max(w, h);
+        this.docH = Math.min(w, h);
+      }
     } else {
       const side = Math.max(w, h);
       this.docW = side;

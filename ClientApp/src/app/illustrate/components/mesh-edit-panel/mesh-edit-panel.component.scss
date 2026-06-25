@@ -53,6 +53,17 @@ $danger:  #c0392b;
   }
 }
 
+.me-bg-select {
+  background: rgba($accent, 0.12);
+  border: 1px solid rgba($accent, 0.35);
+  color: lighten($accent, 15%);
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 2px 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .me-mesh-name {
   flex: 1;
   font-size: 12px;

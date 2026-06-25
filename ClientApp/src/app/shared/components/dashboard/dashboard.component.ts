@@ -407,12 +407,13 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     if (!item || !item.uuid) return;
     this.closeContextMenu();
 
-    let url: string;
+    let url: string | undefined;
     if (this.isBoard(item)) {
       url = this.router.serializeUrl(this.router.createUrlTree(['/board', item.uuid]));
     } else if (this.isIllustration(item)) {
       url = this.router.serializeUrl(this.router.createUrlTree(this._illustrationRoute(item as Illustration)));
     }
+    if (!url) return;
 
     window.open(url, '_blank');
   } 
@@ -1250,7 +1251,6 @@ onKeydown(e: KeyboardEvent) {
       this.clearData();
       this.isFrogPlayerActive = true;
       this.isFrogmarksGalaxyActive = false;
-      this.isFrogPlayerActive = false;
       this.isDesignCenterActive = false;
       this.isFavoritesFilterActive = false;
       this.isArchivedFilterActive = false;

@@ -403,4 +403,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   close(): void { this.closeRequest.emit(); }
+
+  trackById(_: number, item: { id: string }): string { return item.id; }
+  trackByName(_: number, item: { name: string }): string { return item.name; }
 }

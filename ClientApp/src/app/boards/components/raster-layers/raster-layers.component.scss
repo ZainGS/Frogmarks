@@ -189,6 +189,13 @@ $radius: 6px;
 
 /* ── 3D Scene row ────────────────────────────────────────── */
 
+.rl-scene-eye {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: $muted;
+  &:hover { color: $text; }
+}
+
 .rl-scene {
   cursor: default;
   padding-top: 2px !important;
@@ -386,7 +393,7 @@ $vector-accent: #3dbfa8;
   scrollbar-color: $border transparent;
 
   &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: $border; border-radius: 4px; }
+  &::-webkit-scrollbar-thumb { background: $border; border-radius: 0; }
 }
 
 .blend-cat-label {

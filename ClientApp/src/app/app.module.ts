@@ -55,6 +55,7 @@ import { EphemeraPanel } from './illustrate/components/ephemera-panel/ephemera-p
 import { GreasePencilPanelComponent } from './illustrate/components/grease-pencil-panel/grease-pencil-panel.component';
 import { UvEditorPanelComponent } from './illustrate/components/uv-editor-panel/uv-editor-panel.component';
 import { DocsComponent } from './shared/components/docs/docs.component';
+import { StudioComponent } from './shared/components/studio/studio.component';
 
 // Define MSAL configuration
 /*
@@ -102,6 +103,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
     SkinBuilderComponent,
     FmIconComponent,
     DocsComponent,
+    StudioComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
@@ -127,10 +129,12 @@ export function MSALInstanceFactory(): PublicClientApplication {
     MatExpansionModule,
     ApiAuthorizationModule,
     RouterModule.forRoot([
-      { path: '', component: HomeComponent, pathMatch: 'full' },
+      { path: '', component: StudioComponent, pathMatch: 'full' },
+      { path: 'home', component: HomeComponent },
       { path: 'check-your-email', component: CheckYourEmailComponent},
       { path: 'signin', component: SignInComponent},
       { path: 'dashboard', component: DashboardComponent},
+      { path: 'dashboard-old', component: DashboardComponent},
       { path: 'board/:id', component: BoardComponent},
       { path: 'illustration/local/:id', component: IllustrationComponent, data: { local: true } },
       { path: 'illustration/:id', component: IllustrationComponent},

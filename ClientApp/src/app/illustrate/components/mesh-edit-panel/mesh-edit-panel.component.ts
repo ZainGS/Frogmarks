@@ -22,6 +22,7 @@ export class MeshEditPanelComponent implements OnChanges {
   @Output() toolChange = new EventEmitter<'select' | 'knife'>();
 
   selectionMode: 'vertex' | 'face' | 'edge' = 'face';
+  bgMode: 'wavy' | 'gradient' | 'dim' | 'solid' | 'none' = 'wavy';
 
   extrudeDistance = 0.3;
   insetAmount = 0.1;
@@ -54,7 +55,15 @@ export class MeshEditPanelComponent implements OnChanges {
     if (changes['meshId'] && this.meshId) {
       this.refreshModifiers();
       this.selectionMode = 'face';
+      this.sm?.setMeshEditBgMode3D?.({ mode: this.bgMode });
     }
+    if (changes['shapeManager'] && this.shapeManager && this.meshId) {
+      this.sm?.setMeshEditBgMode3D?.({ mode: this.bgMode });
+    }
+  }
+
+  updateBgMode(): void {
+    this.sm?.setMeshEditBgMode3D?.({ mode: this.bgMode });
   }
 
   // ── Selection state ─────────────────────────────────────────────
@@ -83,6 +92,7 @@ export class MeshEditPanelComponent implements OnChanges {
   // ── Tool & mode ──────────────────────────────────────────────────
 
   exit(): void {
+    this.sm?.setMeshEditBgMode3D?.({ mode: 'none' });
     this.exitRequest.emit();
   }
 

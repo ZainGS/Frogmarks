@@ -1,6 +1,6 @@
 // ── Text Effect Types (mirrors Salsa's TextEffectEngine types) ──
 
-export type TextEffectType = 'chromatic-aberration' | 'glow' | 'wave' | 'glitch' | 'outline';
+export type TextEffectType = 'chromatic-aberration' | 'glow' | 'wave' | 'glitch' | 'outline' | 'feather';
 
 export interface TextEffectEntry {
   id: number;
@@ -20,6 +20,7 @@ export const TEXT_EFFECT_TYPE_OPTIONS: { value: TextEffectType; label: string }[
   { value: 'wave',                 label: 'Wave' },
   { value: 'glitch',               label: 'Glitch' },
   { value: 'outline',              label: 'Outline' },
+  { value: 'feather',              label: 'Feather' },
 ];
 
 let _nextId = 1;
@@ -27,10 +28,11 @@ let _nextId = 1;
 export function createDefaultParams(type: TextEffectType): Record<string, any> {
   switch (type) {
     case 'chromatic-aberration': return { strength: 0.005, angle: 0 };
-    case 'glow':                 return { radius: 4, intensity: 1.5, color: [1, 1, 1] };
+    case 'glow':                 return { radius: 4, intensity: 1.5, glowColor: [1, 1, 1, 1] };
     case 'wave':                 return { amplitude: 3, frequency: 10, speed: 1, time: 0 };
     case 'glitch':               return { intensity: 0.3, blockSize: 8, time: 0 };
-    case 'outline':              return { thickness: 2, color: [0, 0, 0, 1] };
+    case 'outline':              return { thickness: 2, color: [0, 0, 0, 1], offset: [0, 0] as [number, number], gap: 0 };
+    case 'feather':              return { mode: 'linear', angle: 90, start: 0.6, end: 1.0 };
   }
 }
 

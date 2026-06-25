@@ -303,6 +303,17 @@ export class RasterBrushService {
     this.refreshPresets();
   }
 
+  /** Store a preview image dataURL on any preset (not just the active one). */
+  updatePresetIcon(id: string, iconDataUrl: string | null): void {
+    const engine = this.sm?.getRasterPaintEngine?.();
+    if (!engine) return;
+    const preset = engine.getPreset?.(id) as BrushPreset | undefined;
+    if (!preset) return;
+    preset.icon = iconDataUrl ?? undefined;
+    engine.registerPreset(preset);
+    this.refreshPresets();
+  }
+
   // ── Raster layers ───────────────────────────────────────────
 
   refreshLayers(): void {

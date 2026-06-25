@@ -31,9 +31,9 @@
 
       <div class="cb-editor-toolbar">
         <button class="cb-tool-btn" [class.active]="editorMode === 'draw'" (click)="editorMode = 'draw'; stitchPendingA = null" title="Draw cells">✏</button>
-        <button class="cb-tool-btn" [class.active]="editorMode === 'pin'" (click)="editorMode = 'pin'; stitchPendingA = null" title="Pin vertices">📌</button>
-        <button class="cb-tool-btn" [class.active]="editorMode === 'stitch'" (click)="editorMode = 'stitch'; stitchPendingA = null" title="Stitch vertices">🧵</button>
-        <button class="cb-tool-btn" [class.active]="editorMode === 'paint-stiffness'" (click)="editorMode = 'paint-stiffness'; stitchPendingA = null" title="Paint bend stiffness">🖌</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'pin'" (click)="editorMode = 'pin'; stitchPendingA = null" title="Pin vertices">Pin</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'stitch'" (click)="editorMode = 'stitch'; stitchPendingA = null" title="Stitch vertices">Stitch</button>
+        <button class="cb-tool-btn" [class.active]="editorMode === 'paint-stiffness'" (click)="editorMode = 'paint-stiffness'; stitchPendingA = null" title="Paint bend stiffness">Paint</button>
       </div>
 
       <div class="cb-canvas-wrap">

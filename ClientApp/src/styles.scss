@@ -1,4 +1,5 @@
 @import './themes.scss';
+@import './retro-chrome-theme.scss';
 /* You can add global styles to this file, and also import other style files */
 
 /* Provide sufficient contrast against white background */
@@ -396,12 +397,12 @@ $white-color: rgb(255, 255, 255);
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #4CAF50;
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -1305,3 +1306,16 @@ mat-error {
   cursor: default !important;
 }
 .sb-inspecting-paused [data-fm-icon]:hover::after { display: none !important; }
+
+/* ── Retro Chrome theme scrollbar overrides (must be last to win cascade) ── */
+body.theme-retro-chrome ::-webkit-scrollbar        { width: 8px; height: 8px; }
+body.theme-retro-chrome ::-webkit-scrollbar-track  { background: #0a0a0a; border-radius: 0; }
+body.theme-retro-chrome ::-webkit-scrollbar-thumb  { background: #3b6151; border: 1px solid #111; border-radius: 0; }
+body.theme-retro-chrome ::-webkit-scrollbar-thumb:hover { background: #4f7a68; }
+body.theme-retro-chrome ::-webkit-scrollbar-corner { background: #0a0a0a; }
+
+/* ── Brush list scrollbar (global so ViewEncapsulation doesn't block it) ── */
+.brush-list::-webkit-scrollbar       { width: 8px; }
+.brush-list::-webkit-scrollbar-track { background: #0a0a0a; }
+.brush-list::-webkit-scrollbar-thumb { background: #3b6151; border: 1px solid #111; border-radius: 0; }
+.brush-list::-webkit-scrollbar-thumb:hover { background: #4f7a68; }

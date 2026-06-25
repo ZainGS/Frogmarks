@@ -76,14 +76,29 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       this.rasterService.layers$.subscribe(l => {
         this.vectorLayers = l.filter(x => x.type === 'vector');
         this.layers = l.filter(x => x.type !== 'vector');
+        setTimeout(() => {
+          if (!this.activeLayerId && !this.selected3DSceneId && !this.activeVectorLayerId) this._autoSelectDefault();
+        }, 0);
       }),
       this.rasterService.activeLayerId$.subscribe(id => (this.activeLayerId = id))
     );
   }
 
+  private _autoSelectDefault(): void {
+    // topmost 2D layer (last in array = visually highest)
+    const raster2d = this.layers.filter(l => l.type === 'layer' || l.type === 'folder');
+    if (raster2d.length) { this.selectLayer(raster2d[raster2d.length - 1].id); return; }
+    // fallback: any non-vector layer (3D scene, etc.)
+    if (this.layers.length) { this.selectLayer(this.layers[this.layers.length - 1].id); return; }
+    // fallback: vector layer
+    if (this.vectorLayers.length) { this.selectLayer(this.vectorLayers[0].id); }
+  }
+
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
   }
+
+  @HostListener('document:click') onDocClick() { this.showAddMenu = false; }
 
   // ── Keyboard shortcuts ────────────────────────────────────────
 
@@ -270,6 +285,14 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── 3D Scene ──────────────────────────────────────────────────
 
+  scene3dVisible = true;
+
+  toggle3DSceneVisible(e: MouseEvent): void {
+    e.stopPropagation();
+    this.scene3dVisible = !this.scene3dVisible;
+    (this.shapeManager as any).scene3DVisible = this.scene3dVisible;
+  }
+
   add3DScene(): void {
     this.rasterService.add3DScene();
     // Auto-select on the next layers$ emission (after service microtask)
@@ -298,7 +321,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Vector Layers ─────────────────────────────────────────────
 
   addVectorLayer(): void {
-    const id: string | undefined = this.shapeManager?.addVectorLayer?.('Vector');
+    const id: string | undefined = this.shapeManager?.addVectorLayer?.('Vector Layer');
     if (id) {
       this.shapeManager?.setActiveVectorLayer?.(id);
       this.activeVectorLayerId = id;

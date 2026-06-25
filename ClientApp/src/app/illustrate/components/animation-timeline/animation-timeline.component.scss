@@ -114,7 +114,7 @@ $play-range: rgba($accent, 0.08);
   scrollbar-color: $border transparent;
 
   &::-webkit-scrollbar { height: 6px; width: 6px; }
-  &::-webkit-scrollbar-thumb { background: $border; border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: $border; border-radius: 0; }
 }
 
 /* ── Frame header row ────────────────────────────────────────── */

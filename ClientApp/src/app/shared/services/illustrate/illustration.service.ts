@@ -133,6 +133,15 @@ export interface IllustrationStateDto {
     animEndFrame?: number;
     animFps?: number;
     animLoop?: boolean;
+    // Snap settings
+    snapMode?: string;
+    snapGridSize?: number;
+    snapAngleDeg?: number;
+    snapScaleStep?: number;
+    // Ground grid
+    gridVisible?: boolean;
+    gridOpacity?: number;
+    gridColor?: [number, number, number];
   } | null;
 }
 

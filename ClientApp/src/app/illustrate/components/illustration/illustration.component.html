@@ -7,6 +7,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=visibility" />
 <body style="background-color: black !important;" class="dark-mode">
 
+    <!-- Fixed info tooltip (escapes overflow:hidden panels) -->
+    <div *ngIf="infoTooltipVisible" class="info-tooltip-fixed"
+         [style.left.px]="infoTooltipX"
+         [style.top.px]="infoTooltipY">{{ infoTooltipText }}</div>
+
     <!-- Loading overlay -->
     <div class="loading-overlay" *ngIf="isLoading">
         <div class="loading-label">Loading…</div>
@@ -20,16 +25,17 @@
 
     <div #boardShell class="board-shell" [class.ui-hidden]="uiHidden" [class.viewer-mode]="isViewerMode">
         <canvas #webgpuCanvas id="webgpuCanvas"
-                [style.width]="uvEditorOpen ? '50vw' : ''"
+                [style.width]="uvEditorOpen && showUVPane ? '50vw' : ''"
                 (dragover)="onCanvasDragOver($event)"
                 (drop)="onCanvasDrop($event)"
                 (pointerdown)="scene3dCanvasPointerDown($event)"
                 (pointermove)="scene3dCanvasPointerMove($event)"
                 (pointerup)="scene3dCanvasPointerUp($event)"></canvas>
-        <canvas #handleCanvas [style.width]="uvEditorOpen ? '50vw' : ''" style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
+        <canvas #handleCanvas [style.width]="uvEditorOpen && showUVPane ? '50vw' : ''" style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
 
-        <!-- UV Editor canvas — right half of the split viewport -->
-        <canvas #uvCanvas id="uvCanvas" *ngIf="uvEditorOpen"
+        <!-- UV Editor canvas — right half of the split viewport (hidden until user enables UV Pane) -->
+        <canvas #uvCanvas id="uvCanvas" *ngIf="uvEditorOpen || eyeDrawMode"
+                [style.display]="(uvEditorOpen && showUVPane) || eyeDrawMode ? '' : 'none'"
                 style="position:absolute;top:0;left:50vw;width:calc(50vw - 280px);height:100vh;z-index:1;background:#111;border-left:1px solid #333;"></canvas>
 
         <!-- 3D rotation drag degree readout -->
@@ -41,7 +47,10 @@
         </div>
 
         <!-- Snap indicator — shown while Ctrl is held during a drag -->
-        <div *ngIf="scene3dSnapActive" class="scene3d-snap-badge">🔲 SNAP: {{ scene3dSnapMode | uppercase }}</div>
+        <div *ngIf="scene3dSnapBadgeVisible" class="scene3d-snap-badge" [class.fading-out]="scene3dSnapFadingOut">
+            <div class="scene3d-snap-badge__title">{{ scene3dSnapMode | uppercase }} SNAP: {{ scene3dSnapActive ? 'ON' : 'OFF' }}</div>
+            <div class="scene3d-snap-badge__hint">Grid size adjustable in Global Scene › Grid Snap</div>
+        </div>
 
         <!-- Viewport transform shortcut HUD (G/R/S state machine) -->
         <div *ngIf="scene3dShortcutActive" class="scene3d-shortcut-hud">
@@ -91,6 +100,7 @@
         <app-armature-panel
             *ngIf="scene3dArmaturePanelOpen"
             [shapeManager]="$any(shapeManager)"
+            [initialMeshId]="scene3dSelectedMeshId"
             (closeRequest)="closeArmaturePanel()">
         </app-armature-panel>
 
@@ -108,15 +118,37 @@
             [shapeManager]="$any(shapeManager)"
             [meshId]="scene3dSelectedMeshId"
             [session]="uvSession"
-            [layers]="uvLayers"
+            [uvRenderer]="uvRendererRef"
             (closeRequest)="closeUVEditor()"
             (redrawRequested)="uvDraw()"
-            (paintSettingsChange)="onUvPaintSettingsChange($event)">
+            (showUVPaneChange)="onShowUVPaneChange($event)">
         </app-uv-editor-panel>
+
+        <!-- Eye Draw Mode overlay (right side, same column as UV editor panel) -->
+        <div *ngIf="eyeDrawMode" class="eye-draw-panel">
+            <div class="eye-draw-header">
+                <span class="eye-draw-title">DRAW EYES</span>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        (click)="scene3dReframeFace()"
+                        title="Re-aim camera at the face">⊙ Re-frame</button>
+                <button class="scene3d-btn" (click)="scene3dExitEyeDraw()">Done</button>
+            </div>
+            <div class="eye-draw-strip">
+                <div *ngFor="let expr of scene3dFaceExpressions"
+                     class="eye-draw-chip"
+                     [class.active]="eyeDrawExprId === expr.id"
+                     (click)="scene3dSwitchEyeDrawExpr(expr.id)">
+                    {{ expr.name }}
+                </div>
+            </div>
+            <div class="eye-draw-brush">
+                <app-brush-options [activeRasterTool]="'brush'"></app-brush-options>
+            </div>
+        </div>
 
         <!-- Ephemera Panel overlay -->
         <app-ephemera-panel
-            *ngIf="activeVectorLayerId"
+            *ngIf="showEphemeraPanel && activeVectorLayerId"
             [shapeManager]="$any(shapeManager)"
             [vectorLayerId]="activeVectorLayerId"
             (closeRequest)="closeEphemeraPanel()">
@@ -130,7 +162,6 @@
 
         <!-- Export reminder banner (no-cloud / local-only) -->
         <div *ngIf="showExportReminder" class="export-reminder">
-          <span class="export-reminder-icon">💾</span>
           <span class="export-reminder-text">
             Back up your work<ng-container *ngIf="opfsSizeLabel"> — scene is <strong>{{ opfsSizeLabel }}</strong> in browser storage</ng-container> — export a <strong>.frogmarks</strong> file to keep a portable copy.
           </span>
@@ -196,6 +227,24 @@
                     </span>
                   </div>
                   <span class="smp-btn-desc">Zero cloud. Everything stored locally in this browser only.</span>
+                </div>
+
+                <!-- Pixel format -->
+                <div class="smp-section-divider">Pixel Format</div>
+                <div class="smp-format-rows">
+                  <ng-container *ngFor="let opt of storageFormatOptions">
+                    <ng-container *ngIf="opt.id !== 'webp' || webpSupported">
+                      <label class="smp-format-row" [class.on]="pixelFormat === opt.id">
+                        <input type="radio" name="smpPixelFormat"
+                               [value]="opt.id"
+                               [checked]="pixelFormat === opt.id"
+                               (change)="onPixelFormatChange(opt.id)">
+                        <span class="smp-format-name">{{ opt.label }}</span>
+                        <span class="smp-format-desc">{{ opt.desc }}</span>
+                      </label>
+                    </ng-container>
+                  </ng-container>
+                  <div class="smp-format-note">Takes effect on next save</div>
                 </div>
 
                 <div *ngIf="opfsSizeLabel" class="smp-size-row">
@@ -572,21 +621,6 @@
                             </g>
                             </svg>
                         </span>
-                        <!-- Eraser Tool -->
-                        <span (click)="setActiveTool('drawing:eraser')" style="margin-right: .5vw; margin-left: .5vw;">
-                            <svg *ngIf="controlPanelActiveTool === 'drawing:eraser'" width="1.5vw" height="1.5vw" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
-                                <g id="eraser-4" transform="translate(-1.881 -2.881)">
-                                <path id="secondary" fill="#ba75ff" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
-                                <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#ba75ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-                                </g>
-                            </svg>
-                            <svg *ngIf="controlPanelActiveTool != 'drawing:eraser'" width="1.5vw" height="1.5vw" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
-                                <g id="eraser-4" transform="translate(-1.881 -2.881)">
-                                <path id="secondary" fill="#fff" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
-                                <path id="primary" d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-                                </g>
-                            </svg>
-                        </span>
                         <!-- Small Stroke -->
                         <span (click)="setStrokeWidth(1)" style="margin-right: .5vw; margin-left: .5vw;">
                             <svg *ngIf="controlPanelActiveTool === 'drawing:pen'" width=".75vw" height=".75vw" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
@@ -945,6 +979,10 @@
                                 <div class="edit-menu-item" (click)="toggleScreencastKeys(); closeAllMenus()">
                                     <span>{{ screenscastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
                                 </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="openResizeDialog(); closeAllMenus()">
+                                    <span>Resize Canvas…</span>
+                                </div>
                             </div>
                         </div>
                         <div class="menubar-item">
@@ -974,27 +1012,38 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="menubar-item">
+                            <div class="menubar-btn" [class.active]="showViewMenu"
+                                 (click)="toggleViewMenu(); $event.stopPropagation()">View</div>
+                            <div *ngIf="showViewMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+                                <div class="edit-menu-item" (click)="toggleRetroTheme(); closeAllMenus()">
+                                    <span>Retro Chrome</span>
+                                    <span class="shortcut" *ngIf="retroThemeActive">✓</span>
+                                </div>
+                                <div class="edit-menu-divider"></div>
+                                <div class="edit-menu-item" (click)="showShortcutCheatsheet = true; closeAllMenus()">
+                                    <span>Keyboard Shortcuts</span><span class="shortcut">?</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="top-toolbar-btn share-btn" (click)="downloadCanvasViewAsPng()" title="Share">Share</div>
-                    <div class="top-toolbar-btn shortcut-help-btn" (click)="openResizeDialog()" title="Resize canvas">⊞</div>
-                    <div class="top-toolbar-btn shortcut-help-btn" (click)="showShortcutCheatsheet = true" title="Keyboard shortcuts">?</div>
                 </div>
             </div>
         </div>
 
         <!-- Right-side column: Tool Options + Layers stacked vertically -->
-        <div *ngIf="!uiHidden && !isViewerMode" class="right-column">
+        <div *ngIf="!uiHidden && !isViewerMode" class="right-column" [class.no-timeline]="!animationEnabled">
 
-        <!-- Right Content Panel -->
+        <!-- Right Content Panel (hidden — properties panel deferred) -->
+        <!--
         <div class="right-panel">
-            <!-- Right Panel Explorer -->
             <div class="text-start properties-panel-content">
                 <div *ngIf="this.selectedLayerIds.size == 0">
                     <label class="mt-3 mb-3 fw-semibold" style="font-size: 13px;">Tool Options</label>
                     <div>
-                        <div class="row" style="flex-flow: nowrap;">
+                        <div class="row" style="flex-flow: nowrap; margin-left: 0; margin-right: 0;">
                             <label style="width: 100px; color:#cecece; font-size: 13px;">Base Color</label>
-                            <!-- Add this square for background color picker -->
                             <div [ngStyle]="{ 'background-color': bgColor }" class="bg-square" (click)="openBgColorPicker()"></div>
                             <input
                                 type="text"
@@ -1009,15 +1058,13 @@
                                 (close)="showBgColorPicker = false"
                                 [color]="bgColor"
                                 *ngIf="showBgColorPicker"
-                                (colorSelected)="onBgColorSelected($event)" 
+                                (colorSelected)="onBgColorSelected($event)"
                                 style="position: absolute; left: -8px; top: 115px; z-index: 100; transform: scale(1.05);">
                             </app-color-picker>
                         </div>
-
-                        <!-- Paper Grain (global canvas paper material) -->
                         <div class="mt-2">
                             <label style="color:#cecece; font-size: 13px; display: block; margin-bottom: 4px;">Paper Texture</label>
-                            <div class="row" style="flex-flow: nowrap; align-items: center;">
+                            <div class="row" style="flex-flow: nowrap; align-items: center; margin-left: 0; margin-right: 0;">
                                 <label style="width: 100px; color:#aaa; font-size: 12px;">Type</label>
                                 <select class="form-control d-inline-block panel-input-field"
                                         [(ngModel)]="paperGrainType"
@@ -1026,14 +1073,14 @@
                                     <option *ngFor="let g of paperGrainOptions" [ngValue]="g.value" [title]="g.tooltip">{{ g.label }}</option>
                                 </select>
                             </div>
-                            <div *ngIf="paperGrainType !== 'none'" class="row mt-1" style="flex-flow: nowrap; align-items: center;">
+                            <div *ngIf="paperGrainType !== 'none'" class="row mt-1" style="flex-flow: nowrap; align-items: center; margin-left: 0; margin-right: 0;">
                                 <label style="width: 100px; color:#aaa; font-size: 12px;">Scale</label>
                                 <input type="range" min="0.2" max="3" step="0.1" class="flex-grow-1"
                                        [(ngModel)]="paperGrainScale"
                                        (ngModelChange)="onPaperGrainScaleChange($event)">
                                 <span style="min-width: 30px; text-align: right; color:#aaa; font-size: 11px;">{{ paperGrainScale }}</span>
                             </div>
-                            <div *ngIf="paperGrainType !== 'none'" class="row mt-1" style="flex-flow: nowrap; align-items: center;">
+                            <div *ngIf="paperGrainType !== 'none'" class="row mt-1" style="flex-flow: nowrap; align-items: center; margin-left: 0; margin-right: 0;">
                                 <label style="width: 100px; color:#aaa; font-size: 12px;">Strength</label>
                                 <input type="range" min="0" max="1" step="0.01" class="flex-grow-1"
                                        [(ngModel)]="paperGrainStrength"
@@ -1041,43 +1088,24 @@
                                 <span style="min-width: 30px; text-align: right; color:#aaa; font-size: 11px;">{{ paperGrainStrength }}</span>
                             </div>
                         </div>
-
-                        <!-- Storage / layer compression -->
-                        <div class="mt-3 storage-settings-section">
-                            <label style="color:#cecece; font-size: 13px; display: block; margin-bottom: 6px;">Storage</label>
-                            <div class="storage-format-row" *ngFor="let opt of storageFormatOptions">
-                                <ng-container *ngIf="opt.id !== 'webp' || webpSupported">
-                                    <label class="storage-format-label">
-                                        <input type="radio" name="pixelFormat"
-                                               [value]="opt.id"
-                                               [checked]="pixelFormat === opt.id"
-                                               (change)="onPixelFormatChange(opt.id)">
-                                        <span class="storage-format-name">{{ opt.label }}</span>
-                                        <span class="storage-format-desc">{{ opt.desc }}</span>
-                                    </label>
-                                </ng-container>
-                            </div>
-                            <div class="storage-format-note">Takes effect on next save</div>
-                            <div *ngIf="opfsSizeLabel" class="storage-size-label">
-                                <span>Scene: </span><strong>{{ opfsSizeLabel }}</strong>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
-
-                <!-- Vector object properties removed — Illustration is raster-only.
-                     Vector shape properties (Transform, Text, Fill, Stroke, etc.) live in Board component. -->
-                
             </div>
         </div>
+        -->
 
         <!-- Layer Panel (inside right-column wrapper) -->
         <div *ngIf="!layerTreeHidden" class="layer-panel">
 
+            <!-- Scene / Global tab switcher -->
+            <div class="right-panel-tabs">
+                <button class="rp-tab" [class.rp-tab-active]="rightPanelTab === 'scene'" (click)="rightPanelTab = 'scene'">Scene</button>
+                <button class="rp-tab" [class.rp-tab-active]="rightPanelTab === 'global'" (click)="rightPanelTab = 'global'">Global</button>
+            </div>
+
             <!-- Raster layers — Phase 2 compositor panel -->
             <div *ngIf="rasterLayers?.length > 0" class="raster-layers-inline">
-                <app-raster-layers
+                <app-raster-layers *ngIf="rightPanelTab === 'scene'"
                     [shapeManager]="$any(shapeManager)"
                     (scene3dSelected)="onScene3dSelected($event)"
                     (vectorLayerSelected)="onVectorLayerSelected($event)">
@@ -1093,6 +1121,9 @@
                         </div>
                     </div>
 
+                    <!-- Scene tab: Outliner + Selected Mesh panels -->
+                    <ng-container *ngIf="rightPanelTab === 'scene'">
+
                     <details class="scene3d-details" open>
                         <summary>Outliner</summary>
                         <!-- Action row: Add Mesh dropdown + Import -->
@@ -1107,15 +1138,17 @@
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('cylinder'); scene3dShowAddMeshMenu=false">Cylinder</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('torus'); scene3dShowAddMeshMenu=false">Torus</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddMesh('sprite'); scene3dShowAddMeshMenu=false" title="Flat textured quad — apply a texture to show an image">Sprite</div>
-                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowPolygonForm=!scene3dShowPolygonForm; scene3dShowCircleForm=false"
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowPolygonForm=!scene3dShowPolygonForm; scene3dShowCircleForm=false; scene3dShowAddMeshMenu=false"
                                          title="Editable polygon from 2D silhouette">Polygon…</div>
-                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowCircleForm=!scene3dShowCircleForm; scene3dShowPolygonForm=false"
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dShowCircleForm=!scene3dShowCircleForm; scene3dShowPolygonForm=false; scene3dShowAddMeshMenu=false"
                                          title="Circle / n-gon with optional height">Circle…</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddGroup(); scene3dShowAddMeshMenu=false">Group</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dAddRibbon(); scene3dShowAddMeshMenu=false"
                                          title="Ribbon — flat strip for banners/scrolling text">Ribbon</div>
                                     <div class="scene3d-add-mesh-item" (click)="scene3dOpenClothBuilder(); scene3dShowAddMeshMenu=false"
                                          title="Cloth — GPU-simulated fabric mesh">Cloth…</div>
+                                    <div class="scene3d-add-mesh-item" (click)="scene3dOpenCharacterForm(); scene3dShowAddMeshMenu=false"
+                                         title="Generate a rigged procedural character body">Character…</div>
                                 </div>
 
                                 <!-- Polygon quick-form -->
@@ -1161,6 +1194,45 @@
                                     </div>
                                     <button class="scene3d-qf-btn" (click)="scene3dAddCircle()">Add Circle</button>
                                 </div>
+
+                                <!-- Character quick-form -->
+                                <div *ngIf="scene3dShowCharacterForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+                                    <div class="scene3d-quick-form-title">Base Body</div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Height</span>
+                                        <input type="range" min="0.1" max="1" step="0.05" [(ngModel)]="scene3dCharHeight" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharHeight | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Leg length</span>
+                                        <input type="range" min="0.75" max="1.25" step="0.05" [(ngModel)]="scene3dCharLegLength" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharLegLength | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Limb thick</span>
+                                        <input type="range" min="0.6" max="1.6" step="0.05" [(ngModel)]="scene3dCharLimbThick" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharLimbThick | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Torso width</span>
+                                        <input type="range" min="0.6" max="1.6" step="0.05" [(ngModel)]="scene3dCharTorsoThick" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharTorsoThick | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Torso length</span>
+                                        <input type="range" min="0.6" max="1.4" step="0.05" [(ngModel)]="scene3dCharTorsoLength" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharTorsoLength | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div class="scene3d-qf-row">
+                                        <span class="scene3d-qf-label">Head size</span>
+                                        <input type="range" min="0.7" max="1.6" step="0.05" [(ngModel)]="scene3dCharHeadSize" (ngModelChange)="scene3dPreviewCharacter()" style="flex:1">
+                                        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ scene3dCharHeadSize | number:'1.2-2' }}</span>
+                                    </div>
+                                    <div style="display:flex;gap:4px;margin-top:6px">
+                                        <button class="scene3d-qf-btn" style="flex:1" (click)="scene3dGenerateCharacter()">Generate body</button>
+                                        <button class="scene3d-qf-btn" style="flex:none;background:#2a2a2a" (click)="scene3dCancelCharacter()">Cancel</button>
+                                    </div>
+                                </div>
                             </div>
                             <button class="scene3d-btn" (click)="modelFileInput.click()" title="Import .glb, .gltf, or .obj file" style="margin-left:auto">↑ Import</button>
                             <input #modelFileInput type="file" accept=".glb,.gltf,.obj" style="display:none" (change)="scene3dImportModelFromPicker($event)">
@@ -1186,7 +1258,7 @@
                                 <span *ngIf="node.type === '3DArrayGroup'" class="scene3d-node-icon">⊞</span>
                                 <span *ngIf="node.type === '3DMeshGroup'" class="scene3d-node-icon"
                                       (click)="scene3dToggleGroupCollapse(node.id); $event.stopPropagation()">
-                                    {{ scene3dCollapsedGroups.has(node.id) ? '▶' : '▼' }} 📁
+                                    {{ scene3dCollapsedGroups.has(node.id) ? '▶' : '▼' }}
                                 </span>
                                 <span *ngIf="node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-node-icon">⬡</span>
                                 <span *ngIf="scene3dRenamingId !== node.id" class="scene3d-mesh-name"
@@ -1208,7 +1280,7 @@
                                         title="Duplicate mesh (Ctrl+D)">⧉</button>
                                 <button class="scene3d-mesh-delete"
                                         (click)="node.type === '3DMeshGroup' ? scene3dDeleteGroup(node.id) : node.type === '3DArrayGroup' ? scene3dDeleteGroup(node.id) : scene3dDeleteMesh(node.id); $event.stopPropagation()"
-                                        [title]="node.type === '3DMeshGroup' || node.type === '3DArrayGroup' ? 'Delete group' : 'Delete mesh'">🗑</button>
+                                        [title]="node.type === '3DMeshGroup' || node.type === '3DArrayGroup' ? 'Delete group' : 'Delete mesh'">✕</button>
                             </div>
                             <ng-container *ngIf="node.type === '3DMeshGroup' && node.children?.length && !scene3dCollapsedGroups.has(node.id)">
                                 <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: node.children, depth: depth + 1 }"></ng-container>
@@ -1216,35 +1288,6 @@
                         </ng-container>
                     </ng-template>
 
-                    <!-- Array Tool options strip (visible while hover-handle mode is active) -->
-                    <div *ngIf="scene3dArrayToolActive" class="scene3d-array-tool-strip">
-                        <span class="scene3d-array-strip-label">Mode</span>
-                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'line'"   (click)="scene3dSetArrayToolMode('line')">Line</button>
-                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'grid'"   (click)="scene3dSetArrayToolMode('grid')">Grid</button>
-                        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'radial'" (click)="scene3dSetArrayToolMode('radial')">Radial</button>
-                        <span class="scene3d-array-strip-label" style="margin-left:8px;">Count</span>
-                        <input class="scene3d-array-strip-count" type="number" min="1" max="32"
-                               [ngModel]="scene3dArrayToolCount"
-                               (ngModelChange)="scene3dSetArrayToolCount($event)">
-                        <!-- Radial-specific pre-commit options -->
-                        <ng-container *ngIf="scene3dArrayToolMode === 'radial'">
-                            <span class="scene3d-array-strip-label" style="margin-left:8px;">Radius</span>
-                            <input class="scene3d-array-strip-count" type="number" min="0.1" step="0.1" placeholder="auto"
-                                   [ngModel]="scene3dArrayToolRadius"
-                                   (ngModelChange)="scene3dSetArrayToolRadius($event != null && $event !== '' ? +$event : null)">
-                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Arc°</span>
-                            <input class="scene3d-array-strip-count" type="number" min="1" max="360" step="1"
-                                   [ngModel]="scene3dArrayToolArc"
-                                   (ngModelChange)="scene3dSetArrayToolArc(+$event)">
-                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Axis</span>
-                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'x'" (click)="scene3dSetArrayToolAxis('x')">X</button>
-                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'y'" (click)="scene3dSetArrayToolAxis('y')">Y</button>
-                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'z'" (click)="scene3dSetArrayToolAxis('z')">Z</button>
-                            <span class="scene3d-array-strip-label" style="margin-left:4px;">Orient</span>
-                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && scene3dToggleGizmoOrientation()">W</button>
-                            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && scene3dToggleGizmoOrientation()">L</button>
-                        </ng-container>
-                    </div>
 
                     <!-- Array Group panel (shown instead of normal mesh panel) -->
                     <details *ngIf="scene3dSelectedMeshId && scene3dIsArrayGroup && !scene3dIsEditingMesh" class="scene3d-section-group" open>
@@ -1406,51 +1449,13 @@
                     </details>
 
                     <!-- Normal mesh panel (hidden for array groups) -->
-                    <details *ngIf="scene3dSelectedMeshId && !scene3dIsArrayGroup" class="scene3d-section-group" open>
-                    <summary class="scene3d-major-header">SELECTED MESH</summary>
+                    <div *ngIf="scene3dSelectedMeshId && !scene3dIsArrayGroup">
 
                     <!-- Linked arrays badge: mesh is a source for N array groups -->
                     <div class="scene3d-linked-arrays-badge" *ngIf="scene3dLinkedArrayCount > 0">
                         &#9679; Source of {{scene3dLinkedArrayCount}} linked array{{scene3dLinkedArrayCount === 1 ? '' : 's'}}
                     </div>
 
-                    <div class="scene3d-edit-mesh-row" *ngIf="scene3dSelectedMeshId">
-                        <button class="scene3d-edit-mesh-btn"
-                                [class.active]="scene3dIsEditingMesh"
-                                (click)="scene3dIsEditingMesh ? exitMeshEditMode() : enterMeshEditMode()"
-                                title="Toggle mesh edit mode (Tab)">
-                            {{ scene3dIsEditingMesh ? '✓ In Edit Mode' : 'Edit Mesh' }}
-                        </button>
-                        <span class="scene3d-edit-mesh-hint scene3d-mode-hint">Tab</span>
-                    </div>
-
-                    <div class="scene3d-edit-mesh-row">
-                        <button class="scene3d-edit-mesh-btn"
-                                [class.active]="scene3dArmaturePanelOpen"
-                                (click)="scene3dArmaturePanelOpen ? closeArmaturePanel() : openArmaturePanel()"
-                                title="Open Armature &amp; Skeleton panel (Shift+Tab)">
-                            {{ scene3dArmaturePanelOpen ? '✓ Armature' : 'Armature' }}
-                        </button>
-                        <span class="scene3d-edit-mesh-hint scene3d-mode-hint">⇧Tab</span>
-                    </div>
-
-                    <div class="scene3d-edit-mesh-row">
-                        <button class="scene3d-edit-mesh-btn"
-                                [class.active]="gpPanelVisible"
-                                (click)="gpPanelVisible ? closeGpPanel() : openGpPanel()"
-                                title="Open Grease Pencil panel — draw 2D strokes in 3D space">
-                            {{ gpPanelVisible ? '✓ Grease Pencil' : 'Grease Pencil' }}
-                        </button>
-                    </div>
-
-                    <div class="scene3d-edit-mesh-row">
-                        <button class="scene3d-edit-mesh-btn"
-                                [class.active]="uvEditorOpen"
-                                (click)="uvEditorOpen ? closeUVEditor() : openUVEditor()"
-                                title="Open UV editor — unwrap and edit UV coordinates">
-                            {{ uvEditorOpen ? '✓ UV Editor' : 'UV Editor' }}
-                        </button>
-                    </div>
 
 
                     <!-- Normal mesh sections (hidden while UV editor is open) -->
@@ -1484,6 +1489,16 @@
                         <!-- Single-material mode (no submesh slots) -->
                         <ng-container *ngIf="scene3dSubmeshes.length === 0">
                             <div class="scene3d-material-row">
+                                <label>Style</label>
+                                <select class="scene3d-select" [ngModel]="scene3dRenderStyle" (ngModelChange)="scene3dSetRenderStyle($event)">
+                                    <option value="default">Default (PBR)</option>
+                                    <option value="gouraud">Gouraud (PS1)</option>
+                                    <option value="cel">Cel / Toon</option>
+                                    <option value="sketch">Sketch</option>
+                                    <option value="ink">Ink / Manga</option>
+                                </select>
+                            </div>
+                            <div class="scene3d-material-row">
                                 <label>Color</label>
                                 <input type="color" [(ngModel)]="scene3dMeshColor" (input)="scene3dUpdateMeshColor()">
                             </div>
@@ -1502,16 +1517,6 @@
                                 <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dMeshMetalness" (input)="scene3dUpdateMeshMetalness()">
                                 <span class="scene3d-val">{{ scene3dMeshMetalness | number:'1.2-2' }}</span>
                             </div>
-                            <div class="scene3d-material-row">
-                                <label>Style</label>
-                                <select class="scene3d-select" [ngModel]="scene3dRenderStyle" (ngModelChange)="scene3dSetRenderStyle($event)">
-                                    <option value="default">Default (PBR)</option>
-                                    <option value="gouraud">Gouraud (PS1)</option>
-                                    <option value="cel">Cel / Toon</option>
-                                    <option value="sketch">Sketch</option>
-                                    <option value="ink">Ink / Manga</option>
-                                </select>
-                            </div>
                         </ng-container>
 
                         <!-- Multi-material slots mode -->
@@ -1522,17 +1527,7 @@
                                         <input class="scene3d-submesh-label-input" [(ngModel)]="slot.label"
                                                (change)="scene3dUpdateSubmeshLabel(i)"
                                                [title]="'Slot ' + i + ' label'">
-                                        <button class="scene3d-move-btn" (click)="scene3dRemoveSubmesh(i)" title="Remove slot">🗑</button>
-                                    </div>
-                                    <div class="scene3d-material-row">
-                                        <label>Color</label>
-                                        <input type="color" [(ngModel)]="slot.color" (input)="scene3dUpdateSubmeshColor(i)">
-                                    </div>
-                                    <div class="scene3d-material-row">
-                                        <label>Opacity</label>
-                                        <input type="range" min="0" max="100" step="1" [value]="slot.opacity * 100"
-                                               (input)="slot.opacity = +$any($event.target).value / 100; scene3dUpdateSubmeshOpacity(i)">
-                                        <span class="scene3d-val">{{ mathRound(slot.opacity * 100) }}%</span>
+                                        <button class="scene3d-move-btn" (click)="scene3dRemoveSubmesh(i)" title="Remove slot">✕</button>
                                     </div>
                                     <div class="scene3d-material-row">
                                         <label>Style</label>
@@ -1543,6 +1538,16 @@
                                             <option value="sketch">Sketch</option>
                                             <option value="ink">Ink / Manga</option>
                                         </select>
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Color</label>
+                                        <input type="color" [(ngModel)]="slot.color" (input)="scene3dUpdateSubmeshColor(i)">
+                                    </div>
+                                    <div class="scene3d-material-row">
+                                        <label>Opacity</label>
+                                        <input type="range" min="0" max="100" step="1" [value]="slot.opacity * 100"
+                                               (input)="slot.opacity = +$any($event.target).value / 100; scene3dUpdateSubmeshOpacity(i)">
+                                        <span class="scene3d-val">{{ mathRound(slot.opacity * 100) }}%</span>
                                     </div>
                                 </div>
                             </div>
@@ -2090,10 +2095,12 @@
 
                     </ng-container><!-- /normal mesh sections -->
 
-                    </details><!-- /SELECTED MESH section-group -->
+                    </div><!-- /SELECTED MESH section-group -->
 
-                    <details class="scene3d-section-group" open>
-                    <summary class="scene3d-major-header">GLOBAL SCENE</summary>
+                    </ng-container><!-- /scene tab content -->
+
+                    <!-- Global tab: global scene settings -->
+                    <div *ngIf="rightPanelTab === 'global'">
 
                     <details class="scene3d-details" open>
                         <summary>Camera</summary>
@@ -2151,7 +2158,7 @@
                         </div>
                         <div class="scene3d-material-row">
                             <label>Color Depth</label>
-                            <input type="range" min="8" max="256" step="8" [(ngModel)]="scene3dPS1ColorDepth" (input)="scene3dApplyPS1()">
+                            <input type="range" min="2" max="32" step="1" [(ngModel)]="scene3dPS1ColorDepth" (input)="scene3dApplyPS1()">
                             <span class="scene3d-val">{{ scene3dPS1ColorDepth }}</span>
                         </div>
                         <!-- Lo-res buffer -->
@@ -2251,13 +2258,14 @@
                                 <option value="solid">Solid</option>
                                 <option value="gradient">Gradient</option>
                                 <option value="wavy">Wavy</option>
+                                <option value="checkers">Clover Picnic</option>
                             </select>
                         </div>
                         <div class="scene3d-material-row" *ngIf="scene3dBgMode !== 'none'">
-                            <label>{{ scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy' ? 'Color 1' : 'Color' }}</label>
+                            <label>{{ scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy' || scene3dBgMode === 'checkers' ? 'Color 1' : 'Color' }}</label>
                             <input type="color" [(ngModel)]="scene3dBgColor1" (input)="scene3dApplySceneBg()">
                         </div>
-                        <div class="scene3d-material-row" *ngIf="scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy'">
+                        <div class="scene3d-material-row" *ngIf="scene3dBgMode === 'gradient' || scene3dBgMode === 'wavy' || scene3dBgMode === 'checkers'">
                             <label>Color 2</label>
                             <input type="color" [(ngModel)]="scene3dBgColor2" (input)="scene3dApplySceneBg()">
                         </div>
@@ -2463,9 +2471,31 @@
                     </details>
 
                     <details class="scene3d-details">
-                        <summary>Snap Settings</summary>
+                        <summary>Grid Visibility</summary>
+                        <div class="scene3d-toggle-row">
+                            <label style="display:flex;align-items:center;gap:4px">Show Grid <span class="scene3d-info-icon" (mouseenter)="showInfoTooltip($event, infoTips.gridVisibility)" (mouseleave)="hideInfoTooltip()">i</span></label>
+                            <input type="checkbox" [(ngModel)]="scene3dGridVisible" (ngModelChange)="applyScene3dGrid()">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Opacity</label>
+                            <input type="range" min="0" max="100" step="1" style="flex:1"
+                                   [value]="mathRound(scene3dGridOpacity * 100)"
+                                   (input)="onScene3dGridOpacityChange($any($event.target).value)">
+                            <span class="scene3d-val">{{ mathRound(scene3dGridOpacity * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Color</label>
+                            <input type="color" [value]="scene3dGridColorHex"
+                                   (input)="onScene3dGridColorChange($any($event.target).value)"
+                                   style="width:32px;height:22px;padding:0;border:1px solid #555;border-radius:3px;cursor:pointer">
+                        </div>
+                    </details>
+
+                    <details class="scene3d-details">
+                        <summary>Grid Snap</summary>
                         <div class="scene3d-material-row">
                             <label>Mode</label>
+                            <span class="scene3d-info-icon" (mouseenter)="showInfoTooltip($event, infoTips.snapMode)" (mouseleave)="hideInfoTooltip()">i</span>
                             <select class="scene3d-select"
                                     [(ngModel)]="scene3dSnapMode"
                                     (ngModelChange)="scene3dSetSnapMode($event)">
@@ -2475,19 +2505,22 @@
                             </select>
                         </div>
                         <div *ngIf="scene3dSnapMode === 'grid'" class="scene3d-material-row">
-                            <label>Grid size</label>
+                            <label>Cell size</label>
+                            <span class="scene3d-info-icon" (mouseenter)="showInfoTooltip($event, infoTips.snapGridSize)" (mouseleave)="hideInfoTooltip()">i</span>
                             <input type="number" step="0.1" min="0.01" class="scene3d-input-small"
                                    [(ngModel)]="scene3dSnapGridSize" (input)="scene3dUpdateSnapSettings()">
                             <span class="scene3d-val">units</span>
                         </div>
                         <div class="scene3d-material-row">
-                            <label>Rotate</label>
+                            <label>Rotate step</label>
+                            <span class="scene3d-info-icon" (mouseenter)="showInfoTooltip($event, infoTips.snapRotate)" (mouseleave)="hideInfoTooltip()">i</span>
                             <input type="number" step="1" min="1" max="180" class="scene3d-input-small"
                                    [(ngModel)]="scene3dSnapAngleDeg" (input)="scene3dUpdateSnapSettings()">
                             <span class="scene3d-val">°</span>
                         </div>
                         <div class="scene3d-material-row">
                             <label>Scale step</label>
+                            <span class="scene3d-info-icon" (mouseenter)="showInfoTooltip($event, infoTips.snapScaleStep)" (mouseleave)="hideInfoTooltip()">i</span>
                             <input type="number" step="0.05" min="0.01" class="scene3d-input-small"
                                    [(ngModel)]="scene3dSnapScaleStep" (input)="scene3dUpdateSnapSettings()">
                         </div>
@@ -2506,11 +2539,47 @@
                         </div>
                     </details>
 
-                    </details><!-- /GLOBAL SCENE section-group -->
+                    </div><!-- /GLOBAL SCENE section-group -->
+                </div>
+
+                <!-- Canvas Grid (Global tab, non-3D) -->
+                <div *ngIf="!scene3dPanelVisible && rightPanelTab === 'global'" class="canvas-grid-section">
+                    <details class="scene3d-details">
+                        <summary>Canvas Grid</summary>
+                        <div class="scene3d-toggle-row">
+                            <label>Show Grid</label>
+                            <input type="checkbox" [(ngModel)]="canvasGridVisible" (ngModelChange)="applyCanvasGrid()">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Cells</label>
+                            <select [(ngModel)]="canvasGridCells" (ngModelChange)="applyCanvasGrid()"
+                                    style="flex:1;font-size:10px;background:#333;color:#ccc;border:1px solid #555;padding:2px 4px;">
+                                <option [ngValue]="4">4</option>
+                                <option [ngValue]="8">8</option>
+                                <option [ngValue]="16">16</option>
+                                <option [ngValue]="32">32</option>
+                                <option [ngValue]="64">64</option>
+                                <option [ngValue]="128">128</option>
+                            </select>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Opacity</label>
+                            <input type="range" min="0" max="100" step="1" style="flex:1"
+                                   [value]="mathRound(canvasGridOpacity * 100)"
+                                   (input)="onCanvasGridOpacityChange($any($event.target).value)">
+                            <span style="min-width:28px;text-align:right;color:#aaa;font-size:10px">{{ mathRound(canvasGridOpacity * 100) }}%</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Color</label>
+                            <input type="color" [value]="canvasGridColorHex"
+                                   (input)="onCanvasGridColorChange($any($event.target).value)"
+                                   style="width:32px;height:22px;padding:0;border:1px solid #555;border-radius:3px;cursor:pointer">
+                        </div>
+                    </details>
                 </div>
 
                 <!-- Per-Layer Dither Settings (shown when a raster layer is selected, hidden when 3D panel is shown) -->
-                <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible" class="layer-dither-section">
+                <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible && rightPanelTab === 'scene'" class="layer-dither-section">
                 <div class="form-check" style="margin-bottom: 6px;">
                     <input class="form-check-input" type="checkbox"
                            [checked]="getLayerDitherEnabled(selectedRasterLayerId)"
@@ -2670,7 +2739,7 @@
             </div>
 
             <!-- ── Frame Link Animation (per-layer procedural displacement) ── -->
-            <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible" class="frame-link-section">
+            <div *ngIf="selectedRasterLayerId && !scene3dPanelVisible && rightPanelTab === 'scene'" class="frame-link-section">
                 <div class="form-check" style="margin-bottom: 6px;">
                     <input class="form-check-input" type="checkbox"
                            [checked]="getLayerFrameLinkConfig(selectedRasterLayerId).enabled"
@@ -2840,42 +2909,80 @@
         <!-- Always-visible Color Picker (CSP-style) -->
         <div *ngIf="!uiHidden && !isViewerMode" class="persistent-color-picker"
              (mousedown)="$event.stopPropagation()">
-            <!-- Hue ring -->
-            <div class="hue-ring"
-                 (mousedown)="onHueRingMouseDown($event)">
-                <div class="hue-ring-thumb"
-                     [style.transform]="'rotate(' + persistentHue + 'deg) translateY(-63px)'">>
-                </div>
-                <!-- SB square inside the ring -->
-                <div class="sb-square"
-                     [style.background]="'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + persistentHue + ', 100%, 50%))'"
-                     (mousedown)="onSbSquareMouseDown($event)">
-                    <div class="sb-indicator"
-                         [style.left.%]="persistentSbX"
-                         [style.top.%]="persistentSbY">
+            <!-- Main picker: hue ring + swatch -->
+            <div class="picker-main">
+                <div class="hue-ring"
+                     (mousedown)="onHueRingMouseDown($event)">
+                    <div class="hue-ring-thumb"
+                         [style.transform]="'rotate(' + persistentHue + 'deg) translateY(-63px)'">>
+                    </div>
+                    <!-- SB square inside the ring -->
+                    <div class="sb-square"
+                         [style.background]="'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + persistentHue + ', 100%, 50%))'"
+                         (mousedown)="onSbSquareMouseDown($event)">
+                        <div class="sb-indicator"
+                             [style.left.%]="persistentSbX"
+                             [style.top.%]="persistentSbY">
+                        </div>
                     </div>
                 </div>
+                <!-- Current color swatch -->
+                <div class="persistent-swatch-row">
+                    <div class="persistent-swatch" [style.background-color]="selectedPenColor"></div>
+                    <input type="text" class="persistent-hex-input"
+                           [ngModel]="selectedPenColor"
+                           (ngModelChange)="onPersistentHexInput($event)">
+                    <input type="number" class="persistent-opacity-input"
+                           min="0" max="100" step="1"
+                           [value]="persistentOpacity"
+                           (change)="onPersistentOpacityChange($event)"
+                           title="Opacity">
+                    <span class="persistent-opacity-pct">%</span>
+                </div>
             </div>
-            <!-- Current color swatch -->
-            <div class="persistent-swatch-row">
-                <div class="persistent-swatch" [style.background-color]="selectedPenColor"></div>
-                <input type="text" class="persistent-hex-input"
-                       [ngModel]="selectedPenColor"
-                       (ngModelChange)="onPersistentHexInput($event)">
+            <!-- Recent colors — vertical strip on the right -->
+            <div class="recent-colors-row">
+                <ng-container *ngFor="let i of [0,1,2,3,4,5,6]">
+                    <ng-container *ngIf="recentColors[i] as c; else colorPlaceholder">
+                        <div class="recent-color-dot"
+                             [style.background-color]="c"
+                             [class.recent-color-dot--active]="c === selectedPenColor"
+                             (click)="setPenColor(c)"
+                             [title]="c"></div>
+                    </ng-container>
+                    <ng-template #colorPlaceholder>
+                        <div class="recent-color-dot recent-color-dot--placeholder"></div>
+                    </ng-template>
+                </ng-container>
             </div>
-            <!-- Recent colors -->
-            <div *ngIf="recentColors.length" class="recent-colors-row">
-                <div *ngFor="let c of recentColors"
-                     class="recent-color-dot"
-                     [style.background-color]="c"
-                     [class.recent-color-dot--active]="c === selectedPenColor"
-                     (click)="setPenColor(c)"
-                     [title]="c"></div>
+            <!-- Utility actions column -->
+            <div class="picker-actions">
+                <!-- Foreground / secondary swap -->
+                <div class="picker-swap" (click)="swapColors()" title="Swap primary ↔ secondary color (X)">
+                    <div class="swap-bg-square" [style.background]="secondaryPenColor"></div>
+                    <div class="swap-fg-square" [style.background]="selectedPenColor"></div>
+                    <span class="swap-icon">↺</span>
+                </div>
+                <!-- Reset to black/white -->
+                <button class="picker-action-btn" (click)="resetToDefaultColors()" title="Reset to black / white">
+                    <span class="reset-icon">
+                        <span class="reset-white"></span>
+                        <span class="reset-black"></span>
+                    </span>
+                </button>
+                <!-- Palette (placeholder) -->
+                <button class="picker-action-btn" title="Palette (coming soon)" disabled>
+                    ▦
+                </button>
+                <!-- Eyedropper (placeholder) -->
+                <button class="picker-action-btn" title="Sample from canvas (coming soon)" disabled>
+                    ⊕
+                </button>
             </div>
         </div>
 
         <!-- Zoom Controls -->
-        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control">
+        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled">
             <div class="zoom-percent-display" (click)="fitArtboard()" title="Current zoom — click to fit artboard">{{ currentZoomPercent }}</div>
             <div class="row zoom-control-row">
                 <div class="col-6 zoom-button-left" (click)="zoomOut()">
@@ -2995,9 +3102,6 @@
 
     <!-- Vertical Control Panel -->
     <div class="vertical-control-panel">
-        <!-- Mode label along right edge -->
-        <div class="toolbar-mode-label">{{ scene3dPanelVisible ? '3D TOOLS' : '2D TOOLS' }}</div>
-
         <!-- Cursor Controls -->
         <div class="cursor-controls">
             <div class="vertical-tool-button" 
@@ -3026,7 +3130,7 @@
         </div>
 
         <!-- 2D tools — animates out, then removed when 3D becomes active -->
-        <div class="tools-2d" *ngIf="tools2dVisible" [class.tools-exiting]="tools2dExiting">
+        <div class="tools-2d" *ngIf="tools2dVisible && !activeVectorLayerId" [class.tools-exiting]="tools2dExiting">
 
             <!-- Move / Grab -->
             <div class="vertical-tool-button tool-2d-move"
@@ -3070,16 +3174,6 @@
                 </svg>
             </div>
 
-            <div class="vertical-tool-button" 
-                 [class.selected]="controlPanelActiveTool === 'drawing:eraser'"
-                 (click)="setActiveTool('drawing:eraser')">
-                <svg width="20" height="20" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
-                    <g transform="translate(-1.881 -2.881)">
-                        <path fill="#e8e8e8" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
-                        <path d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#e8e8e8" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-                    </g>
-                </svg>
-            </div>
 
             <!-- Paint Bucket (Flood Fill) -->
             <div class="vertical-tool-button" 
@@ -3091,57 +3185,20 @@
                 </svg>
                 <div class="color-indicator" [style.background-color]="selectedPenColor || '#fff'"></div>
             </div>
-        </div>
-        <div class="tool-section">
-            <div class="vertical-tool-button" 
-                 [class.selected]="controlPanelActiveTool.startsWith('shape:')"
-                 (click)="setActiveTool('shape:' + activeShapeKind, $event)">
-                <!-- Show the icon of the currently selected shape kind -->
-                <svg *ngIf="activeShapeKind === 'circle'" width="20" height="20" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z" 
-                          fill="none" stroke="#e8e8e8" stroke-width="1.2" />
-                </svg>
-                <svg *ngIf="activeShapeKind === 'square'" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z" 
-                          fill="none" stroke="#e8e8e8" stroke-width="8" />
-                </svg>
-                <svg *ngIf="activeShapeKind === 'triangle'" width="20" height="20" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7.5385,2C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077C1,12.8462,1.3846,13,1.6923,13h11.6154C13.6923,13,14,12.8462,14,12.3077c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846C8.028,2.1765,7.7882,2,7.5385,2z" 
-                          fill="none" stroke="#e8e8e8" stroke-width="1.35" />
-                </svg>
-                <svg *ngIf="activeShapeKind === 'polygon'" width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <polygon points="12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5" fill="none" stroke="#e8e8e8" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-            </div>
 
-            <div class="vertical-tool-button" 
-                 [class.selected]="controlPanelActiveTool === 'polygon:freeform'"
-                 (click)="setActiveTool('polygon:freeform')">
-                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <polygon points="4,18 8,4 20,6 18,16" fill="none" stroke="#e8e8e8" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="2,1"/>
-                    <circle cx="4" cy="18" r="1.5" fill="#e8e8e8"/>
-                    <circle cx="8" cy="4" r="1.5" fill="#e8e8e8"/>
-                    <circle cx="20" cy="6" r="1.5" fill="#e8e8e8"/>
-                    <circle cx="18" cy="16" r="1.5" fill="#e8e8e8"/>
-                </svg>
-            </div>
-
-            <!-- TODO: Arrow tool currently uses vector line drawing.
-                 Replace with raster line when Salsa adds raster line support.
-                 For now, keep the button but it draws vector lines. -->
-            <!-- Arrow tool (line with arrowheads) -->
-            <div class="vertical-tool-button" 
-                 [class.selected]="controlPanelActiveTool === 'arrow'"
-                 (click)="setActiveTool('arrow')">
-                <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <line x1="4" y1="20" x2="18" y2="6" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"/>
-                    <polygon points="20,4 14,5 19,10" fill="#e8e8e8"/>
+            <!-- Selection Tool -->
+            <div class="vertical-tool-button"
+                 [class.selected]="controlPanelActiveTool.startsWith('select:')"
+                 (click)="setActiveTool(controlPanelActiveTool.startsWith('select:') ? controlPanelActiveTool : 'select:rect')"
+                 title="Select Tool — choose shape in the options panel. (Shift+M)">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="4 2">
+                    <rect x="3" y="3" width="18" height="18" rx="1"/>
                 </svg>
             </div>
         </div>
 
         <!-- Content Tools Section -->
-        <div class="tool-section">
+        <div class="tool-section" hidden>
             <div hidden class="vertical-tool-button" 
                  [class.selected]="controlPanelActiveTool === 'postit'"
                  (click)="setActiveTool('postit')"
@@ -3191,8 +3248,6 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12,3V21m-2,0h4M5,5V4A1,1,0,0,1,6,3H18a1,1,0,0,1,1,1V5"
                           fill="none" stroke="#e8e8e8" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-                    <circle cx="19" cy="19" r="4" fill="#9B59B6" opacity="0.8"/>
-                    <text x="19" y="21.5" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">fx</text>
                 </svg>
             </div>
 
@@ -3220,20 +3275,8 @@
             </div>
         </div>
 
-        <!-- Selection Tool -->
-        <div class="tool-section">
-            <div class="vertical-tool-button" 
-                 [class.selected]="controlPanelActiveTool.startsWith('select:')"
-                 (click)="setActiveTool(controlPanelActiveTool.startsWith('select:') ? controlPanelActiveTool : 'select:rect')"
-                 title="Select Tool — choose shape in the options panel. (Shift+M)">
-                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="4 2">
-                    <rect x="3" y="3" width="18" height="18" rx="1"/>
-                </svg>
-            </div>
-        </div>
-
         <!-- Misc Tools Section -->
-        <div class="tool-section">
+        <div>
             <div class="vertical-tool-button"
                  [class.selected]="controlPanelActiveTool === 'misc'"
                  (click)="setActiveTool('misc')">
@@ -3245,18 +3288,77 @@
 
         </div><!-- /.tools-2d -->
 
+        <!-- Vector layer tools — visible when a vector layer is selected -->
+        <div class="tools-vector" *ngIf="!!activeVectorLayerId && tools2dVisible" [class.tools-exiting]="tools2dExiting">
+
+            <!-- Open Ephemera panel -->
+            <div class="vertical-tool-button"
+                 [class.selected]="showEphemeraPanel"
+                 (click)="openEphemeraPanel()"
+                 title="Open Vector / Ephemera panel">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"
+                          fill="none" stroke="#e8e8e8" stroke-width="1.6" stroke-linejoin="round"/>
+                </svg>
+            </div>
+
+            <div class="tool-section">
+                <div class="vertical-tool-button"
+                     [class.selected]="controlPanelActiveTool.startsWith('shape:')"
+                     (click)="setActiveTool('shape:' + activeShapeKind, $event)">
+                    <svg *ngIf="activeShapeKind === 'circle'" width="20" height="20" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14,7.5c0,3.5899-2.9101,6.5-6.5,6.5S1,11.0899,1,7.5S3.9101,1,7.5,1S14,3.9101,14,7.5z"
+                              fill="none" stroke="#e8e8e8" stroke-width="1.2" />
+                    </svg>
+                    <svg *ngIf="activeShapeKind === 'square'" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13.5 10a3.5 3.5 0 0 0-3.5 3.5v73a3.5 3.5 0 0 0 3.5 3.5h73a3.5 3.5 0 0 0 3.5-3.5v-73a3.5 3.5 0 0 0-3.5-3.5h-73z"
+                              fill="none" stroke="#e8e8e8" stroke-width="8" />
+                    </svg>
+                    <svg *ngIf="activeShapeKind === 'triangle'" width="20" height="20" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5385,2C7.2437,2,7.0502,2.1772,6.9231,2.3846l-5.8462,9.5385C1,12,1,12.1538,1,12.3077C1,12.8462,1.3846,13,1.6923,13h11.6154C13.6923,13,14,12.8462,14,12.3077c0-0.1538,0-0.2308-0.0769-0.3846L8.1538,2.3846C8.028,2.1765,7.7882,2,7.5385,2z"
+                              fill="none" stroke="#e8e8e8" stroke-width="1.35" />
+                    </svg>
+                    <svg *ngIf="activeShapeKind === 'polygon'" width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5" fill="none" stroke="#e8e8e8" stroke-width="1.5" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+
+                <div class="vertical-tool-button"
+                     [class.selected]="controlPanelActiveTool === 'polygon:freeform'"
+                     (click)="setActiveTool('polygon:freeform')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="4,18 8,4 20,6 18,16" fill="none" stroke="#e8e8e8" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="2,1"/>
+                        <circle cx="4" cy="18" r="1.5" fill="#e8e8e8"/>
+                        <circle cx="8" cy="4" r="1.5" fill="#e8e8e8"/>
+                        <circle cx="20" cy="6" r="1.5" fill="#e8e8e8"/>
+                        <circle cx="18" cy="16" r="1.5" fill="#e8e8e8"/>
+                    </svg>
+                </div>
+
+                <!-- Arrow tool (line with arrowheads) -->
+                <div class="vertical-tool-button"
+                     [class.selected]="controlPanelActiveTool === 'arrow'"
+                     (click)="setActiveTool('arrow')">
+                    <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <line x1="4" y1="20" x2="18" y2="6" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"/>
+                        <polygon points="20,4 14,5 19,10" fill="#e8e8e8"/>
+                    </svg>
+                </div>
+            </div>
+
+        </div><!-- /.tools-vector -->
+
         <!-- 3D transform tools — rendered after 2D tools have exited -->
         <div class="tools-3d" *ngIf="tools3dVisible && !scene3dArmaturePanelOpen" [class.tools-exiting]="tools3dExiting">
-            <!-- Repeat / Array Tool -->
+            <!-- Edit Character — shown when a procedural body is selected -->
             <div class="vertical-tool-button"
-                 [class.selected]="scene3dArrayToolActive"
-                 (click)="scene3dToggleArrayTool()"
-                 title="Repeat / Array Tool">
+                 *ngIf="scene3dSelectedIsCharacter"
+                 [class.selected]="scene3dEditCharPanelOpen"
+                 (click)="scene3dToggleEditCharPanel()"
+                 title="Edit Character (eyes, expressions)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="2" y="2" width="8" height="8" rx="1"/>
-                    <rect x="14" y="2" width="8" height="8" rx="1"/>
-                    <rect x="2" y="14" width="8" height="8" rx="1"/>
-                    <rect x="14" y="14" width="8" height="8" rx="1"/>
+                    <circle cx="12" cy="7" r="4"/>
+                    <path d="M5.5 21v-1.5A6.5 6.5 0 0 1 18.5 19.5V21"/>
                 </svg>
             </div>
             <!-- Move -->
@@ -3294,6 +3396,18 @@
                     <line x1="3" y1="21" x2="10" y2="14"/>
                 </svg>
             </div>
+            <!-- Repeat / Array Tool -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dArrayToolActive"
+                 (click)="scene3dToggleArrayTool()"
+                 title="Repeat / Array Tool">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="8" height="8" rx="1"/>
+                    <rect x="14" y="2" width="8" height="8" rx="1"/>
+                    <rect x="2" y="14" width="8" height="8" rx="1"/>
+                    <rect x="14" y="14" width="8" height="8" rx="1"/>
+                </svg>
+            </div>
             <!-- World / Local orientation toggle -->
             <div class="vertical-tool-button gizmo-orientation-btn"
                  [class.selected]="scene3dGizmoOrientation === 'local'"
@@ -3302,6 +3416,984 @@
                 <span class="gizmo-orientation-label">{{ scene3dGizmoOrientation === 'world' ? 'W' : 'L' }}</span>
             </div>
         </div><!-- /.tools-3d -->
+
+        <!-- Mesh action tools — visible in 3D mode, greyed when no mesh selected -->
+        <div class="tools-3d-mesh-actions" *ngIf="tools3dVisible">
+            <div class="tools-3d-separator"></div>
+
+            <!-- Edit Mesh -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dIsEditingMesh"
+                 [class.tool-disabled]="!scene3dSelectedMeshId"
+                 (click)="scene3dIsEditingMesh ? exitMeshEditMode() : enterMeshEditMode()"
+                 title="Edit Mesh (Tab)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16"/>
+                    <circle cx="4" cy="4" r="2" fill="#e8e8e8" stroke="none"/>
+                    <circle cx="20" cy="4" r="2" fill="#e8e8e8" stroke="none"/>
+                    <circle cx="4" cy="20" r="2" fill="#e8e8e8" stroke="none"/>
+                    <circle cx="20" cy="20" r="2" fill="#e8e8e8" stroke="none"/>
+                    <circle cx="12" cy="12" r="2" fill="#e8e8e8" stroke="none"/>
+                </svg>
+            </div>
+
+            <!-- Armature -->
+            <div class="vertical-tool-button"
+                 [class.selected]="scene3dArmaturePanelOpen"
+                 [class.tool-disabled]="!scene3dSelectedMeshId"
+                 (click)="scene3dArmaturePanelOpen ? closeArmaturePanel() : openArmaturePanel()"
+                 title="Armature (⇧Tab)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="4" r="2"/>
+                    <line x1="12" y1="6" x2="12" y2="12"/>
+                    <line x1="6" y1="9" x2="18" y2="9"/>
+                    <line x1="12" y1="12" x2="7" y2="20"/>
+                    <line x1="12" y1="12" x2="17" y2="20"/>
+                </svg>
+            </div>
+
+            <!-- Grease Pencil -->
+            <div class="vertical-tool-button"
+                 [class.selected]="gpPanelVisible"
+                 [class.tool-disabled]="!scene3dSelectedMeshId"
+                 (click)="gpPanelVisible ? closeGpPanel() : openGpPanel()"
+                 title="Grease Pencil">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+            </div>
+
+            <!-- UV Editor -->
+            <div class="vertical-tool-button"
+                 [class.selected]="uvEditorOpen"
+                 [class.tool-disabled]="!scene3dSelectedMeshId"
+                 (click)="uvEditorOpen ? closeUVEditor() : openUVEditor()"
+                 title="UV Editor">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2">
+                    <rect x="8" y="8" width="8" height="8"/>
+                    <rect x="8" y="2" width="8" height="6"/>
+                    <rect x="8" y="16" width="8" height="6"/>
+                    <rect x="2" y="8" width="6" height="8"/>
+                </svg>
+            </div>
+        </div><!-- /.tools-3d-mesh-actions -->
+
+    </div>
+
+    <!-- Mode label — sibling of tool-subpanel so it renders below it in z-order -->
+    <div class="toolbar-mode-label">{{ scene3dPanelVisible ? '3D TOOLS' : activeVectorLayerId ? 'VECTOR TOOLS' : '2D TOOLS' }}</div>
+
+    <!-- Array Tool subpanel — shown when 3D array tool is active -->
+    <div class="tool-subpanel" [class.visible]="scene3dArrayToolActive">
+        <div class="tool-label">ARRAY TOOL</div>
+
+        <div class="scene3d-array-strip-label" style="margin-bottom:6px;">Mode</div>
+        <div class="scene3d-row scene3d-array-mode-row" style="padding: 0 0 8px 0;">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'line'"   (click)="scene3dSetArrayToolMode('line')">Line</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'grid'"   (click)="scene3dSetArrayToolMode('grid')">Grid</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolMode === 'radial'" (click)="scene3dSetArrayToolMode('radial')">Radial</button>
+        </div>
+
+        <div class="scene3d-material-row">
+            <label>Count</label>
+            <input class="scene3d-array-strip-count" type="number" min="1" max="32"
+                   [ngModel]="scene3dArrayToolCount"
+                   (ngModelChange)="scene3dSetArrayToolCount($event)">
+        </div>
+
+        <ng-container *ngIf="scene3dArrayToolMode === 'radial'">
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input class="scene3d-array-strip-count" type="number" min="0.1" step="0.1" placeholder="auto"
+                       [ngModel]="scene3dArrayToolRadius"
+                       (ngModelChange)="scene3dSetArrayToolRadius($event != null && $event !== '' ? +$event : null)">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Arc°</label>
+                <input class="scene3d-array-strip-count" type="number" min="1" max="360" step="1"
+                       [ngModel]="scene3dArrayToolArc"
+                       (ngModelChange)="scene3dSetArrayToolArc(+$event)">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Axis</label>
+                <div class="scene3d-axis-btns">
+                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'x'" (click)="scene3dSetArrayToolAxis('x')">X</button>
+                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'y'" (click)="scene3dSetArrayToolAxis('y')">Y</button>
+                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayToolAxis === 'z'" (click)="scene3dSetArrayToolAxis('z')">Z</button>
+                </div>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Orient</label>
+                <div class="scene3d-axis-btns">
+                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && scene3dToggleGizmoOrientation()">W</button>
+                    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && scene3dToggleGizmoOrientation()">L</button>
+                </div>
+            </div>
+        </ng-container>
+    </div>
+
+    <!-- Edit Character subpanel — shown when a procedural body is selected and panel is open -->
+    <div class="tool-subpanel" [class.visible]="scene3dEditCharPanelOpen">
+        <div class="tool-label">EDIT CHARACTER</div>
+
+        <!-- ── Back header ── -->
+        <div *ngIf="charSection !== 'menu'" class="char-nav-header">
+            <button class="char-back-btn" (click)="charSection = 'menu'">← Back</button>
+            <span class="char-nav-title">{{ charSection | titlecase }}</span>
+        </div>
+
+        <!-- ── Category menu ── -->
+        <ng-container *ngIf="charSection === 'menu'">
+            <div class="char-menu">
+                <button class="char-menu-btn" (click)="charSection = 'body'">Body</button>
+                <button class="char-menu-btn" (click)="charSection = 'eyes'">Eyes</button>
+                <button class="char-menu-btn" (click)="charSection = 'hair'">Hair</button>
+                <button class="char-menu-btn" (click)="charSection = 'top'">Top</button>
+                <button class="char-menu-btn" (click)="charSection = 'bottom'">Bottom</button>
+            </div>
+            <div class="scene3d-material-row" style="margin-top:12px">
+                <label>Style</label>
+                <select class="scene3d-select" [(ngModel)]="charRenderStyle" (ngModelChange)="scene3dSetCharRenderStyle($event)">
+                    <option value="default">Default (PBR)</option>
+                    <option value="gouraud">Gouraud (PS1)</option>
+                    <option value="cel">Cel / Toon</option>
+                    <option value="sketch">Sketch</option>
+                    <option value="ink">Ink / Manga</option>
+                </select>
+            </div>
+        </ng-container>
+
+        <!-- ── Body ── -->
+        <ng-container *ngIf="charSection === 'body'">
+            <ng-container *ngIf="scene3dBodyParams">
+                <div class="scene3d-material-row">
+                    <label>Bust</label>
+                    <input type="range" min="0.5" max="2" step="0.05"
+                           [(ngModel)]="scene3dBodyParams.bust"
+                           (ngModelChange)="scene3dBodyParamChanged()">
+                    <span class="scene3d-val">{{ scene3dBodyParams.bust | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Waist</label>
+                    <input type="range" min="0.5" max="1.5" step="0.05"
+                           [(ngModel)]="scene3dBodyParams.waist"
+                           (ngModelChange)="scene3dBodyParamChanged()">
+                    <span class="scene3d-val">{{ scene3dBodyParams.waist | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Hip Width</label>
+                    <input type="range" min="0.75" max="1.25" step="0.05"
+                           [(ngModel)]="scene3dBodyParams.hipWidth"
+                           (ngModelChange)="scene3dBodyParamChanged()">
+                    <span class="scene3d-val">{{ scene3dBodyParams.hipWidth | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Hip Front</label>
+                    <input type="range" min="0.75" max="1.25" step="0.05"
+                           [(ngModel)]="scene3dBodyParams.hipFront"
+                           (ngModelChange)="scene3dBodyParamChanged()">
+                    <span class="scene3d-val">{{ scene3dBodyParams.hipFront | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Shoulders</label>
+                    <input type="range" min="0.5" max="2" step="0.05"
+                           [(ngModel)]="scene3dBodyParams.shoulderWidth"
+                           (ngModelChange)="scene3dBodyParamChanged()">
+                    <span class="scene3d-val">{{ scene3dBodyParams.shoulderWidth | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Skin tone</label>
+                    <input type="color"
+                           [(ngModel)]="scene3dSkinTone"
+                           (ngModelChange)="scene3dSkinToneChanged()">
+                </div>
+            </ng-container>
+            <button *ngIf="!scene3dBodyParams" class="scene3d-btn" style="width:100%"
+                    (click)="scene3dInitBodyParams()">Load Body Params</button>
+            <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+            <div class="scene3d-material-row">
+                <label>Diffuse</label>
+                <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                    Upload<input type="file" accept="image/*" style="display:none" (change)="scene3dUploadCharPartTexture('body', $event)">
+                </label>
+                <button class="scene3d-btn" *ngIf="charPartTextureSet['body']"
+                        (click)="scene3dClearCharPartTexture('body')" title="Clear texture">✕</button>
+            </div>
+        </ng-container>
+
+        <!-- ── Eyes ── -->
+        <ng-container *ngIf="charSection === 'eyes'">
+            <div class="eye-expr-list">
+                <ng-container *ngFor="let expr of scene3dFaceExpressions">
+                    <div class="eye-expr-row">
+                        <span class="eye-expr-name"
+                              [class.active]="scene3dFaceActiveExprId === expr.id"
+                              (click)="scene3dSetActiveFaceExpr(expr.id)"
+                              title="Set as active expression">{{ expr.name }}</span>
+                        <button class="scene3d-btn scene3d-btn-sm"
+                                [class.scene3d-btn-active]="scene3dEyeModeMap[expr.id] !== 'procedural'"
+                                (click)="scene3dSetEyeMode(expr.id, 'draw'); scene3dDrawEyes(expr.id)"
+                                title="Draw eyes freehand">Draw</button>
+                        <button class="scene3d-btn scene3d-btn-sm"
+                                [class.scene3d-btn-active]="scene3dEyeModeMap[expr.id] === 'procedural'"
+                                (click)="scene3dSetEyeMode(expr.id, 'procedural')"
+                                title="Generate eyes from sliders">Proc</button>
+                        <button class="scene3d-btn scene3d-btn-sm"
+                                [class.scene3d-btn-active]="scene3dFaceBlinkExprId === expr.id"
+                                (click)="scene3dToggleBlinkExpr(expr.id)"
+                                title="Use as blink state">↻</button>
+                        <button class="scene3d-btn scene3d-btn-sm"
+                                (click)="scene3dDeleteFaceExpr(expr.id)"
+                                title="Delete state">✕</button>
+                    </div>
+                    <!-- Procedural eye param sliders -->
+                    <div *ngIf="scene3dEyeModeMap[expr.id] === 'procedural' && scene3dEyeParamsMap[expr.id]"
+                         class="eye-proc-params">
+                        <div class="eye-proc-group">Render</div>
+                        <div class="scene3d-material-row">
+                            <label>Pixelation</label>
+                            <input type="range" min="0" max="400" step="10"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].pixelResolution"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].pixelResolution === 0 ? 'off' : scene3dEyeParamsMap[expr.id].pixelResolution }}</span>
+                        </div>
+
+                        <div class="eye-proc-group">Placement</div>
+                        <div class="scene3d-material-row">
+                            <label>Spacing</label>
+                            <input type="range" min="0.2" max="1.0" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].spacing"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].spacing | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>V pos</label>
+                            <input type="range" min="0.1" max="0.9" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].verticalPos"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].verticalPos | number:'1.2-2' }}</span>
+                        </div>
+
+                        <div class="eye-proc-group">Shape</div>
+                        <div class="scene3d-material-row">
+                            <label>Width</label>
+                            <input type="range" min="0.1" max="0.5" step="0.02"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].width"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].width | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Height</label>
+                            <input type="range" min="0.1" max="0.5" step="0.02"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].height"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].height | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Tilt</label>
+                            <input type="range" min="-0.5" max="0.5" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].tilt"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].tilt | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Round</label>
+                            <input type="range" min="0" max="1" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].roundness"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].roundness | number:'1.2-2' }}</span>
+                        </div>
+
+                        <div class="eye-proc-group">Iris</div>
+                        <div class="scene3d-material-row">
+                            <label>Gradient</label>
+                            <input type="checkbox"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].irisGradient"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+                        <ng-container *ngIf="scene3dEyeParamsMap[expr.id].irisGradient">
+                            <div class="scene3d-material-row">
+                                <label>Top</label>
+                                <input type="color"
+                                       [(ngModel)]="scene3dEyeParamsMap[expr.id].irisColorTop"
+                                       (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Bottom</label>
+                                <input type="color"
+                                       [(ngModel)]="scene3dEyeParamsMap[expr.id].irisColorBottom"
+                                       (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            </div>
+                        </ng-container>
+                        <ng-container *ngIf="!scene3dEyeParamsMap[expr.id].irisGradient">
+                            <div class="scene3d-material-row">
+                                <label>Color</label>
+                                <input type="color"
+                                       [(ngModel)]="scene3dEyeParamsMap[expr.id].irisColor"
+                                       (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            </div>
+                        </ng-container>
+                        <div class="scene3d-material-row">
+                            <label>Radius</label>
+                            <input type="range" min="0.1" max="0.9" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].irisRadius"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].irisRadius | number:'1.2-2' }}</span>
+                        </div>
+
+                        <div class="eye-proc-group">Pupil</div>
+                        <div class="scene3d-material-row">
+                            <label>Color</label>
+                            <input type="color"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].pupilColor"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Radius</label>
+                            <input type="range" min="0.05" max="0.6" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].pupilRadius"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].pupilRadius | number:'1.2-2' }}</span>
+                        </div>
+
+                        <div class="eye-proc-group">Lashes</div>
+                        <div class="scene3d-material-row">
+                            <label>Color</label>
+                            <input type="color"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].upperLashColor"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Thickness</label>
+                            <input type="range" min="0.01" max="0.1" step="0.005"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].upperLashThickness"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].upperLashThickness | number:'1.2-3' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Outer flick</label>
+                            <input type="range" min="0" max="1" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].outerLashLength"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].outerLashLength | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Lower lash</label>
+                            <input type="checkbox"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].lowerLash"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>Double lid</label>
+                            <input type="checkbox"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].doubleEyelid"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+
+                        <div class="eye-proc-group">Deco dots</div>
+                        <div class="scene3d-material-row">
+                            <label>Enable</label>
+                            <input type="checkbox"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].underDeco"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+                        <ng-container *ngIf="scene3dEyeParamsMap[expr.id].underDeco">
+                            <div class="scene3d-material-row">
+                                <label>Color</label>
+                                <input type="color"
+                                       [(ngModel)]="scene3dEyeParamsMap[expr.id].underDecoColor"
+                                       (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            </div>
+                            <div class="scene3d-material-row">
+                                <label>Count</label>
+                                <input type="range" min="1" max="5" step="1"
+                                       [(ngModel)]="scene3dEyeParamsMap[expr.id].underDecoCount"
+                                       (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                                <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].underDecoCount }}</span>
+                            </div>
+                        </ng-container>
+
+                        <div class="scene3d-material-row" style="margin-top:8px">
+                            <label>Closed eye</label>
+                            <input type="checkbox"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].closed"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                        </div>
+
+                        <div class="eye-proc-group">Gaze (baked)</div>
+                        <div class="scene3d-material-row">
+                            <label>← →</label>
+                            <input type="range" min="-1" max="1" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].gazeX"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].gazeX | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="scene3d-material-row">
+                            <label>↑ ↓</label>
+                            <input type="range" min="-1" max="1" step="0.05"
+                                   [(ngModel)]="scene3dEyeParamsMap[expr.id].gazeY"
+                                   (ngModelChange)="scene3dEyeParamChanged(expr.id)">
+                            <span class="scene3d-val">{{ scene3dEyeParamsMap[expr.id].gazeY | number:'1.2-2' }}</span>
+                        </div>
+                    </div>
+                </ng-container>
+            </div>
+
+            <div *ngIf="scene3dFaceExpressions.length === 0"
+                 style="font-size:10px;color:#666;font-style:italic;padding:6px 0">No states yet</div>
+            <button class="scene3d-btn" style="width:100%;margin-top:6px"
+                    (click)="scene3dAddFaceExpression()">+ New state</button>
+
+            <!-- Live gaze pad -->
+            <div style="margin-top:14px">
+                <div class="scene3d-array-strip-label" style="margin-bottom:6px">Live Gaze</div>
+                <div class="gaze-pad"
+                     #gazePad
+                     (pointerdown)="scene3dGazePadPointerDown($event, gazePad)"
+                     (pointermove)="scene3dGazePadPointerMove($event, gazePad)"
+                     (pointerup)="scene3dGazePadPointerUp()"
+                     (pointercancel)="scene3dGazePadPointerUp()">
+                    <div class="gaze-reticle"></div>
+                    <div class="gaze-dot"
+                         [style.left.%]="(scene3dGazeX + 1) * 50"
+                         [style.top.%]="(scene3dGazeY + 1) * 50"></div>
+                </div>
+                <button class="scene3d-btn scene3d-btn-sm" style="width:100%;margin-top:4px"
+                        (click)="scene3dGazeCenter()">Center</button>
+            </div>
+
+            <!-- Blink config -->
+            <div *ngIf="scene3dFaceBlinkExprId" style="margin-top:14px">
+                <div class="scene3d-array-strip-label" style="margin-bottom:6px">Blink</div>
+                <div class="scene3d-material-row">
+                    <label>Mode</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dFaceBlinkMode" (ngModelChange)="scene3dApplyFaceBlinkConfig()">
+                        <option value="random">Random</option>
+                        <option value="fixed">Fixed</option>
+                    </select>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Min s</label>
+                    <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+                           [(ngModel)]="scene3dFaceBlinkMin" (ngModelChange)="scene3dApplyFaceBlinkConfig()">
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dFaceBlinkMode === 'random'">
+                    <label>Max s</label>
+                    <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+                           [(ngModel)]="scene3dFaceBlinkMax" (ngModelChange)="scene3dApplyFaceBlinkConfig()">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Hold ms</label>
+                    <input type="number" class="scene3d-array-strip-count" style="width:52px" min="50" step="10"
+                           [(ngModel)]="scene3dFaceBlinkHold" (ngModelChange)="scene3dApplyFaceBlinkConfig()">
+                </div>
+            </div>
+            <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+            <div class="scene3d-material-row">
+                <label>Diffuse</label>
+                <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                    Upload<input type="file" accept="image/*" style="display:none" (change)="scene3dUploadCharPartTexture('eyes', $event)">
+                </label>
+                <button class="scene3d-btn" *ngIf="charPartTextureSet['eyes']"
+                        (click)="scene3dClearCharPartTexture('eyes')" title="Clear texture">✕</button>
+            </div>
+        </ng-container>
+
+        <!-- ── Hair ── -->
+        <ng-container *ngIf="charSection === 'hair'">
+            <div *ngIf="!scene3dHairParams">
+                <button class="scene3d-btn" style="width:100%" (click)="scene3dInitHair()">Generate Hair</button>
+            </div>
+            <ng-container *ngIf="scene3dHairParams">
+                <div class="eye-proc-group">Cap</div>
+                <div class="scene3d-material-row">
+                    <label>V offset</label>
+                    <input type="range" min="0.6" max="0.8" step="0.02"
+                           [(ngModel)]="scene3dHairParams.verticalOffset"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.verticalOffset | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Thickness</label>
+                    <input type="range" min="-0.5" max="0.25" step="0.01"
+                           [(ngModel)]="scene3dHairParams.capThickness"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.capThickness | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Back len</label>
+                    <input type="range" min="0" max="4" step="0.1"
+                           [(ngModel)]="scene3dHairParams.backLength"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.backLength | number:'1.1-1' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Crown</label>
+                    <input type="range" min="0" max="0.5" step="0.01"
+                           [(ngModel)]="scene3dHairParams.crownRound"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.crownRound | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Hairline</label>
+                    <input type="range" min="0" max="0.6" step="0.01"
+                           [(ngModel)]="scene3dHairParams.hairlineFront"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.hairlineFront | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Bangs</div>
+                <div class="scene3d-material-row">
+                    <label>Style</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dHairParams.partingStyle"
+                            (ngModelChange)="scene3dHairParamChanged()">
+                        <option value="fringe">Fringe</option>
+                        <option value="parted">Parted</option>
+                        <option value="swept">Swept</option>
+                    </select>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Part pos</label>
+                    <input type="range" min="-1" max="1" step="0.05"
+                           [(ngModel)]="scene3dHairParams.partingPosition"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.partingPosition | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Part width</label>
+                    <input type="range" min="0" max="0.5" step="0.01"
+                           [(ngModel)]="scene3dHairParams.partingWidth"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.partingWidth | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Count</label>
+                    <input type="range" min="0" max="12" step="1"
+                           [(ngModel)]="scene3dHairParams.bangCount"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.bangCount }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Length</label>
+                    <input type="range" min="0" max="2.5" step="0.05"
+                           [(ngModel)]="scene3dHairParams.bangLength"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.bangLength | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Curve</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dHairParams.bangCurve"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.bangCurve | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Pointy</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dHairParams.bangPointiness"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.bangPointiness | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>V offset</label>
+                    <input type="range" min="-0.8" max="0.8" step="0.02"
+                           [(ngModel)]="scene3dHairParams.bangOffset"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.bangOffset | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Side Locks</div>
+                <div class="scene3d-material-row">
+                    <label>Enable</label>
+                    <input type="checkbox"
+                           [(ngModel)]="scene3dHairParams.sideLock"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                </div>
+                <ng-container *ngIf="scene3dHairParams.sideLock">
+                    <div class="scene3d-material-row">
+                        <label>Length</label>
+                        <input type="range" min="0" max="3" step="0.05"
+                               [(ngModel)]="scene3dHairParams.sideLockLength"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.sideLockLength | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Width</label>
+                        <input type="range" min="0" max="0.5" step="0.01"
+                               [(ngModel)]="scene3dHairParams.sideLockWidth"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.sideLockWidth | number:'1.2-2' }}</span>
+                    </div>
+                </ng-container>
+
+                <div class="eye-proc-group">Tails</div>
+                <div class="scene3d-material-row">
+                    <label>Style</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dHairParams.tailStyle"
+                            (ngModelChange)="scene3dHairParamChanged()">
+                        <option value="none">None</option>
+                        <option value="twin">Twin</option>
+                        <option value="pony">Pony</option>
+                        <option value="pig">Pig</option>
+                    </select>
+                </div>
+                <ng-container *ngIf="scene3dHairParams.tailStyle !== 'none'">
+                    <div class="scene3d-material-row">
+                        <label>Height</label>
+                        <input type="range" min="-0.5" max="0.8" step="0.05"
+                               [(ngModel)]="scene3dHairParams.tailHeight"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailHeight | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Spread</label>
+                        <input type="range" min="0" max="1" step="0.05"
+                               [(ngModel)]="scene3dHairParams.tailSpread"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailSpread | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Length</label>
+                        <input type="range" min="0" max="6" step="0.1"
+                               [(ngModel)]="scene3dHairParams.tailLength"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailLength | number:'1.1-1' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Thickness</label>
+                        <input type="range" min="0.1" max="0.8" step="0.05"
+                               [(ngModel)]="scene3dHairParams.tailThickness"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailThickness | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Taper</label>
+                        <input type="range" min="0" max="1" step="0.05"
+                               [(ngModel)]="scene3dHairParams.tailTaper"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailTaper | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Curl</label>
+                        <input type="range" min="-1" max="1" step="0.05"
+                               [(ngModel)]="scene3dHairParams.tailCurl"
+                               (ngModelChange)="scene3dHairParamChanged()">
+                        <span class="scene3d-val">{{ scene3dHairParams.tailCurl | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="scene3d-material-row">
+                        <label>Tip</label>
+                        <select class="scene3d-select" [(ngModel)]="scene3dHairParams.tailTip"
+                                (ngModelChange)="scene3dHairParamChanged()">
+                            <option value="point">Point</option>
+                            <option value="flare">Flare</option>
+                            <option value="blunt">Blunt</option>
+                        </select>
+                    </div>
+                </ng-container>
+
+                <div class="eye-proc-group">Colour</div>
+                <div class="scene3d-material-row">
+                    <label>Root</label>
+                    <input type="color"
+                           [(ngModel)]="scene3dHairParams.rootColor"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Tip</label>
+                    <input type="color"
+                           [(ngModel)]="scene3dHairParams.tipColor"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Gradient</label>
+                    <input type="checkbox"
+                           [(ngModel)]="scene3dHairParams.gradient"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dHairParams.gradient">
+                    <label>Tip fade</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dHairParams.tipFade"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.tipFade | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Render</div>
+                <div class="scene3d-material-row">
+                    <label>Chunkiness</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dHairParams.chunkiness"
+                           (ngModelChange)="scene3dHairParamChanged()">
+                    <span class="scene3d-val">{{ scene3dHairParams.chunkiness | number:'1.2-2' }}</span>
+                </div>
+
+                <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
+                        (click)="scene3dRemoveHair()">Remove Hair</button>
+                <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                        (click)="scene3dBakeHair()">Save as Part</button>
+                <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+                <div class="scene3d-material-row">
+                    <label>Diffuse</label>
+                    <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                        Upload<input type="file" accept="image/*" style="display:none" (change)="scene3dUploadCharPartTexture('hair', $event)">
+                    </label>
+                    <button class="scene3d-btn" *ngIf="charPartTextureSet['hair']"
+                            (click)="scene3dClearCharPartTexture('hair')" title="Clear texture">✕</button>
+                </div>
+            </ng-container>
+        </ng-container>
+
+        <!-- ── Top ── -->
+        <ng-container *ngIf="charSection === 'top'">
+            <div *ngIf="!scene3dTopParams">
+                <button class="scene3d-btn" style="width:100%" (click)="scene3dInitClothing('top')">Generate Top</button>
+            </div>
+            <ng-container *ngIf="scene3dTopParams">
+                <div class="scene3d-material-row" *ngIf="scene3dTopPresets.length > 0">
+                    <label>Preset</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dTopPresetName"
+                            (ngModelChange)="scene3dApplyClothingPreset('top', $event)">
+                        <option value="">—</option>
+                        <option *ngFor="let p of scene3dTopPresets" [value]="p">{{ p }}</option>
+                    </select>
+                </div>
+
+                <div class="eye-proc-group">Neckline</div>
+                <div class="scene3d-material-row">
+                    <label>Shape</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dTopParams.neckline"
+                            (ngModelChange)="scene3dClothingParamChanged('top')">
+                        <option value="round">Round</option>
+                        <option value="v">V-neck</option>
+                        <option value="crew">Crew</option>
+                        <option value="collar">Collar</option>
+                    </select>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Height</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dTopParams.necklineHeight"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.necklineHeight | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Body</div>
+                <div class="scene3d-material-row">
+                    <label>Crop</label>
+                    <input type="range" min="-0.5" max="1" step="0.05"
+                           [(ngModel)]="scene3dTopParams.hemHeight"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.hemHeight | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Shoulders</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dTopParams.shoulderCoverage"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.shoulderCoverage | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Looseness</label>
+                    <input type="range" min="0" max="0.025" step="0.001"
+                           [(ngModel)]="scene3dTopParams.thickness"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.thickness | number:'1.3-3' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Sleeves</div>
+                <div class="scene3d-material-row">
+                    <label>Length</label>
+                    <input type="range" min="0" max="1" step="0.02"
+                           [(ngModel)]="scene3dTopParams.sleeveLength"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.sleeveLength | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dTopParams.sleeveLength > 0">
+                    <label>Width</label>
+                    <input type="range" min="0" max="0.04" step="0.001"
+                           [(ngModel)]="scene3dTopParams.sleeveWidth"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.sleeveWidth | number:'1.3-3' }}</span>
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dTopParams.sleeveLength > 0">
+                    <label>Cap flare</label>
+                    <input type="range" min="0" max="1" step="0.02"
+                           [(ngModel)]="scene3dTopParams.sleeveCap"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.sleeveCap | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Colour</div>
+                <div class="scene3d-material-row">
+                    <label>Base</label>
+                    <input type="color" [(ngModel)]="scene3dTopParams.baseColor"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Trim</label>
+                    <input type="color" [(ngModel)]="scene3dTopParams.trimColor"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Gradient</label>
+                    <input type="checkbox" [(ngModel)]="scene3dTopParams.gradient"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dTopParams.gradient">
+                    <label>Trim width</label>
+                    <input type="range" min="0" max="0.5" step="0.02"
+                           [(ngModel)]="scene3dTopParams.trimWidth"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.trimWidth | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Render</div>
+                <div class="scene3d-material-row">
+                    <label>Chunkiness</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dTopParams.chunkiness"
+                           (ngModelChange)="scene3dClothingParamChanged('top')">
+                    <span class="scene3d-val">{{ scene3dTopParams.chunkiness | number:'1.2-2' }}</span>
+                </div>
+
+                <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                        [class.scene3d-btn-active]="scene3dClothingPaintActive === 'top'"
+                        (click)="scene3dToggleClothingPaint('top')">
+                    {{ scene3dClothingPaintActive === 'top' ? '✎ Painting…' : '✎ Paint' }}
+                </button>
+                <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                        (click)="scene3dRemoveClothing('top')">Remove Top</button>
+                <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                        (click)="scene3dBakeClothing('top')">Save as Part</button>
+                <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+                <div class="scene3d-material-row">
+                    <label>Diffuse</label>
+                    <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                        Upload<input type="file" accept="image/*" style="display:none" (change)="scene3dUploadCharPartTexture('top', $event)">
+                    </label>
+                    <button class="scene3d-btn" *ngIf="charPartTextureSet['top']"
+                            (click)="scene3dClearCharPartTexture('top')" title="Clear texture">✕</button>
+                </div>
+            </ng-container>
+        </ng-container>
+
+        <!-- ── Bottom ── -->
+        <ng-container *ngIf="charSection === 'bottom'">
+            <div *ngIf="!scene3dBottomParams">
+                <button class="scene3d-btn" style="width:100%" (click)="scene3dInitClothing('bottom')">Generate Bottom</button>
+            </div>
+            <ng-container *ngIf="scene3dBottomParams">
+                <div class="scene3d-material-row" *ngIf="scene3dBottomPresets.length > 0">
+                    <label>Preset</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dBottomPresetName"
+                            (ngModelChange)="scene3dApplyClothingPreset('bottom', $event)">
+                        <option value="">—</option>
+                        <option *ngFor="let p of scene3dBottomPresets" [value]="p">{{ p }}</option>
+                    </select>
+                </div>
+
+                <div class="eye-proc-group">Style</div>
+                <div class="scene3d-material-row">
+                    <label>Type</label>
+                    <select class="scene3d-select" [(ngModel)]="scene3dBottomParams.bottomStyle"
+                            (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                        <option value="skirt">Skirt</option>
+                        <option value="shorts">Shorts</option>
+                        <option value="pants">Pants</option>
+                    </select>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Waist</label>
+                    <input type="range" min="0" max="0.5" step="0.02"
+                           [(ngModel)]="scene3dBottomParams.waistWidth"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.waistWidth | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Rise</label>
+                    <input type="range" min="-0.5" max="0.5" step="0.05"
+                           [(ngModel)]="scene3dBottomParams.waistHeight"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.waistHeight | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Length</label>
+                    <input type="range"
+                           [min]="scene3dBottomParams.bottomStyle === 'shorts' ? 0.35 : 0.5"
+                           [max]="scene3dBottomParams.bottomStyle === 'pants' ? 1 : scene3dBottomParams.bottomStyle === 'shorts' ? 0.5 : 1.5"
+                           step="0.05"
+                           [(ngModel)]="scene3dBottomParams.length"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.length | number:'1.2-2' }}</span>
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dBottomParams.bottomStyle === 'skirt'">
+                    <label>Flare</label>
+                    <input type="range" min="1" max="3" step="0.1"
+                           [(ngModel)]="scene3dBottomParams.flare"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.flare | number:'1.1-1' }}</span>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Looseness</label>
+                    <input type="range" min="0" max="0.025" step="0.001"
+                           [(ngModel)]="scene3dBottomParams.thickness"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.thickness | number:'1.3-3' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Colour</div>
+                <div class="scene3d-material-row">
+                    <label>Base</label>
+                    <input type="color" [(ngModel)]="scene3dBottomParams.baseColor"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Trim</label>
+                    <input type="color" [(ngModel)]="scene3dBottomParams.trimColor"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Gradient</label>
+                    <input type="checkbox" [(ngModel)]="scene3dBottomParams.gradient"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                </div>
+                <div class="scene3d-material-row" *ngIf="scene3dBottomParams.gradient">
+                    <label>Trim width</label>
+                    <input type="range" min="0" max="0.5" step="0.02"
+                           [(ngModel)]="scene3dBottomParams.trimWidth"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.trimWidth | number:'1.2-2' }}</span>
+                </div>
+
+                <div class="eye-proc-group">Render</div>
+                <div class="scene3d-material-row">
+                    <label>Chunkiness</label>
+                    <input type="range" min="0" max="1" step="0.05"
+                           [(ngModel)]="scene3dBottomParams.chunkiness"
+                           (ngModelChange)="scene3dClothingParamChanged('bottom')">
+                    <span class="scene3d-val">{{ scene3dBottomParams.chunkiness | number:'1.2-2' }}</span>
+                </div>
+
+                <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                        [class.scene3d-btn-active]="scene3dClothingPaintActive === 'bottom'"
+                        (click)="scene3dToggleClothingPaint('bottom')">
+                    {{ scene3dClothingPaintActive === 'bottom' ? '✎ Painting…' : '✎ Paint' }}
+                </button>
+                <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                        (click)="scene3dRemoveClothing('bottom')">Remove Bottom</button>
+                <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                        (click)="scene3dBakeClothing('bottom')">Save as Part</button>
+                <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+                <div class="scene3d-material-row">
+                    <label>Diffuse</label>
+                    <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                        Upload<input type="file" accept="image/*" style="display:none" (change)="scene3dUploadCharPartTexture('bottom', $event)">
+                    </label>
+                    <button class="scene3d-btn" *ngIf="charPartTextureSet['bottom']"
+                            (click)="scene3dClearCharPartTexture('bottom')" title="Clear texture">✕</button>
+                </div>
+            </ng-container>
+        </ng-container>
 
     </div>
 
@@ -3313,7 +4405,8 @@
             <div *ngIf="controlPanelActiveTool === 'drawing:pen'">
                 <app-brush-options
                     [activeRasterTool]="activeRasterTool"
-                    (presetChanged)="rasterBrushService.refreshPresets()">
+                    (presetChanged)="rasterBrushService.refreshPresets()"
+                    (toolSelected)="activeRasterTool = $event">
                 </app-brush-options>
             </div>
 
@@ -3368,7 +4461,7 @@
                     </div>
                 </div>
                 <!-- Reference Layer -->
-                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
                     <label style="width: 70px; color:#aaa; font-size: 11px;"
                            title="Use another layer's outlines as fill boundaries. The manga workflow: ink on one layer, fill on another.">Reference</label>
                     <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
@@ -3378,6 +4471,7 @@
                         <option *ngFor="let layer of rasterLayers" [ngValue]="layer.id">{{ layer.name || 'Layer' }}</option>
                     </select>
                 </div>
+                <p style="margin: 0 0 6px 0; font-size: 10px; color: #777; line-height: 1.4;">Detects fill boundaries from another layer. Useful when your line art and colors are on separate layers.</p>
             </div>
         </div>
 
@@ -3831,7 +4925,7 @@
         <!-- ═══════════════════════════════════════════════ -->
         <div *ngIf="controlPanelActiveTool === 'live-text'">
             <div class="tool-label">Live Text</div>
-            <div style="padding: 4px 8px; font-size: 12px;">
+            <div class="lt-panel" style="padding: 4px 8px; font-size: 12px;">
                 <!-- Font / Size / Bold / Italic -->
                 <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
                     <select [(ngModel)]="liveTextFont"
@@ -3842,10 +4936,12 @@
                     <input type="number" min="12" max="400" step="1" [(ngModel)]="liveTextFontSize"
                            (ngModelChange)="onLiveTextStyleChange('fontSize', +$event)"
                            style="width: 48px; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
-                    <button (click)="liveTextBold = !liveTextBold; onLiveTextStyleChange('bold', liveTextBold)"
+                    <button class="lt-seg-btn" [class.lt-active]="liveTextBold"
+                            (click)="liveTextBold = !liveTextBold; onLiveTextStyleChange('bold', liveTextBold)"
                             [style.background]="liveTextBold ? '#9B59B6' : '#333'"
                             style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-weight: bold; font-size: 11px;">B</button>
-                    <button (click)="liveTextItalic = !liveTextItalic; onLiveTextStyleChange('italic', liveTextItalic)"
+                    <button class="lt-seg-btn" [class.lt-active]="liveTextItalic"
+                            (click)="liveTextItalic = !liveTextItalic; onLiveTextStyleChange('italic', liveTextItalic)"
                             [style.background]="liveTextItalic ? '#9B59B6' : '#333'"
                             style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-style: italic; font-size: 11px;">I</button>
                 </div>
@@ -3853,43 +4949,73 @@
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
                     <label style="width: 54px; color: #aaa;">Writing</label>
                     <div style="display: flex; gap: 2px;">
-                        <button (click)="liveTextWritingMode = 'horizontal-tb'; onLiveTextStyleChange('writingMode', 'horizontal-tb')"
+                        <button class="lt-seg-btn" [class.lt-active]="liveTextWritingMode === 'horizontal-tb'"
+                                (click)="liveTextWritingMode = 'horizontal-tb'; onLiveTextStyleChange('writingMode', 'horizontal-tb')"
                                 [style.background]="liveTextWritingMode === 'horizontal-tb' ? '#9B59B6' : '#333'"
                                 style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;"
                                 title="Horizontal text (left-to-right)">H</button>
-                        <button (click)="liveTextWritingMode = 'vertical-rl'; onLiveTextStyleChange('writingMode', 'vertical-rl')"
+                        <button class="lt-seg-btn" [class.lt-active]="liveTextWritingMode === 'vertical-rl'"
+                                (click)="liveTextWritingMode = 'vertical-rl'; onLiveTextStyleChange('writingMode', 'vertical-rl')"
                                 [style.background]="liveTextWritingMode === 'vertical-rl' ? '#9B59B6' : '#333'"
                                 style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;"
                                 title="Vertical text (top-to-bottom, right-to-left columns)">V</button>
                     </div>
                 </div>
+                <!-- Alignment -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <label style="width: 54px; color: #aaa;">Align</label>
+                    <div style="display: flex; gap: 2px;">
+                        <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'left'"
+                                (click)="onLiveTextAlignChange('left')"
+                                [style.background]="liveTextAlign === 'left' ? '#9B59B6' : '#333'"
+                                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Left align">L</button>
+                        <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'center'"
+                                (click)="onLiveTextAlignChange('center')"
+                                [style.background]="liveTextAlign === 'center' ? '#9B59B6' : '#333'"
+                                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Center align">C</button>
+                        <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'right'"
+                                (click)="onLiveTextAlignChange('right')"
+                                [style.background]="liveTextAlign === 'right' ? '#9B59B6' : '#333'"
+                                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Right align">R</button>
+                    </div>
+                </div>
                 <!-- Text Color -->
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
                     <label style="width: 54px; color: #aaa;">Color</label>
-                    <div style="display: flex; flex-wrap: wrap; gap: 3px;">
-                        <div *ngFor="let color of ['#ffffff','#ff0000','#ffff00','#00ff00','#00ffff','#0000ff','#ff00ff','#000000']"
-                            class="palette-circle"
-                            [class.selected]="liveTextColor === color"
-                            [style.background-color]="color"
-                            (click)="liveTextColor = color; onLiveTextStyleChange('color', color)"
-                            style="width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid #555;"></div>
-                    </div>
+                    <input type="color" [(ngModel)]="liveTextColor"
+                           (ngModelChange)="onLiveTextStyleChange('color', $event)"
+                           style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+                </div>
+                <!-- Background Color -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <label style="width: 54px; color: #aaa;">Bg</label>
+                    <input type="color" [(ngModel)]="liveTextBgColor" (ngModelChange)="onLiveTextBgChange()"
+                           style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+                    <input type="range" min="0" max="1" step="0.01" [(ngModel)]="liveTextBgAlpha" (ngModelChange)="onLiveTextBgChange()"
+                           style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+                    <span style="font-size: 10px; color: #aaa; min-width: 28px; text-align: right;">{{ liveTextBgAlpha * 100 | number:'1.0-0' }}%</span>
+                </div>
+                <!-- Padding -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <label style="width: 54px; color: #aaa;">Padding</label>
+                    <input type="range" min="0" max="48" step="1" [(ngModel)]="liveTextPadding"
+                           (ngModelChange)="onLiveTextStyleChange('padding', +$event)"
+                           style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+                    <span style="font-size: 10px; color: #aaa; min-width: 20px; text-align: right;">{{ liveTextPadding }}</span>
+                </div>
+                <!-- Arc -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <label style="width: 54px; color: #aaa;" title="Bend text along an arc. 0 = flat, positive = arch up (∩), negative = arch down (∪).">Arc</label>
+                    <input type="range" min="-180" max="180" step="1" [(ngModel)]="liveTextArcAngle"
+                           (ngModelChange)="onLiveTextStyleChange('arcAngle', +$event)"
+                           style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+                    <span style="font-size: 10px; color: #aaa; min-width: 28px; text-align: right;">{{ liveTextArcAngle }}°</span>
                 </div>
 
                 <!-- Effects Section (visible when HTML-in-Canvas is available) -->
                 <ng-container *ngIf="hasHtmlInCanvas">
                     <hr style="border-color: #444; margin: 6px 0;">
                     <div class="tool-label" style="font-size: 11px; margin-bottom: 4px;">Effects</div>
-                    <!-- Presets -->
-                    <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 6px;">
-                        <button *ngFor="let preset of textEffectPresets"
-                                class="fx-preset-btn"
-                                (click)="applyLiveTextEffectPreset(preset)"
-                                [title]="preset.label">
-                            <span style="font-size: 12px;">{{ preset.icon }}</span>
-                            <span style="font-size: 9px;">{{ preset.label }}</span>
-                        </button>
-                    </div>
                     <!-- Effect chain -->
                     <div style="margin-bottom: 4px;">
                         <div *ngFor="let entry of liveTextEffectChain; let i = index"
@@ -3913,6 +5039,7 @@
                                 <ng-container *ngIf="entry.type === 'glow'">
                                     <div class="fx-param-row"><label>Radius</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['radius']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'radius', +$event)"><span>{{ entry.params['radius'] }}</span></div>
                                     <div class="fx-param-row"><label>Intensity</label><input type="range" min="0.5" max="5" step="0.1" [ngModel]="entry.params['intensity']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'intensity', +$event)"><span>{{ entry.params['intensity'] | number:'1.1-1' }}</span></div>
+                                    <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onLiveTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))"></div>
                                 </ng-container>
                                 <ng-container *ngIf="entry.type === 'wave'">
                                     <div class="fx-param-row"><label>Amplitude</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['amplitude']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'amplitude', +$event)"><span>{{ entry.params['amplitude'] }}</span></div>
@@ -3925,6 +5052,19 @@
                                 </ng-container>
                                 <ng-container *ngIf="entry.type === 'outline'">
                                     <div class="fx-param-row"><label>Thickness</label><input type="range" min="1" max="10" step="1" [ngModel]="entry.params['thickness']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'thickness', +$event)"><span>{{ entry.params['thickness'] }}</span></div>
+                                    <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(entry.params['color'])" (ngModelChange)="onLiveTextEffectParamChange(entry, 'color', fxHexToColor($event, entry.params['color']?.[3] ?? 1))"></div>
+                                    <div class="fx-param-row"><label>Offset X</label><input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[0] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'offset', [+$event, entry.params['offset']?.[1] ?? 0])"><span>{{ (entry.params['offset']?.[0] ?? 0) | number:'1.1-1' }}</span></div>
+                                    <div class="fx-param-row"><label>Offset Y</label><input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[1] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'offset', [entry.params['offset']?.[0] ?? 0, +$event])"><span>{{ (entry.params['offset']?.[1] ?? 0) | number:'1.1-1' }}</span></div>
+                                    <div class="fx-param-row"><label>Gap</label><input type="range" min="0" max="5" step="0.5" [ngModel]="entry.params['gap'] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'gap', +$event)"><span>{{ entry.params['gap'] ?? 0 }}</span></div>
+                                </ng-container>
+                                <ng-container *ngIf="entry.type === 'feather'">
+                                    <div class="fx-param-row"><label>Mode</label>
+                                        <button (click)="onLiveTextEffectParamChange(entry, 'mode', 'linear')" [style.background]="entry.params['mode'] === 'linear' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Linear</button>
+                                        <button (click)="onLiveTextEffectParamChange(entry, 'mode', 'radial')" [style.background]="entry.params['mode'] === 'radial' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Radial</button>
+                                    </div>
+                                    <div class="fx-param-row" *ngIf="entry.params['mode'] === 'linear'"><label>Angle</label><input type="range" min="0" max="360" step="1" [ngModel]="entry.params['angle']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'angle', +$event)"><span>{{ entry.params['angle'] }}°</span></div>
+                                    <div class="fx-param-row"><label>Start</label><input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['start']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'start', +$event)"><span>{{ entry.params['start'] | number:'1.2-2' }}</span></div>
+                                    <div class="fx-param-row"><label>End</label><input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['end']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'end', +$event)"><span>{{ entry.params['end'] | number:'1.2-2' }}</span></div>
                                 </ng-container>
                             </div>
                         </div>
@@ -3935,42 +5075,62 @@
                     <!-- Custom Shader -->
                     <hr style="border-color: #444; margin: 6px 0;">
                     <div class="tool-label" style="font-size: 11px; margin-bottom: 4px;">Custom Shader</div>
+                    <!-- Params (1–4, shown on demand) — declared before the code editor -->
+                    <div class="fx-param-row">
+                        <label>Variable A</label>
+                        <input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamA" (ngModelChange)="onCustomShaderParamChange()">
+                        <span>{{ customShaderParamA | number:'1.1-1' }}</span>
+                        <button *ngIf="customShaderParamCount === 1" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+                    </div>
+                    <ng-container *ngIf="customShaderParamCount >= 2">
+                        <div class="fx-param-row">
+                            <label>Variable B</label>
+                            <input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamB" (ngModelChange)="onCustomShaderParamChange()">
+                            <span>{{ customShaderParamB | number:'1.1-1' }}</span>
+                            <button *ngIf="customShaderParamCount === 2" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+                            <button *ngIf="customShaderParamCount === 2" (click)="customShaderParamB = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                        </div>
+                    </ng-container>
+                    <ng-container *ngIf="customShaderParamCount >= 3">
+                        <div class="fx-param-row">
+                            <label>Variable C</label>
+                            <input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamC" (ngModelChange)="onCustomShaderParamChange()">
+                            <span>{{ customShaderParamC | number:'1.2-2' }}</span>
+                            <button *ngIf="customShaderParamCount === 3" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+                            <button *ngIf="customShaderParamCount === 3" (click)="customShaderParamC = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                        </div>
+                    </ng-container>
+                    <ng-container *ngIf="customShaderParamCount >= 4">
+                        <div class="fx-param-row">
+                            <label>Variable D</label>
+                            <input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamD" (ngModelChange)="onCustomShaderParamChange()">
+                            <span>{{ customShaderParamD | number:'1.2-2' }}</span>
+                            <button (click)="customShaderParamD = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                        </div>
+                    </ng-container>
                     <textarea [(ngModel)]="customShaderCode"
                               placeholder="// WGSL effect body..."
-                              style="width: 100%; height: 80px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #555; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 10px; padding: 4px; resize: vertical; box-sizing: border-box;"></textarea>
+                              style="width: 100%; height: 80px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #555; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 10px; padding: 4px; resize: vertical; box-sizing: border-box; margin-top: 6px;"></textarea>
                     <div style="display: flex; gap: 3px; margin: 4px 0;">
                         <button (click)="validateCustomShader()" style="flex: 1; background: #333; border: 1px solid #555; border-radius: 3px; color: #aaa; padding: 3px; cursor: pointer; font-size: 10px;">Validate</button>
-                        <button (click)="applyCustomShader()" style="flex: 1; background: #9B59B6; border: none; border-radius: 3px; color: #fff; padding: 3px; cursor: pointer; font-size: 10px;">Apply</button>
-                        <button (click)="removeCustomShader()" style="background: #333; border: 1px solid #555; border-radius: 3px; color: #f77; padding: 3px 6px; cursor: pointer; font-size: 10px;">×</button>
+                        <button class="lt-apply-btn" (click)="applyCustomShader()" style="flex: 1; background: #9B59B6; border: none; border-radius: 3px; color: #fff; padding: 3px; cursor: pointer; font-size: 10px;">Apply</button>
+                        <button class="lt-danger-btn" (click)="removeCustomShader()" style="background: #333; border: 1px solid #555; border-radius: 3px; color: #f77; padding: 3px 6px; cursor: pointer; font-size: 10px;">×</button>
                     </div>
                     <div *ngIf="customShaderStatus"
                          class="shader-status"
                          [class.success]="customShaderStatusType === 'success'"
                          [class.error]="customShaderStatusType === 'error'"
                          style="font-size: 10px; padding: 3px 4px; border-radius: 3px; margin-bottom: 4px; white-space: pre-wrap;">{{ customShaderStatus }}</div>
-                    <!-- Params A/B/C/D -->
-                    <div class="fx-param-row"><label>A</label><input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamA" (ngModelChange)="onCustomShaderParamChange()"><span>{{ customShaderParamA | number:'1.1-1' }}</span></div>
-                    <div class="fx-param-row"><label>B</label><input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamB" (ngModelChange)="onCustomShaderParamChange()"><span>{{ customShaderParamB | number:'1.1-1' }}</span></div>
-                    <div class="fx-param-row"><label>C</label><input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamC" (ngModelChange)="onCustomShaderParamChange()"><span>{{ customShaderParamC | number:'1.2-2' }}</span></div>
-                    <div class="fx-param-row"><label>D</label><input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamD" (ngModelChange)="onCustomShaderParamChange()"><span>{{ customShaderParamD | number:'1.2-2' }}</span></div>
                     <div style="display: flex; align-items: center; gap: 6px; margin: 4px 0;">
                         <input type="checkbox" [(ngModel)]="customShaderAdvanced">
                         <label style="color: #888; font-size: 10px;">Advanced mode (raw WGSL)</label>
-                    </div>
-                    <!-- Snippets -->
-                    <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;">
-                        <button *ngFor="let snippet of shaderSnippets"
-                                class="fx-preset-btn"
-                                (click)="loadShaderSnippet(snippet)"
-                                [title]="snippet.label"
-                                style="font-size: 9px;">{{ snippet.label }}</button>
                     </div>
                 </ng-container>
 
                 <!-- Action buttons -->
                 <hr style="border-color: #444; margin: 6px 0;">
                 <div style="display: flex; gap: 4px;">
-                    <button (click)="flattenLiveText()"
+                    <button class="lt-flatten-btn" (click)="flattenLiveText()"
                             style="flex: 1; background: #e67e22; border: none; border-radius: 4px; color: #fff; padding: 5px 8px; cursor: pointer; font-size: 11px;"
                             title="Flatten the live text node onto the active raster layer (destructive).">Flatten to Layer</button>
                 </div>
@@ -4220,6 +5380,10 @@
                                     <input type="range" min="0.5" max="5" step="0.1" [ngModel]="entry.params['intensity']" (ngModelChange)="onTextEffectParamChange(entry, 'intensity', +$event)">
                                     <span>{{ entry.params['intensity'] | number:'1.1-1' }}</span>
                                 </div>
+                                <div class="fx-param-row">
+                                    <label>Color</label>
+                                    <input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))">
+                                </div>
                             </ng-container>
                             <!-- Wave -->
                             <ng-container *ngIf="entry.type === 'wave'">
@@ -4258,6 +5422,48 @@
                                     <label>Thickness</label>
                                     <input type="range" min="1" max="10" step="1" [ngModel]="entry.params['thickness']" (ngModelChange)="onTextEffectParamChange(entry, 'thickness', +$event)">
                                     <span>{{ entry.params['thickness'] }}</span>
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>Color</label>
+                                    <input type="color" [ngModel]="fxColorToHex(entry.params['color'])" (ngModelChange)="onTextEffectParamChange(entry, 'color', fxHexToColor($event, entry.params['color']?.[3] ?? 1))">
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>Offset X</label>
+                                    <input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[0] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'offset', [+$event, entry.params['offset']?.[1] ?? 0])">
+                                    <span>{{ (entry.params['offset']?.[0] ?? 0) | number:'1.1-1' }}</span>
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>Offset Y</label>
+                                    <input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[1] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'offset', [entry.params['offset']?.[0] ?? 0, +$event])">
+                                    <span>{{ (entry.params['offset']?.[1] ?? 0) | number:'1.1-1' }}</span>
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>Gap</label>
+                                    <input type="range" min="0" max="5" step="0.5" [ngModel]="entry.params['gap'] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'gap', +$event)">
+                                    <span>{{ entry.params['gap'] ?? 0 }}</span>
+                                </div>
+                            </ng-container>
+                            <!-- Feather -->
+                            <ng-container *ngIf="entry.type === 'feather'">
+                                <div class="fx-param-row">
+                                    <label>Mode</label>
+                                    <button (click)="onTextEffectParamChange(entry, 'mode', 'linear')" [style.background]="entry.params['mode'] === 'linear' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Linear</button>
+                                    <button (click)="onTextEffectParamChange(entry, 'mode', 'radial')" [style.background]="entry.params['mode'] === 'radial' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Radial</button>
+                                </div>
+                                <div class="fx-param-row" *ngIf="entry.params['mode'] === 'linear'">
+                                    <label>Angle</label>
+                                    <input type="range" min="0" max="360" step="1" [ngModel]="entry.params['angle']" (ngModelChange)="onTextEffectParamChange(entry, 'angle', +$event)">
+                                    <span>{{ entry.params['angle'] }}°</span>
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>Start</label>
+                                    <input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['start']" (ngModelChange)="onTextEffectParamChange(entry, 'start', +$event)">
+                                    <span>{{ entry.params['start'] | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="fx-param-row">
+                                    <label>End</label>
+                                    <input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['end']" (ngModelChange)="onTextEffectParamChange(entry, 'end', +$event)">
+                                    <span>{{ entry.params['end'] | number:'1.2-2' }}</span>
                                 </div>
                             </ng-container>
                         </div>

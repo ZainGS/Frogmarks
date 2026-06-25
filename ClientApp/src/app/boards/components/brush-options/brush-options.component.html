@@ -9,41 +9,60 @@
        ═══════════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'grid'">
 
-    <div class="brush-panel-header">
-      <span><mat-icon class="brush-header-icon">brush</mat-icon> Brushes</span>
+    <div class="brush-panel-header" style="justify-content: center;">
+      <span>Brushes</span>
     </div>
 
-    <div class="brush-grid">
-      <!-- + Create New Brush cell -->
-      <div class="brush-cell create-cell" (click)="startCreateBrush()" title="Create new brush">
-        <div class="create-icon">+</div>
+    <div class="brush-list">
+      <!-- + Create New Brush row -->
+      <div class="brush-row create-row" (click)="startCreateBrush()" title="Create new brush">
+        <div class="brush-row-preview create-preview">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#888">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+        </div>
+        <span class="brush-row-name create-label">New Brush</span>
       </div>
 
-      <!-- Preset cells -->
+      <!-- Eraser row -->
+      <div class="brush-row" [class.active]="activeRasterTool === 'eraser'" (click)="selectEraserTool()" title="Eraser">
+        <div class="brush-row-preview create-preview">
+          <svg width="16" height="16" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(-1.881 -2.881)">
+              <path fill="#e8e8e8" d="M20.71,10,15.05,4.29a1,1,0,0,0-1.41,0l-5.4,5.4,7.07,7.07,5.4-5.4A1,1,0,0,0,20.71,10Z"/>
+              <path d="M20.71,11.36,12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41L13.64,4.29a1,1,0,0,1,1.41,0L20.71,10a1,1,0,0,1,0,1.36Zm-5.4,5.4L12.07,20H7.66A1,1,0,0,1,7,19.71L3.29,16.05a1,1,0,0,1,0-1.41l5-5ZM18,20H12" fill="none" stroke="#e8e8e8" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+            </g>
+          </svg>
+        </div>
+        <span class="brush-row-name">Eraser</span>
+      </div>
+
+      <!-- Preset rows -->
       <div *ngFor="let preset of presets"
-           class="brush-cell"
+           class="brush-row"
            [class.active]="activePresetId === preset.id"
            (click)="quickSelectBrush(preset.id)">
-        <!-- Gear icon (top-right) -->
-        <div class="gear-icon" (click)="openEditor(preset.id, $event)" title="Edit brush settings">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="#aaa">
+        <!-- Preview image or stroke placeholder -->
+        <div class="brush-row-preview">
+          <img *ngIf="preset.icon" [src]="preset.icon" alt="" class="brush-preview-img">
+          <div *ngIf="!preset.icon" class="brush-preview-placeholder">
+            <svg width="80" height="30" viewBox="0 0 80 30" fill="none">
+              <path d="M4 15 Q20 7 40 15 Q60 23 76 15" stroke="#666" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <!-- Name -->
+        <span class="brush-row-name">{{ preset.name }}</span>
+        <!-- Gear -->
+        <div class="brush-row-gear" (click)="openEditor(preset.id, $event)" title="Edit brush settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#aaa">
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/>
           </svg>
         </div>
-        <!-- Brush preview -->
-        <span class="brush-cell-icon" *ngIf="preset.icon">
-          <img [src]="preset.icon" alt="">
-        </span>
-        <span class="brush-cell-icon" *ngIf="!preset.icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
-            <circle cx="12" cy="12" r="8" opacity="0.6"/>
-          </svg>
-        </span>
-        <span class="brush-cell-name">{{ preset.name }}</span>
       </div>
 
       <!-- Empty state -->
-      <div *ngIf="presets.length === 0" class="empty-state">
+      <div *ngIf="presets.length === 0" class="empty-state-row">
         No brushes yet — click <strong>+</strong> to create one
       </div>
     </div>
@@ -57,23 +76,16 @@
                [(ngModel)]="maxSize" (ngModelChange)="onMaxSizeChange($event)">
         <span class="quick-value">{{ maxSize }}px</span>
       </div>
-      <!-- Opacity -->
-      <div class="quick-row">
-        <span class="quick-label">Opacity</span>
-        <input type="range" min="0" max="100" step="1"
-               [(ngModel)]="opacity" (ngModelChange)="onOpacityChange($event)">
-        <span class="quick-value">{{ opacity }}%</span>
-      </div>
     </div>
 
     <!-- Import / Export Brush Pack -->
     <div class="import-row">
       <label class="btn-brush btn-import" title="Import a brush pack file containing presets and textures.">
-        📦 Import Pack
+        Import Pack
         <input type="file" accept=".json" (change)="onBrushPackFileSelected($event)" hidden>
       </label>
       <button class="btn-brush btn-export" (click)="exportAllPresets()"
-              title="Export all brushes as a .json pack file">💾 Export Pack</button>
+              title="Export all brushes as a .json pack file">Export Pack</button>
     </div>
 
     <!-- Import confirmation dialog -->
@@ -116,6 +128,32 @@
       <div *ngIf="isCreating" class="section">
         <label class="section-label">Name</label>
         <input type="text" class="name-input" [(ngModel)]="newPresetName" placeholder="My Brush…">
+      </div>
+
+      <!-- Preview image (editing existing brush only) -->
+      <div *ngIf="!isCreating" class="section">
+        <label class="section-label">Preview Image</label>
+        <div class="brush-img-editor">
+          <div class="brush-img-preview">
+            <img *ngIf="editingPresetIcon" [src]="editingPresetIcon" alt="preview">
+            <ng-container *ngIf="!editingPresetIcon">
+              <svg width="100%" height="100%" viewBox="0 0 220 44" fill="none">
+                <path d="M10 22 Q55 10 110 22 Q165 34 210 22" stroke="#555" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </ng-container>
+          </div>
+          <div class="brush-img-actions">
+            <label class="btn-brush btn-img-upload" title="Upload brush preview (recommended: 240×48 px)">
+              Upload
+              <input type="file" accept="image/*" (change)="onBrushImageSelected(editingPresetId!, $event)" hidden>
+            </label>
+            <button class="btn-brush btn-img-remove"
+                    *ngIf="editingPresetIcon"
+                    (click)="removeBrushImage(editingPresetId!, $event)"
+                    title="Remove preview image">✕</button>
+          </div>
+          <div class="brush-img-hint">Recommended: 240 × 48 px</div>
+        </div>
       </div>
 
       <!-- ── ERASER sub-options ─────────────────────────────── -->
@@ -166,7 +204,10 @@
               *ngIf="showColorPicker"
               [color]="brushColor"
               [hideInput]="false"
+              [showOpacity]="true"
+              [opacity]="opacity"
               (colorSelected)="onColorSelected($event)"
+              (opacityChange)="onOpacityChange($event)"
               (close)="showColorPicker = false"
               style="position: relative; z-index: 10; margin-top: 4px;">
           </app-color-picker>
@@ -194,15 +235,9 @@
           </div>
         </div>
 
-        <!-- Opacity & Flow -->
+        <!-- Flow & Blend -->
         <div class="section">
-          <label class="section-label">Opacity &amp; Flow</label>
-          <div class="slider-row">
-            <span class="slider-label">Opacity</span>
-            <input type="range" min="0" max="100" step="1"
-                   [(ngModel)]="opacity" (ngModelChange)="onOpacityChange($event)">
-            <span class="slider-value">{{ opacity }}%</span>
-          </div>
+          <label class="section-label">Flow &amp; Blend</label>
           <div class="slider-row">
             <span class="slider-label">Flow</span>
             <input type="range" min="0" max="100" step="1"

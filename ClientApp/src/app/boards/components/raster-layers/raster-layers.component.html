@@ -6,12 +6,12 @@
   <div class="rl-header">
     <span>Layers</span>
     <div class="rl-header-actions">
-      <div class="rl-add-dropdown-wrapper">
+      <div class="rl-add-dropdown-wrapper" (click)="$event.stopPropagation()">
         <button class="rl-btn rl-btn-add" (click)="showAddMenu = !showAddMenu" title="Add Layer">+ Add</button>
         <div *ngIf="showAddMenu" class="rl-add-dropdown">
           <button (click)="addLayer(); showAddMenu = false">2D Layer</button>
           <button (click)="add3DScene(); showAddMenu = false" [disabled]="has3DScene">3D Scene</button>
-          <button (click)="addVectorLayer()">✦ Vector Layer</button>
+          <button (click)="addVectorLayer()">Vector Layer</button>
           <button (click)="addFolder(); showAddMenu = false">Folder</button>
           <button (click)="triggerReferenceImagePicker()">📷 Reference Image</button>
         </div>
@@ -35,7 +35,6 @@
             [title]="vl.visible ? 'Hide layer' : 'Show layer'">
         <mat-icon class="rl-mat-icon">{{ vl.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
       </span>
-      <span class="rl-vector-icon">✦</span>
       <span class="rl-name">{{ vl.name }}</span>
       <button class="rl-vector-remove" (click)="removeVectorLayer(vl.id, $event)" title="Remove vector layer">✕</button>
     </div>
@@ -64,8 +63,11 @@
       <!-- ═══ 3D Scene row ═══ -->
       <ng-container *ngIf="layer.type === '3d-scene'">
         <div class="rl-scene-row">
+          <span class="rl-eye rl-scene-eye" (click)="toggle3DSceneVisible($event)" [title]="scene3dVisible ? 'Hide 3D scene' : 'Show 3D scene'">
+            <mat-icon class="rl-mat-icon">{{ scene3dVisible ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </span>
           <span class="rl-scene-line"></span>
-          <span class="rl-scene-label">⬡ {{ layer.name || '3D Scene' }}</span>
+          <span class="rl-scene-label">{{ layer.name || '3D Scene' }}</span>
           <span class="rl-scene-line"></span>
           <button class="rl-scene-remove" (click)="remove3DScene($event)" title="Remove 3D scene">✕</button>
         </div>
@@ -81,7 +83,7 @@
                 [title]="layer.visible ? 'Hide folder' : 'Show folder'">
             <mat-icon class="rl-mat-icon">{{ layer.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
           </span>
-          <span class="rl-folder-icon">📁</span>
+          <span class="rl-folder-icon">&#x25B6;</span>
 
           <span *ngIf="renamingLayerId !== layer.id"
                 class="rl-name"
@@ -175,7 +177,7 @@
                 [class.on]="layer.lockTransparency"
                 (click)="toggleLockTransparency(layer, $event)"
                 title="Lock transparency">
-            {{ layer.lockTransparency ? '🔒' : '🔓' }}
+            {{ layer.lockTransparency ? 'L' : '·' }}
           </span>
         </div>
 

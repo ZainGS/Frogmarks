@@ -15,7 +15,7 @@
          [title]="layer.animated
            ? 'Animated: this layer has separate drawings per frame. Right-click for options.'
            : 'Static: this layer shows the same drawing on every frame. Right-click to make animated.'">
-      <span class="layer-type-icon">{{ layer.animated ? '✏️' : '🔒' }}</span>
+      <span class="layer-type-icon">{{ layer.animated ? 'A' : '–' }}</span>
       <span class="layer-name">{{ layer.name }}</span>
     </div>
     <!-- 3D Dope Sheet tracks — one block per mesh -->
@@ -320,7 +320,7 @@
       <div class="ctx-divider"></div>
       <div class="ctx-item" (click)="ctxToggleLayerAnimated()"
            title="Convert this layer to animated so it can have separate drawings per frame.">
-        ✏️ Make Animated
+        Make Animated
       </div>
     </ng-container>
 
@@ -335,27 +335,27 @@
              title="Transitional drawing between keys. Shown as ○ in timeline.">○ Set as Inbetween</div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" (click)="ctxDuplicateCel()"
-             title="Copy this drawing to another frame.">📋 Duplicate to Frame…</div>
+             title="Copy this drawing to another frame.">Duplicate to Frame…</div>
         <div class="ctx-item" (click)="ctxMoveCel()"
-             title="Move this drawing to a different frame position.">✂️ Move to Frame…</div>
+             title="Move this drawing to a different frame position.">Move to Frame…</div>
         <div class="ctx-item" (click)="ctxSwapCel()"
-             title="Exchange two drawings' positions.">🔄 Swap with…</div>
+             title="Exchange two drawings' positions.">Swap with…</div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" (click)="ctxDeleteCel()"
-             title="Remove this drawing. The frame becomes blank.">🗑️ Delete Cel</div>
+             title="Remove this drawing. The frame becomes blank.">Delete Cel</div>
       </ng-container>
 
       <!-- Empty frame items (right-clicked on a blank frame) -->
       <ng-container *ngIf="!contextMenuCelId">
         <div class="ctx-item" (click)="ctxNewCel()"
-             title="Create a new blank drawing on this frame. You can then draw on the canvas.">✏️ New Blank Cel</div>
+             title="Create a new blank drawing on this frame. You can then draw on the canvas.">New Blank Cel</div>
       </ng-container>
 
       <div class="ctx-divider"></div>
       <div class="ctx-item" (click)="ctxInsertFrame()"
-           title="Insert a blank frame here. All subsequent frames shift right.">➕ Insert Frame</div>
+           title="Insert a blank frame here. All subsequent frames shift right.">Insert Frame</div>
       <div class="ctx-item" (click)="ctxDeleteFrame()"
-           title="Remove this frame. All subsequent frames shift left.">➖ Delete Frame</div>
+           title="Remove this frame. All subsequent frames shift left.">Delete Frame</div>
       <div class="ctx-divider"></div>
       <div class="ctx-item" (click)="ctxToggleLayerAnimated()">
         {{ getContextLayerAnimatedLabel() }}
@@ -381,11 +381,11 @@
       {{ opt.icon }}&nbsp;&nbsp;{{ opt.label }}
     </div>
     <div class="ctx-divider"></div>
-    <div class="ctx-item" (click)="openKfCopyPrompt()" title="Duplicate this keyframe to another frame.">📋 Copy to Frame…</div>
-    <div class="ctx-item" (click)="openKfMovePrompt()" title="Move this keyframe to a different frame.">✂️ Move to Frame…</div>
+    <div class="ctx-item" (click)="openKfCopyPrompt()" title="Duplicate this keyframe to another frame.">Copy to Frame…</div>
+    <div class="ctx-item" (click)="openKfMovePrompt()" title="Move this keyframe to a different frame.">Move to Frame…</div>
     <div class="ctx-divider"></div>
-    <div class="ctx-item ctx-item-danger" (click)="deleteKeyframe()" title="Remove this keyframe.">🗑️ Delete Keyframe</div>
-    <div class="ctx-item ctx-item-danger" (click)="clearAllKeyframes()" title="Remove all keyframes for this object.">🗑️ Clear All Keyframes</div>
+    <div class="ctx-item ctx-item-danger" (click)="deleteKeyframe()" title="Remove this keyframe.">Delete Keyframe</div>
+    <div class="ctx-item ctx-item-danger" (click)="clearAllKeyframes()" title="Remove all keyframes for this object.">Clear All Keyframes</div>
   </div>
 
   <!-- ── Duplicate cel prompt dialog ────────────────────── -->
@@ -411,7 +411,7 @@
   <div *ngIf="selectedKfKeys.size > 0" class="kf-bulk-bar" (click)="$event.stopPropagation()">
     <span class="kf-bulk-count">{{ selectedKfKeys.size }} kf{{ selectedKfKeys.size > 1 ? 's' : '' }} selected</span>
     <button class="transport-btn" (click)="openKfBulkMovePrompt()" title="Shift all selected keyframes by a frame offset">Move…</button>
-    <button class="transport-btn kf-bulk-delete-btn" (click)="deleteSelectedKeyframes()" title="Delete all selected keyframes">🗑️</button>
+    <button class="transport-btn kf-bulk-delete-btn" (click)="deleteSelectedKeyframes()" title="Delete all selected keyframes">Delete</button>
     <button class="transport-btn" (click)="clearKfSelection()" title="Clear selection">✕</button>
   </div>
 
@@ -424,7 +424,7 @@
       {{ trackMenuTrackKey }} track
     </div>
     <div class="ctx-divider"></div>
-    <div class="ctx-item ctx-item-danger" (click)="clearTrackKeyframes()" title="Remove all keyframes on this property track.">🗑️ Clear Track</div>
+    <div class="ctx-item ctx-item-danger" (click)="clearTrackKeyframes()" title="Remove all keyframes on this property track.">Clear Track</div>
   </div>
 
   <!-- ── Keyframe bulk move prompt ────────────────────────── -->

@@ -25,13 +25,13 @@
           <span class="gp-label">Skeleton</span>
           <select class="gp-select" [(ngModel)]="newGpSkeletonId">
             <option value="">none</option>
-            <option *ngFor="let sk of skeletonList" [value]="sk.id">{{ sk.name }}</option>
+            <option *ngFor="let sk of skeletonList; trackBy: trackByName" [value]="sk.id">{{ sk.name }}</option>
           </select>
           <button class="gp-op-btn" (click)="createGpObject()">+ New</button>
         </div>
 
         <div class="gp-list" *ngIf="gpObjects.length > 0; else noGpObjects">
-          <div *ngFor="let g of gpObjects"
+          <div *ngFor="let g of gpObjects; trackBy: trackById"
                class="gp-list-row"
                [class.active]="activeGpId === g.id"
                (click)="selectGpObject(g.id)">
@@ -84,7 +84,7 @@
         </div>
 
         <div class="gp-list" *ngIf="gpLayers.length > 0; else noLayers">
-          <div *ngFor="let l of gpLayers"
+          <div *ngFor="let l of gpLayers; trackBy: trackById"
                class="gp-list-row gp-layer-row"
                [class.active]="activeLayerId === l.id"
                (click)="selectLayer(l.id)">
@@ -157,6 +157,11 @@
 
       <ng-container *ngIf="!settingsCollapsed">
 
+        <!-- Drawing plane required hint -->
+        <div *ngIf="!gpDrawPlane" class="gp-hint gp-plane-prompt" style="margin-bottom:8px">
+          ✦ Set a Drawing Plane above before drawing.
+        </div>
+
         <!-- Tool toggle -->
         <div class="gp-btn-pair" style="margin-bottom:8px">
           <button class="gp-op-btn" style="flex:1"
@@ -177,7 +182,7 @@
             <span class="gp-label">Color</span>
             <input type="color" class="gp-color" [(ngModel)]="strokeColorHex"
                    (ngModelChange)="onStrokeSettingChange()">
-            <span class="gp-label">α</span>
+            <span class="gp-label">Opacity</span>
             <input type="range" class="gp-range" min="0" max="1" step="0.01"
                    [(ngModel)]="strokeOpacity" (ngModelChange)="onStrokeSettingChange()">
             <span class="gp-val">{{ strokeOpacity | number:'1.2-2' }}</span>
@@ -198,7 +203,7 @@
             <ng-container *ngIf="filled">
               <input type="color" class="gp-color" [(ngModel)]="fillColorHex"
                      (ngModelChange)="onStrokeSettingChange()">
-              <span class="gp-label">α</span>
+              <span class="gp-label">Opacity</span>
               <input type="range" class="gp-range" min="0" max="1" step="0.01"
                      [(ngModel)]="fillOpacity" (ngModelChange)="onStrokeSettingChange()">
               <span class="gp-val">{{ fillOpacity | number:'1.2-2' }}</span>
@@ -214,17 +219,14 @@
             <span class="gp-hint" style="flex:1;margin-left:6px">auto-connects last→first</span>
           </div>
 
-          <!-- Parent joint -->
-          <div class="gp-form-row" style="margin-bottom:4px">
+          <!-- Parent joint (only shown when a skeleton is linked) -->
+          <div class="gp-form-row" style="margin-bottom:4px" *ngIf="jointList.length > 0">
             <span class="gp-label">Bone</span>
             <select class="gp-select" [(ngModel)]="parentJoint"
                     (ngModelChange)="onStrokeSettingChange()">
               <option value="">none</option>
               <option *ngFor="let j of jointList" [value]="j.name">{{ j.name }}</option>
             </select>
-          </div>
-          <div *ngIf="jointList.length === 0" class="gp-hint">
-            No skeleton linked — set one when creating the GP object.
           </div>
         </ng-container>
 

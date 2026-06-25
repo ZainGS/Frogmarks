@@ -70,9 +70,15 @@
                [checked]="params[key]"
                (change)="onParamChange(key, $any($event.target).checked, 'toggle')">
 
-        <input *ngIf="paramType(key) === 'color'" type="color" class="ep-color"
-               [value]="params[key]"
-               (input)="onParamChange(key, $any($event.target).value, 'color')">
+        <ng-container *ngIf="paramType(key) === 'color'">
+          <input type="color" class="ep-color"
+                 [value]="getColorHex(key)"
+                 (input)="onColorChange(key, $any($event.target).value)">
+          <input type="range" class="ep-range" min="0" max="1" step="0.01"
+                 [value]="getColorAlpha(key)"
+                 (input)="onColorAlphaChange(key, +$any($event.target).value)">
+          <span class="ep-val">{{ getColorAlpha(key) * 100 | number:'1.0-0' }}%</span>
+        </ng-container>
 
         <input *ngIf="paramType(key) === 'seed'" type="number" class="ep-num"
                [value]="params[key]"
@@ -101,6 +107,12 @@
         <input type="number" class="ep-num" [(ngModel)]="placeRotation">
         <span class="ep-label">Opacity</span>
         <input type="range" class="ep-range" min="0" max="1" step="0.01" [(ngModel)]="placeOpacity">
+      </div>
+      <div class="ep-form-row" style="margin-top:4px">
+        <span class="ep-label">Blend</span>
+        <select class="ep-text" [(ngModel)]="placeBlendMode">
+          <option *ngFor="let b of blendModeOptions" [value]="b.value">{{ b.label }}</option>
+        </select>
       </div>
       <button class="ep-btn ep-btn-primary ep-btn-full" style="margin-top:8px"
               [disabled]="!activeGeneratorTypeId"
@@ -153,14 +165,83 @@
                      [checked]="editParams[key]"
                      (change)="onEditParamChange(key, $any($event.target).checked, 'toggle')">
 
-              <input *ngIf="editParamType(key) === 'color'" type="color" class="ep-color"
-                     [value]="editParams[key]"
-                     (input)="onEditParamChange(key, $any($event.target).value, 'color')">
+              <ng-container *ngIf="editParamType(key) === 'color'">
+                <input type="color" class="ep-color"
+                       [value]="getEditColorHex(key)"
+                       (input)="onEditColorChange(key, $any($event.target).value)">
+                <input type="range" class="ep-range" min="0" max="1" step="0.01"
+                       [value]="getEditColorAlpha(key)"
+                       (input)="onEditColorAlphaChange(key, +$any($event.target).value)">
+                <span class="ep-val">{{ getEditColorAlpha(key) * 100 | number:'1.0-0' }}%</span>
+              </ng-container>
 
               <input *ngIf="editParamType(key) === 'seed'" type="number" class="ep-num"
                      [value]="editParams[key]"
                      (input)="onEditParamChange(key, $any($event.target).value, 'seed')">
             </div>
+            <div class="ep-form-row" style="margin-top:4px">
+              <span class="ep-label">Blend</span>
+              <select class="ep-text" [(ngModel)]="editBlendMode">
+                <option *ngFor="let b of blendModeOptions" [value]="b.value">{{ b.label }}</option>
+              </select>
+            </div>
+
+            <!-- Glow -->
+            <div class="ep-form-row" style="margin-top:6px">
+              <label class="ep-label" style="cursor:pointer">
+                <input type="checkbox" [(ngModel)]="editGlowEnabled" style="margin-right:4px">Glow
+              </label>
+            </div>
+            <ng-container *ngIf="editGlowEnabled">
+              <div class="ep-form-row">
+                <span class="ep-label">Radius</span>
+                <input type="range" class="ep-range" min="1" max="20" step="1" [(ngModel)]="editGlowRadius">
+                <span class="ep-val">{{ editGlowRadius }}</span>
+              </div>
+              <div class="ep-form-row">
+                <span class="ep-label">Color</span>
+                <input type="color" class="ep-color" [(ngModel)]="editGlowColor">
+              </div>
+              <div class="ep-form-row">
+                <span class="ep-label">Opacity</span>
+                <input type="range" class="ep-range" min="0" max="1" step="0.05" [(ngModel)]="editGlowOpacity">
+                <span class="ep-val">{{ editGlowOpacity * 100 | number:'1.0-0' }}%</span>
+              </div>
+            </ng-container>
+
+            <!-- Feather -->
+            <div class="ep-form-row" style="margin-top:6px">
+              <label class="ep-label" style="cursor:pointer">
+                <input type="checkbox" [(ngModel)]="editFeatherEnabled" style="margin-right:4px">Feather
+              </label>
+            </div>
+            <ng-container *ngIf="editFeatherEnabled">
+              <div class="ep-form-row">
+                <span class="ep-label">Mode</span>
+                <button (click)="editFeatherMode = 'radial'"
+                        [style.background]="editFeatherMode === 'radial' ? '#3b6151' : '#333'"
+                        style="border:1px solid #555;color:#e0e0e0;padding:1px 7px;cursor:pointer;font-size:10px;border-radius:2px">Radial</button>
+                <button (click)="editFeatherMode = 'linear'"
+                        [style.background]="editFeatherMode === 'linear' ? '#3b6151' : '#333'"
+                        style="border:1px solid #555;color:#e0e0e0;padding:1px 7px;cursor:pointer;font-size:10px;border-radius:2px">Linear</button>
+              </div>
+              <div class="ep-form-row" *ngIf="editFeatherMode === 'linear'">
+                <span class="ep-label">Angle</span>
+                <input type="range" class="ep-range" min="0" max="360" step="1" [(ngModel)]="editFeatherAngle">
+                <span class="ep-val">{{ editFeatherAngle }}°</span>
+              </div>
+              <div class="ep-form-row">
+                <span class="ep-label">Start</span>
+                <input type="range" class="ep-range" min="0" max="1" step="0.01" [(ngModel)]="editFeatherStart">
+                <span class="ep-val">{{ editFeatherStart | number:'1.2-2' }}</span>
+              </div>
+              <div class="ep-form-row">
+                <span class="ep-label">End</span>
+                <input type="range" class="ep-range" min="0" max="1" step="0.01" [(ngModel)]="editFeatherEnd">
+                <span class="ep-val">{{ editFeatherEnd | number:'1.2-2' }}</span>
+              </div>
+            </ng-container>
+
             <div class="ep-btn-pair" style="margin-top:6px">
               <button class="ep-btn ep-btn-xs" (click)="commitEdit()">✓ Apply</button>
               <button class="ep-btn ep-btn-xs ep-btn-ghost" (click)="cancelEdit()">✕</button>

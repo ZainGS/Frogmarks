@@ -32,6 +32,7 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   /** The current raster tool mode set by the parent */
   @Input() activeRasterTool: 'brush' | 'airbrush' | 'eraser' = 'brush';
   @Output() presetChanged = new EventEmitter<string>();
+  @Output() toolSelected = new EventEmitter<'brush' | 'airbrush' | 'eraser'>();
   @ViewChild('gridColorPicker') gridColorPickerRef!: ColorPickerComponent;
   @ViewChild('editorColorPicker') editorColorPickerRef!: ColorPickerComponent;
 
@@ -45,6 +46,9 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   isCreating = false;
   editingPresetId: string | null = null;
   editingPresetName = '';
+  get editingPresetIcon(): string | undefined {
+    return this.presets.find(p => p.id === this.editingPresetId)?.icon;
+  }
   /** Snapshot of the preset at the moment the editor was opened — for Reset to Default */
   private _editSnapshot: string | null = null;
 
@@ -210,6 +214,17 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   quickSelectBrush(id: string): void {
     this.rasterService.setActivePreset(id);
     this.presetChanged.emit(id);
+    this.toolSelected.emit('brush');
+  }
+
+  selectEraserTool(): void {
+    if (this.activeRasterTool === 'eraser') {
+      if (this.activePresetId) this.rasterService.setActivePreset(this.activePresetId);
+      this.toolSelected.emit('brush');
+    } else {
+      this.rasterService.enableEraserTool(this.eraserStyle);
+      this.toolSelected.emit('eraser');
+    }
   }
 
   /** Gear icon clicked — open editor for an existing preset */
@@ -661,6 +676,28 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
       sampleRadius: 0,
     };
     this.rasterService.setBrushSmudge(settings);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  Brush preview image  (stored in preset.icon as dataURL)
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Called by the hidden file input on each brush row. */
+  onBrushImageSelected(id: string, event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.rasterService.updatePresetIcon(id, reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  /** Remove the preview image from a preset. */
+  removeBrushImage(id: string, e: MouseEvent): void {
+    e.stopPropagation();
+    this.rasterService.updatePresetIcon(id, null);
   }
 
   exportAllPresets(): void {

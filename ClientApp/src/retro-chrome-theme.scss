@@ -1,0 +1,1700 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// RETRO CHROME THEME  —  Frogmarks Illustration UI  (v2 — full coverage)
+// ═══════════════════════════════════════════════════════════════════════════
+// Activation: add class "theme-retro-chrome" to <body>.
+// All rules are scoped so the default theme is fully preserved.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── CSS custom properties ────────────────────────────────────────────────
+body.theme-retro-chrome {
+  --rc-canvas-bg:     #0a0a0a;
+  --rc-panel-bg:      #1a1a1a;
+  --rc-surface:       #242424;
+  --rc-surface-hi:    #2e2e2e;
+  --rc-bevel-lt:      #6a6a6a;   // chrome highlight (top / left)
+  --rc-bevel-dk:      #111111;   // chrome shadow   (bottom / right)
+  --rc-bevel-mid:     #3a3a3a;
+  --rc-green:         #3b6151;
+  --rc-green-hi:      #4f7a68;
+  --rc-green-txt:     #c8ede3;
+  --rc-text:          #c8c8c8;
+  --rc-text-muted:    #a8a8a8;
+  --rc-text-label:    #c0c0c0;
+  --rc-danger:        #8b1a1a;
+  --rc-danger-hi:     #c0392b;
+  --rc-scrollbar-radius: 0px;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MIXINS (used inline via duplicated rules — SCSS mixins apply at compile)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Raised chrome bevel
+%rc-raised {
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+}
+
+// Sunken chrome bevel (inputs / active buttons)
+%rc-sunken {
+  border: 2px solid;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  border-radius: 0 !important;
+}
+
+// Green title strip
+%rc-title {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+}
+
+// Section heading with left green bar
+%rc-section-head {
+  font-family: 'Courier New', monospace !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  padding: 2px 6px !important;
+  background: #1c1c1c !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 1  GLOBAL RESETS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Every border-radius → 0
+body.theme-retro-chrome * {
+  border-radius: 0 !important;
+  transition: background 0.05s, border-color 0.05s !important;
+  box-shadow: none !important;
+}
+
+// Monospace everywhere inside panels
+body.theme-retro-chrome .ep-panel *,
+body.theme-retro-chrome .me-panel *,
+body.theme-retro-chrome .gp-panel *,
+body.theme-retro-chrome .raster-layers-panel *,
+body.theme-retro-chrome .scene3d-section *,
+body.theme-retro-chrome .timeline-panel *,
+body.theme-retro-chrome .transport-bar *,
+body.theme-retro-chrome .control-panel-dark *,
+body.theme-retro-chrome .pen-subcontrol-panel *,
+body.theme-retro-chrome .vertical-control-panel *,
+body.theme-retro-chrome .brush-panel * {
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+// Restore Material Icons — must come after the broad override
+body.theme-retro-chrome .mat-icon {
+  font-family: 'Material Icons' !important;
+  font-feature-settings: 'liga' !important;
+}
+
+// ── Scrollbars ────────────────────────────────────────────────────────────
+body.theme-retro-chrome ::-webkit-scrollbar        { width: 8px !important; height: 8px !important; }
+body.theme-retro-chrome ::-webkit-scrollbar-track  { background: #0a0a0a !important; border-radius: 0 !important; }
+body.theme-retro-chrome ::-webkit-scrollbar-thumb  { background: #3b6151 !important; border: 1px solid #111 !important; border-radius: 0 !important; }
+body.theme-retro-chrome ::-webkit-scrollbar-thumb:hover { background: #4f7a68 !important; }
+body.theme-retro-chrome ::-webkit-scrollbar-corner { background: #0a0a0a !important; }
+
+// ── Checkboxes  (fully custom square) ────────────────────────────────────
+body.theme-retro-chrome input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 13px !important;
+  height: 13px !important;
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  vertical-align: middle !important;
+
+  &:checked {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+
+    &::after {
+      content: '✓' !important;
+      color: var(--rc-green-txt) !important;
+      font-size: 9px !important;
+      line-height: 1 !important;
+      position: absolute !important;
+    }
+  }
+}
+
+// ── Range sliders (rectangular track + thumb) ─────────────────────────────
+body.theme-retro-chrome input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 14px !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+
+body.theme-retro-chrome input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px !important;
+  background: #111 !important;
+  border: 1px solid var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+}
+
+body.theme-retro-chrome input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 10px !important;
+  height: 16px !important;
+  margin-top: -5px !important;
+  background: #909090 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  cursor: pointer !important;
+}
+
+body.theme-retro-chrome input[type="range"]::-moz-range-track {
+  height: 6px !important;
+  background: #111 !important;
+  border: 1px solid var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+}
+
+body.theme-retro-chrome input[type="range"]::-moz-range-thumb {
+  width: 10px !important;
+  height: 16px !important;
+  background: #909090 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+}
+
+// ── Text inputs / number inputs / selects ─────────────────────────────────
+body.theme-retro-chrome input[type="text"],
+body.theme-retro-chrome input[type="number"],
+body.theme-retro-chrome textarea,
+body.theme-retro-chrome select {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+
+  &:focus { outline: 1px solid var(--rc-green-hi) !important; border-color: var(--rc-green) !important; }
+  &::placeholder { color: var(--rc-text-muted) !important; }
+}
+
+body.theme-retro-chrome select option { background: #1a1a1a !important; }
+
+// ── Color inputs ──────────────────────────────────────────────────────────
+body.theme-retro-chrome input[type="color"] {
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  padding: 1px !important;
+  background: #111 !important;
+  cursor: pointer !important;
+}
+
+// ── Generic buttons (catch-all; specific overrides below) ─────────────────
+body.theme-retro-chrome button {
+  border-radius: 0 !important;
+  transition: background 0.05s !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 2  LEFT VERTICAL TOOLBAR
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .vertical-control-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  backdrop-filter: none !important;
+}
+
+body.theme-retro-chrome .vertical-tool-button {
+  background: #404040 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  width: 46px !important;
+  height: 46px !important;
+  transform: none !important;
+}
+
+body.theme-retro-chrome .vertical-tool-button:hover {
+  background: #555555 !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  transform: none !important;
+}
+
+body.theme-retro-chrome .vertical-tool-button.selected {
+  background: var(--rc-green) !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+}
+
+
+body.theme-retro-chrome .vertical-tool-button.tool-disabled {
+  opacity: 0.2 !important;
+}
+
+body.theme-retro-chrome .right-panel-tabs {
+  background: var(--rc-green) !important;
+}
+
+body.theme-retro-chrome .rp-tab {
+  background: #404040 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--rc-text) !important;
+  transform: none !important;
+}
+
+
+body.theme-retro-chrome .rp-tab:hover:not(.rp-tab-active) {
+  background: #555555 !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .rp-tab.rp-tab-active {
+  background: #3d4242 !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  box-shadow: none !important;
+  color: #e0e0e0 !important;
+}
+
+
+body.theme-retro-chrome .brush-row {
+  margin: 2px 4px !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  background: var(--rc-surface) !important;
+}
+
+body.theme-retro-chrome .brush-row.active {
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  background: var(--rc-panel-bg) !important;
+}
+
+body.theme-retro-chrome .toolbar-mode-label {
+  color: var(--rc-green-txt) !important;
+  opacity: 1 !important;
+  background: var(--rc-green) !important;
+  z-index: 500 !important;
+}
+
+body.theme-retro-chrome .color-indicator {
+  border: 1px solid var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 3  BOTTOM CONTROL PANEL + SUBCONTROL PANELS
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .control-panel-dark,
+body.theme-retro-chrome .control-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  backdrop-filter: none !important;
+}
+
+body.theme-retro-chrome .control-panel-header {
+  color: var(--rc-green-hi) !important;
+  font-size: 10px !important;
+  letter-spacing: 1px !important;
+}
+
+body.theme-retro-chrome .control-panel-item,
+body.theme-retro-chrome .control-panel-item-last {
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+}
+
+body.theme-retro-chrome .control-panel-item-selected-dark,
+body.theme-retro-chrome .control-panel-item-selected {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+}
+
+body.theme-retro-chrome .pen-subcontrol-panel,
+body.theme-retro-chrome .pen-subcontrol-panel-dark,
+body.theme-retro-chrome .shape-subcontrol-panel,
+body.theme-retro-chrome .text-subcontrol-panel,
+body.theme-retro-chrome .sdftext-subcontrol-panel,
+body.theme-retro-chrome .stamp-subcontrol-panel-dark {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  backdrop-filter: none !important;
+}
+
+body.theme-retro-chrome .tool-label {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  padding: 5px 8px !important;
+  margin-bottom: 6px !important;
+}
+
+body.theme-retro-chrome .form-select-sm {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .stamp-option {
+  border: 1px solid var(--rc-bevel-mid) !important;
+  &:hover { border-color: var(--rc-green) !important; }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4  RIGHT PANEL (Live Text sidebar + generic right panel shell)
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .right-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  backdrop-filter: none !important;
+  position: relative !important;
+  padding-top: 26px !important;
+}
+
+body.theme-retro-chrome .right-panel::before {
+  content: 'PROPERTIES' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 22px !important;
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  z-index: 5 !important;
+}
+
+// Live text sidebar section headers (inline `style` overrides won't reach,
+// but class-level do — these cover the label divs with class="tool-label")
+body.theme-retro-chrome .right-panel .tool-label,
+body.theme-retro-chrome .right-panel label {
+  color: var(--rc-text-label) !important;
+  background: transparent !important;
+  font-size: 10px !important;
+  padding: 0 !important;
+  margin-bottom: 4px !important;
+  border-bottom: none !important;
+}
+
+body.theme-retro-chrome .right-panel button {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+  &.active, &[class*="selected"] {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4C  LIVE TEXT PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .lt-panel {
+  font-family: 'Courier New', monospace !important;
+
+  label { color: var(--rc-text-label) !important; font-size: 10px !important; }
+  hr    { border-color: var(--rc-bevel-mid) !important; }
+
+  // Selects and number inputs (inline style override via !important)
+  select, input[type="number"] {
+    background: #111 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    padding: 2px 4px !important;
+  }
+
+  // All buttons: base chrome style (overrides inline background/border styles)
+  button {
+    background: #404040 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    cursor: pointer !important;
+    &:hover:not(:disabled) { background: #555555 !important; }
+  }
+
+  // Toggle buttons (H/V, L/C/R, B/I) — active = green sunken
+  .lt-seg-btn.lt-active {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+
+  // Apply shader button
+  .lt-apply-btn {
+    background: var(--rc-green) !important;
+    color: var(--rc-green-txt) !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    &:hover { background: var(--rc-green-hi) !important; }
+  }
+
+  // Danger button (remove shader ×)
+  .lt-danger-btn { color: #ff9090 !important; }
+
+  // Flatten to Layer — distinctive but chrome-consistent
+  .lt-flatten-btn {
+    background: var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.8px !important;
+    font-weight: bold !important;
+    &:hover { background: #4a4a4a !important; }
+  }
+
+  // Section headers inside the panel
+  .tool-label {
+    background: var(--rc-green) !important;
+    color: var(--rc-green-txt) !important;
+    border-bottom: 2px solid var(--rc-bevel-lt) !important;
+    margin: 4px -8px 6px -8px !important;
+    padding: 4px 8px !important;
+    font-size: 9px !important;
+    font-weight: bold !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+  }
+
+  // Effect chain entry
+  .fx-chain-entry {
+    background: var(--rc-surface) !important;
+    border: 1px solid var(--rc-bevel-mid) !important;
+    padding: 4px !important;
+    margin-bottom: 3px !important;
+  }
+
+  // Effect preset buttons (emoji + label)
+  .fx-preset-btn {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 2px !important;
+    background: #404040 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    color: var(--rc-text) !important;
+    font-size: 9px !important;
+    border-radius: 0 !important;
+    padding: 4px 6px !important;
+    cursor: pointer !important;
+    &:hover { background: #555555 !important; }
+  }
+
+  // fx-param-row text
+  .fx-param-row {
+    label { color: var(--rc-text-label) !important; }
+    span  { color: var(--rc-text) !important; }
+  }
+
+  // Shader status messages
+  .shader-status {
+    background: var(--rc-surface) !important;
+    border: 1px solid var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    border-radius: 0 !important;
+    &.success { border-color: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+    &.error   { border-color: var(--rc-danger-hi) !important; color: #ff9090 !important; }
+  }
+}
+
+// Tool subpanel — slide-out from left toolbar (position: fixed; top: 0)
+// The entire panel gets the chrome shell + green header treatment.
+// Padding is removed so the green header sits flush at the top edge.
+body.theme-retro-chrome .tool-subpanel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  backdrop-filter: none !important;
+  padding: 0 !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4B  BRUSH PANEL  (brush-options component)
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .brush-panel {
+  background: transparent !important;
+  border: none !important;
+}
+
+body.theme-retro-chrome .brush-panel-header {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  padding: 5px 8px !important;
+  font-family: 'Courier New', monospace !important;
+
+  mat-icon, .mat-icon { color: var(--rc-green-txt) !important; }
+}
+
+body.theme-retro-chrome .btn-brush {
+  background: #404040 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  &:hover { background: #555555 !important; color: #ffffff !important; }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 5  EPHEMERA PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .ep-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .ep-header {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  padding: 5px 8px !important;
+}
+
+body.theme-retro-chrome .ep-title {
+  color: var(--rc-green-txt) !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+}
+
+body.theme-retro-chrome .ep-exit-btn,
+body.theme-retro-chrome .ep-refresh-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+  &:active { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important; }
+}
+
+body.theme-retro-chrome .ep-section-title {
+  font-size: 9px !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  background: #1c1c1c !important;
+  padding: 3px 6px !important;
+  margin-bottom: 6px !important;
+}
+
+// Category tabs — each gets a full-width row
+body.theme-retro-chrome .ep-tab-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  padding: 0 !important;
+}
+
+body.theme-retro-chrome .ep-tab {
+  display: block !important;
+  width: 100% !important;
+  text-align: left !important;
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  border-left: 3px solid transparent !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 10px !important;
+  padding: 5px 8px !important;
+
+  &.active {
+    background: rgba(46, 107, 40, 0.25) !important;
+    border-left: 3px solid var(--rc-green-hi) !important;
+    color: var(--rc-green-txt) !important;
+    border-color: var(--rc-bevel-mid) !important;
+    border-left-color: var(--rc-green-hi) !important;
+  }
+
+  &:hover:not(.active) {
+    background: var(--rc-surface-hi) !important;
+    color: var(--rc-text) !important;
+  }
+}
+
+// Generator list — full-width rows
+body.theme-retro-chrome .ep-list { gap: 2px !important; }
+
+body.theme-retro-chrome .ep-list-row {
+  border: 1px solid transparent !important;
+  border-left: 3px solid transparent !important;
+  background: var(--rc-surface) !important;
+  color: var(--rc-text) !important;
+  padding: 5px 8px !important;
+
+  &.active {
+    background: var(--rc-green) !important;
+    border-left-color: var(--rc-green-hi) !important;
+    color: var(--rc-green-txt) !important;
+  }
+
+  &:hover:not(.active) {
+    background: var(--rc-surface-hi) !important;
+    border-left-color: var(--rc-bevel-mid) !important;
+  }
+}
+
+body.theme-retro-chrome .ep-preview {
+  background: #080808 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+}
+
+body.theme-retro-chrome .ep-text,
+body.theme-retro-chrome .ep-num {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .ep-val,
+body.theme-retro-chrome .ep-label { color: var(--rc-text-label) !important; font-size: 10px !important; }
+
+body.theme-retro-chrome .ep-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+  &:hover:not(:disabled) { background: var(--rc-surface-hi) !important; }
+  &:active:not(:disabled) { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important; }
+  &:disabled { opacity: 0.3 !important; }
+}
+
+body.theme-retro-chrome .ep-btn-primary {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .ep-btn-danger {
+  background: var(--rc-danger) !important;
+  color: #ffaaaa !important;
+}
+
+body.theme-retro-chrome .ep-placement-row {
+  background: var(--rc-surface) !important;
+  border: 1px solid #222 !important;
+  margin-bottom: 2px !important;
+}
+
+body.theme-retro-chrome .ep-edit-block {
+  background: #161616 !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  padding: 6px !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 6  MESH EDIT PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .me-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .me-header {
+  background: var(--rc-green) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .me-mesh-name {
+  color: var(--rc-green-txt) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.5px !important;
+}
+
+body.theme-retro-chrome .me-exit-btn,
+body.theme-retro-chrome .me-bg-select {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+}
+
+body.theme-retro-chrome .me-section-title {
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  background: #1c1c1c !important;
+  padding: 2px 6px !important;
+  font-size: 9px !important;
+  letter-spacing: 1px !important;
+}
+
+body.theme-retro-chrome .me-tool-btn,
+body.theme-retro-chrome .me-mode-btn,
+body.theme-retro-chrome .me-op-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text-muted) !important;
+  &:hover:not(:disabled) { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+  &.active {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+}
+
+body.theme-retro-chrome .me-num,
+body.theme-retro-chrome .me-select {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .me-chip {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text-muted) !important;
+  &:hover { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; border-color: var(--rc-green-hi) !important; }
+}
+
+body.theme-retro-chrome .me-color-swatch {
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+}
+
+body.theme-retro-chrome .me-hint,
+body.theme-retro-chrome .me-tool-hint {
+  background: #161616 !important;
+  border: 1px solid #2a2a2a !important;
+  color: var(--rc-text-muted) !important;
+}
+
+body.theme-retro-chrome .me-mod-row {
+  background: #1c1c1c !important;
+  border: 1px solid #222 !important;
+}
+
+body.theme-retro-chrome .me-selection-info {
+  background: #161616 !important;
+  border: 1px solid #222 !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 7  GREASE PENCIL PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .gp-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .gp-header {
+  background: var(--rc-green) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .gp-title {
+  color: var(--rc-green-txt) !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+}
+
+body.theme-retro-chrome .gp-section-title {
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  background: #1c1c1c !important;
+  padding: 2px 6px !important;
+  font-size: 9px !important;
+  letter-spacing: 1px !important;
+}
+
+body.theme-retro-chrome .gp-exit-btn,
+body.theme-retro-chrome .gp-refresh-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+}
+
+body.theme-retro-chrome .gp-op-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text-muted) !important;
+  &:hover:not(:disabled) { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+}
+
+body.theme-retro-chrome .gp-text,
+body.theme-retro-chrome .gp-num,
+body.theme-retro-chrome .gp-select {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .gp-label,
+body.theme-retro-chrome .gp-val { color: var(--rc-text-label) !important; font-size: 10px !important; }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 8  LAYER PANEL (raster-layers)
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .raster-layers-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .rl-header {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  padding: 5px 8px !important;
+  font-family: 'Courier New', monospace !important;
+  // Escape the raster-layers-panel's 6px 8px padding so header spans full width
+  margin: -6px -8px 0 -8px !important;
+  span { color: var(--rc-green-txt) !important; }
+}
+
+body.theme-retro-chrome .rl-btn-add {
+  background: #404040 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-green-txt) !important;
+  font-size: 10px !important;
+  &:hover { background: #555555 !important; }
+}
+
+body.theme-retro-chrome .rl-add-dropdown {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+
+  button {
+    color: var(--rc-text) !important;
+    font-size: 10px !important;
+    &:hover { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+    &:disabled { opacity: 0.35 !important; }
+  }
+}
+
+body.theme-retro-chrome .rl-search input {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .rl-item {
+  border-bottom: 1px solid #1e1e1e !important;
+  &.active { background: var(--rc-green) !important; border-left: none !important; }
+  &:hover:not(.active) { background: var(--rc-surface) !important; }
+}
+
+body.theme-retro-chrome .rl-vector-row {
+  padding-left: 8px !important;
+  border-bottom: 1px solid #1e1e1e !important;
+  &.active { background: var(--rc-green) !important; border-left: none !important; }
+}
+
+body.theme-retro-chrome .rl-name {
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .blend-trigger {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .blend-dropdown {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .blend-option {
+  font-size: 10px !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+  &.active { color: var(--rc-green-hi) !important; }
+}
+
+body.theme-retro-chrome .blend-cat-label {
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.5px !important;
+}
+
+body.theme-retro-chrome .opacity-label { color: var(--rc-text) !important; font-size: 10px !important; }
+
+body.theme-retro-chrome .rl-btn {
+  background: #404040 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover:not(:disabled) { background: #555555 !important; color: #ffffff !important; }
+  &:disabled { opacity: 0.3 !important; }
+}
+
+body.theme-retro-chrome .rl-scene-label {
+  color: rgba(255,255,255,0.6) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .rl-scene-line {
+  background: rgba(255,255,255,0.2) !important;
+}
+
+body.theme-retro-chrome .rl-scene-remove {
+  color: rgba(255,255,255,0.4) !important;
+  &:hover { color: #ffffff !important; }
+}
+
+body.theme-retro-chrome .rl-item.rl-scene.active {
+  background: var(--rc-green) !important;
+  border-left: none !important;
+
+  .rl-scene-label { color: #ffffff !important; }
+  .rl-scene-line  { background: rgba(255,255,255,0.35) !important; }
+  .rl-scene-remove { color: rgba(255,255,255,0.6) !important; }
+}
+
+body.theme-retro-chrome .rl-rename-input {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-green) !important;
+  color: var(--rc-text) !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 9  SCENE 3D PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .scene3d-section {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .scene3d-header {
+  color: var(--rc-green-txt) !important;
+  font-size: 11px !important;
+  background: var(--rc-green) !important;
+  padding: 4px 8px !important;
+  margin: -8px -6px 8px -6px !important;
+  letter-spacing: 0.5px !important;
+}
+
+body.theme-retro-chrome .scene3d-section-label {
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  background: #1c1c1c !important;
+  padding: 3px 6px !important;
+  font-size: 9px !important;
+  letter-spacing: 1px !important;
+  border-top: none !important;
+  margin-top: 6px !important;
+}
+
+body.theme-retro-chrome .scene3d-sub-header {
+  color: var(--rc-text-label) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.8px !important;
+}
+
+body.theme-retro-chrome .scene3d-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+  &:hover:not(:disabled) { background: var(--rc-surface-hi) !important; }
+  &.active {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+  &:disabled { opacity: 0.35 !important; }
+}
+
+body.theme-retro-chrome .scene3d-btn-apply {
+  background: rgba(46,107,40,0.35) !important;
+  border-color: var(--rc-green-hi) !important;
+  color: var(--rc-green-txt) !important;
+  &:hover { background: rgba(46,107,40,0.6) !important; }
+}
+
+body.theme-retro-chrome .scene3d-btn-danger {
+  background: rgba(139,26,26,0.5) !important;
+  border-color: var(--rc-danger-hi) !important;
+  color: #ffaaaa !important;
+  &:hover { background: rgba(139,26,26,0.8) !important; }
+}
+
+body.theme-retro-chrome .scene3d-btn-autokey {
+  background: rgba(139,26,26,0.25) !important;
+  border-color: #b84040 !important;
+  color: #ff9090 !important;
+}
+
+// Segmented button group
+body.theme-retro-chrome .scene3d-seg-group {
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+}
+
+body.theme-retro-chrome .scene3d-seg-btn {
+  background: var(--rc-surface) !important;
+  border-right: 1px solid #222 !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 10px !important;
+  &:hover { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+  &.active { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+}
+
+body.theme-retro-chrome .scene3d-select,
+body.theme-retro-chrome .scene3d-input-small {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+  &:focus { outline: 1px solid var(--rc-green-hi) !important; }
+}
+
+body.theme-retro-chrome .scene3d-fixed-projection {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .scene3d-inline-label {
+  color: var(--rc-text-label) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .scene3d-frame-badge {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .scene3d-keyframe-hint {
+  border-top: 1px dashed #2a2a2a !important;
+  color: var(--rc-text-muted) !important;
+}
+
+// Details / accordion
+body.theme-retro-chrome .scene3d-details {
+  background: #1c1c1c !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  margin-bottom: 4px !important;
+
+  summary {
+    color: var(--rc-green-hi) !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    letter-spacing: 0.5px !important;
+    padding: 4px 6px !important;
+    background: #1c1c1c !important;
+    border-bottom: 1px solid #222 !important;
+    &:hover { color: var(--rc-green-txt) !important; background: var(--rc-green) !important; }
+  }
+}
+
+// Wind zone rows
+body.theme-retro-chrome .scene3d-wind-zone-row {
+  background: var(--rc-surface) !important;
+  border: 1px solid #222 !important;
+  color: var(--rc-text-muted) !important;
+  &.active {
+    background: rgba(46,107,40,0.2) !important;
+    border-color: var(--rc-green) !important;
+    color: var(--rc-text) !important;
+  }
+  &:hover:not(.active) { background: var(--rc-surface-hi) !important; }
+}
+
+// Mesh list
+body.theme-retro-chrome .scene3d-mesh-item {
+  color: var(--rc-text-muted) !important;
+  &.active { background: rgba(59,97,81,0.2) !important; border-left-color: var(--rc-green) !important; }
+  &:hover { background: var(--rc-surface) !important; }
+}
+
+// Phase buckets
+body.theme-retro-chrome .scene3d-bucket {
+  background: #1c1c1c !important;
+  border: 1px solid #2a2a2a !important;
+  .scene3d-bucket-title { color: var(--rc-text-label) !important; }
+}
+
+body.theme-retro-chrome .scene3d-bucket-pill {
+  background: rgba(46,107,40,0.2) !important;
+  border: 1px solid rgba(61,142,53,0.4) !important;
+  color: var(--rc-green-txt) !important;
+}
+
+body.theme-retro-chrome .scene3d-normal-badge {
+  background: rgba(46,107,40,0.15) !important;
+  border: 1px solid rgba(61,142,53,0.35) !important;
+  color: var(--rc-green-hi) !important;
+}
+
+body.theme-retro-chrome .scene3d-rename-input {
+  background: #111 !important;
+  border: 1px solid var(--rc-green) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .scene3d-html-editor {
+  background: #0a0a0a !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: #90c890 !important;
+  font-family: 'Courier New', monospace !important;
+  &:focus { border-color: var(--rc-green) !important; }
+}
+
+body.theme-retro-chrome .scene3d-toggle-row {
+  input[type="checkbox"] { accent-color: var(--rc-green-hi) !important; }
+  label { color: var(--rc-text-label) !important; }
+}
+
+// Persistent color picker area
+body.theme-retro-chrome .persistent-color-picker {
+  background: var(--rc-panel-bg) !important;
+  border-top: 4px solid var(--rc-green) !important;
+  border-right: 4px solid var(--rc-green) !important;
+}
+
+// Tool subpanels (draw, fill, text, etc.)
+body.theme-retro-chrome .tool-subpanel {
+  border-right: 4px solid var(--rc-green) !important;
+  border-bottom: 4px solid var(--rc-green) !important;
+}
+
+// Share button — bright white chrome with black text
+body.theme-retro-chrome .top-toolbar-btn.share-btn {
+  background: #e8e8e8 !important;
+  color: #000 !important;
+  border: 2px solid !important;
+  border-color: #ffffff #888 #888 #ffffff !important;
+  border-radius: 0 !important;
+  font-family: 'Courier New', monospace !important;
+  font-weight: bold !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: none !important;
+  &:hover {
+    background: #f5f5f5 !important;
+  }
+  &:active {
+    background: #d0d0d0 !important;
+    border-color: #888 #ffffff #ffffff #888 !important;
+  }
+}
+
+// Zoom controls
+body.theme-retro-chrome .zoom-control {
+  background: var(--rc-panel-bg) !important;
+  border: 1px solid var(--rc-green) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body.theme-retro-chrome .zoom-percent-display {
+  color: var(--rc-green-hi) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  border-bottom: 1px solid var(--rc-bevel-mid) !important;
+}
+body.theme-retro-chrome .zoom-button-left {
+  border-right: 1px solid var(--rc-bevel-mid) !important;
+  border-radius: 0 !important;
+  color: var(--rc-green-hi) !important;
+}
+body.theme-retro-chrome .zoom-button-right {
+  border-radius: 0 !important;
+  color: var(--rc-green-hi) !important;
+}
+body.theme-retro-chrome .fit-artboard-btn {
+  color: var(--rc-green-hi) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  border-top: 1px solid var(--rc-bevel-mid) !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 10  ANIMATION TIMELINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .timeline-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .timeline-layers {
+  background: #161616 !important;
+  border-right: 2px solid var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .tl-header-cell {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+}
+
+body.theme-retro-chrome .tl-layer-label {
+  background: #161616 !important;
+  border-bottom: 1px solid #1e1e1e !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+  &:hover { background: var(--rc-surface) !important; }
+}
+
+body.theme-retro-chrome .layer-name {
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .layer-type-icon { color: var(--rc-green-hi) !important; }
+
+body.theme-retro-chrome .tl-frame-header {
+  background: #161616 !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .tl-frame-number {
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  border-right: 1px solid #1e1e1e !important;
+}
+
+body.theme-retro-chrome .tl-frame-number.current {
+  background: rgba(200, 200, 200, 0.2) !important;
+  color: #fff !important;
+}
+
+body.theme-retro-chrome .tl-cell.current {
+  background: rgba(200, 200, 200, 0.08) !important;
+}
+
+body.theme-retro-chrome .tl-layer-row {
+  border-bottom: 1px solid #1e1e1e !important;
+  background: var(--rc-panel-bg) !important;
+}
+
+body.theme-retro-chrome .tl-cell {
+  border-right: 1px solid #1e1e1e !important;
+}
+
+body.theme-retro-chrome .tl-static-bar {
+  background: rgba(46,107,40,0.15) !important;
+  border: 1px solid rgba(46,107,40,0.4) !important;
+}
+
+body.theme-retro-chrome .tl-playhead {
+  background: var(--rc-green-hi) !important;
+}
+
+body.theme-retro-chrome .range-handle::after {
+  background: #aaa !important;
+}
+body.theme-retro-chrome .range-handle:hover::after {
+  background: #fff !important;
+}
+
+// 3D track rows
+body.theme-retro-chrome .tl-3d-header-label {
+  background: rgba(46,107,40,0.2) !important;
+  border-bottom: 1px solid #222 !important;
+  color: var(--rc-green-hi) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.5px !important;
+}
+
+body.theme-retro-chrome .tl-3d-track-label {
+  background: #161616 !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  border-bottom: 1px solid #1e1e1e !important;
+}
+
+body.theme-retro-chrome .tl-3d-header-cell {
+  background: rgba(46,107,40,0.1) !important;
+  border-right: 1px solid #1e1e1e !important;
+  border-bottom: 1px solid #222 !important;
+}
+
+body.theme-retro-chrome .tl-3d-cell {
+  border-right: 1px solid #1e1e1e !important;
+  border-bottom: 1px solid #1a1a1a !important;
+}
+
+// Transport bar
+body.theme-retro-chrome .transport-bar {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .transport-btn,
+body.theme-retro-chrome .icon-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text-muted) !important;
+  &:hover { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+}
+
+body.theme-retro-chrome .play-btn {
+  background: var(--rc-green) !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-green-txt) !important;
+  &:hover { background: var(--rc-green-hi) !important; }
+}
+
+body.theme-retro-chrome .record-kf-btn {
+  background: rgba(139,26,26,0.3) !important;
+  border-color: var(--rc-danger-hi) !important;
+  color: #ffaaaa !important;
+}
+
+body.theme-retro-chrome .transport-label {
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+}
+
+body.theme-retro-chrome .transport-input {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .frame-counter {
+  background: #0a0a0a !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-green-hi) !important;
+  font-size: 11px !important;
+}
+
+body.theme-retro-chrome .fps-presets { gap: 2px !important; }
+
+body.theme-retro-chrome .fps-btn {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  &:hover { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+  &.active { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+}
+
+body.theme-retro-chrome .segment-btn {
+  background: var(--rc-surface) !important;
+  border: 1px solid var(--rc-bevel-mid) !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+  &.active { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+}
+
+// Floating panels (onion skin / settings)
+body.theme-retro-chrome .floating-panel {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .fp-header {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+}
+
+body.theme-retro-chrome .fp-close {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .slider-label,
+body.theme-retro-chrome .slider-value,
+body.theme-retro-chrome .setting-row label {
+  color: var(--rc-text-label) !important;
+  font-size: 10px !important;
+}
+
+body.theme-retro-chrome .setting-input {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .tint-swatch {
+  border: 2px solid var(--rc-bevel-mid) !important;
+  &.active { border-color: var(--rc-green-hi) !important; }
+}
+
+// Context menu
+body.theme-retro-chrome .ctx-menu {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .ctx-item {
+  color: var(--rc-text) !important;
+  font-size: 10px !important;
+  &:hover { background: var(--rc-green) !important; color: var(--rc-green-txt) !important; }
+}
+
+body.theme-retro-chrome .ctx-divider {
+  border-color: #222 !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 11  MODALS  (SMP — size/mode picker; restore version modal)
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .smp-card {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .smp-header {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .smp-title {
+  color: var(--rc-green-txt) !important;
+  font-size: 11px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+}
+
+body.theme-retro-chrome .smp-close {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+}
+
+body.theme-retro-chrome .smp-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+  &:hover { background: var(--rc-surface-hi) !important; }
+}
+
+body.theme-retro-chrome .smp-apply {
+  background: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .smp-cancel {
+  background: var(--rc-surface) !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+// Restore version modal
+body.theme-retro-chrome .frogmarks-restore-modal {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+}
+
+body.theme-retro-chrome .frogmarks-restore-title {
+  color: var(--rc-green-hi) !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  border-bottom: 2px solid var(--rc-green) !important;
+}
+
+body.theme-retro-chrome .frogmarks-restore-version {
+  background: var(--rc-surface) !important;
+  border: 1px solid #222 !important;
+  &.selected { border-color: var(--rc-green) !important; background: rgba(59,97,81,0.2) !important; }
+}
+
+body.theme-retro-chrome .frogmarks-restore-overlay {
+  backdrop-filter: none !important;
+  background: rgba(0,0,0,0.85) !important;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 12  THEME TOGGLE BUTTON
+// ═══════════════════════════════════════════════════════════════════════════
+
+.rc-theme-toggle {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 99999;
+  background: #242424;
+  border: 2px solid;
+  border-color: #6a6a6a #111 #111 #6a6a6a;
+  color: #a0a0a0;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: none;
+  user-select: none;
+
+  &:hover { background: #3b6151; color: #c8ede3; }
+  &:active { border-color: #111 #6a6a6a #6a6a6a #111; }
+}
+
+body.theme-retro-chrome .rc-theme-toggle {
+  background: #3b6151;
+  color: #c8ede3;
+  border-color: #111 #6a6a6a #6a6a6a #111;
+}
+
+/* ── Screen-edge green borders ─────────────────────────────────── */
+
+body.theme-retro-chrome::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--rc-green);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+body.theme-retro-chrome::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 317px;
+  right: 0;
+  height: 4px;
+  background: var(--rc-green);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+body.theme-retro-chrome .right-column {
+  border-bottom: 4px solid var(--rc-green);
+}
+
+body.theme-retro-chrome .right-column.no-timeline {
+  border-right: 4px solid var(--rc-green);
+}

@@ -158,6 +158,25 @@ $muted:  rgba(255, 255, 255, 0.45);
   &:last-child { margin-bottom: 0; }
 }
 
+.uv-btn-primary {
+  background: rgba($accent, 0.2);
+  border-color: rgba($accent, 0.5);
+  color: lighten($accent, 10%);
+  &:hover { background: rgba($accent, 0.3); }
+}
+
+.uv-btn-active {
+  background: rgba($accent, 0.25);
+  border-color: $accent;
+  color: #fff;
+  &:hover { background: rgba($accent, 0.35); }
+}
+
+.uv-range {
+  flex: 1;
+  accent-color: $accent;
+}
+
 .uv-btn-row {
   display: flex;
   gap: 4px;
@@ -179,6 +198,12 @@ $muted:  rgba(255, 255, 255, 0.45);
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 44px;
+}
+
+.uv-hint {
+  font-size: 10px;
+  color: $muted;
+  line-height: 1.5;
 }
 
 .uv-num {

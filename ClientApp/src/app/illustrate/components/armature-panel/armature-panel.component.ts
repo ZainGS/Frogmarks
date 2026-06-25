@@ -47,6 +47,7 @@ export interface NLATrackDisplay {
 })
 export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() shapeManager: any = null;
+  @Input() initialMeshId: string = '';
   @Output() closeRequest = new EventEmitter<void>();
 
   private get sm(): any { return this.shapeManager; }
@@ -116,6 +117,12 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   bindMeshId = '';
   bindSkeletonId = '';
   bindResult = '';
+  isBound = false;
+
+  get isProceduralBody(): boolean {
+    if (!this.activeSkeleton) return false;
+    return this.sm?.isProceduralBodySkeleton3D?.(this.activeSkeleton.id) ?? false;
+  }
 
   // ── Weight Paint ─────────────────────────────────────────────────
   wpJointIdx = 0;
@@ -158,6 +165,19 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   renamingPoseId: string | null = null;
   renamePoseValue = '';
 
+  // ── Preset Poses ──────────────────────────────────────────────────
+  presetPosesCollapsed = false;
+  presetPoseNames: string[] = [];
+
+  // ── Spring / Jiggle ───────────────────────────────────────────────
+  springCollapsed = false;
+  springChains: any[] = [];
+  selectedSpringChainId: string | null = null;
+  springStiffness = 0.5;
+  springDrag = 0.3;
+  springGravity = 0.005;
+  springHitRadius = 0.05;
+
   // ── NLA ───────────────────────────────────────────────────────────
   nlaCollapsed = true;
   nlaTracks: NLATrackDisplay[] = [];
@@ -179,6 +199,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnInit(): void {
     if (this.shapeManager) {
+      if (this.initialMeshId) this.bindMeshId = this.initialMeshId;
       this._subscribeScene();
       this.refreshMeshes();
       this.sm?.enterArmatureMode3D?.(this.bindMeshId || undefined);
@@ -338,8 +359,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   focusMesh(): void {
-    if (!this.bindMeshId) return;
-    this.sm?.centerCameraOnMesh3D?.(this.bindMeshId);
+    this.sm?.fitArtboard?.();
   }
 
   refreshAll(): void {
@@ -367,6 +387,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.bindSkeletonId && this.skeletons.length) this.bindSkeletonId = this.skeletons[0].id;
     this.refreshJoints();
     this.refreshClips();
+    this.refreshPresetPoses();
   }
 
   selectSkeleton(sk: ArmatureSkeleton): void {
@@ -415,6 +436,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     }
     this._refreshIKChains();
     this.refreshConstraints();
+    this._refreshSpringChains();
   }
 
   private _clearIKState(): void {
@@ -477,13 +499,6 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.refreshJoints();
   }
 
-  extrudeJoint(): void {
-    if (!this.activeSkeleton) return;
-    this.sm?.extrudeJoint3D?.(this.activeSkeleton.id);
-    // extrudeJoint3D arms placement mode automatically; no enterBonePlacementMode3D needed
-    this.placementModeActive = true;
-    this.placementPhase = 'tail';
-  }
 
   selectJoint(idx: number): void {
     this.sm?.selectJoint3D?.(idx);
@@ -555,11 +570,12 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   bindMesh(): void {
     if (!this.canBind || !this.activeSkeleton) return;
     const ok = this.sm?.bindMeshToSkeleton3D?.(this.bindMeshId, this.activeSkeleton.id);
-    console.log('[bind-mesh] result:', ok, '| mesh:', this.bindMeshId, '| skel:', this.activeSkeleton.id, '| joints:', this.joints.length);
     if (ok === false) {
       this.bindResult = 'Bind failed — add joints first';
+      this.isBound = false;
     } else {
       this.bindResult = `Bound "${this.bindMeshName}" → "${this.activeSkeleton.name}"`;
+      this.isBound = true;
     }
   }
 
@@ -569,8 +585,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.bindMeshId || !this.activeSkeleton) return;
     const jointIdx = this.selectedJointIdx ?? 0;
     this.sm?.setWeightPaintBrush?.(this.wpRadius, this.wpStrength, this.wpTargetWeight);
-    const ok = this.sm?.enterWeightPaintMode3D?.(this.bindMeshId, this.activeSkeleton.id, jointIdx);
-    console.log('[weight-paint] entered:', ok, '| mesh:', this.bindMeshId, '| skel:', this.activeSkeleton.id, '| joint:', jointIdx);
+    this.sm?.enterWeightPaintMode3D?.(this.bindMeshId, this.activeSkeleton.id, jointIdx);
     this.wpActive = true;
   }
 
@@ -918,5 +933,101 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.activeSkeleton) return;
     this.sm?.deletePose3D?.(this.activeSkeleton.id, poseId);
     this.refreshPoses();
+  }
+
+  // ── Preset Poses ──────────────────────────────────────────────────
+
+  async refreshPresetPoses(): Promise<void> {
+    this.presetPoseNames = await this.sm?.getBodyPoseNames3D?.() ?? [];
+  }
+
+  async applyPresetPose(poseName: string): Promise<void> {
+    if (!this.activeSkeleton) return;
+    await this.sm?.applyBodyPose3D?.(this.activeSkeleton.id, poseName);
+  }
+
+  // ── Spring / Jiggle ──────────────────────────────────────────────
+
+  private _refreshSpringChains(): void {
+    if (!this.activeSkeleton) { this.springChains = []; return; }
+    const raw: any[] = this.sm?.getSpringChains3D?.(this.activeSkeleton.id) ?? [];
+    this.springChains = raw.map((c: any) => ({
+      id: c.id,
+      enabled: c.enabled ?? true,
+      jointIndices: c.jointIndices ?? [],
+      stiffness: c.stiffness ?? 0.5,
+      drag: c.drag ?? 0.3,
+      gravity: c.gravity ?? 0.005,
+      hitRadius: c.hitRadius ?? 0.05,
+    }));
+    if (this.selectedSpringChainId && !this.springChains.find(c => c.id === this.selectedSpringChainId)) {
+      this.selectedSpringChainId = null;
+    }
+  }
+
+  get selectedSpringChain(): any | null {
+    return this.springChains.find(c => c.id === this.selectedSpringChainId) ?? null;
+  }
+
+  springChainRootName(chain: any): string {
+    const idx = chain.jointIndices?.[0] ?? -1;
+    return this.joints[idx]?.name ?? `Joint ${idx}`;
+  }
+
+  selectSpringChain(chain: any): void {
+    this.selectedSpringChainId = chain.id;
+    this.springStiffness = chain.stiffness;
+    this.springDrag = chain.drag;
+    this.springGravity = chain.gravity;
+    this.springHitRadius = chain.hitRadius;
+  }
+
+  createSpringChain(): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    const indices = this._getSpringChainIndices(this.selectedJointIdx);
+    this.sm?.createSpringChain3D?.(this.activeSkeleton.id, indices, {
+      stiffness: this.springStiffness,
+      drag: this.springDrag,
+      gravity: this.springGravity,
+      hitRadius: this.springHitRadius,
+    });
+    this._refreshSpringChains();
+  }
+
+  private _getSpringChainIndices(rootIdx: number): number[] {
+    const result: number[] = [rootIdx];
+    let current = rootIdx;
+    while (true) {
+      const childIdx = this.joints.findIndex((j, i) => i !== current && j.parentIdx === current);
+      if (childIdx === -1) break;
+      result.push(childIdx);
+      current = childIdx;
+    }
+    return result;
+  }
+
+  removeSpringChain(chainId: string, event: Event): void {
+    event.stopPropagation();
+    if (!this.activeSkeleton) return;
+    this.sm?.removeSpringChain3D?.(this.activeSkeleton.id, chainId);
+    if (this.selectedSpringChainId === chainId) this.selectedSpringChainId = null;
+    this._refreshSpringChains();
+  }
+
+  toggleSpringChainEnabled(chain: any, event: Event): void {
+    event.stopPropagation();
+    if (!this.activeSkeleton) return;
+    this.sm?.setSpringChainParams3D?.(this.activeSkeleton.id, chain.id, { enabled: !chain.enabled });
+    this._refreshSpringChains();
+  }
+
+  onSpringParamChanged(): void {
+    if (!this.activeSkeleton || !this.selectedSpringChainId) return;
+    this.sm?.setSpringChainParams3D?.(this.activeSkeleton.id, this.selectedSpringChainId, {
+      stiffness: this.springStiffness,
+      drag: this.springDrag,
+      gravity: this.springGravity,
+      hitRadius: this.springHitRadius,
+    });
   }
 }

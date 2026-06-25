@@ -1,0 +1,33 @@
+<canvas id="shellCanvas" style="display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;touch-action:none;pointer-events:auto;"></canvas>
+
+<!-- Thin HTML overlay — pointer-events:none except when a dialog is open -->
+<div class="shell-overlay" [class.has-dialog]="showInstallDialog || showSettingsOverlay">
+
+  <!-- Install FrogCart dialog -->
+  <div *ngIf="showInstallDialog" class="shell-dialog" (click)="$event.stopPropagation()">
+    <h3>Install FrogCart</h3>
+    <p class="shell-dialog-sub">Paste a cart URL or choose a .frogcart file.</p>
+    <input class="shell-dialog-input" type="url" placeholder="https://…"
+           [(ngModel)]="installUrlInput" />
+    <div class="shell-dialog-actions">
+      <button class="shell-btn" (click)="installCartFromUrl()"
+              [disabled]="!installUrlInput">Install</button>
+      <button class="shell-btn shell-btn-ghost" (click)="closeInstallDialog()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Settings overlay (placeholder until settings panel is wired) -->
+  <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()">
+    <h3>Settings</h3>
+    <p class="shell-dialog-sub">Settings coming soon.</p>
+    <button class="shell-btn shell-btn-ghost" (click)="closeSettingsOverlay()">Close</button>
+  </div>
+
+  <!-- Offscreen ARIA tree for screen readers -->
+  <ul class="shell-aria-tree" aria-label="Frogmarks shell" role="tree">
+    <li *ngFor="let slot of ariaSlots" role="treeitem" [attr.aria-label]="slot.name">
+      {{ slot.name }}
+    </li>
+  </ul>
+
+</div>
