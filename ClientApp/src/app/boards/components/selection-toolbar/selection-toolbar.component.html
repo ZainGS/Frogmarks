@@ -4,89 +4,95 @@
 <div class="sel-toolbar">
 
   <!-- ── Tool buttons ──────────────────────────────────────── -->
-  <div class="sel-section">
-    <div class="sel-row">
-      <button class="sel-btn tool-btn"
-              [class.active]="activeTool === 'rect'"
-              (click)="setTool('rect')"
-              title="Rectangle Select (M)">
-        <mat-icon class="sel-mat-icon">crop_square</mat-icon>
-      </button>
-      <button class="sel-btn tool-btn"
-              [class.active]="activeTool === 'ellipse'"
-              (click)="setTool('ellipse')"
-              title="Ellipse Select (O)">
-        <mat-icon class="sel-mat-icon">radio_button_unchecked</mat-icon>
-      </button>
-      <button class="sel-btn tool-btn"
-              [class.active]="activeTool === 'lasso'"
-              (click)="setTool('lasso')"
-              title="Lasso Select (L)">
-        <mat-icon class="sel-mat-icon">gesture</mat-icon>
-      </button>
-      <button class="sel-btn tool-btn"
-              [class.active]="activeTool === 'magic-wand'"
-              (click)="setTool('magic-wand')"
-              title="Magic Wand (W)">
-        <mat-icon class="sel-mat-icon">auto_fix_high</mat-icon>
-      </button>
-
-      <span class="sel-spacer"></span>
-
-      <!-- Feather -->
-      <label class="feather-label" title="Feather radius (soft edge)">
-        Feather:
-        <input type="number" class="feather-input" min="0" max="50" step="1"
-               [value]="feather"
-               (change)="onFeatherChange($event)"> px
-      </label>
-    </div>
+  <div class="sel-tool-row">
+    <button class="sel-tool-btn"
+            [class.active]="activeTool === 'rect'"
+            (click)="setTool('rect')"
+            title="Rectangle Select (M)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/></svg>
+    </button>
+    <button class="sel-tool-btn"
+            [class.active]="activeTool === 'ellipse'"
+            (click)="setTool('ellipse')"
+            title="Ellipse Select (O)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="9"/></svg>
+    </button>
+    <button class="sel-tool-btn"
+            [class.active]="activeTool === 'lasso'"
+            (click)="setTool('lasso')"
+            title="Lasso Select (L)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12c0-4 3-7 7-7s7 3 7 7c0 3-2 5-5 5l-4-1-2-3 1-1"/></svg>
+    </button>
+    <button class="sel-tool-btn"
+            [class.active]="activeTool === 'magic-wand'"
+            (click)="setTool('magic-wand')"
+            title="Magic Wand (W)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="20" x2="16" y2="8"/><path d="M16 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/><path d="M6 6l.5 1 1 .5-1 .5-.5 1-.5-1-1-.5 1-.5z"/></svg>
+    </button>
   </div>
+
+  <!-- ── Feather ─────────────────────────────────────────── -->
+  <div class="sel-param-row">
+    <label class="sel-param-label">Feather</label>
+    <input type="number" class="sel-param-num" min="0" max="50" step="1"
+           [value]="feather"
+           (change)="onFeatherChange($event)">
+    <span class="sel-param-unit">px</span>
+  </div>
+
+  <div class="sel-divider"></div>
 
   <!-- ── Selection actions ─────────────────────────────────── -->
-  <div class="sel-section">
-    <div class="sel-row">
-      <button class="sel-btn" (click)="selectAll()" title="Select All (Ctrl+A)">Select All</button>
-      <button class="sel-btn" (click)="deselect()"
-              [disabled]="!info.hasSelection"
-              title="Deselect (Ctrl+D)">Deselect</button>
-      <button class="sel-btn" (click)="invert()"
-              [disabled]="!info.hasSelection"
-              title="Invert Selection (Ctrl+Shift+I)">Invert</button>
-    </div>
+  <div class="sel-action-row">
+    <button class="sel-action-btn" (click)="selectAll()" title="Select All (Ctrl+A)">Select All</button>
+    <button class="sel-action-btn" (click)="deselect()"
+            [disabled]="!info.hasSelection"
+            title="Deselect (Ctrl+D)">Deselect</button>
+    <button class="sel-action-btn" (click)="invert()"
+            [disabled]="!info.hasSelection"
+            title="Invert Selection (Ctrl+Shift+I)">Invert</button>
   </div>
 
-  <!-- ── Clipboard / delete ────────────────────────────────── -->
-  <div class="sel-section">
-    <div class="sel-row">
-      <button class="sel-btn" (click)="cut()"
-              [disabled]="!info.hasSelection"
-              title="Cut (Ctrl+X)"><mat-icon class="sel-mat-icon">content_cut</mat-icon> Cut</button>
-      <button class="sel-btn" (click)="copy()"
-              [disabled]="!info.hasSelection"
-              title="Copy (Ctrl+C)"><mat-icon class="sel-mat-icon">content_copy</mat-icon> Copy</button>
-      <button class="sel-btn" (click)="paste()"
-              title="Paste (Ctrl+V)"><mat-icon class="sel-mat-icon">content_paste</mat-icon> Paste</button>
-      <button class="sel-btn danger" (click)="deleteSelection()"
-              [disabled]="!info.hasSelection"
-              title="Delete (Del)"><mat-icon class="sel-mat-icon">delete</mat-icon> Delete</button>
-    </div>
+  <div class="sel-divider"></div>
+
+  <!-- ── Clipboard ─────────────────────────────────────────── -->
+  <div class="sel-action-row">
+    <button class="sel-action-btn" (click)="cut()"
+            [disabled]="!info.hasSelection"
+            title="Cut (Ctrl+X)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="20" r="2"/><circle cx="18" cy="20" r="2"/><path d="M5.5 18l7-12 7 12"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+      Cut
+    </button>
+    <button class="sel-action-btn" (click)="copy()"
+            [disabled]="!info.hasSelection"
+            title="Copy (Ctrl+C)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="1"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      Copy
+    </button>
+    <button class="sel-action-btn" (click)="paste()"
+            title="Paste (Ctrl+V)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+      Paste
+    </button>
+    <button class="sel-action-btn danger" (click)="deleteSelection()"
+            [disabled]="!info.hasSelection"
+            title="Delete (Del)">Delete</button>
   </div>
+
+  <div class="sel-divider"></div>
 
   <!-- ── Transform ─────────────────────────────────────────── -->
-  <div class="sel-section">
-    <div class="sel-row">
-      <button class="sel-btn" (click)="beginTransform()"
-              *ngIf="!info.isTransforming"
-              [disabled]="!info.hasSelection"
-              title="Transform (Ctrl+T)"><mat-icon class="sel-mat-icon">open_with</mat-icon> Transform</button>
-      <button class="sel-btn commit" (click)="commitTransform()"
-              *ngIf="info.isTransforming"
-              title="Commit (Enter)"><mat-icon class="sel-mat-icon">check</mat-icon> Commit</button>
-      <button class="sel-btn cancel" (click)="cancelTransform()"
-              *ngIf="info.isTransforming"
-              title="Cancel (Escape)"><mat-icon class="sel-mat-icon">close</mat-icon> Cancel</button>
-    </div>
+  <div class="sel-action-row">
+    <button class="sel-action-btn" (click)="beginTransform()"
+            *ngIf="!info.isTransforming"
+            [disabled]="!info.hasSelection"
+            title="Transform (Ctrl+T)">Transform</button>
+    <button class="sel-action-btn commit" (click)="commitTransform()"
+            *ngIf="info.isTransforming"
+            title="Commit (Enter)">Commit</button>
+    <button class="sel-action-btn cancel" (click)="cancelTransform()"
+            *ngIf="info.isTransforming"
+            title="Cancel (Escape)">Cancel</button>
   </div>
 
 </div>

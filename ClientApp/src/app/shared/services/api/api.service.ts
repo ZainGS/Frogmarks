@@ -3,7 +3,6 @@ import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { MsalService } from '@azure/msal-angular';
 import { ConfigurationService } from './configuration.service';
 import { NotifyService } from '../notify/notify.service';
 import { ErrorResultModel } from '../../models/error-result.model';

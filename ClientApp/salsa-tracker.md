@@ -88,6 +88,54 @@ Add:
 
 ---
 
+## Backdrop Squiggles — 3D Wireframe Style (Salsa: DONE 2026-06-25)
+
+### What Salsa built
+
+- Launcher home decoration squiggles (drawn when `!inGrid`) now support a **3D wireframe tube** style alongside the original flat riso ribbons.
+- Shader: `squigUV()` marches the same centreline, maps cross offset → tube angle via `asin` (longitudinal lines bunch at silhouette = round read), draws dense cross rings (`u*40`) + longitudinal lines (`ang01*8`), shaded `crest=sqrt(1-vN²)` (bright centre → dark edge). No `fwidth` — uses derivative-free AA grid lines.
+- Toggle is a uniform `if (g.squiggle.w > 0.5)` — repurposed the unused `squiggle.w` slot (was theme alpha, always 1). No struct changes, nothing else moved.
+- **Default = wireframe.**
+- API: `shapeManager.setShellSquiggleStyle('wireframe'|'flat')` / `getShellSquiggleStyle()`. Choice survives leaving/re-entering the shell (persists in `ShellUIManager.squiggleWire`). Toggle picked up next rAF frame, no rebuild.
+- Tune knobs in one place: ring count 40, longitudinal 8, tube radius `th*1.35`, line half-width 0.05.
+- Pink/yellow blob left as-is (squiggles only).
+
+### Frogmarks UI still needed
+
+None required — default is wireframe. If we ever want a style picker in the dashboard (e.g. "Background style: Wireframe / Flat ribbons"), call `shapeManager.setShellSquiggleStyle(...)` from there.
+
+---
+
+## Package Designer (Salsa: DONE 2026-06-26 — Frogmarks: NOT STARTED)
+
+### What Salsa built ✅
+- Shell tile + packages sub-dashboard with "+ New Product Packaging" tile
+- `sm.packaging.*` API: `create / setDimensions / fold / unfold / setFoldAmount / setDielineLayer / exportDielinePng / get / getAll / remove`
+- Kraft-brown 3D box mesh; live-texture via `LiveTextureMode`; dieline PNG export
+- All gated by `PACKAGING_ENABLED` — `sm.packaging` is `null` when off
+- Key insight: flat dieline and folded box are the **same mesh** — `setFoldAmount(0)` = flat, `setFoldAmount(1)` = box (one canvas, fold scrub is the view toggle)
+
+### Frogmarks work needed 🟦
+Full spec in [package-designer-plan.md](package-designer-plan.md). Summary:
+- `kind?: 'packaging'` on `LocalIllustration` + `create(name, kind?)` update
+- `studio.component.ts`: route by `dashboardKind` in `onActivate`, pass `kind` in `listProjects`, add `_initiateNewPackagingProject()`
+- `app.module.ts`: add `/packaging/local/:id` + `/packaging/:id` routes
+- `illustration.service.ts`: extend `IllustrationStateDto` with optional `packaging?: PackagingStateDto`
+- New `PackageEditorComponent`: sliders → `setDimensions`, fold scrub, guide overlay canvas, stroke-end → `syncLiveTextures3D`, OPFS save/load
+
+### API key points
+```ts
+// onActivate event shape
+interface ShellActivateEvent {
+  id: string;
+  kind: 'system' | 'project' | 'empty' | 'local' | 'remote';
+  dashboardKind?: 'illustration' | 'packaging';
+}
+// createProject(name) does NOT receive dashboardKind — read it from the event
+```
+
+---
+
 ## Phase 3 — Arc Text (Salsa: NOT STARTED)
 
 Spec file: `arc-text.md` (in Salsa repo)

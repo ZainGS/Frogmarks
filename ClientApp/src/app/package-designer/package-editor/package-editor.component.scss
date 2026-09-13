@@ -1,0 +1,212 @@
+$accent:  #e07b30;
+$bg:      #1a1a1a;
+$bg2:     #222;
+$border:  rgba(255,255,255,0.1);
+$text:    rgba(255,255,255,0.85);
+$muted:   rgba(255,255,255,0.45);
+
+// ── Shell ──────────────────────────────────────────────────────
+
+.pkg-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: $bg;
+  color: $text;
+  font-size: 12px;
+  user-select: none;
+}
+
+// ── Loading ────────────────────────────────────────────────────
+
+.pkg-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.75);
+  z-index: 100;
+}
+
+.pkg-loading-label {
+  color: $text;
+  font-size: 14px;
+}
+
+// ── Header ─────────────────────────────────────────────────────
+
+.pkg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+  background: lighten($bg, 3%);
+  z-index: 10;
+}
+
+.pkg-back-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid $border;
+  color: $text;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover { background: rgba(255,255,255,0.13); }
+}
+
+.pkg-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: lighten($accent, 15%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pkg-export-btn {
+  background: rgba($accent, 0.18);
+  border: 1px solid rgba($accent, 0.45);
+  color: lighten($accent, 20%);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($accent, 0.32);
+    color: #fff;
+  }
+}
+
+// ── Body ───────────────────────────────────────────────────────
+
+.pkg-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+// ── Sidebar ────────────────────────────────────────────────────
+
+.pkg-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: $bg2;
+  border-right: 1px solid $border;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.pkg-section {
+  padding: 8px 12px;
+  border-bottom: 1px solid $border;
+}
+
+.pkg-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: $muted;
+  margin-bottom: 8px;
+}
+
+.pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+
+  &:last-child { margin-bottom: 0; }
+}
+
+.pkg-row-label {
+  width: 44px;
+  flex-shrink: 0;
+  color: $muted;
+  font-size: 11px;
+}
+
+input[type=range] {
+  flex: 1;
+  accent-color: $accent;
+}
+
+.pkg-num {
+  width: 44px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  font-size: 11px;
+  padding: 2px 4px;
+  text-align: right;
+
+  &:focus { outline: 1px solid $accent; border-color: $accent; }
+}
+
+.pkg-btn-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pkg-btn {
+  flex: 1;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid $border;
+  color: $text;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover { background: rgba(255,255,255,0.13); }
+}
+
+.pkg-check-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  color: $text;
+
+  &:last-child { margin-bottom: 0; }
+
+  input[type=checkbox] {
+    accent-color: $accent;
+    width: 13px;
+    height: 13px;
+  }
+}
+
+// ── Canvas area ────────────────────────────────────────────────
+
+.pkg-canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #111;
+
+  canvas#webgpuCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.pkg-guide-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}

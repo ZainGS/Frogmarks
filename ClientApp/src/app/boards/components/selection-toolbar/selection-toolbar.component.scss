@@ -1,42 +1,106 @@
 /* ═══════════════════════════════════════════════════════════
-   Selection Toolbar — dark theme, compact layout
+   Selection Toolbar — matches Drawing Options / Fill Options style
    ═══════════════════════════════════════════════════════════ */
 
 $surface: #333;
-$border: #555;
-$text: #e0e0e0;
-$muted: #aaa;
-$accent: #9B59B6;
-$accent-light: #b87fd9;
+$border:  #555;
+$text:    #e0e0e0;
+$muted:   #aaa;
+$accent:  #9B59B6;
 
 .sel-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  font-size: 11px;
   color: $text;
-  font-size: 12px;
 }
 
-.sel-section {
+/* ── Tool icon buttons ─────────────────────────────────── */
+
+.sel-tool-row {
   display: flex;
-  flex-direction: column;
   gap: 4px;
 }
 
-.sel-row {
+.sel-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 4px;
+  color: $text;
+  cursor: pointer;
+  transition: background 0.13s, border-color 0.13s;
+
+  &:hover { background: lighten($surface, 8%); }
+
+  &.active {
+    background: rgba($accent, 0.22);
+    border-color: $accent;
+    color: lighten($accent, 20%);
+    svg { stroke: lighten($accent, 20%); }
+  }
+
+  svg { display: block; }
+}
+
+/* ── Feather param row ─────────────────────────────────── */
+
+.sel-param-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sel-param-label {
+  width: 54px;
+  color: $muted;
+  flex-shrink: 0;
+}
+
+.sel-param-num {
+  width: 44px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 3px;
+  color: $text;
+  padding: 2px 4px;
+  text-align: right;
+  font-size: 11px;
+
+  &:focus { outline: 1px solid $accent; border-color: $accent; }
+}
+
+.sel-param-unit {
+  color: $muted;
+  font-size: 11px;
+}
+
+/* ── Divider ───────────────────────────────────────────── */
+
+.sel-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 1px 0;
+}
+
+/* ── Action button rows ────────────────────────────────── */
+
+.sel-action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.sel-action-btn {
+  display: inline-flex;
   align-items: center;
-}
-
-.sel-spacer {
-  flex: 1;
-}
-
-/* ── Buttons ─────────────────────────────────────────────── */
-
-.sel-btn {
+  gap: 4px;
   background: $surface;
   color: $text;
   border: 1px solid $border;
@@ -44,88 +108,32 @@ $accent-light: #b87fd9;
   padding: 4px 8px;
   font-size: 11px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.13s, border-color 0.13s;
   white-space: nowrap;
 
-  &:hover:not(:disabled) {
-    background: lighten($surface, 10%);
-  }
+  &:hover:not(:disabled) { background: lighten($surface, 9%); }
 
   &:disabled {
     opacity: 0.35;
     cursor: default;
   }
 
-  &.active {
-    background: rgba($accent, 0.25);
-    border-color: $accent;
-    color: $accent-light;
+  svg { flex-shrink: 0; }
+
+  &.commit {
+    border-color: #4CAF50;
+    color: #81C784;
+    &:hover:not(:disabled) { background: rgba(#4CAF50, 0.15); }
   }
-}
 
-.tool-btn {
-  min-width: 32px;
-  text-align: center;
-  font-size: 14px;
-  padding: 4px 6px;
-}
-
-.sel-btn.commit {
-  border-color: #4CAF50;
-  color: #81C784;
-
-  &:hover:not(:disabled) {
-    background: rgba(#4CAF50, 0.15);
+  &.cancel {
+    border-color: #f44336;
+    color: #ef9a9a;
+    &:hover:not(:disabled) { background: rgba(#f44336, 0.13); }
   }
-}
 
-.sel-btn.cancel {
-  border-color: #f44336;
-  color: #ef9a9a;
-
-  &:hover:not(:disabled) {
-    background: rgba(#f44336, 0.15);
-  }
-}
-
-.sel-btn.danger {
-  &:hover:not(:disabled) {
+  &.danger:hover:not(:disabled) {
     border-color: #f44336;
     color: #ef9a9a;
   }
-}
-
-/* ── Feather ─────────────────────────────────────────────── */
-
-.feather-label {
-  font-size: 11px;
-  color: $muted;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.feather-input {
-  width: 42px;
-  background: $surface;
-  border: 1px solid $border;
-  border-radius: 3px;
-  color: $text;
-  padding: 2px 4px;
-  font-size: 11px;
-  text-align: center;
-
-  &:focus {
-    outline: 1px solid $accent;
-  }
-}
-
-/* ── Mat-icon sizing ───────────────────────────────────────── */
-
-.sel-mat-icon {
-  font-size: 15px;
-  width: 15px;
-  height: 15px;
-  vertical-align: middle;
-  line-height: 15px;
 }

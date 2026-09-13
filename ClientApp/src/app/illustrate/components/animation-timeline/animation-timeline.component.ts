@@ -118,6 +118,24 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   /** Emitted when the user clicks the Record KF button in the transport bar. */
   @Output() recordKeyframeRequested = new EventEmitter<void>();
 
+  /** Camera cut points — drives the Cameras lane in the dope sheet. */
+  @Input() cameraCuts: { cameraId: string; frame: number }[] = [];
+
+  /** Camera nodes in the scene — label sources for cut markers. */
+  @Input() cameraNodes: { id: string; name: string }[] = [];
+
+  /** Whether cinematic cut preview is active — reflects preview toggle state. */
+  @Input() cameraPreviewOn = false;
+
+  /** Emitted when the user clicks a frame in a camera's row to drop a cut. */
+  @Output() dropCutRequested = new EventEmitter<{ cameraId: string; frame: number }>();
+
+  /** Emitted when the user removes a cut by clicking its ▼ marker. */
+  @Output() removeCutRequested = new EventEmitter<number>();
+
+  /** Emitted when the user clicks the cut-preview toggle. */
+  @Output() previewToggled = new EventEmitter<void>();
+
   private _collapsedMesh3dIds = new Set<string>();
 
   toggleMesh3dCollapse(meshId: string): void {
@@ -130,6 +148,20 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   isMesh3dCollapsed(meshId: string): boolean {
     return this._collapsedMesh3dIds.has(meshId);
+  }
+
+  getCutsForCamera(cameraId: string): { cameraId: string; frame: number }[] {
+    return this.cameraCuts.filter(c => c.cameraId === cameraId);
+  }
+
+  onCameraRowClick(event: MouseEvent, cameraId: string): void {
+    const frame = Math.max(1, Math.min(this.frameCount, Math.floor(event.offsetX / this.frameWidth) + 1));
+    this.dropCutRequested.emit({ cameraId, frame });
+  }
+
+  onCutMarkerClick(event: MouseEvent, frame: number): void {
+    event.stopPropagation();
+    this.removeCutRequested.emit(frame);
   }
 
   get allMeshesCollapsed(): boolean {
@@ -699,9 +731,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   }
 
   ctxNewCel(): void {
-    console.log(`[Timeline] ctxNewCel: layerId=${this.contextMenuLayerId}, frame=${this.contextMenuFrame}, layerAnimated=${this.contextMenuLayerAnimated}`);
-    const result = this.animService.addCelAtFrame(this.contextMenuLayerId, this.contextMenuFrame);
-    console.log(`[Timeline] ctxNewCel result:`, result);
+    this.animService.addCelAtFrame(this.contextMenuLayerId, this.contextMenuFrame);
     this.closeContextMenu();
   }
 
@@ -725,7 +755,6 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   // ── Cel operations (from context menu) ────────────────────
 
   ctxSetCelType(type: CelType): void {
-    console.log(`[Timeline] ctxSetCelType: celId=${this.contextMenuCelId}, layerId=${this.contextMenuLayerId}, type=${type}`);
     if (this.contextMenuCelId) {
       this.animService.setCelType(this.contextMenuLayerId, this.contextMenuCelId, type);
     }

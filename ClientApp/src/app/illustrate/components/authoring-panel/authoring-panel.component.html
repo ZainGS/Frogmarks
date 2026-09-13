@@ -1,0 +1,65 @@
+<div class="ap-header">
+    <span class="ap-title">AI Scene Authoring</span>
+    <button class="ap-new-session" (click)="resetSession()" [disabled]="running" title="Clear and start a new session">New</button>
+</div>
+
+<div class="ap-body">
+    <select class="ap-model-select" [(ngModel)]="selectedModel" [disabled]="running">
+        <option *ngFor="let m of models" [value]="m.id">{{ m.label }}</option>
+    </select>
+
+    <div *ngIf="supportsThinking" class="ap-thinking-row">
+        <label class="ap-thinking-toggle">
+            <input type="checkbox" [(ngModel)]="thinkingEnabled" [disabled]="running">
+            <span>Extended thinking</span>
+        </label>
+        <div *ngIf="thinkingEnabled" class="ap-budget-row">
+            <span class="ap-budget-label">Effort</span>
+            <select class="ap-effort-select" [(ngModel)]="thinkingEffort" [disabled]="running">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+            </select>
+        </div>
+    </div>
+
+    <textarea
+        class="ap-prompt"
+        [(ngModel)]="prompt"
+        placeholder="Describe what you want to build… e.g. 'add a small park with three trees and a bench'"
+        rows="5"
+        [disabled]="running"
+        (keydown.meta.enter)="send()"
+        (keydown.control.enter)="send()">
+    </textarea>
+
+    <button class="ap-send" (click)="send()" [disabled]="running || !prompt.trim() || !authoring">
+        <span *ngIf="!running">Build →</span>
+        <span *ngIf="running" class="ap-spinner"></span>
+    </button>
+
+    <div *ngIf="error" class="ap-error">{{ error }}</div>
+
+    <div *ngIf="toolLog.length > 0" class="ap-log">
+        <div *ngFor="let t of toolLog" class="ap-log-entry" [class.ap-log-error]="t.isError">
+            <span class="ap-log-icon">{{ t.isError ? '✗' : '✓' }}</span>
+            <span class="ap-log-name">{{ t.name }}</span>
+        </div>
+    </div>
+
+    <div *ngIf="resultText" class="ap-result">
+        <div class="ap-result-meta">
+            {{ turns }} turn{{ turns !== 1 ? 's' : '' }}
+            <span *ngIf="stoppedLabel" class="ap-stopped-label">{{ stoppedLabel }}</span>
+        </div>
+        <div class="ap-result-text">{{ resultText }}</div>
+    </div>
+
+    <button *ngIf="showContinue" class="ap-continue" (click)="continue()">
+        Continue →
+    </button>
+
+    <div *ngIf="!authoring" class="ap-warning">
+        Open an illustration first to enable authoring.
+    </div>
+</div>

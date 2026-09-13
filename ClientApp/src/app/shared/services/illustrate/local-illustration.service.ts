@@ -16,6 +16,7 @@ export interface LocalIllustration {
   uuid: string;
   name: string;
   syncMode: 2;
+  kind?: 'illustration' | 'packaging';  // undefined treated as 'illustration'
   createdAt: number;    // epoch ms
   updatedAt: number;    // epoch ms
   documentAspect?: number;
@@ -95,11 +96,12 @@ export class LocalIllustrationService {
     });
   }
 
-  async create(name: string, documentAspect?: number): Promise<LocalIllustration> {
+  async create(name: string, documentAspect?: number, kind?: 'illustration' | 'packaging'): Promise<LocalIllustration> {
     const record: LocalIllustration = {
       uuid: crypto.randomUUID(),
       name,
       syncMode: 2,
+      kind: kind ?? 'illustration',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       documentAspect,

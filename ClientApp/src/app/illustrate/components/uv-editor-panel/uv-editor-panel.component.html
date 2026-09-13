@@ -20,9 +20,55 @@
       </ng-container>
     </div>
 
-<!-- ── Brush ───────────────────────────────────────────────────── -->
+<!-- ── Tools ───────────────────────────────────────────────────── -->
     <div class="uv-section">
+      <div style="display:flex;gap:4px;padding-bottom:6px;">
+        <button class="uv-btn" style="flex:1"
+                [class.uv-btn-active]="activeTool==='brush'"
+                (click)="setTool('brush')">Brush</button>
+        <button class="uv-btn" style="flex:1"
+                [class.uv-btn-active]="activeTool==='stamp'"
+                (click)="setTool('stamp')">Stamp decal</button>
+      </div>
+      <ng-container *ngIf="activeTool==='stamp'">
+        <div class="uv-field-row" style="margin-bottom:4px">
+          <span class="uv-label">Size</span>
+          <input type="range" min="0.05" max="1" step="0.01" style="flex:1"
+                 [(ngModel)]="stampSize" (ngModelChange)="updateStampParams()">
+          <span style="min-width:34px;text-align:right">{{ stampSize | number:'1.2-2' }}</span>
+        </div>
+        <div class="uv-field-row" style="margin-bottom:6px">
+          <span class="uv-label">Rotation</span>
+          <input type="range" min="-180" max="180" step="1" style="flex:1"
+                 [(ngModel)]="stampRotationDeg" (ngModelChange)="updateStampParams()">
+          <span style="min-width:34px;text-align:right">{{ stampRotationDeg }}°</span>
+        </div>
+        <div style="font-size:10px;opacity:0.55;padding-bottom:2px">
+          Click in the 3D view to stamp. Source = active Decal panel selection.
+        </div>
+      </ng-container>
+    </div>
+
+<!-- ── Brush ───────────────────────────────────────────────────── -->
+    <div class="uv-section" *ngIf="activeTool==='brush'">
       <app-brush-options [activeRasterTool]="'brush'"></app-brush-options>
+    </div>
+
+    <!-- ── Save as GARP skin variant (Bridge 2: UV Paint → Skins) ─ -->
+    <div class="uv-section" *ngIf="garpTarget">
+      <div class="uv-section-title">Save as {{ garpTarget.poolName }} variant</div>
+      <div class="uv-field-row" style="margin-bottom:6px">
+        <span class="uv-label">Name</span>
+        <input type="text" class="uv-select" [(ngModel)]="garpSkinName"
+               placeholder="e.g. coke" style="flex:1;min-width:0">
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="uv-btn" style="flex:1" [disabled]="!garpSkinName.trim() || garpSaving"
+                (click)="garpSave()">
+          {{ garpSaving ? 'Saving…' : 'Save variant' }}
+        </button>
+        <button class="uv-btn" style="flex:1" (click)="garpCancel()">Cancel</button>
+      </div>
     </div>
 
     <!-- ── Export ────────────────────────────────────────────────── -->

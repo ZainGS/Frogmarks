@@ -497,3 +497,17 @@ $danger:  #c0392b;
 
   &:hover { color: #f77; }
 }
+
+.me-displace-details {
+  margin-bottom: 8px;
+}
+
+.me-displace-summary {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+
+  &:hover { color: rgba(255,255,255,0.8); }
+}

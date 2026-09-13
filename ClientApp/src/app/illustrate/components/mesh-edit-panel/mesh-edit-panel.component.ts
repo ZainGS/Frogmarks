@@ -1,11 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 
 export interface MeshModifier {
-  type: 'mirror' | 'subdivision';
+  type: 'mirror' | 'subdivision' | 'displace';
   enabled: boolean;
   index: number;
   axis?: 'x' | 'y' | 'z';
   iterations?: number;
+  strength?: number;
+  frequency?: number;
+  octaves?: number;
+  seed?: number;
+  direction?: 'x' | 'y' | 'z' | 'xyz';
 }
 
 @Component({
@@ -35,10 +40,26 @@ export class MeshEditPanelComponent implements OnChanges {
   weldV1Input = '';
   weldV2Input = '';
 
+  // Vertex bevel
+  bevelVertexIndex = '';
+  bevelVertexAmount = 0.1;
+
   // Edge ops
   halfEdgeInput = '';
   loopCutT = 0.5;
   bevelAmount = 0.3;
+
+  // Displace modifier params
+  displaceStrength = 0.3;
+  displaceFrequency = 2.0;
+  displaceOctaves = 3;
+  displaceSeed = 42;
+  displaceDirection: 'x' | 'y' | 'z' | 'xyz' = 'y';
+
+  // Decimate
+  decimateRatio = 0.3;
+  decimateTrisBefore = 0;
+  decimateTrisAfter = 0;
 
   // Phase 2 — mesh cleanup
   mergeThreshold = 0.001;
@@ -209,6 +230,13 @@ export class MeshEditPanelComponent implements OnChanges {
     this.weldV2Input = '';
   }
 
+  bevelVertex(): void {
+    if (!this.meshId) return;
+    const idx = parseInt(this.bevelVertexIndex, 10);
+    if (isNaN(idx)) return;
+    this.sm?.bevelVertex3D?.(this.meshId, idx, this.bevelVertexAmount);
+  }
+
   autoUnwrap(): void {
     if (!this.meshId) return;
     this.sm?.autoUnwrap3D?.(this.meshId);
@@ -279,7 +307,15 @@ export class MeshEditPanelComponent implements OnChanges {
       index: i,
       axis: m.axis,
       iterations: m.iterations,
+      strength: m.strength,
+      frequency: m.frequency,
+      octaves: m.octaves,
+      seed: m.seed,
+      direction: m.direction,
     }));
+    const geom = this.sm?.getMesh3D?.(this.meshId)?.geometry;
+    this.decimateTrisBefore = geom ? Math.round(geom.indices.length / 3) : 0;
+    this.decimateTrisAfter = 0;
   }
 
   addMirror(axis: 'x' | 'y' | 'z'): void {
@@ -291,6 +327,18 @@ export class MeshEditPanelComponent implements OnChanges {
   addSubdivision(iterations: 1 | 2): void {
     if (!this.meshId) return;
     this.sm?.addSubdivisionModifier3D?.(this.meshId, iterations);
+    this.refreshModifiers();
+  }
+
+  addDisplace(): void {
+    if (!this.meshId) return;
+    this.sm?.addDisplaceModifier3D?.(this.meshId, {
+      strength: this.displaceStrength,
+      frequency: this.displaceFrequency,
+      seed: this.displaceSeed,
+      octaves: this.displaceOctaves,
+      direction: this.displaceDirection,
+    });
     this.refreshModifiers();
   }
 
@@ -310,6 +358,13 @@ export class MeshEditPanelComponent implements OnChanges {
     if (!this.meshId) return;
     this.sm?.removeModifier3D?.(this.meshId, mod.index);
     this.refreshModifiers();
+  }
+
+  decimateMesh(): void {
+    if (!this.meshId) return;
+    this.sm?.simplifyMesh3D?.(this.meshId, this.decimateRatio);
+    const geomAfter = this.sm?.getMesh3D?.(this.meshId)?.geometry;
+    this.decimateTrisAfter = geomAfter ? Math.round(geomAfter.indices.length / 3) : 0;
   }
 
   private _hexToRgb(hex: string): [number, number, number] {

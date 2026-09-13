@@ -353,6 +353,47 @@ $play-range: rgba($accent, 0.08);
   &:hover .kf-diamond { transform: scale(1.4); }
 }
 
+/* ── Cinematic camera cuts lane ──────────────────────────────── */
+
+.tl-cam-preview-btn {
+  margin-left: auto;
+  font-size: 8px;
+  background: none;
+  border: 1px solid #5a4080;
+  color: #ce93d8;
+  border-radius: 3px;
+  padding: 1px 5px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+
+  &.active {
+    background: #ce93d8;
+    color: #1a1a2e;
+  }
+}
+
+.tl-camera-cut-row {
+  cursor: crosshair;
+  background: rgba(#2a1a3e, 0.6);
+}
+
+.tl-cut-marker {
+  position: absolute;
+  top: 3px;
+  font-size: 10px;
+  line-height: 1;
+  color: #f97316;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s, color 0.1s;
+
+  &:hover {
+    color: #facc15;
+    transform: scale(1.4);
+  }
+}
+
 /* ── Transport bar (bottom) ──────────────────────────────────── */
 
 .transport-bar {

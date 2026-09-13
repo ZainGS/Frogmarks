@@ -912,7 +912,7 @@
                          (click)="toggleGridItemSelection($event, ri.item.uuid)">
                       <fm-icon [name]="selectedItems.has(ri.item.uuid) ? 'check_circle' : 'radio_button_unchecked'"></fm-icon>
                     </div>
-                    <img [src]="getThumbnailSrc(ri.item)" class="thumbnail-img">
+                    <img [src]="getThumbnailSrc(ri.item)" class="thumbnail-img" loading="lazy">
                     <div class="sync-status-badge"
                          *ngIf="$any(ri.item).syncStatus"
                          [ngClass]="'sync-status-badge--' + $any(ri.item).syncStatus"
@@ -992,7 +992,7 @@
                          (click)="toggleGridItemSelection($event, mi.item.uuid)">
                       <fm-icon [name]="selectedItems.has(mi.item.uuid) ? 'check_circle' : 'radio_button_unchecked'"></fm-icon>
                     </div>
-                    <img [src]="getThumbnailSrc(mi.item)" class="thumbnail-img">
+                    <img [src]="getThumbnailSrc(mi.item)" class="thumbnail-img" loading="lazy">
                     <div class="sync-status-badge"
                          *ngIf="$any(mi.item).syncStatus"
                          [ngClass]="'sync-status-badge--' + $any(mi.item).syncStatus"
@@ -1051,6 +1051,7 @@
                   <div style="flex: 0 0 80px;">
                     <img [src]="getThumbnailSrc(listItem)"
                         class="thumbnail-img"
+                        loading="lazy"
                         style="width: 80px; height: auto; border-radius: 6px;">
                   </div>
 
@@ -1078,6 +1079,12 @@
               </div>
             </div>
 
+          <!-- Pagination sentinel — IntersectionObserver triggers next cloud page -->
+          <div #paginationSentinel style="height: 1px;"></div>
+          <div *ngIf="_isLoadingMore" style="text-align:center; padding: 16px; font-size: 12px; opacity: 0.5;">
+            Loading more…
+          </div>
+
           </div>
           <!-- Frogmarks Galaxy / Explore (kept, hidden — replaced by FrogPlayer) -->
           <!-- <div style="background-color: transparent; position: absolute; width: -webkit-fill-available; margin-right: 0px;" *ngIf="isFrogmarksGalaxyActive" [ngClass]="{ 'loading-container': isLoading }">
@@ -1090,10 +1097,20 @@
           </div>
 
           <!-- FrogPlayer -->
-          <div class="frog-player-container" *ngIf="isFrogPlayerActive">
-            <div class="frog-player-placeholder">
-              <fm-icon name="videogame_asset" style="font-size: 48px; opacity: 0.3;"></fm-icon>
-              <p style="margin-top: 12px; opacity: 0.4; font-size: 13px;">FrogPlayer coming soon — drag a .frogcart here to load it</p>
+          <div class="frog-player-container" *ngIf="isFrogPlayerActive"
+               (dragenter)="onPlayerDragEnter($event)"
+               (dragover)="onPlayerDragOver($event)"
+               (dragleave)="onPlayerDragLeave($event)"
+               (drop)="onPlayerDrop($event)"
+               [class.frog-player-drag-over]="isPlayerDragOver">
+            <div class="frog-player-drop-zone">
+              <fm-icon name="videogame_asset" style="font-size: 52px; opacity: 0.35;"></fm-icon>
+              <p class="frog-player-heading">Frogmarks Player</p>
+              <p class="frog-player-sub">Drop a <code>.frogcart</code> here to play it</p>
+              <label class="frog-player-file-btn">
+                Choose file
+                <input type="file" accept=".frogcart" style="display:none" (change)="onPlayerFileInput($event)">
+              </label>
             </div>
           </div>
 

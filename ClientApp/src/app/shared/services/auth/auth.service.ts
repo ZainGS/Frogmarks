@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { ConfigurationService } from '../api/configuration.service';
-import { MsalService } from '@azure/msal-angular';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { NotifyService } from '../notify/notify.service';

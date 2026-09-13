@@ -74,8 +74,8 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     this.rasterService.refreshLayers();
     this.subs.push(
       this.rasterService.layers$.subscribe(l => {
-        this.vectorLayers = l.filter(x => x.type === 'vector');
-        this.layers = l.filter(x => x.type !== 'vector');
+        this.vectorLayers = l.filter(x => x.type === 'vector' && !x.systemOwner);
+        this.layers = l.filter(x => x.type !== 'vector' && !x.systemOwner);
         setTimeout(() => {
           if (!this.activeLayerId && !this.selected3DSceneId && !this.activeVectorLayerId) this._autoSelectDefault();
         }, 0);
@@ -212,7 +212,13 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     // 3D scene: highlight in UI and emit event, but don't select in engine
     if (layer?.type === '3d-scene') {
       this.selected3DSceneId = layer.id;
-      this.activeLayerId = null;  // deselect raster layer visually
+      this.activeLayerId = null;
+      // Clear vector layer so only one row appears active at a time
+      if (this.activeVectorLayerId) {
+        this.activeVectorLayerId = null;
+        this.shapeManager?.setActiveVectorLayer?.(null);
+        this.vectorLayerSelected.emit(null);
+      }
       this.scene3dSelected.emit(true);
       return;
     }
@@ -234,6 +240,16 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Add / Delete ──────────────────────────────────────────────
 
   addLayer(): void {
+    // Deselect 3D scene / vector layer so the new 2D layer becomes active
+    if (this.selected3DSceneId) {
+      this.selected3DSceneId = null;
+      this.scene3dSelected.emit(false);
+    }
+    if (this.activeVectorLayerId) {
+      this.activeVectorLayerId = null;
+      this.shapeManager?.setActiveVectorLayer?.(null);
+      this.vectorLayerSelected.emit(null);
+    }
     this.rasterService.addLayer('Layer ' + (this.layers.length + 1));
   }
 
@@ -356,7 +372,11 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleVectorVisibility(layer: RasterLayer, e: MouseEvent): void {
     e.stopPropagation();
-    this.shapeManager?.setVectorLayerVisible?.(layer.id, !layer.visible);
+    const newVisible = !(layer.visible ?? true);
+    this.shapeManager?.setVectorLayerVisible?.(layer.id, newVisible);
+    // layers$ doesn't reflect vector visibility changes, so update local state immediately
+    const vl = this.vectorLayers.find(v => v.id === layer.id);
+    if (vl) vl.visible = newVisible;
   }
 
   // ── Visibility ────────────────────────────────────────────────

@@ -34,6 +34,20 @@
         </div>
       </ng-container>
     </ng-container>
+    <!-- Cameras lane labels -->
+    <ng-container *ngIf="cameraNodes.length > 0">
+      <div class="tl-3d-header-label">
+        <span class="layer-type-icon" style="font-size:9px">🎬</span>
+        <span class="layer-name">Cameras</span>
+        <button class="tl-cam-preview-btn" [class.active]="cameraPreviewOn"
+                (click)="previewToggled.emit(); $event.stopPropagation()"
+                title="Preview render through camera cuts">▶</button>
+      </div>
+      <div *ngFor="let cam of cameraNodes" class="tl-3d-track-label"
+           title="Click a frame in this row to drop a cut for {{ cam.name }}">
+        <span class="layer-name">{{ cam.name }}</span>
+      </div>
+    </ng-container>
   </div>
 
   <!-- ── Timeline grid (scrollable) ──────────────────────── -->
@@ -142,6 +156,29 @@
           </div>
         </div>
       </ng-container>
+    </ng-container>
+
+    <!-- Cameras lane grid -->
+    <ng-container *ngIf="cameraNodes.length > 0">
+      <div class="tl-3d-header-row" [style.width.px]="frameCount * frameWidth">
+        <div *ngFor="let f of frameNumbers"
+             class="tl-3d-header-cell"
+             [class.current]="f === currentFrame"
+             [style.width.px]="frameWidth"
+             (click)="onFrameClick(f)">
+        </div>
+      </div>
+      <div *ngFor="let cam of cameraNodes"
+           class="tl-3d-track-row tl-camera-cut-row"
+           [style.width.px]="frameCount * frameWidth"
+           (click)="onCameraRowClick($event, cam.id)"
+           [title]="'Click to drop a cut for ' + cam.name">
+        <div *ngFor="let cut of getCutsForCamera(cam.id)"
+             class="tl-cut-marker"
+             [style.left.px]="(cut.frame - 1) * frameWidth + frameWidth * 0.5 - 6"
+             (click)="onCutMarkerClick($event, cut.frame)"
+             [title]="'Cut to ' + cam.name + ' at frame ' + cut.frame + ' — click to remove'">▼</div>
+      </div>
     </ng-container>
 
     <!-- Current frame indicator line -->

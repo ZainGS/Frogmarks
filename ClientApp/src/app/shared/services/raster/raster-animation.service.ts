@@ -99,6 +99,7 @@ export class RasterAnimationService {
 
   private _unsubscribeEvent: (() => void) | null = null;
   private _suppressRefresh = false;
+  private _lastTimelineJson = '';
 
   /** Suppress refreshTimeline reactions to Salsa events. Call beginBulkRestore() before
    *  loadDocument() and endBulkRestore() after — events fired during restore are batched
@@ -216,17 +217,10 @@ export class RasterAnimationService {
    * then setLayerAnimated(layerId, true), then addCelAtFrame.
    */
   setLayerAnimated(layerId: string, animated: boolean): void {
-    console.log(`[AnimService] setLayerAnimated(${layerId}, ${animated})`);
-    // Ensure animation system is enabled before marking a layer animated
     if (animated && !this._animationEnabled$.value) {
-      console.log('[AnimService] animation not enabled yet, calling setAnimationEnabled(true)');
       this.setAnimationEnabled(true);
     }
-    const sm = this.sm;
-    console.log('[AnimService] sm exists:', !!sm);
-    console.log('[AnimService] sm.setLayerAnimated exists:', typeof sm?.setLayerAnimated);
-    sm?.setLayerAnimated?.(layerId, animated);
-    console.log('[AnimService] after setLayerAnimated, isLayerAnimated:', sm?.isLayerAnimated?.(layerId));
+    this.sm?.setLayerAnimated?.(layerId, animated);
     this.refreshTimeline();
   }
 
@@ -246,29 +240,18 @@ export class RasterAnimationService {
    * (via setLayerAnimated) or the engine will reject the call.
    */
   addCelAtFrame(layerId: string, frame: number): string | null {
-    console.log(`[AnimService] addCelAtFrame(${layerId}, ${frame})`);
-    console.log('[AnimService] animationEnabled:', this._animationEnabled$.value);
-    // Guard: ensure animation is enabled and layer is animated
     if (!this._animationEnabled$.value) {
       console.warn('[AnimService] addCelAtFrame: animation not enabled, enabling now');
       this.setAnimationEnabled(true);
     }
     const isAnim = this.isLayerAnimated(layerId);
-    console.log(`[AnimService] isLayerAnimated(${layerId}):`, isAnim);
     if (!isAnim) {
       console.warn(`[AnimService] addCelAtFrame: layer ${layerId} not animated, marking animated now`);
       this.sm?.setLayerAnimated?.(layerId, true);
-      console.log('[AnimService] after force setLayerAnimated, isLayerAnimated:', this.sm?.isLayerAnimated?.(layerId));
     }
-    const sm = this.sm;
-    console.log('[AnimService] sm.addCelAtFrame exists:', typeof (sm as any)?.addCelAtFrame);
-    const celId = sm?.addCelAtFrame?.(layerId, frame) ?? null;
-    console.log(`[AnimService] addCelAtFrame returned:`, celId);
+    const celId = this.sm?.addCelAtFrame?.(layerId, frame) ?? null;
     if (!celId) {
       console.warn(`[AnimService] addCelAtFrame returned null for layer=${layerId} frame=${frame}`);
-      // Extra diagnostics
-      console.log('[AnimService] getRasterLayers:', JSON.stringify(sm?.getRasterLayers?.()?.map((l: any) => ({ id: l.id, name: l.name }))));
-      console.log('[AnimService] getCels:', JSON.stringify((sm as any)?.getCels?.(layerId)));
     }
     this.refreshTimeline();
     return celId;
@@ -281,8 +264,6 @@ export class RasterAnimationService {
 
   insertFrame(at: number): void {
     this.sm?.insertFrame?.(at);
-    // Frame count is updated by the 'timeline-changed' event from the engine.
-    // Read the engine's ground truth to keep in sync regardless of event timing.
     const engineCount = (this.sm?.getFrameCount?.() as number);
     if (engineCount != null) this._frameCount$.next(engineCount);
     this.refreshTimeline();
@@ -290,8 +271,6 @@ export class RasterAnimationService {
 
   deleteFrame(at: number): void {
     this.sm?.deleteFrame?.(at);
-    // Frame count is updated by the 'timeline-changed' event from the engine.
-    // Read the engine's ground truth to keep in sync regardless of event timing.
     const engineCount = (this.sm?.getFrameCount?.() as number);
     if (engineCount != null) this._frameCount$.next(engineCount);
     this.refreshTimeline();
@@ -321,8 +300,6 @@ export class RasterAnimationService {
   }
 
   setCelType(layerId: string, celId: string, celType: CelType): void {
-    console.log(`[AnimService] setCelType(${layerId}, ${celId}, ${celType})`);
-    console.log('[AnimService] sm.setCelType exists:', typeof (this.sm as any)?.setCelType);
     (this.sm as any)?.setCelType?.(layerId, celId, celType);
     this.refreshTimeline();
   }
@@ -357,26 +334,21 @@ export class RasterAnimationService {
     const layers: any[] = (sm.getRasterLayers?.() ?? []).filter(
       (l: any) => l.type !== '3d-scene' && l.type !== '3d-mesh' && l.type !== '3DMesh' && l.name !== 'Mesh3D'
     );
-    console.log(`[AnimService] refreshTimeline: ${layers.length} layers`);
     const timelineLayers: TimelineLayerInfo[] = layers.map((l: any) => {
       const animated = sm.isLayerAnimated?.(l.id) ?? false;
       const rawCels: any[] = (sm as any).getCels?.(l.id) ?? [];
-      // Map engine shape → our CelInfo interface
       const cels: CelInfo[] = rawCels.map((c: any) => ({
         id: c.id,
-        frame: c.startFrame ?? c.frame ?? 1,    // engine uses startFrame
+        frame: c.startFrame ?? c.frame ?? 1,
         duration: c.duration ?? 1,
         isKey: c.celType === 'key' || c.isKey === true,
         celType: c.celType ?? (c.isKey ? 'key' : 'inbetween'),
       }));
-      console.log(`[AnimService]   layer ${l.id} (${l.name}): animated=${animated}, cels=${cels.length}`, JSON.stringify(cels));
-      return {
-        id: l.id,
-        name: l.name ?? 'Layer',
-        animated,
-        cels,
-      };
+      return { id: l.id, name: l.name ?? 'Layer', animated, cels };
     });
+    const json = JSON.stringify(timelineLayers);
+    if (json === this._lastTimelineJson) return;
+    this._lastTimelineJson = json;
     this._timelineLayers$.next(timelineLayers);
   }
 
@@ -386,29 +358,33 @@ export class RasterAnimationService {
     this._unsubscribeEvents();
     const sm = this.sm;
     if (!sm?.onAnimationEvent) return;
-    this._unsubscribeEvent = sm.onAnimationEvent((event: AnimationEvent) => {
-      this.zone.run(() => {
-        switch (event.type) {
-          case 'frame-changed':
-            this._currentFrame$.next(event.frame ?? 1);
-            break;
-          case 'playback-state-changed':
-            this._isPlaying$.next((sm as any).isPlaying?.() ?? false);
-            break;
-          case 'timeline-changed':
-            this._frameCount$.next(sm.getFrameCount?.() ?? 24);
-            this.refreshTimeline();
-            break;
-          case 'cel-added':
-          case 'cel-removed':
-          case 'layer-type-changed':
-            this.refreshTimeline();
-            break;
-          case 'onion-skin-changed':
-            const cfg = sm.getOnionSkin?.();
-            if (cfg) this._onionSkin$.next(cfg);
-            break;
+    this.zone.runOutsideAngular(() => {
+      this._unsubscribeEvent = sm.onAnimationEvent((event: AnimationEvent) => {
+        if (event.type === 'frame-changed') {
+          // Frame ticks don't need Angular CD — emit outside zone to avoid 60fps CD cycles
+          this._currentFrame$.next(event.frame ?? 1);
+          return;
         }
+        this.zone.run(() => {
+          switch (event.type) {
+            case 'playback-state-changed':
+              this._isPlaying$.next((sm as any).isPlaying?.() ?? false);
+              break;
+            case 'timeline-changed':
+              this._frameCount$.next(sm.getFrameCount?.() ?? 24);
+              this.refreshTimeline();
+              break;
+            case 'cel-added':
+            case 'cel-removed':
+            case 'layer-type-changed':
+              this.refreshTimeline();
+              break;
+            case 'onion-skin-changed':
+              const cfg = sm.getOnionSkin?.();
+              if (cfg) this._onionSkin$.next(cfg);
+              break;
+          }
+        });
       });
     });
   }

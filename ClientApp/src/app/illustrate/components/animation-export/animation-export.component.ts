@@ -1,5 +1,4 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnChanges } from '@angular/core';
-import JSZip from 'jszip';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { AnimationFrameSource } from '../../models/animation-frame-source';
 
@@ -124,6 +123,7 @@ export class AnimationExportComponent implements OnChanges {
   private async _exportPngSequence(scale: number): Promise<void> {
     const savedFrame = this.shapeManager.getCurrentFrame?.() ?? 1;
     const frames = this._getFrameRange();
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     for (let i = 0; i < frames.length; i++) {

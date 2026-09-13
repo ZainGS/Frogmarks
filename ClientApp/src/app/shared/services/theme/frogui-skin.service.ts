@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 
 export interface SkinManifest {
   froguiVersion: number;
@@ -331,6 +331,7 @@ export class FroguiSkinService {
   }
 
   async applySkinFromBytes(bytes: Uint8Array, persist = false): Promise<{ ok: boolean; error?: string }> {
+    const { default: JSZip } = await import('jszip');
     let zip: JSZip;
     try { zip = await JSZip.loadAsync(bytes); }
     catch { return { ok: false, error: 'File is not a valid ZIP archive.' }; }
@@ -407,6 +408,7 @@ export class FroguiSkinService {
     tokens: Record<string, string>,
     images: Map<string, File>
   ): Promise<void> {
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     const iconsManifest: Record<string, string> = {};
@@ -468,6 +470,7 @@ export class FroguiSkinService {
     tokens: Record<string, string>,
     images: Map<string, File>
   ): Promise<void> {
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     const iconsManifest: Record<string, string> = {};

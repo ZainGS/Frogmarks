@@ -368,13 +368,10 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       depthMode:     'surface' as const,
       color:         this._hexToRgba(this.strokeColorHex, this.strokeOpacity),
       baseWidth:     this.strokeWidth,
-      strokeOpacity: this.strokeOpacity,
-      filled:        this.filled,
       fillColor:     this._hexToRgba(this.fillColorHex, this.fillOpacity),
-      closed:        this.closed,
+      closed:        this.closed || this.filled,
       parentJoint:   this.parentJoint || undefined,
       eraseRadius:   this.eraserRadius,
-      frame:         this.gpFrame,
     };
   }
 

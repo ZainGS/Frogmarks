@@ -4,7 +4,6 @@ import { ApiService } from '../api/api.service';
 import { ConfigurationService } from '../api/configuration.service';
 import { NotifyService } from '../notify/notify.service';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { MsalService } from '@azure/msal-angular';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
 

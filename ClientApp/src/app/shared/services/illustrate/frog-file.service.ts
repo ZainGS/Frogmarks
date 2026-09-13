@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import JSZip from 'jszip';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { RasterAnimationService, OnionSkinConfig, LoopMode, CelInfo } from '../raster/raster-animation.service';
 import {
@@ -93,6 +92,7 @@ export class FrogFileService {
     if (!sm) throw new Error('ShapeManager not available');
 
     console.log('[FrogFile] starting export…');
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     // ── 1. Gather state (reusable helper) ──
@@ -177,6 +177,7 @@ export class FrogFileService {
   async parseFrogFile(file: File): Promise<FrogImportResult> {
 
     console.log('[FrogFile] reading', file.name);
+    const { default: JSZip } = await import('jszip');
     const zip = await JSZip.loadAsync(file);
 
     // ── 1. Read manifest ──

@@ -28,8 +28,6 @@ import { NavMenuComponent } from './shared/components/nav-menu/nav-menu.componen
 import { HomeComponent } from './shared/components/home/home.component';
 import { AuthInterceptor } from './shared/interceptors/auth.interceptor';
 
-import { MsalModule, MsalService, MSAL_INSTANCE } from '@azure/msal-angular';
-import { PublicClientApplication, InteractionType } from '@azure/msal-browser';
 import { SignInComponent } from './shared/components/signin/signin.component';
 import { DashboardComponent } from './shared/components/dashboard/dashboard.component';
 import { CheckYourEmailComponent } from './shared/components/check-your-email/check-your-email.component';
@@ -56,23 +54,10 @@ import { GreasePencilPanelComponent } from './illustrate/components/grease-penci
 import { UvEditorPanelComponent } from './illustrate/components/uv-editor-panel/uv-editor-panel.component';
 import { DocsComponent } from './shared/components/docs/docs.component';
 import { StudioComponent } from './shared/components/studio/studio.component';
+import { PackageEditorComponent } from './package-designer/package-editor/package-editor.component';
+import { AuthoringPanelComponent } from './illustrate/components/authoring-panel/authoring-panel.component';
+import { PlayerComponent } from './player/player.component';
 
-// Define MSAL configuration
-/*
-export function MSALInstanceFactory(): PublicClientApplication {
-  return new PublicClientApplication({
-    auth: {
-      clientId: 'your-client-id', // Azure AD Application (client) ID
-      authority: 'https://login.microsoftonline.com/your-tenant-id', // Azure AD tenant ID
-      redirectUri: 'http://localhost:4200' // redirect URI
-    },
-    cache: {
-      cacheLocation: 'localStorage', // This configures where your cache will be stored
-      storeAuthStateInCookie: true // Set to true for Internet Explorer 11
-    }
-  });
-}
-*/
 
 @NgModule({
   declarations: [
@@ -104,11 +89,13 @@ export function MSALInstanceFactory(): PublicClientApplication {
     FmIconComponent,
     DocsComponent,
     StudioComponent,
+    PackageEditorComponent,
+    AuthoringPanelComponent,
+    PlayerComponent,
   ],
   imports: [
     //.withServerTransition({ appId: 'ng-cli-universal' })
     BrowserModule,
-    MsalModule,
     HttpClientModule,
     MatSnackBarModule,
     MatInputModule,
@@ -140,6 +127,9 @@ export function MSALInstanceFactory(): PublicClientApplication {
       { path: 'illustration/:id', component: IllustrationComponent},
       { path: 'view/:id', component: IllustrationComponent, data: { viewer: true } },
       { path: 'docs', component: DocsComponent },
+      { path: 'packaging/local/:id', component: PackageEditorComponent, data: { local: true } },
+      { path: 'packaging/:id',       component: PackageEditorComponent },
+      { path: 'player',              component: PlayerComponent },
     ])
   ],
   exports: [RouterModule],
@@ -149,13 +139,6 @@ export function MSALInstanceFactory(): PublicClientApplication {
       //useClass: AuthorizeInterceptor, multi: true
       useClass: AuthInterceptor, multi: true
     },
-    /*
-    {
-      provide: MSAL_INSTANCE,
-      useFactory: MSALInstanceFactory
-    },
-    MsalService
-    */
   ],
   bootstrap: [AppComponent]
 })

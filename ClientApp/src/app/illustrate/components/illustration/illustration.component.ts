@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, HostListener, ElementRef, NgZone } from '@angular/core';
-import JSZip from 'jszip';
+import { Component, OnInit, OnDestroy, ViewChild, HostListener, ElementRef, NgZone, isDevMode } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
 
@@ -12,7 +11,7 @@ import { Illustration } from 'app/illustrate/models/illustration.model';
 
 import ShapeManager from '@zaings/salsa/shape-manager';
 import WorldManager from '@zaings/salsa/world-manager';
-import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from '@zaings/salsa';
+import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering, SceneAuthoringAPI } from '@zaings/salsa';
 
 import { ShapeType } from '../../../shared/enums/shape-type';
 import { auditTime, debounceTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
@@ -136,11 +135,16 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   private _rasterActiveLayerSub: any = null;
   private _currentFrameSub: any = null;
   private _scene3dViewportSub: any = null;
+  private _viewStateSub: any = null;
+  private _playStateSub: any = null;
+  private _cameraCutsSub: any = null;
   private _scene3dResizeObserver: ResizeObserver | null = null;
 
   @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('handleCanvas') handleCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('uvCanvas') uvCanvasRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('pkgDielinePane')  pkgDiePaneRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('pkgDielineGuide') pkgDieGuideRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild('titleInput') titleInputRef!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInput') imageFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('imageFileInputLayer') imageFileInputLayer!: ElementRef<HTMLInputElement>;
@@ -155,7 +159,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   @HostListener('document:click') onDocClick() { this.closeAllMenus(); }
   @HostListener('window:scroll') onWinScroll() { this.closeContextMenu(); }
   @HostListener('window:resize') onWinResize() { this.closeContextMenu(); }
-  @HostListener('document:keydown.escape') onEsc() { this.closeContextMenu(); }
+  @HostListener('document:keydown.escape') onEsc() {
+    if (this.scene3dViewIsPlaying) return; // Esc releases pointer-lock; Play Mode handles it
+    this.scene3dEndPlacePick();
+    this.closeContextMenu();
+  }
   // Viewport transform shortcut HUD (synced from Salsa getters)
   scene3dShortcutActive = false;
   scene3dShortcutMode: string | null = null;
@@ -351,6 +359,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   controlPanelActiveTool = '';
   shapeManager!: ShapeManager;
   worldManager!: WorldManager;
+  authoringApi: SceneAuthoringAPI | null = null;
   isCommentPanelActive = false;
 
   selectedPenColor = '#9B59B6';
@@ -369,30 +378,30 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   artboardLabelText = '';
   private _artboardViewportSub: any = null;
 
-  selectedStamp = 'assets/stamps/star.png';
+  selectedStamp = 'assets/stamps/star.webp';
   selectedStampColor = '#FFFFFF';
   selectedStampSize = 0.10;
 
   stampPalette: string[] = [
-    'assets/stamps/star.png',
-    'assets/stamps/heart.png',
-    'assets/stamps/check.png',
-    'assets/stamps/arrow.png',
-    'assets/stamps/circle.png',
-    'assets/stamps/x.png',
-    'assets/stamps/thumbs_up.png',
-    'assets/stamps/icecream/icecream_strawberry.png'
+    'assets/stamps/star.webp',
+    'assets/stamps/heart.webp',
+    'assets/stamps/check.webp',
+    'assets/stamps/arrow.webp',
+    'assets/stamps/circle.webp',
+    'assets/stamps/x.webp',
+    'assets/stamps/thumbs_up.webp',
+    'assets/stamps/icecream/icecream_strawberry.webp'
   ];
 
   iceCreamStamps: string[] = [
-    'assets/stamps/icecream/icecream_chocolate.png',
-    'assets/stamps/icecream/icecream_chocolate2.png',
-    'assets/stamps/icecream/icecream_matcha.png',
-    'assets/stamps/icecream/icecream_matcha2.png',
-    'assets/stamps/icecream/icecream_strawberry.png',
-    'assets/stamps/icecream/icecream_strawberry2.png',
-    'assets/stamps/icecream/icecream_vanilla.png',
-    'assets/stamps/icecream/icecream_vanilla2.png'
+    'assets/stamps/icecream/icecream_chocolate.webp',
+    'assets/stamps/icecream/icecream_chocolate2.webp',
+    'assets/stamps/icecream/icecream_matcha.webp',
+    'assets/stamps/icecream/icecream_matcha2.webp',
+    'assets/stamps/icecream/icecream_strawberry.webp',
+    'assets/stamps/icecream/icecream_strawberry2.webp',
+    'assets/stamps/icecream/icecream_vanilla.webp',
+    'assets/stamps/icecream/icecream_vanilla2.webp'
   ];
 
   getRandomIceCreamStamp(): string {
@@ -530,6 +539,20 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   loadPolygonPresets(): void {
     this.polygonPresets = (ShapeManager as any).PolygonPresets || [];
+  }
+
+  private readonly _polygonPresetLabels: Record<string, string> = {
+    arrowRight: 'Arrow Right',
+    speechBubble: 'Speech Bubble',
+    star5: '5-Sided Star',
+    star6: '6-Sided Star',
+    parallelogram: 'Parallelogram',
+    trapezoid: 'Trapezoid',
+    chevron: 'Chevron',
+    cross: 'Cross',
+  };
+  polygonPresetLabel(preset: string): string {
+    return this._polygonPresetLabels[preset] ?? preset;
   }
 
   // Dither effect
@@ -1002,7 +1025,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager as any;
     const layerId = await sm.importImageAsNewLayer?.(file, file.name.replace(/\.[^.]+$/, ''));
     if (layerId) {
-      console.log('[ImageImport] Created new layer:', layerId);
       this.selectRasterLayer(layerId);
       this.refreshRasterLayers();
     }
@@ -1080,7 +1102,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager as any;
     const layerId = await sm.importImageAsNewLayer?.(imageFile, imageFile.name.replace(/\.[^.]+$/, ''));
     if (layerId) {
-      console.log('[ImageImport] Dropped image → new layer:', layerId);
       this.selectRasterLayer(layerId);
       this.refreshRasterLayers();
     }
@@ -1281,9 +1302,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   /** Whether the 3D scene entry is currently selected in the layer panel */
   scene3dPanelVisible = false;
+  authoringPanelOpen = false;
 
-  /** Right-panel tab: 'scene' = layers + outliner/mesh, 'global' = global scene settings */
-  rightPanelTab: 'scene' | 'global' = 'scene';
+  /** Right-panel tab: 'scene' = layers + outliner/mesh, 'global' = global scene settings, 'ui' = UI system */
+  rightPanelTab: 'scene' | 'global' | 'ui' = 'scene';
 
   // Rotation drag readout
   scene3dDragAngleDeg: number | null = null;
@@ -1318,11 +1340,69 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dIllustrationProjection: 'perspective' | 'orthographic' = 'orthographic';
   scene3dFOV = 60;
 
+  // View mode: target × cameraMode (driven by engine events — see applyViewUI3D)
+  scene3dViewTarget: 'illustration' | 'scene' = 'illustration';
+  scene3dViewCameraMode: 'ortho2D' | 'perspective2D' | 'free3D' = 'ortho2D';
+  scene3d2DPanelsActive = true;
+  scene3dViewFly = false;
+  scene3dViewIsPlaying = false;
+  scene3dViewArtboardFrame = true;
+  scene3dPlayCameraMode: 'first' | 'third' = 'first';
+  scene3dPlayerObjectId: string | null = null;
+  scene3dSkyPresets: string[] = [];
+  scene3dActiveSkyPreset: string | null = null;
+  scene3dDiffuseIBL = 1.0;
+  scene3dSpecularIBL = 1.0;
+  scene3dSSREnabled = false;
+  scene3dSSRIntensity = 1.0;
+  scene3dSSRFillBlur = 2.0;
+  scene3dSSRThickness = 2.0;
+  scene3dSSRReach = 12.8;
+  scene3dSSRShadow = 0.35;
+
+  // Cinematic cameras
+  scene3dCameraNodes: { id: string; name: string }[] = [];
+  scene3dLookThroughId: string | null = null;
+  scene3dCameraCuts: { cameraId: string; frame: number }[] = [];
+  scene3dCutPreviewOn = false;
+
+  // CD Jewel-Case Designer
+  cdDesignerActive = false;
+  cdKitRootId: string | null = null;
+  cdActiveComponent = 'complete';
+  cdScrub = 0;
+  cdTrayCardFold = 0;
+  cdTrayClear = false;
+
+  // ── UI System ────────────────────────────────────────────
+  uiLayers: { id: string; name: string }[] = [];
+  uiActiveLayerId: string | null = null;
+  uiPreviewOn = false;
+  uiCurrentStateId: string | null = null;
+  uiActiveMachine: any | null = null;
+  uiActiveShapeInteractions: Record<string, any> = {};
+  uiSelectedStateId: string | null = null;
+  uiSelectedTransitionId: string | null = null;
+  uiAddingState = false;
+  uiNewStateName = '';
+  uiAddingVar = false;
+  uiNewVarName = '';
+  uiNewVarType = 'boolean';
+  uiSelectedShapeId: string | null = null;
+  uiSoundList: { assetId: string }[] = [];
+  private _uiEventOff: (() => void) | null = null;
+  private _uiSelectionOff: (() => void) | null = null;
+  private _pathEditedOff: (() => void) | null = null;
+  isPathEditActive = false;
+  private _uiTickRafId: number | null = null;
+  private _uiTickLast = 0;
+
   // Phase 4: shadows
   scene3dShadowsEnabled = false;
   scene3dShadowMapSize = 1024;
   scene3dShadowExtent = 15;
   scene3dShadowBias = 0.002;
+  scene3dShadowStrength = 0.58;
 
   // Phase 4: performance/debug
   scene3dFrustumCulling = true;
@@ -1343,6 +1423,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dFrameLinkPhase = 0;
   scene3dFrameLinkStagger = 0;
   scene3dSelectedIsGroup = false;
+  scene3dSelectedMeshType = '';
+  cityBuilding = false;
+  cityBuildReason: 'load' | 'edit' = 'load';
+  private _cityBuildSub: { unsubscribe(): void } | null = null;
   // Bucket state — persisted per group ID in the illustration save
   scene3dAllGroupBuckets: Record<string, string[][]> = {};
   scene3dBucketSelections: string[] = []; // per-bucket dropdown selection (transient)
@@ -1350,15 +1434,58 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // ── Vector / Ephemera state ────────────────────────────────
   activeVectorLayerId: string | null = null;
   showEphemeraPanel = false;
+  vectorShapes: { id: string; name: string; type: string; parentId?: string; visible: boolean }[] = [];
 
   onVectorLayerSelected(id: string | null): void {
     this.activeVectorLayerId = id;
     (this.shapeManager as any)?.setActiveVectorLayer?.(id);
-    if (!id) this.showEphemeraPanel = false;
+    if (!id) {
+      this.showEphemeraPanel = false;
+      this.vectorShapes = [];
+    } else {
+      // Deactivate 2D brush/drawing tools — they don't apply to vector layers
+      const t = this.controlPanelActiveTool;
+      if (t.startsWith('drawing:') || t.startsWith('raster:') || t === 'fill') {
+        this.setActiveTool('');
+      }
+      this.refreshVectorShapes();
+    }
+  }
+
+  showSVGImport = false;
+  svgImportD = '';
+  svgImportWidth = 0.5;
+
+  refreshVectorShapes(): void {
+    this.vectorShapes = (this.shapeManager as any)?.getVectorShapes?.(this.activeVectorLayerId) ?? [];
+  }
+
+  selectVectorShape(id: string, e: MouseEvent): void {
+    e.stopPropagation();
+    (this.shapeManager as any)?.selectNodesByIds?.([id], e.shiftKey);
+  }
+
+  enterPathEdit(id: string): void {
+    (this.shapeManager as any)?.enterPathEdit?.(id);
+  }
+
+  convertPolygonToPath(id: string): void {
+    (this.shapeManager as any)?.convertPolygonToPath?.(id);
+    this.refreshVectorShapes();
+  }
+
+  importSVGPath(): void {
+    const d = this.svgImportD.trim();
+    if (!d) return;
+    (this.shapeManager as any)?.importSVGPath?.(d, { width: this.svgImportWidth });
+    this.svgImportD = '';
+    this.showSVGImport = false;
+    this.refreshVectorShapes();
   }
 
   openEphemeraPanel(): void {
-    this.showEphemeraPanel = true;
+    this.showEphemeraPanel = !this.showEphemeraPanel;
+    if (this.showEphemeraPanel) this.setActiveTool('');
   }
 
   closeEphemeraPanel(): void {
@@ -1370,6 +1497,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dArmaturePanelOpen = false;
 
   openArmaturePanel(): void {
+    this._exitAllScene3dModes();
     this.scene3dArmaturePanelOpen = true;
     this.scene3dDeactivateArrayTool();
     this.scene3dGizmoMode = null;
@@ -1380,6 +1508,47 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   closeArmaturePanel(): void {
     this.scene3dArmaturePanelOpen = false;
+    this._armatureCleanup();
+  }
+
+  private _armatureCleanup(): void {
+    const sm = this.shapeManager as any;
+    sm.exitBonePlacementMode3D?.();
+    sm.showBoneOverlay3D?.(null);
+    sm.selectJoint3D?.(null);
+    sm.setArmatureBgMode3D?.({ mode: 'none' });
+  }
+
+  /** True while any exclusive 3D sub-mode is active. */
+  get scene3dInSubMode(): boolean {
+    return this.scene3dIsEditingMesh
+      || this.scene3dArmaturePanelOpen
+      || this.gpPanelVisible
+      || this.uvEditorOpen
+      || this.scene3dClothingPaintActive !== null
+      || this.scene3dWorldPanelOpen;
+  }
+
+  private _exitAllScene3dModes(): void {
+    if (this.scene3dIsEditingMesh) this.exitMeshEditMode();
+    if (this.scene3dArmaturePanelOpen) { this.scene3dArmaturePanelOpen = false; this._armatureCleanup(); }
+    if (this.gpPanelVisible) this.closeGpPanel();
+    if (this.uvEditorOpen) this.closeUVEditor();
+    if (this.scene3dClothingPaintActive) this.scene3dToggleClothingPaint(this.scene3dClothingPaintActive);
+    if (this.scene3dEditCharPanelOpen) { this.scene3dEditCharPanelOpen = false; }
+    if (this.scene3dGizmoMode !== null) {
+      this.scene3dGizmoMode = null;
+      (this.shapeManager as any).setGizmoMode3D?.(null);
+    }
+    if (this.scene3dArrayToolActive) { this.scene3dDeactivateArrayTool(); }
+    if (this.scene3dWorldPanelOpen) { this.scene3dWorldPanelOpen = false; }
+    if (this.scene3dPkgCreatorOpen) {
+      this.scene3dPkgCreatorOpen = false;
+      this.pkgLayerStack = [];
+      (this.shapeManager as any).packaging?.exitCreatorMode();
+      this._pkgDielinePane = null;
+      if (this._pkgFoldRaf != null) { cancelAnimationFrame(this._pkgFoldRaf); this._pkgFoldRaf = undefined; }
+    }
   }
 
   // ── Mesh Edit state ────────────────────────────────────────
@@ -1413,6 +1582,120 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dInstanceOverrides: Array<{index: number; rotX: number; rotY: number; rotZ: number; scaleX: number; scaleY: number; scaleZ: number; visible: boolean}> = [];
   scene3dOverridesPanelOpen = false;
   scene3dNewOverrideIdx = 0;
+
+  // ── Package Creator ─────────────────────────────────────────────────────────
+  scene3dPkgCreatorOpen = false;
+  pkgCreatorId: string | null = null;
+  pkgStyle = 'simpleBox';
+  pkgWidth  = 80;
+  pkgHeight = 60;
+  pkgDepth  = 40;
+  pkgBleed  = 3;
+  pkgFoldAmount = 0;
+  // Style-specific params
+  pkgTuckStyle: 'reverse' | 'straight' = 'reverse';
+  pkgLockTabs = true;
+  pkgRestOpenAmount = 0;
+  pkgLidDepth = 0;        // 0 = Salsa default (full telescope)
+  pkgBoardThickness = 2;
+  pkgBoardPreset: 'white' | 'kraft' = 'white';
+  pkgStageMode = 'gradient';
+  private _pkgDimDebounce: any = null;
+  private _pkgFoldRaf?: number;
+  // Selection-driven package mode
+  scene3dSelectedIsPackage = false;
+  pkgSelectedId: string | null = null;
+  // Dieline pane handle (from attachDielinePane) — LIVE handle, re-use on resize/setDimensions
+  private _pkgDielinePane: any = null;
+  pkgGuideTypes = new Set<string>(['cut', 'fold', 'bleed', 'panel', 'slit']);
+  pkgLayerStack: Array<{layerId: string; name: string; visible: boolean; opacity: number; active: boolean; kind: 'raster' | 'vector'}> = [];
+
+  // ── World / City Tool ──────────────────────────────────────────────────────
+  scene3dWorldPanelOpen = false;
+  scene3dCityContainerId: string | null = null;
+  worldMode: 'diorama' | 'tiled' = 'diorama';
+  worldTileRadius = 0;
+  worldTileDetail: 'flat' | 'focus' | 'full' = 'focus';
+  worldStreamFollow = false;
+  worldStreamStats = '';
+  worldBorder: 'circle' | 'square' | 'hexagon' | 'octagon' = 'square';
+  worldPattern: 'radial' | 'grid' = 'grid';
+  worldSeed = 3;
+  worldRadius = 10;
+  worldSpokeCount = 8;
+  worldRingCount = 4;
+  worldGridCols = 11;
+  worldGridRows = 11;
+  worldLotsRadial = 2;
+  worldLotsAngular = 3;
+  worldStreetWidth = 0.40;
+  worldPlazaRadius = 0.09;
+  worldParkChance = 0.12;
+  worldWaterChance = 0.06;
+  worldHasWorld = false;
+  worldEnabledRegions: number[] | null = null;  // null = all enabled
+  worldRegions: Array<{ id: number; type: string }> = [];
+  worldLandmarks = true;
+  worldShotengai = false;
+  worldAwnings = true;
+  worldStreetFurniture = true;
+  worldPowerLines = true;
+  worldParkedCars = true;
+  worldNightMode = false;
+  worldStreetTrees = true;
+  worldBicycles = true;
+  worldLanterns = true;
+  worldRailway = true;
+  worldRooftops = true;
+  worldFacadeDetail = true;
+  worldDetailedBuildings = true;
+  worldPedestrians = true;
+  worldPedestrianDensity = 1;
+  worldFog = true;
+  worldClouds = true;
+  worldCloudDensity = 0.55;
+  worldHolograms = false;
+  worldVoidGrid = true;
+  worldBorderGlow = true;
+  worldTerrainApron = false;
+  worldVoidExtent = 2.0;
+  worldVoidLineWidth = 0.05;
+  worldBorderGlowHeight = 1.2;
+  worldWarp = 0.35;
+  worldPalette: 'auto' | 'terracotta' | 'slate' | 'pastel' | 'brick' | 'mint' = 'auto';
+  worldLeafColor = '#ffffff';
+  worldLeafColorVar = 0.08;
+  // Live controls (no regen)
+  worldTimeOfDay: number | null = null;
+  worldDayCyclePlaying = false;
+  worldDayCycleSec = 120;
+  worldRenderStyle: string | null = null;
+  worldTrafficRunning = true;
+  worldTurntableOn = false;
+  worldWeather: 'clear' | 'rain' | 'snow' = 'clear';
+  worldCinematicGrade = true;
+  worldOverrideGlobalLighting = true;
+  worldGradePhase: 'night' | 'dawn' | 'noon' | 'dusk' = 'noon';
+  worldGradeKeys: Record<string, Record<string, number>> = {
+    night: { bloomIntensity: 1.35, vignette: 0.35 },
+    dawn:  { bloomIntensity: 0.8,  vignette: 0.2  },
+    noon:  { bloomIntensity: 0.6,  vignette: 0.15 },
+    dusk:  { bloomIntensity: 1.1,  vignette: 0.25 },
+  };
+  worldJunctionVariety = 0.3;
+  worldElevation = 0.45;
+  worldTerraces = true;
+  worldSidewalks = true;
+  worldRoadPaint = true;
+  worldStreetLights = true;
+  worldTrafficLights = true;
+  worldCornerStyle: 'sharp' | 'chamfer' | 'round' | 'mixed' = 'mixed';
+  worldRoofStyle: 'flat' | 'pointed' | 'parapet' | 'chamfer' | 'rounded' | 'helipad' | 'tower' | 'spire' | 'mansard' | 'mixed' = 'mixed';
+  worldSignage = false;
+  private _worldDebounce: any = null;
+  private _streamStatsTimer: any = null;
+  private _gizmoPosTimer: any = null;
+  private _worldMeshIdsKey = '';
   // Object offset and merge-bake options (linear arrays only)
   scene3dArrayObjectOffsetId = '';
   scene3dArrayGapFill = false;
@@ -1420,6 +1703,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   enterMeshEditMode(): void {
     if (!this.scene3dSelectedMeshId) return;
+    this._exitAllScene3dModes();
     const sm = this.shapeManager as any;
     const canvas = this.canvasRef?.nativeElement;
     sm.enterMeshEditMode3D?.(this.scene3dSelectedMeshId);
@@ -1475,6 +1759,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   uvPaintMode = false;
   showUVPane  = false;
   uvLayers: Array<{id: string; name: string}> = [];
+  // Stamp tool (Mode B decals — bake into mesh texture while in UV Paint)
+  uvStampActive = false;
+  uvStampSize   = 0.25;
+  uvStampRotationRad = 0;
 
   get uvRendererRef(): any { return this._uvRenderer; }
 
@@ -1482,6 +1770,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   openUVEditor(): void {
     if (!this.scene3dSelectedMeshId) return;
+    this._exitAllScene3dModes();
     const sm = this.shapeManager as any;
     // openUVEditor3D handles orbit setup internally — no enterMeshEditMode3D needed
     this._uvSession = sm.openUVEditor3D?.(this.scene3dSelectedMeshId);
@@ -1503,24 +1792,35 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   closeUVEditor(): void {
     const sm = this.shapeManager as any;
-    // If closing while a clothing slot is in paint mode, exit that mesh specifically
-    if (this.scene3dClothingPaintActive) {
-      const bodyId = this.scene3dEditCharBodyId;
-      const clothingMeshId = bodyId ? sm.getClothingMeshId3D?.(bodyId, this.scene3dClothingPaintActive) : null;
-      if (clothingMeshId) sm.exitUVPaintMode3D?.(clothingMeshId);
-      this.scene3dClothingPaintActive = null;
-    } else {
+    // If closing with an active GARP paint preview, discard it (cancelGarpPaint3D is idempotent)
+    if (this.garpPaintMeshId) {
+      sm.cancelGarpPaint3D?.();
+      this.garpPaintMeshId = null;
+      this.garpPaintSlot = null;
+      this.garpPaintSkinName = '';
+    }
+    // No-arg exit is idempotent and safe — don't gate on mesh ID (wrong mesh = skipped exit)
+    sm.exitUVPaintMode3D?.();
+    if (!this.scene3dClothingPaintActive) {
       sm.closeUVEditor3D?.(this.scene3dSelectedMeshId);
     }
+    this.scene3dClothingPaintActive = null;
     this._uvSession = null;
     this._uvRenderer = null;
     this._uvHandlersBound = false;
     this.uvEditorOpen = false;
     this.uvPaintMode  = false;
     this.showUVPane   = false;
+    this.uvStampActive = false;
   }
 
   uvDraw(): void { this._uvDraw(); }
+
+  onUvStampToolChange(evt: {active: boolean; size: number; rotationRad: number}): void {
+    this.uvStampActive     = evt.active;
+    this.uvStampSize       = evt.size;
+    this.uvStampRotationRad = evt.rotationRad;
+  }
 
   onShowUVPaneChange(show: boolean): void {
     this.showUVPane = show;
@@ -1609,6 +1909,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // ── Cloth state ────────────────────────────────────────────
   scene3dIsCloth = false;
   scene3dClothIds = new Set<string>();
+  // Character body IDs (isProceduralBody3D === true) — shown as "Character" in outliner
+  scene3dCharacterBodyIds = new Set<string>();
+  // Part IDs that belong to a character body — hidden from outliner (needs getProceduralBodyParts3D)
+  scene3dCharPartIds = new Set<string>();
   clothBuilderVisible = false;
   clothBuilderExistingId: string | null = null;
   clothBuilderInitialGrid: any = null;
@@ -1750,6 +2054,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dBgColor1 = '#1a1a2e';
   scene3dBgColor2 = '#99aabb';
 
+  // Enhanced visuals
+  scene3dEnhancedVisuals = false;
+  scene3dGlassQuality = false;
+  scene3dAerialPerspective = 0;
+
   // Fog
   scene3dFogMode: 'off' | 'linear' | 'exponential' = 'off';
   scene3dFogColor = '#cccccc';
@@ -1760,15 +2069,21 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // Texture sampling
   scene3dTextureFilter: 'nearest' | 'linear' = 'nearest';
 
-  // Lighting (spec defaults)
-  scene3dLightDirX = 0.3;
-  scene3dLightDirY = -0.8;
-  scene3dLightDirZ = -0.5;
+  // Lighting (spec defaults — matches salsa's built-in default)
+  scene3dLightAzimuth = -31;
+  scene3dLightElevation = 54;
   scene3dLightIntensity = 1.0;
-  scene3dAmbientR = 0.15;
-  scene3dAmbientG = 0.15;
-  scene3dAmbientB = 0.2;
+  scene3dKeyLightColorHex = '#ffffff';
+  scene3dAmbientR = 0.17;
+  scene3dAmbientG = 0.17;
+  scene3dAmbientB = 0.17;
   scene3dAmbientIntensity = 1.0;
+  scene3dAmbientColorHex = '#2b2b2b';
+
+  // Scene wind (S1 foliage sway) — defaults match Salsa's DEFAULT_SCENE_WIND
+  sceneWindDirDeg = 35;
+  sceneWindStrength = 0.06;
+  sceneWindSpeed = 1.0;
 
   // Mesh list from engine
   scene3dMeshes: Array<any> = [];
@@ -1782,6 +2097,25 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dMeshOpacity = 1.0;
   scene3dMeshRoughness = 0.5;
   scene3dMeshMetalness = 0.0;
+  scene3dMeshNoEnvReflection = false;
+  scene3dMeshPlanarReflector = false;
+  groundSurface = 'ashlar';
+  groundTileMm = 600;
+  groundGroutMm = 15;
+  groundTintHex = '#ccc09e';
+  groundExtentM = 20;
+  groundWeather: 'new' | 'worn' | 'ancient' | 'mossy' | 'dirty' = 'worn';
+  groundMossTintHex = '#4a6741';
+  groundDirtTintHex = '#5a3a1a';
+  groundWearTrack = false;
+  groundWedges = 12;
+  groundRingMm = 600;
+  groundScatterGroupId: string | null = null;
+  groundScatterFlowers = 1.0;
+  groundScatterPebbles = 1.0;
+  groundScatterTallGrass = 1.0;
+  groundScatterBushes = 1.0;
+  groundScatterRocks = 1.0;
   // IBL / Environment Map (global scene)
   scene3dIblEnabled = false;
   scene3dIblIntensity = 1.0;
@@ -1802,6 +2136,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dVignetteIntensity = 0.45;
   scene3dVignetteRadius = 0.75;
   scene3dVignetteSoftness = 0.45;
+  // SSAO (ambient occlusion)
+  scene3dSSAOEnabled         = false;
+  scene3dSSAORadius          = 0.5;
+  scene3dSSAOIntensity       = 0.8;
+  scene3dSSAOPower           = 2.0;
+  scene3dSSAOBias            = 0.025;
+  scene3dSSAOResolutionScale = 0.5;
+  scene3dSSAOSamples         = 8;
+  scene3dSSAODebug           = false;
 
   // -- Multi-material submesh slots
   scene3dSubmeshes: Array<{ label: string; color: string; opacity: number; renderStyle: string }> = [];
@@ -1879,6 +2222,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (selected) {
       this._scene3dLoadSnapSettings();
       this._loadScene3dGrid();
+      this.scene3dLoadSkyPresets();
       // 2D exits first, then 3D enters
       this.tools3dExiting = false;
       this.tools2dExiting = true;
@@ -1931,10 +2275,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       if (this.canvas) {
         this._scene3dResizeObserver = new ResizeObserver(() => {
           this.scene3dSyncIllustrationCamera();
+          (this.shapeManager as any).repositionUIForms?.();
         });
         this._scene3dResizeObserver.observe(this.canvas);
       }
     } else {
+      this._exitAllScene3dModes();
       this._scene3dViewportSub?.unsubscribe?.();
       this._scene3dViewportSub = null;
       this._scene3dResizeObserver?.disconnect();
@@ -2035,6 +2381,682 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._markStateDirty();
   }
 
+  // ── View mode: target × cameraMode ───────────────────────────────────────
+
+  private applyViewUI3D(rules: any): void {
+    this.scene3d2DPanelsActive = rules.twoDToolsActive ?? true;
+    const state: any = (this.shapeManager as any).getViewState3D?.() ?? {};
+    this.scene3dViewTarget = state.target ?? 'illustration';
+    this.scene3dViewCameraMode = state.cameraMode ?? 'ortho2D';
+    this.scene3dViewArtboardFrame = state.showArtboardFrame ?? true;
+    this.scene3dViewFly = (this.shapeManager as any).isFlyEnabled3D ?? false;
+    // Scene target: the 3D outliner is always the primary panel — no layer-row click needed
+    if (this.scene3dViewTarget === 'scene' && this.has3DScene) {
+      this.scene3dPanelVisible = true;
+    }
+    // free3D: auto-activate the 3D scene context so the orbit camera + 3D render are live
+    // without requiring a manual "3D Scene" layer click
+    if (this.scene3dViewCameraMode === 'free3D' && this.has3DScene && !this.scene3dPanelVisible) {
+      this.onScene3dSelected(true);
+    }
+  }
+
+  scene3dSetViewTarget(t: 'illustration' | 'scene'): void {
+    (this.shapeManager as any).setTarget3D?.(t);
+  }
+
+  scene3dSetViewCameraMode(m: 'ortho2D' | 'perspective2D' | 'free3D'): void {
+    (this.shapeManager as any).setCameraMode3D?.(m);
+  }
+
+  scene3dSetArtboardFrame(on: boolean): void {
+    this.scene3dViewArtboardFrame = on;
+    (this.shapeManager as any).setArtboardFrameVisible3D?.(on);
+  }
+
+  scene3dSetFly(on: boolean): void {
+    this.scene3dViewFly = on;
+    (this.shapeManager as any).setFlyEnabled3D?.(on);
+  }
+
+  scene3dTogglePlay(): void {
+    const sm = this.shapeManager as any;
+    if (sm.isPlaying3D) {
+      sm.exitPlayMode3D?.();
+    } else {
+      sm.enterPlayMode3D?.({ config: { cameraMode: this.scene3dPlayCameraMode } });
+    }
+  }
+
+  scene3dLoadSkyPresets(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dSkyPresets = sm.listSkyPresets3D?.() ?? [];
+  }
+
+  scene3dApplySkyPreset(name: string): void {
+    const sm = this.shapeManager as any;
+    sm.applySkyPreset3D?.(name);
+    this.scene3dActiveSkyPreset = name;
+    this.scene3dSyncIBLSliders();
+  }
+
+  scene3dClearSky(): void {
+    (this.shapeManager as any).resetSky3D?.();
+    this.scene3dActiveSkyPreset = null;
+    this.scene3dSyncIBLSliders();
+  }
+
+  private scene3dSyncIBLSliders(): void {
+    const intensities = (this.shapeManager as any).getIBLIntensities3D?.();
+    if (intensities) {
+      this.scene3dDiffuseIBL = intensities.diffuse ?? 1.0;
+      this.scene3dSpecularIBL = intensities.specular ?? 1.0;
+    }
+  }
+
+  scene3dSetDiffuseIBL(v: number): void {
+    this.scene3dDiffuseIBL = v;
+    (this.shapeManager as any).setIBLDiffuseIntensity3D?.(v);
+  }
+
+  scene3dSetSpecularIBL(v: number): void {
+    this.scene3dSpecularIBL = v;
+    (this.shapeManager as any).setIBLSpecularIntensity3D?.(v);
+  }
+
+  scene3dToggleSSR(): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dSSREnabled) {
+      const r = sm.getReflections3D?.();
+      if (r) {
+        this.scene3dSSRIntensity = r.ssrIntensity ?? 1.0;
+        this.scene3dSSRFillBlur = r.ssrFillBlur ?? 2.0;
+        this.scene3dSSRThickness = r.ssrEdgeFeather ?? 2.0;
+        this.scene3dSSRReach = r.ssrReach ?? 12.8;
+        this.scene3dSSRShadow = r.ssrFallbackShadow ?? 0.35;
+      }
+    }
+    sm.setSSR3D?.({ ssr: this.scene3dSSREnabled, ssrIntensity: this.scene3dSSRIntensity });
+  }
+
+  scene3dSetSSRIntensity(v: number): void {
+    this.scene3dSSRIntensity = v;
+    if (this.scene3dSSREnabled) {
+      (this.shapeManager as any).setSSR3D?.({ ssrIntensity: v });
+    }
+  }
+
+  scene3dSetSSRFillBlur(v: number): void {
+    this.scene3dSSRFillBlur = v;
+    if (this.scene3dSSREnabled) {
+      (this.shapeManager as any).setSSR3D?.({ ssrFillBlur: v });
+    }
+  }
+
+  scene3dSetSSRThickness(v: number): void {
+    this.scene3dSSRThickness = v;
+    if (this.scene3dSSREnabled) {
+      (this.shapeManager as any).setSSR3D?.({ ssrEdgeFeather: v });
+    }
+  }
+
+  scene3dSetSSRReach(v: number): void {
+    this.scene3dSSRReach = v;
+    if (this.scene3dSSREnabled) {
+      (this.shapeManager as any).setSSR3D?.({ ssrReach: v });
+    }
+  }
+
+  scene3dSetSSRShadow(v: number): void {
+    this.scene3dSSRShadow = v;
+    if (this.scene3dSSREnabled) {
+      (this.shapeManager as any).setSSR3D?.({ ssrFallbackShadow: v });
+    }
+  }
+
+  scene3dSetPlayerObject(meshId: string | null): void {
+    const sm = this.shapeManager as any;
+    const next = meshId === this.scene3dPlayerObjectId ? null : meshId;
+    sm.setPlayerObject3D?.(next);
+    this.scene3dPlayerObjectId = next;
+  }
+
+  // ── Cinematic cameras ──────────────────────────────────────
+
+  scene3dRefreshCameraNodes(): void {
+    const sm = this.shapeManager as any;
+    const nodes: any[] = sm.listCameraNodes3D?.() ?? [];
+    this.scene3dCameraNodes = nodes.map((n: any) => ({ id: n.id, name: n.name || 'Camera' }));
+  }
+
+  scene3dAddCamera(): void {
+    const sm = this.shapeManager as any;
+    const id: string | undefined = sm.createCameraNode3D?.({ fov: 60 });
+    if (!id) return;
+    sm.setCameraMarkerSprite3D?.(id, 'fishing_frog.png');
+    this.scene3dRefreshCameraNodes();
+  }
+
+  scene3dToggleLookThrough(id: string): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dLookThroughId === id) {
+      sm.lookThroughCamera3D?.(null);
+      this.scene3dLookThroughId = null;
+    } else {
+      sm.lookThroughCamera3D?.(id);
+      this.scene3dLookThroughId = id;
+    }
+  }
+
+  scene3dDeleteCamera(id: string): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dLookThroughId === id) {
+      sm.lookThroughCamera3D?.(null);
+      this.scene3dLookThroughId = null;
+    }
+    sm.deleteNode3D?.(id);
+    this.scene3dRefreshCameraNodes();
+  }
+
+  scene3dRefreshCuts(): void {
+    const sm = this.shapeManager as any;
+    this.scene3dCameraCuts = sm.getCameraCuts3D?.() ?? [];
+  }
+
+  scene3dDropCut(cameraId: string, frame: number): void {
+    const sm = this.shapeManager as any;
+    sm.setCameraCut3D?.({ cameraId, frame });
+  }
+
+  scene3dRemoveCut(frame: number): void {
+    const sm = this.shapeManager as any;
+    sm.removeCameraCut3D?.(frame);
+  }
+
+  scene3dToggleCutPreview(): void {
+    this.scene3dCutPreviewOn = !this.scene3dCutPreviewOn;
+    const sm = this.shapeManager as any;
+    sm.setPreviewThroughCameras3D?.(this.scene3dCutPreviewOn);
+  }
+
+  scene3dClearAllCuts(): void {
+    (this.shapeManager as any).clearCameraCuts3D?.();
+    this.scene3dRefreshCuts();
+  }
+
+  scene3dExportCinematic(): void {
+    (this.shapeManager as any).exportCinematicFrames3D?.();
+  }
+
+  // ── CD Jewel-Case Designer ─────────────────────────────────
+
+  cdAddKit(): void {
+    const sm = this.shapeManager as any;
+    const result = sm.createCDKit3D?.(0, 0, 0, { clearTray: this.cdTrayClear });
+    if (!result?.rootId) return;
+    this.cdKitRootId = result.rootId;
+    sm.enterCDDesigner3D?.(result.rootId);
+    this.cdDesignerActive = true;
+    this.cdActiveComponent = 'complete';
+    this.cdScrub = 0;
+    this.cdTrayCardFold = 0;
+  }
+
+  cdSetTrayClear(clear: boolean): void {
+    this.cdTrayClear = clear;
+    if (!this.cdKitRootId) return;
+    (this.shapeManager as any).setCDTrayClear3D?.(this.cdKitRootId, clear);
+  }
+
+  cdExitDesigner(): void {
+    (this.shapeManager as any).exitCDDesigner3D?.();
+    this.cdDesignerActive = false;
+    this.cdKitRootId = null;
+  }
+
+  cdSetComponent(c: string): void {
+    (this.shapeManager as any).setCDActiveComponent3D?.(c);
+  }
+
+  cdSetScrub(t: number): void {
+    if (!this.cdKitRootId) return;
+    (this.shapeManager as any).setCDKitScrub3D?.(this.cdKitRootId, t);
+  }
+
+  cdSetTrayCardFold(fold: number): void {
+    if (!this.cdKitRootId) return;
+    (this.shapeManager as any).setCDTrayCardFold3D?.(this.cdKitRootId, fold);
+  }
+
+  async cdUploadArt(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file || !this.cdKitRootId || this.cdActiveComponent === 'complete') return;
+    await (this.shapeManager as any).setCDPieceArt3D?.(this.cdKitRootId, this.cdActiveComponent, file);
+  }
+
+  cdOnDrop(event: DragEvent): void {
+    event.preventDefault();
+    const file = event.dataTransfer?.files?.[0];
+    if (!file || !this.cdKitRootId || this.cdActiveComponent === 'complete') return;
+    (this.shapeManager as any).setCDPieceArt3D?.(this.cdKitRootId, this.cdActiveComponent, file);
+  }
+
+  async cdExportPrintPDF(): Promise<void> {
+    if (!this.cdKitRootId) return;
+    const pdf: Blob | null =
+      await (this.shapeManager as any).exportCDKitPrintPDF3D?.(this.cdKitRootId, {
+        title: this.illustrationTitle ?? '',
+      }) ?? null;
+    if (!pdf) return;
+    const url = URL.createObjectURL(pdf);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.illustrationTitle ?? 'cd-print'}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async cdExportPrintSet(): Promise<void> {
+    if (!this.cdKitRootId) return;
+    const set: { piece: string; blob: Blob; widthMm: number; heightMm: number; dpi: number }[] =
+      await (this.shapeManager as any).exportCDKitPrintSet3D?.(this.cdKitRootId) ?? [];
+    for (const item of set) {
+      const url = URL.createObjectURL(item.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cd-${item.piece}-${item.dpi}dpi.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  // ── UI System ────────────────────────────────────────────
+
+  uiRefreshLayers(): void {
+    const sm = this.shapeManager as any;
+    const list: any[] = sm.listUILayers?.() ?? [];
+    if (list.length > 0) {
+      this.uiLayers = list.map((l: any) => ({ id: l.id, name: l.name }));
+      // sync active layer from engine state (important after restore)
+      const engineActive = sm.activeUILayerId;
+      if (engineActive && this.uiLayers.some(l => l.id === engineActive)) {
+        this.uiActiveLayerId = engineActive;
+      }
+    }
+    if (this.uiActiveLayerId) this.uiRefreshActive();
+    this.uiRefreshSounds();
+  }
+
+  uiRefreshActive(): void {
+    if (!this.uiActiveLayerId) return;
+    const sm = this.shapeManager as any;
+    this.uiActiveMachine = sm.getStateMachine?.(this.uiActiveLayerId) ?? null;
+    const layer = sm.getUILayer?.(this.uiActiveLayerId);
+    this.uiActiveShapeInteractions = layer?.shapeInteractions ?? {};
+    this.uiCurrentStateId = sm.getCurrentUIState?.(this.uiActiveLayerId) ?? null;
+  }
+
+  uiAddLayer(): void {
+    const sm = this.shapeManager as any;
+    const name = `UI Layer ${this.uiLayers.length + 1}`;
+    const id = sm.createUILayer?.(name);
+    if (!id) return;
+    this.uiLayers = [...this.uiLayers, { id, name }];
+    this.uiActiveLayerId = id;
+    this.uiSelectedStateId = null;
+    this.uiSelectedTransitionId = null;
+    const machine = this._uiBlankMachine(id);
+    sm.setStateMachine?.(id, machine);
+    sm.updateUILayer?.(id, { backgroundOverlay: { color: [0, 0, 0, 0.55] } });
+    this.uiActiveMachine = machine;
+    this.uiActiveShapeInteractions = {};
+  }
+
+  uiDeleteLayer(id: string): void {
+    (this.shapeManager as any).deleteUILayer?.(id);
+    this.uiLayers = this.uiLayers.filter(l => l.id !== id);
+    if (this.uiActiveLayerId === id) {
+      this.uiActiveLayerId = this.uiLayers[0]?.id ?? null;
+      this.uiActiveMachine = null;
+      this.uiActiveShapeInteractions = {};
+      this.uiSelectedStateId = null;
+      this.uiSelectedTransitionId = null;
+      if (this.uiActiveLayerId) this.uiRefreshActive();
+    }
+  }
+
+  uiSelectLayer(id: string): void {
+    this.uiActiveLayerId = id;
+    (this.shapeManager as any).setActiveUILayer?.(id);
+    this.uiSelectedStateId = null;
+    this.uiSelectedTransitionId = null;
+    this.uiRefreshActive();
+  }
+
+  uiTogglePreview(): void {
+    this.uiPreviewOn = !this.uiPreviewOn;
+    (this.shapeManager as any).setUIInteractive?.(this.uiPreviewOn);
+    if (this.uiPreviewOn) {
+      this._startUiTick();
+    } else {
+      this._stopUiTick();
+    }
+    if (this.uiActiveLayerId) {
+      this.uiCurrentStateId = (this.shapeManager as any).getCurrentUIState?.(this.uiActiveLayerId) ?? null;
+    }
+  }
+
+  uiGoToState(stateId: string): void {
+    if (!this.uiActiveLayerId || !this.uiPreviewOn) return;
+    (this.shapeManager as any).goToUIState?.(this.uiActiveLayerId, stateId);
+    this.uiCurrentStateId = stateId;
+  }
+
+  uiAddState(): void {
+    if (!this.uiActiveMachine || !this.uiNewStateName.trim()) return;
+    const id = 'state-' + Date.now();
+    const newState: any = { id, name: this.uiNewStateName.trim(), layerVisibility: {}, shapeVisibility: {}, worldBlur: 0 };
+    this.uiActiveMachine = { ...this.uiActiveMachine, states: [...(this.uiActiveMachine.states ?? []), newState] };
+    this.uiNewStateName = '';
+    this.uiAddingState = false;
+    this.uiPushMachine();
+    this.uiSelectedStateId = id;
+  }
+
+  uiDeleteState(id: string): void {
+    if (!this.uiActiveMachine) return;
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      states: this.uiActiveMachine.states.filter((s: any) => s.id !== id),
+      transitions: (this.uiActiveMachine.transitions ?? []).filter((t: any) => t.fromState !== id && t.toState !== id),
+      initialStateId: this.uiActiveMachine.initialStateId === id
+        ? (this.uiActiveMachine.states.find((s: any) => s.id !== id)?.id ?? '')
+        : this.uiActiveMachine.initialStateId,
+    };
+    if (this.uiSelectedStateId === id) this.uiSelectedStateId = null;
+    this.uiPushMachine();
+  }
+
+  uiSetInitialState(id: string): void {
+    if (!this.uiActiveMachine) return;
+    this.uiActiveMachine = { ...this.uiActiveMachine, initialStateId: id };
+    this.uiPushMachine();
+  }
+
+  uiSetStateField(stateId: string, field: string, value: any): void {
+    if (!this.uiActiveMachine) return;
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      states: this.uiActiveMachine.states.map((s: any) => s.id === stateId ? { ...s, [field]: value } : s),
+    };
+    this.uiPushMachine();
+  }
+
+  uiGetState(id: string | null): any {
+    return this.uiActiveMachine?.states?.find((s: any) => s.id === id) ?? null;
+  }
+
+  uiTransitionsFrom(stateId: string): any[] {
+    return (this.uiActiveMachine?.transitions ?? []).filter((t: any) => t.fromState === stateId);
+  }
+
+  uiGlobalTransitions(): any[] {
+    return this.uiActiveMachine?.globalTransitions ?? [];
+  }
+
+  uiAddTransitionFromSelected(): void {
+    if (!this.uiActiveMachine || !this.uiSelectedStateId) return;
+    const states: any[] = this.uiActiveMachine.states ?? [];
+    const toState = states.find((s: any) => s.id !== this.uiSelectedStateId)?.id ?? states[0]?.id ?? '';
+    const id = 't-' + Date.now();
+    const newT: any = {
+      id, fromState: this.uiSelectedStateId, toState,
+      trigger: { type: 'click', targetId: '' },
+      actions: [{ type: 'goToState', stateId: toState }],
+    };
+    this.uiActiveMachine = { ...this.uiActiveMachine, transitions: [...(this.uiActiveMachine.transitions ?? []), newT] };
+    this.uiSelectedTransitionId = id;
+    this.uiPushMachine();
+  }
+
+  uiAddGlobalTransition(): void {
+    if (!this.uiActiveMachine) return;
+    const states: any[] = this.uiActiveMachine.states ?? [];
+    const toState = states[0]?.id ?? '';
+    const id = 'tg-' + Date.now();
+    const newT: any = {
+      id, fromState: '*', toState,
+      trigger: { type: 'keyDown', key: 'Escape' },
+      actions: [{ type: 'goToState', stateId: toState }],
+    };
+    this.uiActiveMachine = { ...this.uiActiveMachine, globalTransitions: [...(this.uiActiveMachine.globalTransitions ?? []), newT] };
+    this.uiSelectedStateId = null;
+    this.uiSelectedTransitionId = id;
+    this.uiPushMachine();
+  }
+
+  uiDeleteTransition(id: string): void {
+    if (!this.uiActiveMachine) return;
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: (this.uiActiveMachine.transitions ?? []).filter((t: any) => t.id !== id),
+      globalTransitions: (this.uiActiveMachine.globalTransitions ?? []).filter((t: any) => t.id !== id),
+    };
+    if (this.uiSelectedTransitionId === id) this.uiSelectedTransitionId = null;
+    this.uiPushMachine();
+  }
+
+  uiGetTransition(id: string | null): any {
+    if (!id || !this.uiActiveMachine) return null;
+    return [...(this.uiActiveMachine.transitions ?? []), ...(this.uiActiveMachine.globalTransitions ?? [])]
+      .find((t: any) => t.id === id) ?? null;
+  }
+
+  uiSetTransitionField(tId: string, field: string, value: any): void {
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) => t.id === tId ? { ...t, [field]: value } : t);
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiSetTransitionTriggerField(tId: string, field: string, value: any): void {
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) =>
+      t.id === tId ? { ...t, trigger: { ...t.trigger, [field]: value } } : t
+    );
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiSetTransitionTriggerType(tId: string, type: string): void {
+    const defaults: Record<string, any> = {
+      click:      { type: 'click', targetId: '' },
+      keyDown:    { type: 'keyDown', key: 'Escape' },
+      timer:      { type: 'timer', delay: 2000 },
+      stateEnter: { type: 'stateEnter', stateId: '' },
+    };
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) =>
+      t.id === tId ? { ...t, trigger: defaults[type] ?? { type } } : t
+    );
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiSetTransitionAction(tId: string, field: string, value: any): void {
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) => {
+      if (t.id !== tId) return t;
+      const actions = t.actions?.length ? [...t.actions] : [{ type: 'goToState', stateId: '' }];
+      actions[0] = { ...actions[0], [field]: value };
+      return { ...t, actions };
+    });
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiSetTransitionAnimation(tId: string, animType: string): void {
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) => {
+      if (t.id !== tId) return t;
+      const animation = animType === 'none' ? undefined : { type: animType, duration: t.animation?.duration ?? 300, easing: 'easeInOut' };
+      return { ...t, animation };
+    });
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiSetTransitionAnimDuration(tId: string, ms: number): void {
+    if (!this.uiActiveMachine) return;
+    const patch = (arr: any[]) => arr.map((t: any) =>
+      t.id === tId && t.animation ? { ...t, animation: { ...t.animation, duration: ms } } : t
+    );
+    this.uiActiveMachine = {
+      ...this.uiActiveMachine,
+      transitions: patch(this.uiActiveMachine.transitions ?? []),
+      globalTransitions: patch(this.uiActiveMachine.globalTransitions ?? []),
+    };
+    this.uiPushMachine();
+  }
+
+  uiTriggerLabel(trigger: any): string {
+    if (!trigger) return '?';
+    switch (trigger.type) {
+      case 'click':      return `click:${trigger.targetId ? trigger.targetId.slice(0, 6) + '…' : '?'}`;
+      case 'keyDown':    return `key:${trigger.key || '?'}`;
+      case 'timer':      return `${trigger.delay ?? 0}ms`;
+      case 'stateEnter': return `enter:${trigger.stateId ? trigger.stateId.slice(0, 6) + '…' : '?'}`;
+      default:           return trigger.type;
+    }
+  }
+
+  uiAddVariable(): void {
+    if (!this.uiActiveMachine || !this.uiNewVarName.trim()) return;
+    const id = 'var-' + Date.now();
+    const defaults: any = { boolean: false, number: 0, string: '' };
+    const newVar: any = { id, name: this.uiNewVarName.trim(), type: this.uiNewVarType, defaultValue: defaults[this.uiNewVarType] };
+    this.uiActiveMachine = { ...this.uiActiveMachine, variables: [...(this.uiActiveMachine.variables ?? []), newVar] };
+    this.uiNewVarName = '';
+    this.uiAddingVar = false;
+    this.uiPushMachine();
+  }
+
+  uiDeleteVariable(id: string): void {
+    if (!this.uiActiveMachine) return;
+    this.uiActiveMachine = { ...this.uiActiveMachine, variables: (this.uiActiveMachine.variables ?? []).filter((v: any) => v.id !== id) };
+    this.uiPushMachine();
+  }
+
+  uiGetVariable(id: string): any {
+    if (!this.uiActiveLayerId) return null;
+    return (this.shapeManager as any).getUIVariable?.(this.uiActiveLayerId, id);
+  }
+
+  uiSetVariable(id: string, value: any): void {
+    if (!this.uiActiveLayerId) return;
+    (this.shapeManager as any).setUIVariable?.(this.uiActiveLayerId, id, value);
+  }
+
+  uiAssignShapeInteraction(shapeId: string): void {
+    if (!this.uiActiveLayerId) return;
+    (this.shapeManager as any).setShapeInteraction?.({ shapeId, cursor: 'pointer', focusable: true, tabIndex: 0 }, this.uiActiveLayerId);
+    this.uiRefreshActive();
+  }
+
+  uiUpdateInteraction(shapeId: string, field: string, value: any): void {
+    if (!this.uiActiveLayerId) return;
+    const existing = this.uiActiveShapeInteractions[shapeId] ?? { shapeId };
+    (this.shapeManager as any).setShapeInteraction?.({ ...existing, [field]: value }, this.uiActiveLayerId);
+    this.uiRefreshActive();
+  }
+
+  uiClearInteraction(shapeId: string): void {
+    if (!this.uiActiveLayerId) return;
+    (this.shapeManager as any).clearShapeInteraction?.(shapeId, this.uiActiveLayerId);
+    this.uiRefreshActive();
+  }
+
+  uiInteractionList(): { shapeId: string; props: any }[] {
+    return Object.entries(this.uiActiveShapeInteractions).map(([shapeId, props]) => ({ shapeId, props }));
+  }
+
+  uiRefreshSounds(): void {
+    const sounds: any[] = (this.shapeManager as any).listUISounds?.() ?? [];
+    this.uiSoundList = sounds.map((s: any) => ({ assetId: s.assetId ?? s }));
+  }
+
+  async uiUploadSound(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    (event.target as HTMLInputElement).value = '';
+    if (!file) return;
+    const assetId = file.name.replace(/\.[^.]+$/, '');
+    await (this.shapeManager as any).registerUISound?.(assetId, file);
+    this.uiRefreshSounds();
+  }
+
+  uiDeleteSound(assetId: string): void {
+    (this.shapeManager as any).removeUISound?.(assetId);
+    this.uiRefreshSounds();
+  }
+
+  uiPushMachine(): void {
+    if (!this.uiActiveLayerId || !this.uiActiveMachine) return;
+    (this.shapeManager as any).setStateMachine?.(this.uiActiveLayerId, this.uiActiveMachine);
+  }
+
+  private _uiBlankMachine(layerId: string): any {
+    const initId = 'state-' + Date.now();
+    return {
+      id: 'machine-' + layerId,
+      initialStateId: initId,
+      states: [{ id: initId, name: 'Initial', layerVisibility: {}, shapeVisibility: {}, worldBlur: 0 }],
+      transitions: [],
+      variables: [],
+      globalTransitions: [],
+    };
+  }
+
+  private _startUiTick(): void {
+    this._uiTickLast = performance.now();
+    const loop = (now: number) => {
+      if (!this.uiPreviewOn) return;
+      (this.shapeManager as any).tickUI?.(now - this._uiTickLast);
+      this._uiTickLast = now;
+      this._uiTickRafId = requestAnimationFrame(loop);
+    };
+    this._uiTickRafId = requestAnimationFrame(loop);
+  }
+
+  private _stopUiTick(): void {
+    if (this._uiTickRafId != null) { cancelAnimationFrame(this._uiTickRafId); this._uiTickRafId = null; }
+  }
+
+  private _handleUIEvent(e: any): void {
+    if (e.type === 'stateChange') {
+      this.uiCurrentStateId = e.toState;
+    }
+  }
+
   scene3dRefreshRuntimeState(): void {
     const sm = this.shapeManager as any;
     const s3d = sm.scene3d;
@@ -2049,9 +3071,20 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     this.scene3dShadowsEnabled = !!(s3d.shadowsEnabled ?? sm.shadowsEnabled3D ?? false);
     this.scene3dFrustumCulling = (s3d.frustumCulling ?? sm.frustumCulling3D ?? true) !== false;
+    const ao = s3d.ssao3D;
+    if (ao) {
+      this.scene3dSSAOEnabled         = ao.enabled         ?? false;
+      this.scene3dSSAORadius          = ao.radius          ?? this.scene3dSSAORadius;
+      this.scene3dSSAOIntensity       = ao.intensity       ?? this.scene3dSSAOIntensity;
+      this.scene3dSSAOPower           = ao.power           ?? this.scene3dSSAOPower;
+      this.scene3dSSAOBias            = ao.bias            ?? this.scene3dSSAOBias;
+      this.scene3dSSAOResolutionScale = ao.resolutionScale ?? this.scene3dSSAOResolutionScale;
+      this.scene3dSSAOSamples         = ao.samples         ?? this.scene3dSSAOSamples;
+    }
   }
 
   scene3dRefreshMeshes(): void {
+    if (this.scene3dWorldPanelOpen) return;
     const s3d = (this.shapeManager as any).scene3d;
     if (!s3d) return;
     this.scene3dMeshes = s3d.getAllMeshes?.() ?? [];
@@ -2065,6 +3098,32 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         .map((m: any) => m.id ?? m.nodeId)
         .filter((id: string) => !!s3d.getClothConfig?.(id))
     );
+    // Track character body meshes and their parts for outliner display
+    const sm2 = this.shapeManager as any;
+    const allIds = this.scene3dMeshes.map((m: any) => m.id ?? m.nodeId) as string[];
+    this.scene3dCharacterBodyIds = new Set(allIds.filter((id) => !!sm2.isProceduralBody3D?.(id)));
+    this.scene3dCharPartIds = new Set(
+      [...this.scene3dCharacterBodyIds].flatMap((bodyId) => (sm2.getProceduralBodyParts3D?.(bodyId) as string[] | undefined) ?? [])
+    );
+    this.scene3dBuildingIds = new Set(allIds.filter((id: string) => !!sm2.isProceduralBuilding3D?.(id)));
+    this.scene3dFoliageIds  = new Set(allIds.filter((id: string) => !!sm2.isProceduralFoliage3D?.(id)));
+    this.scene3dBlockIds    = new Set(allIds.filter((id: string) => !!sm2.isBlock3D?.(id)));
+    this.scene3dCreatorIds  = new Set(allIds.filter((id: string) => !!sm2.isCreator3D?.(id)));
+    this.scene3dDecalIds    = new Set([
+      ...allIds.filter((id: string) => !!sm2.isDecal3D?.(id)),
+      ...(sm2.listDecals3D?.() ?? []).map((d: any) => d.id as string),
+    ]);
+    const pkgAll: any[] = sm2.packaging?.getAll?.() ?? [];
+    const pkgRootsFromRegistry = pkgAll.map((p: any) => p.id);
+    const pkgRootsFromIsPackageNode = allIds.filter((id: string) => {
+      const resolved = sm2.packaging?.isPackageNode?.(id);
+      return resolved != null && resolved === id;
+    });
+    this.scene3dPackageIds = new Set([...pkgRootsFromRegistry, ...pkgRootsFromIsPackageNode]);
+    this.scene3dCDKitIds = new Set([
+      ...allIds.filter((id: string) => !!sm2.isCDKit3D?.(id)),
+      ...(this.cdKitRootId ? [this.cdKitRootId] : []),
+    ]);
     this.scene3dRefreshHierarchy();
     this.scene3dRefreshKeyframeTracks();
   }
@@ -2085,6 +3144,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         children: [],
       }));
     }
+    this.scene3dCityContainerId = sm.world?.getCityContainerId?.() ?? null;
   }
 
   // Polygon / circle / character creation forms
@@ -2097,7 +3157,222 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dCharTorsoThick = 0.9;
   scene3dCharTorsoLength = 1.0;
   scene3dCharHeadSize = 1.25;
+  scene3dCharBiasBodyId: string | null = null;
   private _charPreviewTimer: any = null;
+  private _suppressLayerTreeRebuild = false;
+
+  // Building Creator panel
+  scene3dBuildingIds: Set<string> = new Set();
+  scene3dSelectedIsBuilding = false;
+  scene3dEditBuildingId: string | null = null;
+  scene3dEditBuildingPanelOpen = false;
+  scene3dBuildingArchetypes: string[] = [];
+  // Typology
+  buildingCategory = 'office';
+  buildingArchetype = '';
+  buildingSeed = 1;
+  // Massing
+  buildingFloors = 6;
+  buildingWidth = 12;
+  buildingDepth = 10;
+  buildingFloorHeight = 3.2;
+  buildingGroundFloorHeight = 4.5;
+  buildingCornerStyle: 'sharp' | 'chamfer' | 'round' = 'sharp';
+  buildingCornerAmount = 0.5;
+  buildingSetbacks = false;
+  buildingSetbackInset = 2.0;
+  buildingPodium = false;
+  buildingPodiumFloors = 2;
+  // Facade
+  buildingWindowStyle: 'grid' | 'punched' | 'ribbon' | 'curtain' = 'grid';
+  buildingBayWidth = 3.0;
+  buildingMaterial: 'concrete' | 'brick' | 'plaster' | 'tile' | 'glass' | 'timber' | 'metal' = 'concrete';
+  buildingPilasters = false;
+  buildingQuoins = false;
+  buildingQuoinStyle: 'alternating' | 'block' = 'alternating';
+  buildingCornice = true;
+  buildingMullions = false;
+  buildingGlassTransparent = false;
+  // Ground / storefront
+  buildingStorefront = false;
+  buildingShopBays = 3;
+  buildingStallriser = true;
+  buildingTransom = true;
+  buildingShutter = false;
+  buildingAwning = false;
+  buildingAwningStyle: 'flat' | 'sloped' | 'dome' = 'sloped';
+  buildingAwningStripe = false;
+  buildingNoren = false;
+  buildingRecessedEntry = false;
+  buildingRollerDoors = false;
+  buildingCanopy = false;
+  buildingLattice = false;
+  buildingDoorStyle: 'flush' | 'panel' | 'glazed' | 'double' = 'panel';
+  // Features
+  buildingBalconies = false;
+  buildingJulietBalconies = false;
+  buildingJulietColor = '#2a2a2a';
+  buildingJulietScroll = 0;
+  buildingWindowTrim = false;
+  buildingWindowTrimColor = '#c8c0b0';
+  buildingLedges = true;
+  buildingFireEscape = false;
+  buildingDownpipes = true;
+  buildingWallUnits = false;
+  // Roof
+  buildingRoofStyle: 'flat' | 'parapet' | 'hip' | 'gable' | 'mansard' | 'sawtooth' | 'tiled-hip' = 'parapet';
+  buildingRoofPitch = 0.5;
+  buildingDeepEaves = false;
+  buildingRoofClutter = true;
+  buildingRoofPenthouse = false;
+  buildingRoofRailing = true;
+  buildingRoofGarden = false;
+  buildingRoofDishes = false;
+  buildingRoofVents = false;
+  buildingHelipad = false;
+  buildingCrown: 'none' | 'spire' | 'mech' | 'blade' = 'none';
+  // Signage
+  buildingSignage = false;
+  buildingBladeSign = false;
+  buildingWrapSign = false;
+  buildingRooftopSign = false;
+  buildingLedScreen = false;
+  buildingNeon = false;
+  // Color
+  buildingBaseColor = '#c8bfae';
+  buildingTrimColor = '#8a8a8a';
+  buildingRoofColor = '#555555';
+  buildingGlassColor = '#4a8fc4';
+  buildingAccentColor = '#c4623a';
+  buildingSignColor = '#ff4444';
+  buildingStorefrontColor = '#5a7a8a';
+  buildingAwningColor = '#c43a3a';
+  buildingDoorColor = '#4a3a2a';
+  buildingDoorFrameColor = '#8a7a6a';
+  buildingDoorHandleColor = '#8a8a6a';
+  buildingRenderStyle: 'default' | 'cel' | 'cel-hd' | 'sketch' | 'ink' | 'gouraud' = 'default';
+  buildingNightWindows = 0.4;
+  // Greenery (attached)
+  buildingBaseHedge = false;
+  buildingVines = false;
+  buildingWindowBoxes = false;
+  buildingBasePlanters = false;
+  buildingGreeneryColor = '#4a7a35';
+  buildingBloomColor = '#e05050';
+  // Scale
+  buildingUnitsPerMetre = 0.1;
+  buildingScaleInfo: { scale: number; metersPerUnit: number; realHeightM: number; displayHeightUnits: number; realWidthM: number; realDepthM: number } | null = null;
+
+  // Foliage Creator panel
+  scene3dFoliageIds: Set<string> = new Set();
+  scene3dSelectedIsFoliage = false;
+  scene3dEditFoliageId: string | null = null;
+  scene3dEditFoliagePanelOpen = false;
+  // Block Creator panel
+  scene3dBlockIds: Set<string> = new Set();
+  scene3dPackageIds: Set<string> = new Set();
+  scene3dSelectedIsBlock = false;
+  scene3dEditBlockId: string | null = null;
+  scene3dEditBlockPanelOpen = false;
+  scene3dEditBlockBuildingIndex: number | null = null;
+  blockStats: { buildings: number; distinctInstancedGeometries: number; totalInstances: number } | null = null;
+  blockBuildingList: { index: number; archetype: string; category?: string; placement: { x: number; z: number; ry: number } }[] = [];
+  blockBuildingIndices: number[] = [];
+  blockScale = 0.1;
+  blockAddArchetype = 'brick-townhouse';
+  blockAddX = 0;
+  blockAddZ = 0;
+  blockAddRy = 0;
+  foliageType = 'bush';
+  foliageSeed = 1;
+  foliageSize = 2.0;
+  foliageWidth = 3.0;
+  foliageDensity = 0.8;
+  foliageRender: 'chunky' | 'card' = 'chunky';
+  foliageCelShade = false;
+  foliageBloom = false;
+  foliagePotMaterial: 'terracotta' | 'ceramic' | 'metal' | 'wood' | 'stone' = 'terracotta';
+  foliageColor = '#4a7a35';
+  foliageTipColor = '#7ab84a';
+  foliageBloomColor = '#e05050';
+  foliagePotColor = '#c8703a';
+  foliageTrunkColor = '#6b4a2a';
+  // Blade params (grass-tuft / tall-grass only) — 0.5 = archetype default
+  bladeCurve = 0.5;
+  bladeTwist = 0.5;
+  bladeFold  = 0.5;
+  bladeLod   = 0;
+  // Woody params (bush / shrub / hedge / small-tree only — P4 branch primitive)
+  branchLevels    = 2;
+  branchGnarl     = 0.5;
+  branchUpBias    = 0.5;
+  foliageStemCount = 1;
+  canopyIrregular = 0.5;
+  leafGaps        = 0.3;
+  hedgeSprigs     = 3;
+  branchLod       = 0;
+  // Vessel params (potted / planter / window-box only — P4v arrangement)
+  foliageSpill      = 0.5;
+  foliagePlantCount = 2;
+  foliageSoilColor  = '#6b4a2a';
+  foliagePlantLod   = 0;
+  // Climber params (ivy / vine only — P3 runner primitive)
+  ivyMode: 'area' | 'path' = 'area';
+  ivyAreaWidth    = 3.0;
+  ivyAreaHeight   = 2.4;
+  ivyLeafDensity  = 0.5;
+  ivyCoverage     = 0.7;
+  ivyGrowthBias   = 0.3;
+  ivyWander       = 0.35;
+  ivyStemColor    = '#8a7060';
+  ivyRunnerLod    = 0;
+  // Flower params (daisy / rapeseed / lavender / flower-bed only)
+  foliageBloomStart      = 0.5;
+  foliageBloomScaleCurve = 0.5;
+  foliagePetalPitch      = 0.55;
+  foliagePetalShape: 'rounded' | 'pointed' | 'notched' | 'strap' = 'rounded';
+  foliageBranches        = 0;
+  foliageFlowerLod       = 0;
+  foliagePetalColor      = '#ffffff';
+  foliageCenterColor     = '#f5c000';
+
+  // Decal tool
+  scene3dDecalToolActive   = false;
+  scene3dDecalIds: Set<string> = new Set();
+  scene3dSelectedIsDecal   = false;
+  scene3dSelectedDecalId: string | null = null;
+  decalSize        = 2.0;
+  decalRotation    = 0;
+  decalSourceTab: 'ephemera' | 'image' = 'ephemera';
+  decalImageDataUrl        = '';
+  decalEphemeraCategories: any[] = [];
+  decalEphemeraGenerators: any[] = [];
+  decalActiveCategoryId    = '';
+  decalActiveTypeId        = '';
+  decalEphemeraSchema: any[] = [];
+  decalEphemeraParams: Record<string, any> = {};
+
+  // GARP Skins panel
+  garpPanelOpen = false;
+  garpPools: Array<{ id: string; name: string; slots: Array<{ name: string; live: boolean }>; skins: Array<{ name: string }> }> = [];
+  garpActivePoolId = '';
+  garpNewSkinName = '';
+  garpSlotSources: Record<string, string> = {};
+  garpSaving = false;
+  garpSlotRegionsCache: Record<string, Array<{ label: string; u0: number; v0: number; u1: number; v1: number }>> = {};
+  garpPaintMeshId: string | null = null;
+  garpPaintSlot: string | null = null;
+  garpPaintSkinName = '';
+
+  // Creator panel (generic — vending, bike-rack, bollard, etc.)
+  scene3dCreatorIds: Set<string> = new Set();
+  // CD Kit tracking
+  scene3dCDKitIds: Set<string> = new Set();
+  scene3dCreatorPanelOpen   = false;
+  activeCreatorId: string | null = null;
+  activeCreatorTypeId: string | null = null;
+  creatorSchemaList: any[] = [];
+  creatorParams: Record<string, any> = {};
 
   // Edit Character panel
   scene3dEditCharPanelOpen = false;
@@ -2112,6 +3387,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dFaceBlinkMin = 2.5;
   scene3dFaceBlinkMax = 6.0;
   scene3dFaceBlinkHold = 110;
+  // Auto-blink
+  scene3dAutoBlinkEnabled = false;
+  scene3dAutoBlinkMinSec = 2.5;
+  scene3dAutoBlinkMaxSec = 6.0;
+  scene3dAutoBlinkHoldMs = 110;
+  scene3dAutoBlinkDoubleProb = 15;
+  scene3dAutoBlinkDoubleGapMin = 150;
+  scene3dAutoBlinkDoubleGapMax = 320;
 
   // Body shape + skin tone (live editing of existing character)
   scene3dBodyParams: any = null;
@@ -2132,18 +3415,73 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   // Clothing
   scene3dClothingTab: 'top' | 'bottom' = 'top';
-  charSection: 'menu' | 'body' | 'eyes' | 'hair' | 'top' | 'bottom' = 'menu';
+  private _charSection: 'menu' | 'body' | 'eyes' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms' = 'menu';
+  get charSection() { return this._charSection; }
+  set charSection(v: 'menu' | 'body' | 'eyes' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms') {
+    if (this._charSection === 'charms' && v !== 'charms') {
+      this.scene3dEndPlacePick();
+      this._hideCharmPreview();
+    }
+    this._charSection = v;
+  }
   charRenderStyle = 'cel';
-  charPartTextureSet: Record<string, boolean> = { body: false, eyes: false, hair: false, top: false, bottom: false };
-  scene3dClothingPaintActive: 'top' | 'bottom' | null = null;
+  scene3dCharRimLight = false;
+  charPartTextureSet: Record<string, boolean> = { body: false, eyes: false, hair: false, top: false, bottom: false, shoes: false, socks: false };
+  scene3dClothingPaintActive: 'top' | 'bottom' | 'shoes' | 'socks' | null = null;
+  scene3dEraseStyle: 'burn' | 'clean' | 'cutout' = 'burn';
+  // Charms / accessories
+  scene3dAttachments: Array<{ id: string; type: string; params: any; placement: { joint: string; offset: [number, number, number]; scale: number } }> = [];
+  scene3dAttachmentTypes: string[] = [];
+  scene3dNewAttachmentType = 'chain';
+  scene3dPlacingCharmType: string | null = null;
+  scene3dDrawingChain = false;
+  scene3dChainPickProgress: 'first' | 'second' | null = null;
+  scene3dPreviewActive = false;
+  scene3dCharSparkle = false;
+  scene3dCharSparkleMode: 'glint' | 'star' = 'glint';
+  scene3dAccordionOpen: Record<string, boolean> = {};
+  scene3dCharmOpen: Record<string, boolean> = {};
+  scene3dAttachmentsByType: Array<{ type: string; items: typeof this.scene3dAttachments }> = [];
+  private _attachmentParamTimers: Map<string, any> = new Map();
+  // Procedural idle animation
+  scene3dIdleEnabled = false;
+  scene3dIdleBreaksEnabled = false;
+  scene3dIdleBreaksMinSec = 8;
+  scene3dIdleBreaksMaxSec = 20;
+  scene3dSquashStretchEnabled = false;
+  scene3dSquashStretchIntensity = 0.25;
+  scene3dLegIdleMode: 'fk' | 'ik' | 'none' = 'fk';
+  // Performance stats HUD
+  scene3dStatsVisible = false;
+  scene3dStats: any = null;
+  private _statsInterval: any = null;
   scene3dTopParams: any = null;
   scene3dBottomParams: any = null;
+  scene3dShoeParams: any = null;
+  scene3dSockParams: any = null;
+  scene3dClothingPattern: Record<string, { mode: string; colorHex: string; freq: number; angleDeg: number; scale: number }> = {};
   scene3dTopPresets: string[] = [];
   scene3dBottomPresets: string[] = [];
+  scene3dShoePresets: string[] = [];
+  scene3dSockPresets: string[] = [];
   scene3dTopPresetName = '';
   scene3dBottomPresetName = '';
+  scene3dShoePresetName = '';
+  scene3dSockPresetName = '';
   private _clothingParamTopTimer: any = null;
   private _clothingParamBottomTimer: any = null;
+  private _clothingParamShoesTimer: any = null;
+  private _clothingParamSocksTimer: any = null;
+  private _clothingParamUndershirtTimer: any = null;
+  private _clothingParamUnderpantsTimer: any = null;
+  scene3dUndershirtParams: any = null;
+  scene3dUnderpantsParams: any = null;
+  scene3dUndershirtPresets: string[] = [];
+  scene3dUnderpantsPresets: string[] = [];
+  scene3dUndershirtPresetName = '';
+  scene3dUnderpantsPresetName = '';
+  scene3dTopTab: 'top' | 'undershirt' = 'top';
+  scene3dBottomTab: 'bottom' | 'underpants' = 'bottom';
   private readonly _hairParamDefaults = {
     verticalOffset: 0.62,
     capThickness: 0.00,
@@ -2199,12 +3537,82 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     closed: false,
   };
 
+  // ── Original default character (keep for revert) ──────────────────────
+  private readonly _charBodyDefaults = {
+    height:      0.50,
+    legLength:   1.00,
+    limbThick:   0.85,
+    torsoThick:  0.90,
+    torsoLength: 1.00,
+    headSize:    1.25,
+    waist:       0.90,
+    hipFront:    0.75,
+    skinTone:    '#f5c5a3',
+    hairRoot:    '#80bc80',
+    hairTip:     '#000000',
+    eyeIrisColor:'#96693c',
+    topColor:    '#419041',
+    topTrim:     '#315e31',
+    bottomColor: '#404763',
+    bottomTrim:  '#030407',
+  } as const;
+
   scene3dPolygonSides = 6;
   scene3dPolygonRadius = 0.5;
   scene3dPolygonHeight = 0.2;
   scene3dCircleRadius = 0.5;
   scene3dCircleSegments = 16;
   scene3dCircleHeight = 0.2;
+
+  // Cylinder / cone / frustum form
+  scene3dShowCylinderForm = false;
+  scene3dCylinderRadius = 0.3;
+  scene3dCylinderHeight = 0.8;
+  scene3dCylinderRadiusTop = 0.3;
+  scene3dCylinderSegments = 12;
+
+  // Revolve / lathe form
+  scene3dShowRevolveForm = false;
+  scene3dRevolveProfile: [number, number][] = [[0.3, -0.4], [0.4, 0], [0.3, 0.4]];
+  scene3dRevolveSegments = 16;
+
+  // Tube / loft form
+  scene3dShowTubeForm = false;
+  scene3dTubePath: [number, number, number][] = [[0, -0.4, 0], [0, 0, 0], [0, 0.4, 0]];
+  scene3dTubeRadii: number[] = [0.1, 0.15, 0.1];
+  scene3dTubeSegments = 8;
+
+  // Multi-select for boolean CSG
+  scene3dSelectedMeshIds = new Set<string>();
+
+  // Metaballs form
+  scene3dShowMetaballForm = false;
+  scene3dMetaballBlobs: Array<{
+    shape: 'sphere' | 'capsule' | 'ellipsoid' | 'box' | 'torus';
+    ax: number; ay: number; az: number;
+    bx: number; by: number; bz: number;
+    radius: number; blend: number; subtract: boolean;
+  }> = [
+    { shape: 'sphere', ax: -0.2, ay: 0, az: 0, bx: 0, by: 0.3, bz: 0, radius: 0.3, blend: 0.3, subtract: false },
+    { shape: 'sphere', ax:  0.2, ay: 0, az: 0, bx: 0, by: 0.3, bz: 0, radius: 0.25, blend: 0.3, subtract: false },
+  ];
+  scene3dMetaballResolution = 32;
+  scene3dMetaballDecimate = 1.0;
+
+  // Creature form
+  scene3dShowCreatureForm = false;
+  scene3dCreatureSpecies = 'dog';
+  scene3dCreatureParams = {
+    bodyLength: 1.0, bodyRadius: 0.3,
+    legCount: 4,     legLength: 0.5,
+    neckLength: 0.3, headSize: 0.4,
+    tailLength: 0.4, tailCurl: 0.3,
+    earSize: 0.2,    blend: 0.3,
+    roughness: 0.0,  eyes: true,
+    rigged: false,   decimate: 0.4,
+  };
+  scene3dCreatureSeed = 42;
+  scene3dCreatureResolution = 32;
 
   scene3dAddMesh(primitive: string): void {
     const sm = this.shapeManager as any;
@@ -2269,6 +3677,166 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dShowAddMeshMenu = false;
   }
 
+  scene3dAddCylinder(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+    const mesh = sm.scene3d?.createCylinder(
+      cx, cy, cz,
+      this.scene3dCylinderRadius,
+      this.scene3dCylinderHeight,
+      this.scene3dCylinderSegments,
+      undefined,
+      this.scene3dCylinderRadiusTop,
+    );
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowCylinderForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dRevolveAddPoint(): void {
+    const last = this.scene3dRevolveProfile[this.scene3dRevolveProfile.length - 1];
+    this.scene3dRevolveProfile = [...this.scene3dRevolveProfile, [last[0], last[1] + 0.2]];
+  }
+
+  scene3dRevolveRemovePoint(i: number): void {
+    if (this.scene3dRevolveProfile.length <= 2) return;
+    this.scene3dRevolveProfile = this.scene3dRevolveProfile.filter((_, idx) => idx !== i);
+  }
+
+  scene3dAddRevolve(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+    const mesh = sm.createRevolve3D?.(cx, cy, cz, this.scene3dRevolveProfile, this.scene3dRevolveSegments);
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowRevolveForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dTubeAddPoint(): void {
+    const last = this.scene3dTubePath[this.scene3dTubePath.length - 1];
+    this.scene3dTubePath = [...this.scene3dTubePath, [last[0], last[1] + 0.2, last[2]]];
+    this.scene3dTubeRadii = [...this.scene3dTubeRadii, this.scene3dTubeRadii[this.scene3dTubeRadii.length - 1]];
+  }
+
+  scene3dTubeRemovePoint(i: number): void {
+    if (this.scene3dTubePath.length <= 2) return;
+    this.scene3dTubePath = this.scene3dTubePath.filter((_, idx) => idx !== i);
+    this.scene3dTubeRadii = this.scene3dTubeRadii.filter((_, idx) => idx !== i);
+  }
+
+  scene3dAddTube(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+    const mesh = sm.createTube3D?.(cx, cy, cz, this.scene3dTubePath, this.scene3dTubeRadii, this.scene3dTubeSegments);
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowTubeForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dMetaballAddBlob(): void {
+    this.scene3dMetaballBlobs = [...this.scene3dMetaballBlobs, {
+      shape: 'sphere', ax: 0, ay: 0, az: 0, bx: 0, by: 0.3, bz: 0,
+      radius: 0.2, blend: 0.3, subtract: false,
+    }];
+  }
+
+  scene3dMetaballRemoveBlob(i: number): void {
+    if (this.scene3dMetaballBlobs.length <= 1) return;
+    this.scene3dMetaballBlobs = this.scene3dMetaballBlobs.filter((_, idx) => idx !== i);
+  }
+
+  scene3dAddMetaball(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+    const blobs = this.scene3dMetaballBlobs.map(b => ({
+      shape: b.shape,
+      a: [b.ax, b.ay, b.az] as [number, number, number],
+      b: [b.bx, b.by, b.bz] as [number, number, number],
+      radius: b.radius,
+      blend: b.blend,
+      subtract: b.subtract,
+    }));
+    const mesh = sm.createMetaballMesh3D?.(cx, cy, cz, blobs, this.scene3dMetaballResolution, undefined, this.scene3dMetaballDecimate);
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowMetaballForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dRandomizeCreature(): void {
+    this.scene3dCreatureSeed = Math.floor(Math.random() * 99999);
+  }
+
+  scene3dAddCreature(): void {
+    const sm = this.shapeManager as any;
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+    const [cx, cy, cz] = center;
+    const params = {
+      ...this.scene3dCreatureParams,
+      species: this.scene3dCreatureSpecies,
+      seed: this.scene3dCreatureSeed,
+    };
+    const mesh = sm.createCreature3D?.(params, cx, cy, cz, this.scene3dCreatureResolution);
+    if (mesh) {
+      this.scene3dRefreshMeshes();
+      this.scene3dEnsureAnimationPlayer();
+      this.scene3dSelectMesh(mesh.id ?? mesh.nodeId);
+    }
+    this.scene3dShowCreatureForm = false;
+    this.scene3dShowAddMeshMenu = false;
+  }
+
+  scene3dSelectMeshMulti(id: string, event: MouseEvent): void {
+    if (event.shiftKey) {
+      const ids = new Set(this.scene3dSelectedMeshIds);
+      if (ids.has(id)) {
+        ids.delete(id);
+      } else {
+        ids.add(id);
+      }
+      this.scene3dSelectedMeshIds = ids;
+    } else {
+      this.scene3dSelectedMeshIds = new Set([id]);
+      this.scene3dSelectMesh(id);
+    }
+  }
+
+  scene3dRunBoolean(op: 'union' | 'subtract' | 'intersect'): void {
+    const ids = [...this.scene3dSelectedMeshIds];
+    if (ids.length !== 2) return;
+    const sm = this.shapeManager as any;
+    sm.beginSceneGraphBatch3D?.();
+    const result = sm.booleanMesh3D?.(ids[0], ids[1], op, { keepOperands: false });
+    sm.endSceneGraphBatch3D?.();
+    this.scene3dSelectedMeshIds = new Set();
+    this.scene3dRefreshMeshes();
+    if (result) {
+      const resultId = result.id ?? result.nodeId;
+      this.scene3dSelectedMeshIds = new Set([resultId]);
+      this.scene3dSelectMesh(resultId);
+      sm.mergeByDistance3D?.(resultId, 0.001);
+    }
+  }
+
   scene3dOpenCharacterForm(): void {
     this.scene3dShowCharacterForm = !this.scene3dShowCharacterForm;
     this.scene3dShowPolygonForm = false;
@@ -2295,6 +3863,217 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     });
   }
 
+  private _rnd(min: number, max: number): number {
+    return Math.round((min + Math.random() * (max - min)) * 100) / 100;
+  }
+
+  private _pick<T>(arr: readonly T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  private _varyColorLightness(hex: string, delta: number): string {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+    const r = parseInt(hex.slice(1,3),16)/255;
+    const g = parseInt(hex.slice(3,5),16)/255;
+    const b = parseInt(hex.slice(5,7),16)/255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b);
+    let h = 0, s = 0, l = (max+min)/2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+      if (max === r) h = ((g-b)/d + (g<b?6:0))/6;
+      else if (max === g) h = ((b-r)/d + 2)/6;
+      else h = ((r-g)/d + 4)/6;
+    }
+    l = Math.max(0.10, Math.min(0.90, l + delta));
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p+(q-p)*6*t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p+(q-p)*(2/3-t)*6;
+      return p;
+    };
+    let nr: number, ng: number, nb: number;
+    if (s === 0) { nr = ng = nb = l; }
+    else {
+      const q = l < 0.5 ? l*(1+s) : l+s-l*s;
+      const p = 2*l - q;
+      nr = hue2rgb(p,q,h+1/3); ng = hue2rgb(p,q,h); nb = hue2rgb(p,q,h-1/3);
+    }
+    const toHex = (x: number) => Math.round(x*255).toString(16).padStart(2,'0');
+    return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
+  }
+
+  private _randomizeCharacterInputs(biasBodyId?: string | null) {
+
+    const skinTones    = ['#f5c5a3','#e8b492','#d9956b','#c07846','#8d5633','#6b3a22','#f2d5b0','#fce4cc','#a0724f','#7a4f2d'] as const;
+    const hairColors   = ['#1a0a00','#3d1a00','#6b3a1f','#9b6b3a','#c49a6c','#e8c87a','#f5e6c8','#cc3300','#990033','#4a0066','#1a1a66','#005533','#444444','#888888','#cccccc','#80bc80','#ff6699','#ff9900'] as const;
+    const eyeColors    = ['#6d523b','#4a7c59','#3a5f8a','#6b4a8a','#8a6a3a','#2a5a3a','#5a3a6b','#8a4a2a','#3a6b8a','#1a6b4a'] as const;
+    const accentColors = ['#80bc80','#bc8080','#8080bc','#bc80bc','#80bcbc','#bcbc80','#bc9060','#60bc90'] as const;
+    const shoeColors   = ['#1a1a1a','#2d2d2d','#4a3728','#6b4c35','#8b6848','#c4a882','#f5f5f5','#2c3e6b','#8b4513','#d2691e'] as const;
+    const sockColors   = ['#ffffff','#f5f5f5','#e0e0e0','#cccccc','#1a1a1a','#2d2d2d','#8b3a3a','#3a5a8b','#3a6b3a','#6b3a6b','#d4a574'] as const;
+    const clothPairs   = [
+      ['#419041','#315e31'], ['#404763','#030407'], ['#c0392b','#8e2020'],
+      ['#2980b9','#1a5276'], ['#8e44ad','#4a235a'], ['#e67e22','#7d5a0a'],
+      ['#16a085','#0e6655'], ['#2c3e50','#1a1a2e'], ['#f39c12','#876500'],
+      ['#d35400','#7a2e00'], ['#1abc9c','#0a6b50'], ['#e74c3c','#6b1010'],
+      ['#9b59b6','#5b2c6f'], ['#3498db','#1a4a7a'], ['#f1c40f','#7d6608'],
+      ['#e8d5b0','#9a8060'], ['#34495e','#1a2530'], ['#bdc3c7','#7f8c8d'],
+    ] as const;
+
+    const eyeIris    = this._pick(eyeColors);
+    const [topColor, topTrim]       = this._pick(clothPairs);
+    const [bottomColor, bottomTrim] = this._pick(clothPairs);
+    const tailStyle   = this._pick(['none','twin','pony','pig'] as const);
+    const bottomStyle = this._pick(['skirt','shorts','pants'] as const);
+    const bottomLen   = bottomStyle === 'shorts' ? this._rnd(0.35, 0.50)
+                      : bottomStyle === 'pants'  ? this._rnd(0.60, 1.00)
+                      :                            this._rnd(0.60, 1.40);
+
+    const hairOverride = {
+      hairMode:        'cards' as const,
+      cardifyCap:      true,
+      verticalOffset:  this._rnd(0.60, 0.80),
+      capThickness:    this._rnd(-0.20, 0.15),
+      backLength:      this._rnd(0.00, 4.00),
+      crownRound:      this._rnd(0.00, 0.40),
+      hairlineFront:   this._rnd(0.00, 0.40),
+      partingStyle:    this._pick(['fringe','parted','swept'] as const),
+      partingPosition: this._rnd(-0.50, 0.50),
+      partingWidth:    this._rnd(0.10, 0.40),
+      bangCount:       0,
+      sideLock:        Math.random() < 0.5,
+      sideLockLength:  this._rnd(0.30, 2.00),
+      sideLockWidth:   this._rnd(0.05, 0.25),
+      sideLockCount:   Math.round(this._rnd(1, 4)),
+      tailStyle,
+      tailHeight:      this._rnd(-0.20, 0.70),
+      tailSpread:      this._rnd(0.20, 0.90),
+      tailLength:      this._rnd(1.00, 5.50),
+      tailThickness:   this._rnd(0.15, 0.70),
+      tailTaper:       this._rnd(0.20, 1.00),
+      tailCurl:        this._rnd(-0.80, 0.80),
+      tailTip:         this._pick(['point','flare','blunt'] as const),
+      rootColor:       this._pick(hairColors),
+      tipColor:        this._pick(hairColors),
+      gradient:        true,
+      tipFade:         this._rnd(0.30, 1.00),
+      chunkiness:      this._rnd(0.30, 1.00),
+    };
+
+    const eyeWidth = this._rnd(0.15, 0.45);
+    const eyeOverride = {
+      spacing:            this._rnd(0.30, 0.50),
+      verticalPos:        this._rnd(0.35, 0.75),
+      width:              eyeWidth,
+      height:             this._rnd(0.10, eyeWidth * 0.70),
+      tilt:               this._rnd(-0.30, 0.30),
+      roundness:          this._rnd(0.30, 1.00),
+      irisRadius:         this._rnd(0.50, 0.90),
+      irisGradient:       true,
+      irisColorTop:       eyeIris,
+      irisColorBottom:    eyeIris,
+      irisColor:          eyeIris,
+      pupilRadius:        this._rnd(0.30, 0.60),
+      upperLashThickness: this._rnd(0.03, 0.09),
+      outerLashLength:    this._rnd(0.10, 0.60),
+      lowerLash:          Math.random() < 0.40,
+      doubleEyelid:       Math.random() < 0.50,
+      underDeco:          Math.random() < 0.60,
+      underDecoColor:     this._pick(accentColors),
+      underDecoCount:     Math.round(this._rnd(1, 5)),
+    };
+
+    const topOverride = {
+      hemHeight: this._rnd(-0.10, 0.85),
+      gradient:  true,
+      trimWidth: this._rnd(0.10, 0.45),
+      baseColor: topColor,
+      trimColor: topTrim,
+    };
+
+    const bottomOverride = {
+      bottomStyle,
+      waistWidth:  this._rnd(0.05, 0.45),
+      waistHeight: this._rnd(-0.20, 0.30),
+      length:      bottomLen,
+      gradient:    true,
+      trimWidth:   this._rnd(0.10, 0.45),
+      baseColor:   bottomColor,
+      trimColor:   bottomTrim,
+    };
+
+    const shoeStyle  = this._pick(['sneaker','sneaker','sneaker','boot','boot','heel'] as const);
+    const shoeBase   = this._pick(shoeColors);
+    const shoesOverride = {
+      shoeStyle,
+      soleThickness: 0.010,
+      topCover:      this._rnd(0.30, 0.80),
+      shaftHeight:   shoeStyle === 'boot' ? this._rnd(0.40, 1.20) : this._rnd(0.00, 0.25),
+      heelHeight:    shoeStyle === 'heel' ? this._rnd(0.20, 0.70) : 0.10,
+      toePoint:      this._rnd(0.00, 0.40),
+      ankleCollar:   this._rnd(0.20, 0.70),
+      thickness:     this._rnd(0.005, 0.015),
+      baseColor:     shoeBase,
+      trimColor:     this._varyColorLightness(shoeBase, this._rnd(-0.20, 0.20)),
+      gradient:      Math.random() < 0.5,
+      trimWidth:     this._rnd(0.10, 0.35),
+      chunkiness:    this._rnd(0.30, 0.80),
+    };
+
+    const sockBase   = this._pick(sockColors);
+    const sockTrimDelta = Math.random() < 0.5 ? this._rnd(0.15, 0.25) : this._rnd(-0.25, -0.15);
+    const socksOverride = {
+      sockStyle:  this._pick(['ankle','crew','tube'] as const),
+      legHeight:  this._rnd(0.00, 0.50),
+      thickness:  0.008,
+      baseColor:  sockBase,
+      trimColor:  this._varyColorLightness(sockBase, sockTrimDelta),
+      gradient:   Math.random() < 0.4,
+      trimWidth:  this._rnd(0.10, 0.30),
+    };
+
+    // Bias clothing color + silhouette from a reference character
+    if (biasBodyId) {
+      const sm = this.shapeManager as any;
+      const refTop    = sm.getClothingParams3D?.(biasBodyId, 'top');
+      const refBottom = sm.getClothingParams3D?.(biasBodyId, 'bottom');
+      const nudge = () => this._rnd(-0.12, 0.12);
+      if (refTop) {
+        if (refTop.baseColor) (topOverride as any).baseColor = this._varyColorLightness(refTop.baseColor, this._rnd(-0.15, 0.15));
+        if (refTop.trimColor)  (topOverride as any).trimColor  = this._varyColorLightness(refTop.trimColor,  this._rnd(-0.15, 0.15));
+        if (refTop.hemHeight  != null) (topOverride as any).hemHeight = Math.max(-0.10, Math.min(0.85, refTop.hemHeight  + nudge()));
+        if (refTop.trimWidth   != null) (topOverride as any).trimWidth  = Math.max(0.10,  Math.min(0.45, refTop.trimWidth   + nudge()));
+      }
+      if (refBottom) {
+        if (refBottom.baseColor) (bottomOverride as any).baseColor = this._varyColorLightness(refBottom.baseColor, this._rnd(-0.15, 0.15));
+        if (refBottom.trimColor) (bottomOverride as any).trimColor  = this._varyColorLightness(refBottom.trimColor, this._rnd(-0.15, 0.15));
+        if (refBottom.length    != null) (bottomOverride as any).length    = Math.max(0.35, Math.min(1.40, refBottom.length    + nudge()));
+        if (refBottom.trimWidth != null) (bottomOverride as any).trimWidth = Math.max(0.10, Math.min(0.45, refBottom.trimWidth + nudge()));
+      }
+      const refShoes = sm.getClothingParams3D?.(biasBodyId, 'shoes');
+      if (refShoes?.baseColor) {
+        const biasedShoeBase = this._varyColorLightness(refShoes.baseColor, this._rnd(-0.15, 0.15));
+        (shoesOverride as any).baseColor = biasedShoeBase;
+        (shoesOverride as any).trimColor = this._varyColorLightness(biasedShoeBase, this._rnd(-0.20, 0.20));
+      }
+      const refSocks = sm.getClothingParams3D?.(biasBodyId, 'socks');
+      if (refSocks?.baseColor) {
+        const biasedSockBase = this._varyColorLightness(refSocks.baseColor, this._rnd(-0.15, 0.15));
+        const delta = Math.random() < 0.5 ? this._rnd(0.15, 0.25) : this._rnd(-0.25, -0.15);
+        (socksOverride as any).baseColor = biasedSockBase;
+        (socksOverride as any).trimColor = this._varyColorLightness(biasedSockBase, delta);
+      }
+    }
+
+    return {
+      waist:    this._rnd(0.75, 1.05),
+      hipFront: this._rnd(0.60, 0.90),
+      skinTone: this._pick(skinTones),
+      hairOverride, eyeOverride, topOverride, bottomOverride, shoesOverride, socksOverride,
+    };
+  }
+
   scene3dCancelCharacter(): void {
     clearTimeout(this._charPreviewTimer);
     (this.shapeManager as any).clearProceduralBodyPreview3D?.();
@@ -2305,75 +4084,727 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   async scene3dGenerateCharacter(): Promise<void> {
     clearTimeout(this._charPreviewTimer);
     const sm = this.shapeManager as any;
-    const result = await sm.createProceduralBody3D?.({
-      height:      this.scene3dCharHeight,
-      legLength:   this.scene3dCharLegLength,
-      limbThick:   this.scene3dCharLimbThick,
-      torsoThick:  this.scene3dCharTorsoThick,
-      torsoLength: this.scene3dCharTorsoLength,
-      headSize:    this.scene3dCharHeadSize,
-      waist:       0.90,
-      hipFront:    0.75,
-    });
-    this.scene3dRefreshMeshes();
+    const rnd = this._randomizeCharacterInputs(this.scene3dCharBiasBodyId);
+
+    // Build all part params up front so we can pass them as one atomic call
+    const hairParams = {
+      ...(sm.getDefaultHairParams3D?.() ?? {}),
+      ...this._hairParamDefaults,
+      ...rnd.hairOverride,
+    };
+    const eyeParams = {
+      ...(sm.getDefaultEyeParams3D?.() ?? {}),
+      ...this._eyeParamDefaults,
+      ...rnd.eyeOverride,
+    };
+    const topParams = {
+      ...(sm.getDefaultClothingParams3D?.('top') ?? { slot: 'top' }),
+      hemHeight: 0.65, gradient: true, trimWidth: 0.50,
+      baseColor: this._charBodyDefaults.topColor,
+      trimColor: this._charBodyDefaults.topTrim,
+      ...rnd.topOverride,
+    };
+    const bottomParams = {
+      ...(sm.getDefaultClothingParams3D?.('bottom') ?? { slot: 'bottom' }),
+      bottomStyle: 'pants', waistWidth: 0.32, waistHeight: 0.50, length: 1.00, gradient: true, trimWidth: 0.50,
+      baseColor: this._charBodyDefaults.bottomColor,
+      trimColor: this._charBodyDefaults.bottomTrim,
+      ...rnd.bottomOverride,
+    };
+    const shoesParams = {
+      ...(sm.getDefaultClothingParams3D?.('shoes') ?? { slot: 'shoes' }),
+      ...rnd.shoesOverride,
+    };
+    const socksParams = {
+      ...(sm.getDefaultClothingParams3D?.('socks') ?? { slot: 'socks' }),
+      ...rnd.socksOverride,
+    };
+    const center = sm.getIllustrationCenter3D?.() ?? [0, 0, 0];
+
+    // Single salsa call → single scene-graph event (was ~9 separate calls)
+    // Suppress 2D layer-tree rebuild during the call — 3D-only ops don't touch 2D layers
+    this._suppressLayerTreeRebuild = true;
+    let result: any;
+    try {
+      result = await sm.createFullCharacter3D?.({
+        body: {
+          height:      this.scene3dCharHeight,
+          legLength:   this.scene3dCharLegLength,
+          limbThick:   this.scene3dCharLimbThick,
+          torsoThick:  this.scene3dCharTorsoThick,
+          torsoLength: this.scene3dCharTorsoLength,
+          headSize:    this.scene3dCharHeadSize,
+          waist:       rnd.waist,
+          hipFront:    rnd.hipFront,
+        },
+        position: center,
+        eyes:     eyeParams,
+        hair:     hairParams,
+        top:      topParams,
+        bottom:   bottomParams,
+        shoes:    shoesParams,
+        socks:    socksParams,
+        skinTone: rnd.skinTone,
+      });
+    } finally {
+      this._suppressLayerTreeRebuild = false;
+    }
+
+    // Incremental O(1) mesh list update using nodeIds returned by createFullCharacter3D
+    if (result?.nodeIds?.length) {
+      for (const id of result.nodeIds as string[]) {
+        const meshDesc = sm.getMesh3D?.(id);
+        if (meshDesc) this.scene3dMeshes = [...this.scene3dMeshes, meshDesc];
+        const nodeDesc = sm.getNode3D?.(id);
+        if (nodeDesc) this.scene3dHierarchy = [...this.scene3dHierarchy, nodeDesc];
+      }
+      this.scene3dRefreshKeyframeTracks();
+    } else {
+      this.scene3dRefreshMeshes();
+    }
     this.scene3dEnsureAnimationPlayer();
     if (result?.meshId) {
       this.scene3dSelectMesh(result.meshId);
       this.scene3dEditCharBodyId = result.meshId;
-      this._autoEquipCharacter(result.meshId);
+      sm.playSpawnReveal3D?.(result.meshId);
+      // Sync UI state — no salsa API calls, createFullCharacter3D already applied everything
+      this._syncCharEquipState(result.meshId, { hairParams, eyeParams, topParams, bottomParams, skinTone: rnd.skinTone });
     }
     this.scene3dShowCharacterForm = false;
     this.scene3dShowAddMeshMenu = false;
+    // Trigger autosave — character creation suppressed the normal onSceneGraphChanged path
+    this.scene3dMarkDirty();
   }
 
-  private _autoEquipCharacter(bodyId: string): void {
+  private _syncCharEquipState(bodyId: string, p: {
+    hairParams: any; eyeParams: any;
+    topParams: any; bottomParams: any; skinTone: string;
+  }): void {
     const sm = this.shapeManager as any;
 
-    // Eyes — one default expression, procedural
-    sm.ensureFace3D?.(bodyId);
-    const exprId = sm.createFaceExpression3D?.(bodyId, 'Neutral');
-    if (exprId) {
-      const base = sm.getDefaultEyeParams3D?.() ?? {};
-      const eyeParams = { ...base, ...this._eyeParamDefaults };
-      sm.setFaceExpressionProcedural3D?.(bodyId, exprId, eyeParams);
-      this.scene3dEyeModeMap[exprId] = 'procedural';
-      this.scene3dEyeParamsMap[exprId] = eyeParams;
-      this._refreshFaceExpressions();
+    // Eyes — createFullCharacter3D created the 'Neutral' expression; just read it back
+    this._refreshFaceExpressions();
+    const firstExpr = this.scene3dFaceExpressions[0];
+    if (firstExpr) {
+      this.scene3dEyeModeMap[firstExpr.id]  = 'procedural';
+      this.scene3dEyeParamsMap[firstExpr.id] = p.eyeParams;
     }
 
-    // Hair
-    const hairBase = sm.getDefaultHairParams3D?.() ?? {};
-    this.scene3dHairParams = { ...hairBase, ...this._hairParamDefaults };
-    sm.setHairParams3D?.(bodyId, this.scene3dHairParams);
-
-    // Top
-    this.scene3dTopPresets = sm.getClothingPresetNames3D?.('top') ?? [];
-    this.scene3dTopParams = { ...(sm.getDefaultClothingParams3D?.('top') ?? { slot: 'top' }), hemHeight: 0.65, gradient: true, trimWidth: 0.50, baseColor: '#419041', trimColor: '#315e31' };
-    sm.setClothingParams3D?.(bodyId, this.scene3dTopParams);
-
-    // Bottom
+    // Hair / clothing
+    this.scene3dHairParams    = p.hairParams;
+    this.scene3dTopPresets    = sm.getClothingPresetNames3D?.('top')    ?? [];
+    this.scene3dTopParams     = p.topParams;
     this.scene3dBottomPresets = sm.getClothingPresetNames3D?.('bottom') ?? [];
-    this.scene3dBottomParams = { ...(sm.getDefaultClothingParams3D?.('bottom') ?? { slot: 'bottom' }), bottomStyle: 'pants', waistWidth: 0.32, waistHeight: 0.50, length: 1.00, gradient: true, trimWidth: 0.50, baseColor: '#404763', trimColor: '#030407' };
-    sm.setClothingParams3D?.(bodyId, this.scene3dBottomParams);
+    this.scene3dBottomParams  = p.bottomParams;
+    this.scene3dShoePresets   = sm.getClothingPresetNames3D?.('shoes')  ?? [];
+    this.scene3dShoeParams    = sm.getClothingParams3D?.(bodyId, 'shoes') ?? null;
+    this.scene3dSockPresets   = sm.getClothingPresetNames3D?.('socks')  ?? [];
+    this.scene3dSockParams    = sm.getClothingParams3D?.(bodyId, 'socks') ?? null;
 
-    // Body shape params + skin tone
-    this.scene3dBodyParams = sm.getBodyParams3D?.(bodyId) ?? { bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1 };
-    const tone = sm.getSkinTone3D?.(bodyId);
-    if (tone) this.scene3dSkinTone = tone;
+    // Body shape + skin tone
+    this.scene3dBodyParams = sm.getBodyParams3D?.(bodyId) ?? {
+      height: 0.50, legLength: 1.00, limbThick: 0.85, torsoThick: 0.90, torsoLength: 1.00, headSize: 1.25,
+      bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1, buttSize: 1,
+    };
+    this.scene3dSkinTone   = p.skinTone;
 
-    // Apply default render style
     this.scene3dSetCharRenderStyle('cel');
+  }
+
+  // ── Building Creator ────────────────────────────────────────────────────────
+
+  async scene3dAddBuilding(): Promise<void> {
+    const sm = this.shapeManager as any;
+    const result = await sm.createProceduralBuilding3D?.();
+    if (!result?.id) return;
+    this.scene3dRefreshMeshes();
+    this.scene3dSelectMesh(result.id);
+  }
+
+  scene3dToggleEditBuildingPanel(): void {
+    this.scene3dEditBuildingPanelOpen = !this.scene3dEditBuildingPanelOpen;
+    this._updateGizmoPosition();
+    if (this.scene3dEditBuildingPanelOpen) {
+      this.scene3dEditBuildingId = this.scene3dSelectedMeshId;
+      this._initBuildingParams();
+    }
+  }
+
+  private _initBuildingParams(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    const p = this.scene3dEditBlockBuildingIndex !== null
+      ? sm.getBlockBuildingParams3D?.(id, this.scene3dEditBlockBuildingIndex)
+      : sm.getBuildingParams3D?.(id);
+    if (!p) return;
+    if (p.category != null)           this.buildingCategory          = p.category;
+    if (p.archetype != null)          this.buildingArchetype         = p.archetype;
+    if (p.seed != null)               this.buildingSeed              = p.seed;
+    if (p.floors != null)             this.buildingFloors            = p.floors;
+    if (p.width != null)              this.buildingWidth             = p.width;
+    if (p.depth != null)              this.buildingDepth             = p.depth;
+    if (p.floorHeight != null)        this.buildingFloorHeight       = p.floorHeight;
+    if (p.groundFloorHeight != null)  this.buildingGroundFloorHeight = p.groundFloorHeight;
+    if (p.cornerStyle != null)        this.buildingCornerStyle       = p.cornerStyle;
+    if (p.cornerAmount != null)       this.buildingCornerAmount      = p.cornerAmount;
+    if (p.setbacks != null)           this.buildingSetbacks          = p.setbacks;
+    if (p.setbackInset != null)       this.buildingSetbackInset      = p.setbackInset;
+    if (p.podium != null)             this.buildingPodium            = p.podium;
+    if (p.podiumFloors != null)       this.buildingPodiumFloors      = p.podiumFloors;
+    if (p.windowStyle != null)        this.buildingWindowStyle       = p.windowStyle;
+    if (p.bayWidth != null)           this.buildingBayWidth          = p.bayWidth;
+    if (p.material != null)           this.buildingMaterial          = p.material;
+    if (p.pilasters != null)          this.buildingPilasters         = p.pilasters;
+    if (p.quoins != null)             this.buildingQuoins            = p.quoins;
+    if (p.quoinStyle != null)         this.buildingQuoinStyle        = p.quoinStyle;
+    if (p.cornice != null)            this.buildingCornice           = p.cornice;
+    if (p.mullions != null)           this.buildingMullions          = p.mullions;
+    if (p.glassTransparent != null)   this.buildingGlassTransparent  = p.glassTransparent;
+    if (p.storefront != null)         this.buildingStorefront        = p.storefront;
+    if (p.shopBays != null)           this.buildingShopBays          = p.shopBays;
+    if (p.stallriser != null)         this.buildingStallriser        = p.stallriser;
+    if (p.transom != null)            this.buildingTransom           = p.transom;
+    if (p.shutter != null)            this.buildingShutter           = p.shutter;
+    if (p.awning != null)             this.buildingAwning            = p.awning;
+    if (p.awningStyle != null)        this.buildingAwningStyle       = p.awningStyle;
+    if (p.awningStripe != null)       this.buildingAwningStripe      = p.awningStripe;
+    if (p.noren != null)              this.buildingNoren             = p.noren;
+    if (p.recessedEntry != null)      this.buildingRecessedEntry     = p.recessedEntry;
+    if (p.rollerDoors != null)        this.buildingRollerDoors       = p.rollerDoors;
+    if (p.canopy != null)             this.buildingCanopy            = p.canopy;
+    if (p.lattice != null)            this.buildingLattice           = p.lattice;
+    if (p.doorStyle != null)          this.buildingDoorStyle         = p.doorStyle;
+    if (p.balconies != null)          this.buildingBalconies         = p.balconies;
+    if (p.julietBalconies != null)    this.buildingJulietBalconies   = p.julietBalconies;
+    if (p.julietScroll != null)       this.buildingJulietScroll      = p.julietScroll;
+    if (p.windowTrim != null)         this.buildingWindowTrim        = p.windowTrim;
+    if (p.ledges != null)             this.buildingLedges            = p.ledges;
+    if (p.fireEscape != null)         this.buildingFireEscape        = p.fireEscape;
+    if (p.downpipes != null)          this.buildingDownpipes         = p.downpipes;
+    if (p.wallUnits != null)          this.buildingWallUnits         = p.wallUnits;
+    if (p.roofStyle != null)          this.buildingRoofStyle         = p.roofStyle;
+    if (p.roofPitch != null)          this.buildingRoofPitch         = p.roofPitch;
+    if (p.deepEaves != null)          this.buildingDeepEaves         = p.deepEaves;
+    if (p.roofClutter != null)        this.buildingRoofClutter       = p.roofClutter;
+    if (p.roofPenthouse != null)      this.buildingRoofPenthouse     = p.roofPenthouse;
+    if (p.roofRailing != null)        this.buildingRoofRailing       = p.roofRailing;
+    if (p.roofGarden != null)         this.buildingRoofGarden        = p.roofGarden;
+    if (p.roofDishes != null)         this.buildingRoofDishes        = p.roofDishes;
+    if (p.roofVents != null)          this.buildingRoofVents         = p.roofVents;
+    if (p.helipad != null)            this.buildingHelipad           = p.helipad;
+    if (p.crown != null)              this.buildingCrown             = p.crown;
+    if (p.signage != null)            this.buildingSignage           = p.signage;
+    if (p.bladeSign != null)          this.buildingBladeSign         = p.bladeSign;
+    if (p.wrapSign != null)           this.buildingWrapSign          = p.wrapSign;
+    if (p.rooftopSign != null)        this.buildingRooftopSign       = p.rooftopSign;
+    if (p.ledScreen != null)          this.buildingLedScreen         = p.ledScreen;
+    if (p.neon != null)               this.buildingNeon              = p.neon;
+    const col = (v: unknown) => this._buildingColorToHex(v);
+    if (p.baseColor != null)          this.buildingBaseColor         = col(p.baseColor);
+    if (p.trimColor != null)          this.buildingTrimColor         = col(p.trimColor);
+    if (p.roofColor != null)          this.buildingRoofColor         = col(p.roofColor);
+    if (p.glassColor != null)         this.buildingGlassColor        = col(p.glassColor);
+    if (p.accentColor != null)        this.buildingAccentColor       = col(p.accentColor);
+    if (p.signColor != null)          this.buildingSignColor         = col(p.signColor);
+    if (p.storefrontColor != null)    this.buildingStorefrontColor   = col(p.storefrontColor);
+    if (p.awningColor != null)        this.buildingAwningColor       = col(p.awningColor);
+    if (p.doorColor != null)          this.buildingDoorColor         = col(p.doorColor);
+    if (p.doorFrameColor != null)     this.buildingDoorFrameColor    = col(p.doorFrameColor);
+    if (p.doorHandleColor != null)    this.buildingDoorHandleColor   = col(p.doorHandleColor);
+    if (p.julietColor != null)        this.buildingJulietColor       = col(p.julietColor);
+    if (p.windowTrimColor != null)    this.buildingWindowTrimColor   = col(p.windowTrimColor);
+    if (p.renderStyle != null)        this.buildingRenderStyle       = p.renderStyle;
+    if (p.nightWindows != null)       this.buildingNightWindows      = p.nightWindows;
+    if (p.baseHedge != null)          this.buildingBaseHedge         = p.baseHedge;
+    if (p.vines != null)              this.buildingVines             = p.vines;
+    if (p.windowBoxes != null)        this.buildingWindowBoxes       = p.windowBoxes;
+    if (p.basePlanters != null)       this.buildingBasePlanters      = p.basePlanters;
+    if (p.greeneryColor != null)      this.buildingGreeneryColor     = col(p.greeneryColor);
+    if (p.bloomColor != null)         this.buildingBloomColor        = col(p.bloomColor);
+    this.scene3dBuildingArchetypes = sm.buildingArchetypeNames3D?.() ?? [];
+    this._refreshBuildingScaleInfo();
+  }
+
+  scene3dApplyBuildingParam(field: string, value: unknown): void {
+    const v = (field.endsWith('Color') && typeof value === 'string')
+      ? (() => { const c = this._hexToRgba01(value); return [c.r, c.g, c.b]; })()
+      : value;
+    const sm = this.shapeManager as any;
+    if (this.scene3dEditBlockBuildingIndex !== null && this.scene3dEditBlockId) {
+      sm.setBlockBuildingParams3D?.(this.scene3dEditBlockId, this.scene3dEditBlockBuildingIndex, { [field]: v });
+      return;
+    }
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    sm.setBuildingParams3D?.(id, { [field]: v });
+  }
+
+  scene3dRandomizeBuildingSeed(): void {
+    this.buildingSeed = ((Math.random() * 9999) | 0) + 1;
+    this.scene3dApplyBuildingParam('seed', this.buildingSeed);
+  }
+
+  scene3dDeleteBuilding(): void {
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    (this.shapeManager as any).removeBuilding3D?.(id);
+    this.scene3dEditBuildingPanelOpen = false;
+    this.scene3dEditBuildingId = null;
+    this.scene3dSelectedMeshId = null;
+    this.scene3dSelectedIsBuilding = false;
+    this.scene3dRefreshMeshes();
+    this._updateGizmoPosition();
+  }
+
+  private _refreshBuildingScaleInfo(): void {
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    this.buildingScaleInfo = (this.shapeManager as any).getBuildingScaleInfo3D?.(id) ?? null;
+    if (this.buildingScaleInfo) this.buildingUnitsPerMetre = this.buildingScaleInfo.scale;
+  }
+
+  scene3dApplyBuildingScale(): void {
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    (this.shapeManager as any).setBuildingScale3D?.(id, this.buildingUnitsPerMetre);
+    this._refreshBuildingScaleInfo();
+  }
+
+  scene3dFrameBuilding(): void {
+    const id = this.scene3dEditBuildingId;
+    if (!id) return;
+    (this.shapeManager as any).frameBuilding3D?.(id);
+  }
+
+  // ── Foliage Creator ─────────────────────────────────────────────────────────
+
+  async scene3dAddFoliage(): Promise<void> {
+    const sm = this.shapeManager as any;
+    const result = await sm.createProceduralFoliage3D?.();
+    if (!result?.id) return;
+    this.scene3dRefreshMeshes();
+    this.scene3dSelectMesh(result.id);
+  }
+
+  scene3dToggleEditFoliagePanel(): void {
+    this.scene3dEditFoliagePanelOpen = !this.scene3dEditFoliagePanelOpen;
+    this._updateGizmoPosition();
+    if (this.scene3dEditFoliagePanelOpen) {
+      this.scene3dEditFoliageId = this.scene3dSelectedMeshId;
+      this._initFoliageParams();
+    }
+  }
+
+  private _initFoliageParams(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditFoliageId;
+    if (!id) return;
+    const p = sm.getFoliageParams3D?.(id);
+    if (!p) return;
+    const col = (v: unknown) => this._buildingColorToHex(v);
+    if (p.type != null)         this.foliageType         = p.type;
+    if (p.seed != null)         this.foliageSeed         = p.seed;
+    if (p.size != null)         this.foliageSize         = p.size;
+    if (p.width != null)        this.foliageWidth        = p.width;
+    if (p.density != null)      this.foliageDensity      = p.density;
+    if (p.render != null)       this.foliageRender       = p.render;
+    if (p.celShade != null)     this.foliageCelShade     = p.celShade;
+    if (p.bloom != null)        this.foliageBloom        = p.bloom;
+    if (p.potMaterial != null)  this.foliagePotMaterial  = p.potMaterial;
+    if (p.foliageColor != null) this.foliageColor        = col(p.foliageColor);
+    if (p.tipColor != null)     this.foliageTipColor     = col(p.tipColor);
+    if (p.bloomColor != null)   this.foliageBloomColor   = col(p.bloomColor);
+    if (p.potColor != null)     this.foliagePotColor     = col(p.potColor);
+    if (p.trunkColor != null)   this.foliageTrunkColor   = col(p.trunkColor);
+    if (p.bladeCurve != null)       this.bladeCurve           = p.bladeCurve;
+    if (p.bladeTwist != null)       this.bladeTwist           = p.bladeTwist;
+    if (p.bladeFold  != null)       this.bladeFold            = p.bladeFold;
+    if (p.bladeLod   != null)       this.bladeLod             = p.bladeLod;
+    if (p.bloomStart != null)       this.foliageBloomStart      = p.bloomStart;
+    if (p.bloomScaleCurve != null)  this.foliageBloomScaleCurve = p.bloomScaleCurve;
+    if (p.petalPitch != null)       this.foliagePetalPitch      = p.petalPitch;
+    if (p.petalShape != null)       this.foliagePetalShape      = p.petalShape;
+    if (p.branches != null)         this.foliageBranches        = p.branches;
+    if (p.flowerLod != null)        this.foliageFlowerLod       = p.flowerLod;
+    if (p.petalColor != null)       this.foliagePetalColor      = col(p.petalColor);
+    if (p.centerColor != null)      this.foliageCenterColor     = col(p.centerColor);
+    if (p.branchLevels != null)     this.branchLevels           = p.branchLevels;
+    if (p.branchGnarl != null)      this.branchGnarl            = p.branchGnarl;
+    if (p.branchUpBias != null)     this.branchUpBias           = p.branchUpBias;
+    if (p.stemCount != null)        this.foliageStemCount       = p.stemCount;
+    if (p.canopyIrregular != null)  this.canopyIrregular        = p.canopyIrregular;
+    if (p.leafGaps != null)         this.leafGaps               = p.leafGaps;
+    if (p.hedgeSprigs != null)      this.hedgeSprigs            = p.hedgeSprigs;
+    if (p.branchLod != null)        this.branchLod              = p.branchLod;
+    if (p.spill != null)            this.foliageSpill           = p.spill;
+    if (p.plantCount != null)       this.foliagePlantCount      = p.plantCount;
+    if (p.soilColor != null)        this.foliageSoilColor       = col(p.soilColor);
+    if (p.plantLod != null)         this.foliagePlantLod        = p.plantLod;
+    if (p.ivyMode != null)          this.ivyMode                = p.ivyMode;
+    if (p.areaWidth != null)        this.ivyAreaWidth           = p.areaWidth;
+    if (p.areaHeight != null)       this.ivyAreaHeight          = p.areaHeight;
+    if (p.leafDensity != null)      this.ivyLeafDensity         = p.leafDensity;
+    if (p.coverage != null)         this.ivyCoverage            = p.coverage;
+    if (p.growthBias != null)       this.ivyGrowthBias          = p.growthBias;
+    if (p.wander != null)           this.ivyWander              = p.wander;
+    if (p.stemColor != null)        this.ivyStemColor           = col(p.stemColor);
+    if (p.runnerLod != null)        this.ivyRunnerLod           = p.runnerLod;
+  }
+
+  scene3dApplyFoliageParam(field: string, value: unknown): void {
+    const id = this.scene3dEditFoliageId;
+    if (!id) return;
+    const v = (field.endsWith('Color') && typeof value === 'string')
+      ? (() => { const c = this._hexToRgba01(value); return [c.r, c.g, c.b]; })()
+      : value;
+    (this.shapeManager as any).setFoliageParams3D?.(id, { [field]: v });
+  }
+
+  scene3dRandomizeFoliageSeed(): void {
+    this.foliageSeed = ((Math.random() * 9999) | 0) + 1;
+    this.scene3dApplyFoliageParam('seed', this.foliageSeed);
+  }
+
+  scene3dDeleteFoliage(): void {
+    const id = this.scene3dEditFoliageId;
+    if (!id) return;
+    (this.shapeManager as any).removeFoliage3D?.(id);
+    this.scene3dEditFoliagePanelOpen = false;
+    this.scene3dEditFoliageId = null;
+    this.scene3dSelectedMeshId = null;
+    this.scene3dSelectedIsFoliage = false;
+    this.scene3dRefreshMeshes();
+    this._updateGizmoPosition();
+  }
+
+  // ── Decal tool ───────────────────────────────────────────────────────────────
+
+  scene3dToggleDecalTool(): void {
+    if (this.scene3dDecalToolActive) {
+      this.scene3dDecalToolActive = false;
+      (this.shapeManager as any).exitDecalPlaceMode3D?.();
+    } else {
+      this.scene3dDecalToolActive = true;
+      this._refreshDecalEphemeraCategories();
+    }
+  }
+
+  private _refreshDecalEphemeraCategories(): void {
+    const sm = this.shapeManager as any;
+    this.decalEphemeraCategories = sm.getEphemeraCategories?.() ?? [];
+    if (this.decalEphemeraCategories.length && !this.decalActiveCategoryId) {
+      this.selectDecalCategory(this.decalEphemeraCategories[0].id);
+    } else if (this.decalActiveCategoryId) {
+      this.selectDecalCategory(this.decalActiveCategoryId);
+    }
+  }
+
+  selectDecalCategory(id: string): void {
+    this.decalActiveCategoryId = id;
+    const sm = this.shapeManager as any;
+    this.decalEphemeraGenerators = sm.getEphemeraGeneratorsByCategory?.(id) ?? [];
+    if (this.decalEphemeraGenerators.length) {
+      this.selectDecalGenerator(this.decalEphemeraGenerators[0].typeId);
+    }
+  }
+
+  selectDecalGenerator(typeId: string): void {
+    this.decalActiveTypeId = typeId;
+    const sm = this.shapeManager as any;
+    const gen = sm.getEphemeraGenerator?.(typeId);
+    this.decalEphemeraSchema = gen?.getParamSchema?.() ?? [];
+    this.decalEphemeraParams = {};
+    for (const s of this.decalEphemeraSchema) {
+      this.decalEphemeraParams[s.key] = s.default;
+    }
+    if (this.scene3dDecalToolActive) this._enterDecalPlaceMode();
+  }
+
+  onDecalEphemeraParamChange(key: string, value: any, type: string): void {
+    this.decalEphemeraParams[key] = (type === 'range' || type === 'seed') ? +value : value;
+    if (this.scene3dDecalToolActive) this._enterDecalPlaceMode();
+  }
+
+  onDecalImageUpload(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.decalImageDataUrl = (e.target?.result as string) ?? '';
+      if (this.scene3dDecalToolActive) this._enterDecalPlaceMode();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  private _buildDecalSource(): { kind: 'ephemera'; typeId: string; params: Record<string, unknown> } | { kind: 'image'; dataUrl: string } | null {
+    if (this.decalSourceTab === 'ephemera') {
+      if (!this.decalActiveTypeId) return null;
+      return { kind: 'ephemera', typeId: this.decalActiveTypeId, params: { ...this.decalEphemeraParams } };
+    } else {
+      if (!this.decalImageDataUrl) return null;
+      return { kind: 'image', dataUrl: this.decalImageDataUrl };
+    }
+  }
+
+  private _decalMetresPerUnit(): number {
+    return (this.shapeManager as any).cityMetresPerUnit?.() ?? 15;
+  }
+
+  private _enterDecalPlaceMode(): void {
+    const source = this._buildDecalSource();
+    if (!source) return;
+    (this.shapeManager as any).enterDecalPlaceMode3D?.(source, {
+      size: this.decalSize,
+      rotation: this.decalRotation,
+      metresPerUnit: this._decalMetresPerUnit(),
+    });
+  }
+
+  scene3dUpdateDecalSize(): void {
+    const sm = this.shapeManager as any;
+    const mpu = this._decalMetresPerUnit();
+    if (this.scene3dDecalToolActive) {
+      sm.setDecalToolSize3D?.(this.decalSize, { metresPerUnit: mpu });
+    } else if (this.scene3dSelectedDecalId) {
+      sm.setDecalSize3D?.(this.scene3dSelectedDecalId, this.decalSize, { metresPerUnit: mpu });
+      this.scene3dMarkDirty();
+    }
+  }
+
+  scene3dUpdateDecalRotation(): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dDecalToolActive) {
+      sm.setDecalToolRotation3D?.(this.decalRotation);
+    } else if (this.scene3dSelectedDecalId) {
+      sm.setDecalRotation3D?.(this.scene3dSelectedDecalId, this.decalRotation);
+      this.scene3dMarkDirty();
+    }
+  }
+
+  scene3dDeleteDecal(): void {
+    if (!this.scene3dSelectedDecalId) return;
+    (this.shapeManager as any).removeDecal3D?.(this.scene3dSelectedDecalId);
+    this.scene3dSelectedIsDecal = false;
+    this.scene3dSelectedDecalId = null;
+    this.scene3dSelectedMeshId = null;
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dOutlinerDeleteDecal(id: string): void {
+    (this.shapeManager as any).removeDecal3D?.(id);
+    if (this.scene3dSelectedDecalId === id) {
+      this.scene3dSelectedIsDecal = false;
+      this.scene3dSelectedDecalId = null;
+      this.scene3dSelectedMeshId = null;
+    }
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  // ── Creator Panel (generic — vending / bike-rack / bollard / …) ─────────────
+
+  scene3dOpenCreator(typeId: string): void {
+    const sm = this.shapeManager as any;
+    this.activeCreatorTypeId = typeId;
+    this.creatorSchemaList = sm.creatorParamSchema3D?.(typeId) ?? [];
+    this.creatorParams = { ...(sm.creatorDefaults3D?.(typeId) ?? {}) };
+    const result = sm.createCreator3D?.(typeId);
+    this.activeCreatorId = result?.id ?? null;
+    if (this.activeCreatorId) {
+      sm.enterCreatorStage3D?.(this.activeCreatorId);
+    }
+    this.scene3dCreatorPanelOpen = true;
+    this.scene3dRefreshMeshes();
+    this._updateGizmoPosition();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dEditCreator(id: string): void {
+    const sm = this.shapeManager as any;
+    const typeId = sm.creatorTypeOf3D?.(id);
+    if (!typeId) return;
+    this.activeCreatorTypeId = typeId;
+    this.activeCreatorId = id;
+    this.creatorSchemaList = sm.creatorParamSchema3D?.(typeId) ?? [];
+    this.creatorParams = { ...(sm.getCreatorParams3D?.(id) ?? {}) };
+    sm.enterCreatorStage3D?.(id);
+    this.scene3dCreatorPanelOpen = true;
+    this._updateGizmoPosition();
+  }
+
+  scene3dCloseCreatorPanel(): void {
+    (this.shapeManager as any).exitCreatorStage3D?.();
+    this.scene3dCreatorPanelOpen = false;
+    this._updateGizmoPosition();
+    this.scene3dMarkDirty();
+  }
+
+  onCreatorParamChange(key: string, value: any, type: string): void {
+    this.creatorParams[key] = (type === 'range' || type === 'seed') ? +value : value;
+    if (this.activeCreatorId) {
+      (this.shapeManager as any).setCreatorParams3D?.(this.activeCreatorId, { [key]: value });
+      this.scene3dMarkDirty();
+    }
+  }
+
+  scene3dDeleteCreator(): void {
+    if (!this.activeCreatorId) return;
+    this._removeCreatorById(this.activeCreatorId);
+  }
+
+  scene3dOutlinerDeleteCreator(id: string): void {
+    this._removeCreatorById(id);
+  }
+
+  private _removeCreatorById(id: string): void {
+    const sm = this.shapeManager as any;
+    if (this.scene3dCreatorPanelOpen && this.activeCreatorId === id) {
+      sm.exitCreatorStage3D?.();
+      this.scene3dCreatorPanelOpen = false;
+    }
+    sm.removeCreator3D?.(id);
+    if (this.activeCreatorId === id) this.activeCreatorId = null;
+    this.scene3dRefreshMeshes();
+    this._updateGizmoPosition();
+    this.scene3dMarkDirty();
+  }
+
+  creatorGroups(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of this.creatorSchemaList) {
+      const g = s.group ?? '';
+      if (!seen.has(g)) { seen.add(g); out.push(g); }
+    }
+    return out;
+  }
+
+  schemaForGroup(group: string): any[] {
+    return this.creatorSchemaList.filter(s => (s.group ?? '') === group);
+  }
+
+  get scene3dSelectedIsCreator(): boolean {
+    return !!(this.scene3dSelectedMeshId && (this.shapeManager as any).isCreator3D?.(this.scene3dSelectedMeshId));
+  }
+
+  // ── Block Creator ─────────────────────────────────────────────────────────
+
+  async scene3dCreateBlock(): Promise<void> {
+    const sm = this.shapeManager as any;
+    const id = await sm.createBlock3D?.();
+    if (!id) return;
+    this.scene3dRefreshMeshes();
+    this.scene3dSelectMesh(id);
+  }
+
+  scene3dToggleEditBlockPanel(): void {
+    this.scene3dEditBlockPanelOpen = !this.scene3dEditBlockPanelOpen;
+    if (!this.scene3dEditBlockPanelOpen) {
+      this._exitBlockBuildingEdit();
+    } else {
+      this.scene3dEditBlockId = this.scene3dSelectedMeshId ?? null;
+      this._refreshBlockStats();
+    }
+    this._updateGizmoPosition();
+  }
+
+  private _refreshBlockStats(): void {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    this.blockStats = (this.shapeManager as any).getBlockStats3D?.(id) ?? null;
+    this._refreshBlockBuildingList();
+  }
+
+  private _refreshBlockBuildingList(): void {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    const list = (this.shapeManager as any).getBlockBuildings3D?.(id) ?? [];
+    this.blockBuildingList = list;
+    this.blockBuildingIndices = list.map((_: any, i: number) => i);
+  }
+
+  scene3dSelectBlockBuilding(index: number): void {
+    const blockId = this.scene3dEditBlockId;
+    if (!blockId) return;
+    this.scene3dEditBlockBuildingIndex = index;
+    this.scene3dEditBuildingId = blockId;
+    this._initBuildingParams();
+    this.scene3dEditBlockPanelOpen = false;
+    this.scene3dEditBuildingPanelOpen = true;
+    this._updateGizmoPosition();
+  }
+
+  scene3dBackToBlock(): void {
+    this._exitBlockBuildingEdit();
+    this.scene3dEditBlockPanelOpen = true;
+    this._refreshBlockStats();
+    this._updateGizmoPosition();
+  }
+
+  private _exitBlockBuildingEdit(): void {
+    if (this.scene3dEditBlockBuildingIndex !== null) {
+      this.scene3dEditBlockBuildingIndex = null;
+      this.scene3dEditBuildingId = null;
+      this.scene3dEditBuildingPanelOpen = false;
+    }
+  }
+
+  async scene3dAddBuildingToBlock(): Promise<void> {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    await (this.shapeManager as any).addBuildingToBlock3D?.(id,
+      { archetype: this.blockAddArchetype },
+      { x: this.blockAddX, z: this.blockAddZ, ry: this.blockAddRy }
+    );
+    this._refreshBlockStats();
+  }
+
+  async scene3dRemoveBuildingFromBlock(index: number): Promise<void> {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    if (this.scene3dEditBlockBuildingIndex === index) this._exitBlockBuildingEdit();
+    await (this.shapeManager as any).removeBlockBuilding3D?.(id, index);
+    this._refreshBlockStats();
+  }
+
+  scene3dApplyBlockScale(): void {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    (this.shapeManager as any).setBlockScale3D?.(id, this.blockScale);
+  }
+
+  scene3dDeleteBlock(): void {
+    const id = this.scene3dEditBlockId;
+    if (!id) return;
+    this._exitBlockBuildingEdit();
+    (this.shapeManager as any).removeBlock3D?.(id);
+    this.scene3dEditBlockPanelOpen = false;
+    this.scene3dEditBlockId = null;
+    this.scene3dSelectedIsBlock = false;
+    this.blockStats = null;
+    this.blockBuildingList = [];
+    this.blockBuildingIndices = [];
+    this.scene3dRefreshMeshes();
+    this._updateGizmoPosition();
   }
 
   scene3dToggleEditCharPanel(): void {
     this.scene3dEditCharPanelOpen = !this.scene3dEditCharPanelOpen;
+    this._updateGizmoPosition();
+    const sm = this.shapeManager as any;
     if (this.scene3dEditCharPanelOpen) {
       this.scene3dEditCharBodyId = this.scene3dSelectedMeshId;
       this._refreshFaceExpressions();
       this.scene3dInitBodyParams();
+      // Enable hair jiggle simulation while the character is being edited
+      if (this.scene3dEditCharBodyId) sm.setHairSimulation3D?.(this.scene3dEditCharBodyId, true);
     } else {
       if (this.eyeDrawMode) this.scene3dExitEyeDraw();
       if (this.scene3dClothingPaintActive) this.scene3dToggleClothingPaint(this.scene3dClothingPaintActive);
+      // Disable hair simulation when panel closes (idle characters cost 0 sims/frame)
+      if (this.scene3dEditCharBodyId) sm.setHairSimulation3D?.(this.scene3dEditCharBodyId, false);
     }
   }
 
@@ -2391,6 +4822,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.scene3dFaceBlinkMin  = face.blink.minSec ?? 2.5;
       this.scene3dFaceBlinkMax  = face.blink.maxSec ?? 6.0;
       this.scene3dFaceBlinkHold = face.blink.holdMs ?? 110;
+      this.scene3dAutoBlinkEnabled      = face.blink.enabled          ?? false;
+      this.scene3dAutoBlinkMinSec       = face.blink.minSec           ?? 2.5;
+      this.scene3dAutoBlinkMaxSec       = face.blink.maxSec           ?? 6.0;
+      this.scene3dAutoBlinkHoldMs       = face.blink.holdMs           ?? 110;
+      this.scene3dAutoBlinkDoubleProb   = Math.round((face.blink.doubleProbability ?? 0.15) * 100);
+      this.scene3dAutoBlinkDoubleGapMin = face.blink.doubleGapMinMs   ?? 150;
+      this.scene3dAutoBlinkDoubleGapMax = face.blink.doubleGapMaxMs   ?? 320;
     }
   }
 
@@ -2545,9 +4983,167 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
-    this.scene3dBodyParams = sm.getBodyParams3D?.(id) ?? { bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1 };
+    this.scene3dBodyParams = sm.getBodyParams3D?.(id) ?? {
+      height: 0.50, legLength: 1.00, limbThick: 0.85, torsoThick: 0.90, torsoLength: 1.00, headSize: 1.25,
+      bust: 1, waist: 0.90, hipWidth: 1, hipFront: 0.75, shoulderWidth: 1, buttSize: 1,
+    };
     const tone = sm.getSkinTone3D?.(id);
     if (tone) this.scene3dSkinTone = tone;
+    // Sync clothing + hair so the editor shows existing state after save/reload
+    const hair = sm.getHairParams3D?.(id);
+    if (hair) this.scene3dHairParams = hair;
+    this.scene3dTopPresets    = sm.getClothingPresetNames3D?.('top')    ?? [];
+    this.scene3dBottomPresets = sm.getClothingPresetNames3D?.('bottom') ?? [];
+    this.scene3dShoePresets   = sm.getClothingPresetNames3D?.('shoes')  ?? [];
+    this.scene3dTopParams         = sm.getClothingParams3D?.(id, 'top')         ?? null;
+    this.scene3dBottomParams      = sm.getClothingParams3D?.(id, 'bottom')      ?? null;
+    this.scene3dShoeParams        = sm.getClothingParams3D?.(id, 'shoes')       ?? null;
+    this.scene3dSockParams        = sm.getClothingParams3D?.(id, 'socks')       ?? null;
+    this.scene3dUndershirtParams  = sm.getClothingParams3D?.(id, 'undershirt')  ?? null;
+    this.scene3dUnderpantsParams  = sm.getClothingParams3D?.(id, 'underpants')  ?? null;
+    // Load existing patterns from params.pattern (persists through rebuilds)
+    for (const slot of ['top', 'bottom', 'shoes', 'socks', 'undershirt', 'underpants']) {
+      const slotParams = this._getClothingParamsBySlot(slot);
+      const p = slotParams?.pattern;
+      if (p?.mode) {
+        this.scene3dClothingPattern[slot] = {
+          mode: p.mode,
+          colorHex: typeof p.secondaryColor === 'string' ? p.secondaryColor : '#333333',
+          freq: p.freq ?? 10,
+          angleDeg: Math.round((p.angle ?? 0) * 180 / Math.PI),
+          scale: p.scale ?? 0.5,
+        };
+      } else {
+        this.scene3dClothingPattern[slot] = { mode: '', colorHex: '#333333', freq: 10, angleDeg: 0, scale: 0.5 };
+      }
+    }
+    this.scene3dRefreshAttachments();
+    // Default idle on so the character breathes in the standing preview
+    if (!this.scene3dIdleEnabled) {
+      this.scene3dIdleEnabled = true;
+      sm.setIdleAnimation3D?.(id, true);
+    }
+    this.scene3dLegIdleMode = sm.getLegIdleMode3D?.(id) ?? 'fk';
+  }
+
+  readonly scene3dPatternPresets = ['Pinstripe', 'Stripes', 'Diagonal', 'Polka Dots', 'Micro Dots', 'Argyle', 'Harlequin', 'Checkerboard', 'Gingham', 'Grid', 'Graph'];
+
+  private _getClothingParamsBySlot(slot: string): any {
+    if (slot === 'top') return this.scene3dTopParams;
+    if (slot === 'bottom') return this.scene3dBottomParams;
+    if (slot === 'shoes') return this.scene3dShoeParams;
+    if (slot === 'socks') return this.scene3dSockParams;
+    if (slot === 'undershirt') return this.scene3dUndershirtParams;
+    if (slot === 'underpants') return this.scene3dUnderpantsParams;
+    return null;
+  }
+
+  scene3dApplyPatternPreset(slot: string, presetName: string): void {
+    if (!presetName) return;
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    const params = this._getClothingParamsBySlot(slot);
+    if (!params) return;
+    const preset = sm.clothingPatternPreset3D?.(presetName);
+    if (!preset) return;
+    params.pattern = preset;
+    this.scene3dClothingPattern[slot] = {
+      mode: preset.mode ?? '',
+      colorHex: typeof preset.secondaryColor === 'string' ? preset.secondaryColor : '#333333',
+      freq: preset.freq ?? 10,
+      angleDeg: Math.round((preset.angle ?? 0) * 180 / Math.PI),
+      scale: preset.scale ?? 0.5,
+    };
+    this.scene3dClothingParamChanged(slot as any);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dApplyClothingPattern(slot: string): void {
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    const p = this.scene3dClothingPattern[slot];
+    if (!p) return;
+    const params = this._getClothingParamsBySlot(slot);
+    if (!params) return;
+    if (!p.mode) {
+      params.pattern = undefined;
+    } else {
+      params.pattern = {
+        mode: p.mode,
+        secondaryColor: p.colorHex,
+        freq: p.freq,
+        angle: p.angleDeg * Math.PI / 180,
+        scale: p.scale,
+        spacing: 0,
+      };
+    }
+    this.scene3dClothingParamChanged(slot as any);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleIdle(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId ?? this.scene3dSelectedMeshId;
+    if (!id) return;
+    this.scene3dIdleEnabled = !this.scene3dIdleEnabled;
+    sm.setIdleAnimation3D?.(id, this.scene3dIdleEnabled);
+    if (!this.scene3dIdleEnabled) {
+      this.scene3dIdleBreaksEnabled = false;
+      sm.setIdleBreaks3D?.(id, { enabled: false });
+    }
+  }
+
+  scene3dToggleIdleBreaks(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId ?? this.scene3dSelectedMeshId;
+    if (!id) return;
+    this.scene3dIdleBreaksEnabled = !this.scene3dIdleBreaksEnabled;
+    sm.setIdleBreaks3D?.(id, {
+      enabled: this.scene3dIdleBreaksEnabled,
+      minSec: this.scene3dIdleBreaksMinSec,
+      maxSec: this.scene3dIdleBreaksMaxSec,
+    });
+  }
+
+  scene3dApplySquashStretch(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId ?? this.scene3dSelectedMeshId;
+    if (!id) return;
+    sm.setSquashStretch3D?.(id, {
+      enabled:   this.scene3dSquashStretchEnabled,
+      intensity: this.scene3dSquashStretchIntensity,
+    });
+  }
+
+  scene3dSetLegIdleMode(mode: 'fk' | 'ik' | 'none'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId ?? this.scene3dSelectedMeshId;
+    if (!id) return;
+    this.scene3dLegIdleMode = mode;
+    sm.setLegIdleMode3D?.(id, mode);
+  }
+
+  scene3dApplyAutoBlink(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.setAutoBlink3D?.(id, {
+      enabled:           this.scene3dAutoBlinkEnabled,
+      minSec:            this.scene3dAutoBlinkMinSec,
+      maxSec:            this.scene3dAutoBlinkMaxSec,
+      holdMs:            this.scene3dAutoBlinkHoldMs,
+      doubleProbability: this.scene3dAutoBlinkDoubleProb / 100,
+      doubleGapMinMs:    this.scene3dAutoBlinkDoubleGapMin,
+      doubleGapMaxMs:    this.scene3dAutoBlinkDoubleGapMax,
+    });
+  }
+
+  scene3dInstallDefaultAnimations(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.installDefaultAnimations3D?.(id);
   }
 
   scene3dBodyParamChanged(): void {
@@ -2584,6 +5180,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sm.setHairParams3D?.(id, this.scene3dHairParams);
   }
 
+  scene3dSetHairMode(mode: 'chunky' | 'cards'): void {
+    if (!this.scene3dHairParams) return;
+    this.scene3dHairParams = { ...this.scene3dHairParams, hairMode: mode, ...(mode === 'cards' ? { cardifyCap: true } : {}) };
+    this.scene3dHairParamChanged();
+  }
+
   scene3dHairParamChanged(): void {
     clearTimeout(this._hairParamTimer);
     this._hairParamTimer = setTimeout(() => {
@@ -2602,7 +5204,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dHairParams = null;
   }
 
-  scene3dInitClothing(slot: 'top' | 'bottom'): void {
+  scene3dInitClothing(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
@@ -2611,15 +5213,43 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       const existing = sm.getClothingParams3D?.(id, 'top');
       this.scene3dTopParams = existing ?? { ...(sm.getDefaultClothingParams3D?.('top') ?? { slot: 'top' }), hemHeight: 0.65, gradient: true, trimWidth: 0.50, baseColor: '#419041', trimColor: '#315e31' };
       sm.setClothingParams3D?.(id, this.scene3dTopParams);
-    } else {
+    } else if (slot === 'bottom') {
       this.scene3dBottomPresets = sm.getClothingPresetNames3D?.('bottom') ?? [];
       const existing = sm.getClothingParams3D?.(id, 'bottom');
       this.scene3dBottomParams = existing ?? { ...(sm.getDefaultClothingParams3D?.('bottom') ?? { slot: 'bottom' }), bottomStyle: 'pants', waistWidth: 0.32, waistHeight: 0.50, length: 1.00, gradient: true, trimWidth: 0.50, baseColor: '#404763', trimColor: '#030407' };
       sm.setClothingParams3D?.(id, this.scene3dBottomParams);
+    } else if (slot === 'shoes') {
+      this.scene3dShoePresets = sm.getClothingPresetNames3D?.('shoes') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'shoes');
+      this.scene3dShoeParams = existing ?? (sm.getDefaultClothingParams3D?.('shoes') ?? { slot: 'shoes' });
+      sm.setClothingParams3D?.(id, this.scene3dShoeParams);
+    } else if (slot === 'socks') {
+      this.scene3dSockPresets = sm.getClothingPresetNames3D?.('socks') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'socks');
+      this.scene3dSockParams = existing ?? (sm.getDefaultClothingParams3D?.('socks') ?? { slot: 'socks' });
+      sm.setClothingParams3D?.(id, this.scene3dSockParams);
+    } else if (slot === 'undershirt') {
+      this.scene3dUndershirtPresets = sm.getClothingPresetNames3D?.('undershirt') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'undershirt');
+      this.scene3dUndershirtParams = existing ?? (sm.getDefaultClothingParams3D?.('undershirt') ?? { slot: 'undershirt' });
+      sm.setClothingParams3D?.(id, this.scene3dUndershirtParams);
+      const p = this.scene3dUndershirtParams?.pattern;
+      this.scene3dClothingPattern['undershirt'] = p?.mode
+        ? { mode: p.mode, colorHex: typeof p.secondaryColor === 'string' ? p.secondaryColor : '#f5e6d3', freq: p.freq ?? 12, angleDeg: Math.round((p.angle ?? 0) * 180 / Math.PI), scale: p.scale ?? 0.4 }
+        : { mode: '', colorHex: '#f5e6d3', freq: 12, angleDeg: 0, scale: 0.4 };
+    } else {
+      this.scene3dUnderpantsPresets = sm.getClothingPresetNames3D?.('underpants') ?? [];
+      const existing = sm.getClothingParams3D?.(id, 'underpants');
+      this.scene3dUnderpantsParams = existing ?? (sm.getDefaultClothingParams3D?.('underpants') ?? { slot: 'underpants' });
+      sm.setClothingParams3D?.(id, this.scene3dUnderpantsParams);
+      const p = this.scene3dUnderpantsParams?.pattern;
+      this.scene3dClothingPattern['underpants'] = p?.mode
+        ? { mode: p.mode, colorHex: typeof p.secondaryColor === 'string' ? p.secondaryColor : '#f5e6d3', freq: p.freq ?? 8, angleDeg: Math.round((p.angle ?? 0) * 180 / Math.PI), scale: p.scale ?? 0.5 }
+        : { mode: '', colorHex: '#f5e6d3', freq: 8, angleDeg: 0, scale: 0.5 };
     }
   }
 
-  scene3dClothingParamChanged(slot: 'top' | 'bottom'): void {
+  scene3dClothingParamChanged(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
     if (slot === 'top') {
       clearTimeout(this._clothingParamTopTimer);
       this._clothingParamTopTimer = setTimeout(() => {
@@ -2628,7 +5258,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         if (!id || !this.scene3dTopParams) return;
         sm.setClothingParams3D?.(id, this.scene3dTopParams);
       }, 10);
-    } else {
+    } else if (slot === 'bottom') {
       clearTimeout(this._clothingParamBottomTimer);
       this._clothingParamBottomTimer = setTimeout(() => {
         const sm = this.shapeManager as any;
@@ -2636,53 +5266,365 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         if (!id || !this.scene3dBottomParams) return;
         sm.setClothingParams3D?.(id, this.scene3dBottomParams);
       }, 10);
+    } else if (slot === 'shoes') {
+      clearTimeout(this._clothingParamShoesTimer);
+      this._clothingParamShoesTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dShoeParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dShoeParams);
+      }, 10);
+    } else if (slot === 'socks') {
+      clearTimeout(this._clothingParamSocksTimer);
+      this._clothingParamSocksTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dSockParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dSockParams);
+      }, 10);
+    } else if (slot === 'undershirt') {
+      clearTimeout(this._clothingParamUndershirtTimer);
+      this._clothingParamUndershirtTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dUndershirtParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dUndershirtParams);
+      }, 10);
+    } else {
+      clearTimeout(this._clothingParamUnderpantsTimer);
+      this._clothingParamUnderpantsTimer = setTimeout(() => {
+        const sm = this.shapeManager as any;
+        const id = this.scene3dEditCharBodyId;
+        if (!id || !this.scene3dUnderpantsParams) return;
+        sm.setClothingParams3D?.(id, this.scene3dUnderpantsParams);
+      }, 10);
     }
   }
 
-  scene3dApplyClothingPreset(slot: 'top' | 'bottom', name: string): void {
+  scene3dApplyClothingPreset(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants', name: string): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id || !name) return;
     const p = sm.getClothingPreset3D?.(slot, name);
     if (!p) return;
     if (slot === 'top') this.scene3dTopParams = p;
-    else this.scene3dBottomParams = p;
+    else if (slot === 'bottom') this.scene3dBottomParams = p;
+    else if (slot === 'shoes') this.scene3dShoeParams = p;
+    else if (slot === 'socks') this.scene3dSockParams = p;
+    else if (slot === 'undershirt') this.scene3dUndershirtParams = p;
+    else this.scene3dUnderpantsParams = p;
     sm.setClothingParams3D?.(id, p);
   }
 
-  scene3dRemoveClothing(slot: 'top' | 'bottom'): void {
+  scene3dRemoveClothing(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
     sm.removeClothing3D?.(id, slot);
     if (slot === 'top') this.scene3dTopParams = null;
-    else this.scene3dBottomParams = null;
+    else if (slot === 'bottom') this.scene3dBottomParams = null;
+    else if (slot === 'shoes') this.scene3dShoeParams = null;
+    else if (slot === 'socks') this.scene3dSockParams = null;
+    else if (slot === 'undershirt') this.scene3dUndershirtParams = null;
+    else this.scene3dUnderpantsParams = null;
   }
 
-  scene3dBakeClothing(slot: 'top' | 'bottom'): void {
+  scene3dBakeClothing(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
-    sm.bakeClothingToPart3D?.(id, slot, slot === 'top' ? 'Top 1' : 'Bottom 1');
+    const label = slot === 'top' ? 'Top 1' : slot === 'bottom' ? 'Bottom 1' : slot === 'shoes' ? 'Shoes 1' : slot === 'undershirt' ? 'Undershirt 1' : slot === 'underpants' ? 'Underpants 1' : 'Socks 1';
+    sm.bakeClothingToPart3D?.(id, slot, label);
   }
 
-  scene3dToggleClothingPaint(slot: 'top' | 'bottom'): void {
+  scene3dSetEraseStyle(style: 'burn' | 'clean' | 'cutout'): void {
+    this.scene3dEraseStyle = style;
+    (this.shapeManager as any).setGarmentEraseStyle3D?.(style);
+  }
+
+  scene3dToggleStats(): void {
+    this.scene3dStatsVisible = !this.scene3dStatsVisible;
+    if (this.scene3dStatsVisible) {
+      this.scene3dStats = (this.shapeManager as any).getRenderStats3D?.() ?? null;
+      this._statsInterval = setInterval(() => {
+        this.scene3dStats = (this.shapeManager as any).getRenderStats3D?.() ?? null;
+      }, 250);
+    } else {
+      clearInterval(this._statsInterval);
+      this._statsInterval = null;
+      this.scene3dStats = null;
+    }
+  }
+
+  scene3dStatsBudgetColor(tris: number): string {
+    if (tris < 100_000) return '#4caf50';
+    if (tris < 300_000) return '#ff9800';
+    return '#f44336';
+  }
+
+  scene3dRefreshAttachments(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.scene3dAttachmentTypes = sm.attachmentTypeNames3D?.() ?? ['chain', 'pocket', 'pendant', 'bracelet', 'watch', 'choker', 'clip', 'flower', 'loop', 'beltloop', 'button'];
+    this.scene3dAttachments = sm.listAttachments3D?.(id) ?? [];
+    // Recompute grouped view (stored property — never a getter, avoids change-detection loop)
+    const _groups = new Map<string, typeof this.scene3dAttachments>();
+    for (const a of this.scene3dAttachments) {
+      if (!_groups.has(a.type)) _groups.set(a.type, []);
+      _groups.get(a.type)!.push(a);
+      if (!(a.type in this.scene3dAccordionOpen)) this.scene3dAccordionOpen[a.type] = false;
+      if (!(a.id in this.scene3dCharmOpen)) this.scene3dCharmOpen[a.id] = false;
+    }
+    this.scene3dAttachmentsByType = Array.from(_groups.entries()).map(([type, items]) => ({ type, items }));
+    if (this.scene3dAttachmentTypes.length && !this.scene3dAttachmentTypes.includes(this.scene3dNewAttachmentType)) {
+      this.scene3dNewAttachmentType = this.scene3dAttachmentTypes[0];
+    }
+  }
+
+  private _scene3dLoopsCache: Array<{ id: string; type: string; params: any; placement: any }> | null = null;
+  private _scene3dLoopsRef: any[] | null = null;
+  get scene3dLoops(): Array<{ id: string; type: string; params: any; placement: any }> {
+    if (this._scene3dLoopsCache && this._scene3dLoopsRef === this.scene3dAttachments) {
+      return this._scene3dLoopsCache;
+    }
+    this._scene3dLoopsRef = this.scene3dAttachments;
+    this._scene3dLoopsCache = this.scene3dAttachments.filter(a => a.type === 'loop');
+    return this._scene3dLoopsCache;
+  }
+
+  private _scene3dCharBiasOptionsCache: Array<{ id: string; label: string }> | null = null;
+  private _scene3dCharBiasHierarchyRef: any[] | null = null;
+  get scene3dCharBiasOptions(): Array<{ id: string; label: string }> {
+    if (this._scene3dCharBiasOptionsCache && this._scene3dCharBiasHierarchyRef === this.scene3dHierarchy) {
+      return this._scene3dCharBiasOptionsCache;
+    }
+    this._scene3dCharBiasHierarchyRef = this.scene3dHierarchy;
+    const opts: Array<{ id: string; label: string }> = [];
+    let idx = 1;
+    for (const node of this.scene3dHierarchy) {
+      if (this.scene3dCharacterBodyIds.has(node.id)) {
+        opts.push({ id: node.id, label: `Character ${idx++}` });
+      }
+    }
+    this._scene3dCharBiasOptionsCache = opts;
+    return opts;
+  }
+
+  scene3dAddBeltLoops(count: number = 5): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.addBeltLoops3D?.(id, count);
+    this.scene3dRefreshAttachments();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dTogglePlacePick(): void {
+    if (this.scene3dPlacingCharmType) {
+      this.scene3dEndPlacePick();
+    } else {
+      this.scene3dStartPlacePick(this.scene3dNewAttachmentType);
+    }
+  }
+
+  scene3dStartPlacePick(type: string): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.scene3dPlacingCharmType = type;
+    this._showCharmPreview();
+    sm.beginAttachmentPlacePick3D?.(id, type, {
+      onPlaced: (placedId: string) => {
+        this.scene3dRefreshAttachments();
+        if (placedId) {
+          this.scene3dAccordionOpen[type] = true;
+          this.scene3dCharmOpen[placedId] = true;
+        }
+        this.scene3dMarkDirty();
+      },
+    });
+  }
+
+  scene3dEndPlacePick(): void {
+    if (!this.scene3dPlacingCharmType && !this.scene3dDrawingChain) return;
+    this.scene3dPlacingCharmType = null;
+    this.scene3dDrawingChain = false;
+    this.scene3dChainPickProgress = null;
+    (this.shapeManager as any).endAttachmentPlacePick3D?.();
+    this._hideCharmPreview();
+  }
+
+  scene3dToggleChainPick(): void {
+    if (this.scene3dDrawingChain || this.scene3dPlacingCharmType) {
+      this.scene3dEndPlacePick();
+      return;
+    }
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this._hideCharmPreview();
+    this.scene3dDrawingChain = true;
+    this.scene3dChainPickProgress = 'first';
+    sm.beginChainPick3D?.(id, {
+      onPlaced: (chainId: string) => {
+        this.scene3dDrawingChain = false;
+        this.scene3dChainPickProgress = null;
+        this.scene3dRefreshAttachments();
+        if (chainId) {
+          this.scene3dAccordionOpen['chain'] = true;
+          this.scene3dCharmOpen[chainId] = true;
+        }
+        this.scene3dMarkDirty();
+      },
+      onProgress: (p: 'first' | 'second') => {
+        this.scene3dChainPickProgress = p;
+      },
+    });
+  }
+
+  scene3dToggleCharSparkle(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.scene3dCharSparkle = !this.scene3dCharSparkle;
+    sm.setCharacterSparkle3D?.(id, this.scene3dCharSparkle, this.scene3dCharSparkleMode);
+  }
+
+  scene3dSetCharSparkleMode(mode: 'glint' | 'star'): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    this.scene3dCharSparkleMode = mode;
+    if (this.scene3dCharSparkle) {
+      sm.setCharacterSparkle3D?.(id, true, mode);
+    }
+  }
+
+  private _showCharmPreview(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id || !sm.showAttachmentPreview3D) return;
+    sm.showAttachmentPreview3D(id, this.scene3dNewAttachmentType);
+    this.scene3dPreviewActive = true;
+  }
+
+  private _hideCharmPreview(): void {
+    if (!this.scene3dPreviewActive) return;
+    (this.shapeManager as any).hideAttachmentPreview3D?.();
+    this.scene3dPreviewActive = false;
+  }
+
+  scene3dNewAttachmentTypeChanged(type: string): void {
+    this.scene3dNewAttachmentType = type;
+    if (this.scene3dPreviewActive) {
+      (this.shapeManager as any).updateAttachmentPreview3D?.(null, type);
+    }
+  }
+
+  scene3dAddAttachment(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    let newId: string | null = null;
+    if (this.scene3dPreviewActive) {
+      newId = sm.commitAttachmentPreview3D?.() ?? null;
+    } else {
+      let placement = sm.getDefaultAttachmentPlacement3D?.(this.scene3dNewAttachmentType);
+      let params    = sm.getDefaultAttachmentParams3D?.(this.scene3dNewAttachmentType);
+      if (this.scene3dNewAttachmentType === 'chain') {
+        placement = { ...placement, offset: [0, 0, 0.04] as [number,number,number], scale: 1.0 };
+        params = { ...params, chainMode: 'dangle', linkCount: 20, thickness: 0.0015, span: 0, sag: 0, metalness: 0.40, roughness: 0.28, sparkle: false };
+      }
+      if (this.scene3dNewAttachmentType === 'choker') {
+        params = { ...params, metalness: 1.0, roughness: 0.46, sparkle: false, position: 0.0, thickness: 0.001 };
+      }
+      if (this.scene3dNewAttachmentType === 'pocket') {
+        params = { ...params, width: 0.08, height: 0.09 };
+      }
+      if (this.scene3dNewAttachmentType === 'clip') {
+        params = { ...params, width: 0.02, height: 0.005, thickness: 0.002, metalness: 1.0, roughness: 0.50 };
+      }
+      if (this.scene3dNewAttachmentType === 'pendant') {
+        placement = { ...placement, offset: [0.04, 0.02, 0.01] as [number,number,number], scale: 1.25 };
+        params = { ...params, dropLength: 0.02, width: 0.01, thickness: 0.002, metalness: 1.0, roughness: 0.28, sparkle: false };
+      }
+      if (this.scene3dNewAttachmentType === 'watch') {
+        placement = { ...placement, joint: 'lowerarm_l' };
+        params = { ...params, position: 1.0, thickness: 0.001, width: 0.01, height: 0.01, metalness: 1.0, roughness: 0.28, sparkle: false };
+      }
+      if (this.scene3dNewAttachmentType === 'bracelet') {
+        placement = { ...placement, joint: 'lowerarm_l' };
+        params = { ...params, position: 0.80, thickness: 0.001, metalness: 1.0, roughness: 0.28, sparkle: false };
+      }
+      newId = sm.addAttachment3D?.(id, this.scene3dNewAttachmentType, placement, params) ?? null;
+    }
+    this.scene3dRefreshAttachments();
+    if (newId) {
+      this.scene3dAccordionOpen[this.scene3dNewAttachmentType] = true;
+      this.scene3dCharmOpen[newId] = true;
+    }
+    this.scene3dMarkDirty();
+    if (this.scene3dPlacingCharmType) this._showCharmPreview();
+  }
+
+  scene3dRemoveAttachment(attachId: string): void {
+    const sm = this.shapeManager as any;
+    sm.removeAttachment3D?.(attachId);
+    delete this.scene3dCharmOpen[attachId];
+    this.scene3dRefreshAttachments();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dRemoveAttachmentsByType(type: string): void {
+    const sm = this.shapeManager as any;
+    const ids = this.scene3dAttachments.filter(a => a.type === type).map(a => a.id);
+    for (const id of ids) {
+      sm.removeAttachment3D?.(id);
+      delete this.scene3dCharmOpen[id];
+    }
+    delete this.scene3dAccordionOpen[type];
+    this.scene3dRefreshAttachments();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dAttachmentParamChanged(attachId: string, params: any): void {
+    clearTimeout(this._attachmentParamTimers.get(attachId));
+    this._attachmentParamTimers.set(attachId, setTimeout(() => {
+      (this.shapeManager as any).setAttachmentParams3D?.(attachId, params);
+      this.scene3dMarkDirty();
+    }, 30));
+  }
+
+  scene3dSetAttachmentPlacement(attachId: string, field: string, value: any): void {
+    const a = this.scene3dAttachments.find(x => x.id === attachId);
+    if (!a) return;
+    if (field === 'joint') a.placement.joint = value;
+    else if (field === 'scale') a.placement.scale = +value;
+    else if (field === 'offsetX') a.placement.offset[0] = +value;
+    else if (field === 'offsetY') a.placement.offset[1] = +value;
+    else if (field === 'offsetZ') a.placement.offset[2] = +value;
+    (this.shapeManager as any).setAttachmentPlacement3D?.(attachId, a.placement);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleClothingPaint(slot: 'top' | 'bottom' | 'shoes' | 'socks'): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
 
     if (this.scene3dClothingPaintActive === slot) {
-      // Exit paint mode
-      const meshId = sm.getClothingMeshId3D?.(id, slot);
-      if (meshId) sm.exitUVPaintMode3D?.(meshId);
-      this.scene3dClothingPaintActive = null;
-      this.uvPaintMode = false;
+      // Exit paint mode — no-arg exit is idempotent, avoids wrong-mesh-ID pitfalls
       if (this.uvEditorOpen) this.closeUVEditor();
+      else {
+        sm.exitUVPaintMode3D?.();
+        this.scene3dClothingPaintActive = null;
+        this.uvPaintMode = false;
+      }
     } else {
       // Exit any active paint first
       if (this.scene3dClothingPaintActive) {
-        const prevMeshId = sm.getClothingMeshId3D?.(id, this.scene3dClothingPaintActive);
-        if (prevMeshId) sm.exitUVPaintMode3D?.(prevMeshId);
+        sm.exitUVPaintMode3D?.();
       }
       const meshId = sm.getClothingMeshId3D?.(id, slot);
       if (!meshId) return;
@@ -2694,21 +5636,60 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
   }
 
+  scene3dSetCharRimLight(on: boolean): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    sm.setCharacterRimLight3D?.(id, on);
+  }
+
+  scene3dExportCharacterPreset(): void {
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    const json = sm.exportCharacter3D?.(id);
+    if (!json) return;
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'character-preset.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async scene3dImportCharacterPreset(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const sm = this.shapeManager as any;
+    const id = this.scene3dEditCharBodyId;
+    if (!id) return;
+    await sm.importCharacter3D?.(id, text);
+    // Sync all UI panels from the freshly imported params
+    this.scene3dInitBodyParams();
+    const hair = sm.getHairParams3D?.(id);
+    if (hair) this.scene3dHairParams = hair;
+    this.scene3dTopParams    = sm.getClothingParams3D?.(id, 'top')    ?? this.scene3dTopParams;
+    this.scene3dBottomParams = sm.getClothingParams3D?.(id, 'bottom') ?? this.scene3dBottomParams;
+    this.scene3dShoeParams   = sm.getClothingParams3D?.(id, 'shoes')  ?? null;
+    this.scene3dSockParams   = sm.getClothingParams3D?.(id, 'socks')  ?? null;
+    const tone = sm.getSkinTone3D?.(id);
+    if (tone) this.scene3dSkinTone = tone;
+    (event.target as HTMLInputElement).value = '';
+  }
+
   scene3dSetCharRenderStyle(style: string): void {
     const sm = this.shapeManager as any;
     const id = this.scene3dEditCharBodyId;
     if (!id) return;
     this.charRenderStyle = style;
-    // Apply to all character parts
-    sm.setRenderStyle3D?.(id, style);
-    const hairId = sm.getHairMeshId3D?.(id);
-    if (hairId) sm.setRenderStyle3D?.(hairId, style);
-    const topId = sm.getClothingMeshId3D?.(id, 'top');
-    if (topId) sm.setRenderStyle3D?.(topId, style);
-    const bottomId = sm.getClothingMeshId3D?.(id, 'bottom');
-    if (bottomId) sm.setRenderStyle3D?.(bottomId, style);
-    const eyesId = sm.getEyesMeshId3D?.(id);
-    if (eyesId) sm.setRenderStyle3D?.(eyesId, style);
+    sm.setCharacterRenderStyle3D?.(id, style);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dSetRenderStyleAll(style: string): void {
+    (this.shapeManager as any).setRenderStyleAll3D?.(style);
+    this.scene3dMarkDirty();
   }
 
   private _charPartMeshId(part: string): string | null {
@@ -2720,6 +5701,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       case 'hair':   return sm.getHairMeshId3D?.(id) ?? null;
       case 'top':    return sm.getClothingMeshId3D?.(id, 'top') ?? null;
       case 'bottom': return sm.getClothingMeshId3D?.(id, 'bottom') ?? null;
+      case 'shoes':  return sm.getClothingMeshId3D?.(id, 'shoes') ?? null;
+      case 'socks':  return sm.getClothingMeshId3D?.(id, 'socks') ?? null;
       case 'eyes':   return sm.getEyesMeshId3D?.(id) ?? null;
       default:       return null;
     }
@@ -2752,7 +5735,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
     this.scene3dSelectedMeshId = id;
     // Reset per-mesh state so switching between mesh types clears the flags
+    this.scene3dSelectedMeshType = '';
     this.scene3dSelectedIsGroup = false;
+    this.scene3dSelectedIsBuilding = false;
+    this.scene3dSelectedIsPackage = false;
+    this.pkgSelectedId = null;
     this.scene3dIsArrayGroup = false;
     this.scene3dLinkedArrayCount = 0;
     this.scene3dInstanceOverrides = [];
@@ -2771,6 +5758,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dHtmlContent = '';
     const s3d = (this.shapeManager as any).scene3d;
     if (!s3d) return;
+    // City container thin-wrapper — O(1) path, no child iteration or mesh data loading
+    if (this.scene3dCityContainerId && id === this.scene3dCityContainerId) {
+      (this.shapeManager as any).world?.syncSelectionFromOutliner?.(id);
+      return;
+    }
     (this.shapeManager as any).setSelectedNode?.(id);
     // Detect array group before normal mesh loading — array groups use a separate panel
     if ((this.shapeManager as any).isArrayGroup3D?.(id)) {
@@ -2785,6 +5777,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dLinkedArrayCount = linkedGroups.length;
     const mesh = s3d.getMesh(id);
     if (mesh) {
+      this.scene3dSelectedMeshType = (mesh.type ?? '').toLowerCase();
       this.scene3dMeshPosX = mesh.x ?? mesh.position?.x ?? 0;
       this.scene3dMeshPosY = mesh.y ?? mesh.position?.y ?? 0;
       this.scene3dMeshPosZ = mesh.z ?? mesh.position?.z ?? 0;
@@ -2808,6 +5801,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.scene3dRenderStyle = (mesh.material?.renderStyle ?? 'default') as any;
       this.scene3dMeshRoughness = mesh.material?.roughness ?? 0.5;
       this.scene3dMeshMetalness = mesh.material?.metalness ?? 0.0;
+      this.scene3dMeshNoEnvReflection = mesh.material?.noEnvReflection ?? false;
+      this.scene3dMeshPlanarReflector = mesh.material?.planarReflector ?? false;
+      this.scene3dLoadSurfaces();
       // Load submesh slots
       const sm2 = this.shapeManager as any;
       this._scene3dReloadSubmeshes();
@@ -2934,12 +5930,55 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       const storedBuckets = this.scene3dAllGroupBuckets[id] ?? [];
       this.scene3dBucketSelections = storedBuckets.map(() => '');
     }
+    this.scene3dSelectedIsBuilding = !!(this.shapeManager as any).isProceduralBuilding3D?.(id);
+    if (!this.scene3dSelectedIsBuilding && this.scene3dEditBuildingPanelOpen) {
+      this.scene3dEditBuildingPanelOpen = false;
+      this._updateGizmoPosition();
+    } else if (this.scene3dSelectedIsBuilding && this.scene3dEditBuildingPanelOpen && this.scene3dEditBuildingId !== id) {
+      this.scene3dEditBuildingId = id;
+      this._initBuildingParams();
+    }
+    this.scene3dSelectedIsFoliage = !!(this.shapeManager as any).isProceduralFoliage3D?.(id);
+    if (!this.scene3dSelectedIsFoliage && this.scene3dEditFoliagePanelOpen) {
+      this.scene3dEditFoliagePanelOpen = false;
+      this._updateGizmoPosition();
+    } else if (this.scene3dSelectedIsFoliage && this.scene3dEditFoliagePanelOpen && this.scene3dEditFoliageId !== id) {
+      this.scene3dEditFoliageId = id;
+      this._initFoliageParams();
+    }
+    this.scene3dSelectedIsBlock = !!(this.shapeManager as any).isBlock3D?.(id);
+    if (!this.scene3dSelectedIsBlock && this.scene3dEditBlockPanelOpen) {
+      this.scene3dEditBlockPanelOpen = false;
+      this._updateGizmoPosition();
+    } else if (this.scene3dSelectedIsBlock && this.scene3dEditBlockPanelOpen && this.scene3dEditBlockId !== id) {
+      this.scene3dEditBlockId = id;
+      this._refreshBlockStats();
+    }
+    this.scene3dSelectedIsDecal = this.scene3dDecalIds.has(id) || !!(this.shapeManager as any).isDecal3D?.(id);
+    this.scene3dSelectedDecalId = this.scene3dSelectedIsDecal ? id : null;
+    if (this.scene3dSelectedIsDecal) {
+      const dp = (this.shapeManager as any).getDecalParams3D?.(id);
+      if (dp) {
+        if (dp.size != null) this.decalSize = dp.size;
+        if (dp.rotation != null) this.decalRotation = dp.rotation;
+      }
+    }
+    const _pkgNodeId = (this.shapeManager as any).packaging?.isPackageNode?.(id);
+    this.scene3dSelectedIsPackage = !!_pkgNodeId;
+    if (_pkgNodeId) this.pkgSelectedId = _pkgNodeId;
     this.scene3dSelectedIsCharacter = !!(this.shapeManager as any).isProceduralBody3D?.(id);
     if (!this.scene3dSelectedIsCharacter) {
       this.scene3dEditCharPanelOpen = false;
     } else if (this.scene3dEditCharPanelOpen && this.scene3dEditCharBodyId !== id) {
+      const prevCharId = this.scene3dEditCharBodyId;
       this.scene3dEditCharBodyId = id;
+      this.charSection = 'menu';
       this._refreshFaceExpressions();
+      this.scene3dInitBodyParams();
+      this.scene3dRefreshAttachments();
+      const sm2 = this.shapeManager as any;
+      if (prevCharId) sm2.setHairSimulation3D?.(prevCharId, false);
+      sm2.setHairSimulation3D?.(id, true);
     }
     this.scene3dRefreshKeyframeTracks();
   }
@@ -3351,6 +6390,19 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // 0b. UV Paint stamp mode — bake a decal into the mesh texture at the clicked surface point.
+    if (this.uvEditorOpen && this.uvStampActive && this.scene3dSelectedMeshId) {
+      const source = this._buildDecalSource();
+      if (source) {
+        sm.stampDecalAtScreen3D?.(
+          this.scene3dSelectedMeshId, source,
+          event.clientX, event.clientY, canvas.getBoundingClientRect(),
+          { size: this.uvStampSize, rotation: this.uvStampRotationRad }
+        );
+      }
+      return;
+    }
+
     // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
     if (this.scene3dIsRibbon && this.scene3dSelectedMeshId && this.scene3dRibbonShowHandles) {
       const cw = canvas.clientWidth || canvas.width;
@@ -3378,10 +6430,32 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const pickedId = picked?.meshId ?? picked?.id ?? picked?.nodeId ?? null;
     if (pickedId) {
       this.scene3dSelectMesh(pickedId);
+    } else {
+      // Clicked empty space — clear mesh selection and close char panel if open
+      if (this.scene3dSelectedMeshId) {
+        this.scene3dSelectedMeshId = null;
+        sm.setSelectedNode?.(null);
+      }
+      if (this.scene3dEditCharPanelOpen) {
+        const prevId = this.scene3dEditCharBodyId;
+        this.scene3dEditCharPanelOpen = false;
+        this.scene3dSelectedIsCharacter = false;
+        this.scene3dEditCharBodyId = null;
+        if (prevId) sm.setHairSimulation3D?.(prevId, false);
+        this.charSection = 'menu';
+      }
     }
   }
 
   scene3dCanvasPointerMove(event: PointerEvent): void {
+    if (this.scene3dWorldPanelOpen) {
+      const canvas = this.canvasRef?.nativeElement;
+      if (canvas) {
+        (this.shapeManager as any).world?.hoverLandmarkAtScreen?.(
+          event.clientX, event.clientY, canvas.getBoundingClientRect()
+        );
+      }
+    }
     if (this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart) {
       this._drawKnifePreview(this._knifeStart.x, this._knifeStart.y, event.offsetX, event.offsetY);
       return;
@@ -3398,6 +6472,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.scene3dRibbonControlPoints = data.controlPoints.map(
         (p: any) => ({ x: p.x ?? 0, y: p.y ?? 0, z: p.z ?? 0 })
       );
+    }
+  }
+
+  scene3dCanvasPointerLeave(): void {
+    if (this.scene3dWorldPanelOpen) {
+      (this.shapeManager as any).world?.clearLandmarkHover?.();
     }
   }
 
@@ -3580,6 +6660,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     (this.shapeManager as any).setHoveredMesh3D?.(id);
   }
 
+  trackByNodeId(_: number, node: any): string { return node.id; }
+
   scene3dApplyFrameLink(): void {
     const id = this.scene3dSelectedMeshId;
     if (!id) return;
@@ -3723,21 +6805,75 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dUpdateMeshRoughness(): void {
     if (!this.scene3dSelectedMeshId) return;
-    const sm = this.shapeManager as any;
-    const mesh = sm.scene3d?.getMesh?.(this.scene3dSelectedMeshId);
-    if (!mesh) return;
-    mesh.material = { ...(mesh.material ?? {}), roughness: this.scene3dMeshRoughness };
-    sm.scene3d?.updateMeshMaterial?.(this.scene3dSelectedMeshId, mesh.material);
+    (this.shapeManager as any).setMeshRoughness3D?.(this.scene3dSelectedMeshId, this.scene3dMeshRoughness);
     this.scene3dMarkDirty();
   }
 
   scene3dUpdateMeshMetalness(): void {
     if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setMeshMetalness3D?.(this.scene3dSelectedMeshId, this.scene3dMeshMetalness);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshNoEnvReflection(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setMeshNoEnvReflection3D?.(this.scene3dSelectedMeshId, this.scene3dMeshNoEnvReflection);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dUpdateMeshPlanarReflector(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    (this.shapeManager as any).setMeshPlanarReflector3D?.(this.scene3dSelectedMeshId, this.scene3dMeshPlanarReflector);
+    this.scene3dMarkDirty();
+  }
+
+  applyGroundMaterial(): void {
+    if (!this.scene3dSelectedMeshId) return;
+    const tint = this.hexToRgba01(this.groundTintHex);
+    const moss = this.hexToRgba01(this.groundMossTintHex);
+    const dirt = this.hexToRgba01(this.groundDirtTintHex);
+    const opts: any = {
+      surface: this.groundSurface,
+      tileMm: this.groundTileMm,
+      groutMm: this.groundGroutMm,
+      tint: [tint[0], tint[1], tint[2]],
+      extentMeters: this.groundExtentM,
+      weather: this.groundWeather,
+      mossTint: [moss[0], moss[1], moss[2]],
+      dirtTint: [dirt[0], dirt[1], dirt[2]],
+    };
+    if (this.groundSurface === 'radialMedallion') {
+      opts.wedges = this.groundWedges;
+      opts.ringMm = this.groundRingMm;
+    }
+    if (this.groundWearTrack) opts.wearPath = [0.5, 0.5, 0.25];
+    (this.shapeManager as any).applyGroundMaterial3D?.(this.scene3dSelectedMeshId, opts);
+    this.scene3dMarkDirty();
+  }
+
+  applyGroundScatter(): void {
+    if (!this.scene3dSelectedMeshId) return;
     const sm = this.shapeManager as any;
-    const mesh = sm.scene3d?.getMesh?.(this.scene3dSelectedMeshId);
-    if (!mesh) return;
-    mesh.material = { ...(mesh.material ?? {}), metalness: this.scene3dMeshMetalness };
-    sm.scene3d?.updateMeshMaterial?.(this.scene3dSelectedMeshId, mesh.material);
+    if (this.groundScatterGroupId) {
+      sm.clearGroundScatter3D?.(this.groundScatterGroupId);
+      this.groundScatterGroupId = null;
+    }
+    const groupId = sm.scatterOnGround3D?.(this.scene3dSelectedMeshId, {
+      flowers:   this.groundScatterFlowers,
+      pebbles:   this.groundScatterPebbles,
+      tallGrass: this.groundScatterTallGrass,
+      bushes:    this.groundScatterBushes,
+      rocks:     this.groundScatterRocks,
+      wearPath:  this.groundWearTrack ? [0.5, 0.5, 0.25] : null,
+    });
+    if (groupId) this.groundScatterGroupId = groupId;
+    this.scene3dMarkDirty();
+  }
+
+  clearGroundScatter(): void {
+    if (!this.groundScatterGroupId) return;
+    (this.shapeManager as any).clearGroundScatter3D?.(this.groundScatterGroupId);
+    this.groundScatterGroupId = null;
     this.scene3dMarkDirty();
   }
 
@@ -3805,9 +6941,42 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dMarkDirty();
   }
 
+  scene3dApplySSAO(): void {
+    const sm = this.shapeManager as any;
+    sm.scene3d?.setSSAO3D?.(this.scene3dSSAOEnabled, {
+      radius:          this.scene3dSSAORadius,
+      intensity:       this.scene3dSSAOIntensity,
+      power:           this.scene3dSSAOPower,
+      bias:            this.scene3dSSAOBias,
+      resolutionScale: this.scene3dSSAOResolutionScale,
+      samples:         this.scene3dSSAOSamples,
+    });
+    if (!this.scene3dSSAOEnabled && this.scene3dSSAODebug) {
+      this.scene3dSSAODebug = false;
+      sm.scene3d?.setSSAODebug3D?.(false);
+    }
+    this.scene3dMarkDirty();
+  }
+
+  scene3dToggleSSAODebug(on: boolean): void {
+    this.scene3dSSAODebug = on;
+    (this.shapeManager as any).scene3d?.setSSAODebug3D?.(on);
+    this.scene3dMarkDirty();
+  }
+
   scene3dDeleteMesh(id: string): void {
-    this._instanceGroupRemove(id);
-    (this.shapeManager as any).scene3d?.deleteMesh?.(id);
+    const sm = this.shapeManager as any;
+    if (this.scene3dCharacterBodyIds.has(id)) {
+      // deleteProceduralBody3D removes body + all parts + skeleton + clears rig maps atomically
+      sm.deleteProceduralBody3D?.(id);
+      if (this.scene3dEditCharBodyId === id) {
+        this.scene3dEditCharBodyId = null;
+        this.scene3dEditCharPanelOpen = false;
+      }
+    } else {
+      this._instanceGroupRemove(id);
+      sm.scene3d?.deleteMesh?.(id);
+    }
     this.scene3dRefreshMeshes();
     if (this.scene3dSelectedMeshId === id) {
       this.scene3dSelectedMeshId = this.scene3dMeshes[0]?.id ?? this.scene3dMeshes[0]?.nodeId ?? null;
@@ -3938,13 +7107,33 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   // ── Render style ──────────────────────────────────────────────────────────
-  scene3dRenderStyle: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud' = 'default';
+  scene3dRenderStyle: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud' | 'unlit' = 'default';
 
-  scene3dSetRenderStyle(style: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud'): void {
+  scene3dSetRenderStyle(style: 'default' | 'cel' | 'sketch' | 'ink' | 'gouraud' | 'unlit'): void {
     if (!this.scene3dSelectedMeshId) return;
     this.scene3dRenderStyle = style;
     (this.shapeManager as any).setRenderStyle3D?.(this.scene3dSelectedMeshId, style);
     this.scene3dMarkDirty();
+  }
+
+  // ── Procedural surface materials ──────────────────────────────────────────
+  scene3dSurfacesList: string[] = [];
+
+  scene3dLoadSurfaces(): void {
+    if (this.scene3dSurfacesList.length) return;
+    const list: string[] = (this.shapeManager as any).surfaceMaterials3D?.() ?? [];
+    this.scene3dSurfacesList = list;
+    if (list.length && !list.includes(this.groundSurface)) {
+      this.groundSurface = list[0];
+    }
+  }
+
+  scene3dFormatSurfaceName(s: string): string {
+    return s
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^\w/, c => c.toUpperCase())
+      .trim();
   }
 
   // ── Multi-material submesh slots ─────────────────────────────
@@ -4213,12 +7402,661 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sm.setGizmoMode3D?.(null);
     sm.enableArrayTool?.(this.scene3dArrayToolMode, this.scene3dArrayToolCount);
     if (this.scene3dArrayToolMode === 'radial') this._scene3dSyncRadialToolStrip();
+    this._updateGizmoPosition();
   }
 
   scene3dDeactivateArrayTool(): void {
     if (!this.scene3dArrayToolActive) return;
     this.scene3dArrayToolActive = false;
     (this.shapeManager as any).disableArrayTool?.();
+    this._updateGizmoPosition();
+  }
+
+  // ── World / City Tool ──────────────────────────────────────────────────────
+  openWorldPanel(): void {
+    this._exitAllScene3dModes();
+    this.scene3dWorldPanelOpen = true;
+    const sm = this.shapeManager as any;
+    if (this.worldHasWorld && sm.world?.hasWorld) {
+      sm.world?.enterCityMode();              // resume existing city, no regen
+    } else {
+      sm.world?.enterCityMode(this._worldParams());  // fresh city
+      this.worldHasWorld = true;
+      this.worldRefreshRegions();
+    }
+    this.worldInitGradeKeys();
+    const overrideFlag = sm.world?.overrideGlobalLighting;
+    if (overrideFlag != null) this.worldOverrideGlobalLighting = overrideFlag;
+    this._updateGizmoPosition();
+  }
+
+  closeWorldPanel(): void {
+    this.scene3dWorldPanelOpen = false;
+    (this.shapeManager as any).world?.exitCityMode();
+    this._updateGizmoPosition();
+  }
+
+  // ── Package Creator ──────────────────────────────────────────────────────────
+
+  // 3D = no pane; split/2d = pane mounted in the subpanel canvas
+  pkgViewMode: '3d' | 'split' | '2d' = '3d';
+
+  openPkgCreator(packageId?: string | null): void {
+    this._exitAllScene3dModes();
+    this.scene3dPkgCreatorOpen = true;
+    this.pkgViewMode = '3d';
+    const sm = this.shapeManager as any;
+    const params: any = { width: this.pkgWidth, height: this.pkgHeight, depth: this.pkgDepth, bleed: this.pkgBleed };
+    const opts: any = { params };
+    if (packageId) {
+      opts.packageId = packageId;
+    } else {
+      opts.style = this.pkgStyle;
+      this._applyStyleParams(params);
+    }
+    const st = sm.packaging?.enterCreatorMode(opts);
+    if (st?.packageId) {
+      this.pkgCreatorId = st.packageId;
+      this.pkgFoldAmount = st.foldAmount ?? 0;
+      if (st.style) this.pkgStyle = st.style;
+      const preset = sm.packaging?.getBoardPreset?.(st.packageId);
+      if (preset) this.pkgBoardPreset = preset;
+      const stageBg = sm.packaging?.getStageBackground?.();
+      if (stageBg?.mode) this.pkgStageMode = stageBg.mode;
+      this._refreshPkgLayerStack();
+    }
+    this._updateGizmoPosition();
+  }
+
+  closePkgCreator(): void {
+    this.scene3dPkgCreatorOpen = false;
+    this.pkgViewMode = '3d';
+    this.pkgLayerStack = [];
+    this.onVectorLayerSelected(null);
+    const sm = this.shapeManager as any;
+    sm.packaging?.exitCreatorMode();
+    this._pkgDielinePane = null;
+    if (this._pkgFoldRaf != null) { cancelAnimationFrame(this._pkgFoldRaf); this._pkgFoldRaf = undefined; }
+    this._updateGizmoPosition();
+  }
+
+  pkgSetViewMode(mode: '3d' | 'split' | '2d'): void {
+    this.pkgViewMode = mode;
+    const sm = this.shapeManager as any;
+    if (mode === '3d') {
+      sm.packaging?.detachDielinePane?.();
+      this._pkgDielinePane = null;
+    } else if (!this._pkgDielinePane) {
+      // Canvas just appeared in the DOM — attach fresh
+      setTimeout(() => this._attachDielinePane(), 0);
+    } else {
+      // Mode switched but pane already attached; canvas resized → redraw overlay
+      setTimeout(() => this._drawDielinePaneGuides(), 0);
+    }
+  }
+
+  pkgDimChanged(): void {
+    if (this._pkgDimDebounce) clearTimeout(this._pkgDimDebounce);
+    this._pkgDimDebounce = setTimeout(() => {
+      if (!this.pkgCreatorId) return;
+      const params: any = { width: this.pkgWidth, height: this.pkgHeight, depth: this.pkgDepth, bleed: this.pkgBleed };
+      this._applyStyleParams(params);
+      const s = (this.shapeManager as any).packaging?.setDimensions(this.pkgCreatorId, params);
+      if (s?.id) this.pkgCreatorId = s.id;
+      this._drawDielinePaneGuides();
+    }, 40);
+  }
+
+  private _applyStyleParams(params: any): void {
+    if (this.pkgStyle === 'tuckEnd') {
+      params.tuckStyle = this.pkgTuckStyle;
+    } else if (this.pkgStyle === 'rollEndMailer') {
+      params.lockTabs = this.pkgLockTabs;
+      params.restOpenAmount = this.pkgRestOpenAmount;
+    } else if (this.pkgStyle === 'rigidTwoPiece') {
+      if (this.pkgLidDepth > 0) params.lidDepth = this.pkgLidDepth;
+      params.boardThickness = this.pkgBoardThickness;
+    }
+  }
+
+  pkgFold(): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.fold(this.pkgCreatorId);
+    this._pkgSyncFoldTween();
+  }
+
+  pkgUnfold(): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.unfold(this.pkgCreatorId);
+    this._pkgSyncFoldTween();
+  }
+
+  pkgFoldScrub(): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.setFoldAmount(this.pkgCreatorId, this.pkgFoldAmount);
+  }
+
+  private _pkgSyncFoldTween(): void {
+    if (this._pkgFoldRaf != null) cancelAnimationFrame(this._pkgFoldRaf);
+    const tick = () => {
+      const st = (this.shapeManager as any).packaging?.get?.(this.pkgCreatorId!);
+      if (st != null) this.pkgFoldAmount = st.foldAmount;
+      const settled = Math.abs(this.pkgFoldAmount - Math.round(this.pkgFoldAmount)) < 0.002;
+      this._pkgFoldRaf = settled ? undefined : requestAnimationFrame(tick);
+    };
+    this._pkgFoldRaf = requestAnimationFrame(tick);
+  }
+
+  async pkgExportDieline(): Promise<void> {
+    if (!this.pkgCreatorId) return;
+    const blob = await (this.shapeManager as any).packaging?.exportDielinePng?.(this.pkgCreatorId);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dieline.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  scene3dDeletePackage(id: string): void {
+    const sm = this.shapeManager as any;
+    if (this.pkgCreatorId === id && this.scene3dPkgCreatorOpen) this.closePkgCreator();
+    sm.scene3d?.deleteMesh?.(id);
+    this.scene3dPackageIds.delete(id);
+    if (this.scene3dSelectedMeshId === id) this.scene3dSelectedMeshId = null;
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dOutlinerDeleteCDKit(id: string): void {
+    const sm = this.shapeManager as any;
+    if (this.cdKitRootId === id) {
+      sm.exitCDDesigner3D?.();
+      this.cdDesignerActive = false;
+      this.cdKitRootId = null;
+    }
+    sm.deleteCDKit3D?.(id);
+    this.scene3dCDKitIds.delete(id);
+    if (this.scene3dSelectedMeshId === id) this.scene3dSelectedMeshId = null;
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  scene3dAddPackage(): void {
+    const sm = this.shapeManager as any;
+    if (!sm.packaging) return;
+    const params: any = { width: this.pkgWidth, height: this.pkgHeight, depth: this.pkgDepth, bleed: this.pkgBleed };
+    this._applyStyleParams(params);
+    const st = sm.packaging.addPackage?.(params, this.pkgStyle);
+    if (st?.id) {
+      this.scene3dRefreshMeshes();
+      this.scene3dSelectMesh(st.id);
+    }
+  }
+
+  pkgToggleGuide(type: string, on: boolean): void {
+    on ? this.pkgGuideTypes.add(type) : this.pkgGuideTypes.delete(type);
+    this._drawDielinePaneGuides();
+  }
+
+  // ── Package layer stack (§0e) ────────────────────────────────────────────
+
+  private _refreshPkgLayerStack(): void {
+    if (!this.pkgCreatorId) { this.pkgLayerStack = []; return; }
+    const stack: any[] = (this.shapeManager as any).packaging?.getLayerStack?.(this.pkgCreatorId) ?? [];
+    this.pkgLayerStack = [...stack].reverse(); // API returns bottom→top; UI shows top→bottom
+  }
+
+  pkgAddLayer(): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.addLayer?.(this.pkgCreatorId);
+    this._refreshPkgLayerStack();
+  }
+
+  pkgAddVectorLayer(): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.addVectorLayer?.(this.pkgCreatorId);
+    this._refreshPkgLayerStack();
+  }
+
+  pkgSetActiveLayer(layerId: string): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.setActiveLayer?.(this.pkgCreatorId, layerId);
+    this._refreshPkgLayerStack();
+    // Wire the active layer into the ephemera/vector system
+    const active = this.pkgLayerStack.find(l => l.layerId === layerId);
+    this.onVectorLayerSelected(active?.kind === 'vector' ? layerId : null);
+  }
+
+  pkgSetLayerVisible(layerId: string, visible: boolean): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.setLayerVisible?.(this.pkgCreatorId, layerId, visible);
+    this._refreshPkgLayerStack();
+  }
+
+  pkgSetLayerOpacity(layerId: string, opacity: number, commit = true): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.setLayerOpacity?.(this.pkgCreatorId, layerId, opacity);
+    if (commit) this._refreshPkgLayerStack();
+  }
+
+  pkgRemoveLayer(layerId: string): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.removeLayer?.(this.pkgCreatorId, layerId);
+    this._refreshPkgLayerStack();
+  }
+
+  pkgReorderLayer(layerId: string, toIndex: number): void {
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.reorderLayer?.(this.pkgCreatorId, layerId, toIndex);
+    this._refreshPkgLayerStack();
+  }
+
+  pkgSetStyle(style: string): void {
+    this.pkgStyle = style;
+    // If creator is open, apply the style change to the live box immediately.
+    if (!this.pkgCreatorId || !this.scene3dPkgCreatorOpen) return;
+    const s = (this.shapeManager as any).packaging?.setStyle?.(this.pkgCreatorId, style);
+    if (s?.id) {
+      this.pkgCreatorId = s.id;
+      this._refreshPkgLayerStack();
+      this._drawDielinePaneGuides();
+    }
+  }
+
+  pkgSetBoardPreset(preset: 'white' | 'kraft'): void {
+    this.pkgBoardPreset = preset;
+    if (!this.pkgCreatorId) return;
+    (this.shapeManager as any).packaging?.setBoardPreset?.(this.pkgCreatorId, preset);
+  }
+
+  pkgSetStageMode(mode: string): void {
+    this.pkgStageMode = mode;
+    (this.shapeManager as any).packaging?.setStageBackground?.({ mode });
+  }
+
+  get pkgRasterLayerCount(): number {
+    return this.pkgLayerStack.filter(l => l.kind === 'raster').length;
+  }
+
+  /** True when a raster layer is active (paint mode); false when a vector layer is active (place mode). */
+  get pkgIsActivePaintable(): boolean {
+    return (this.shapeManager as any).packaging?.isActivePaintable?.() ?? true;
+  }
+
+  private _attachDielinePane(): void {
+    const sm = this.shapeManager as any;
+    if (!sm.packaging) return;
+    const paneCanvas = this.pkgDiePaneRef?.nativeElement;
+    if (!paneCanvas) return;
+    const renderer = sm.createUVCanvasRenderer?.(paneCanvas);
+    if (!renderer) return;
+    const pane = sm.packaging.attachDielinePane?.(renderer);
+    if (!pane) return;
+    this._pkgDielinePane = pane;
+    // Salsa fires onPaneResize after its internal ResizeObserver re-syncs the backing store;
+    // redraw our overlay there so guide coordinates are always in the new mapping.
+    pane.onPaneResize = () => this._drawDielinePaneGuides();
+    this._drawDielinePaneGuides();
+  }
+
+  private _drawDielinePaneGuides(): void {
+    const pane = this._pkgDielinePane;
+    const guideCanvas = this.pkgDieGuideRef?.nativeElement;
+    const paneEl = this.pkgDiePaneRef?.nativeElement;
+    if (!pane || !guideCanvas || !paneEl) return;
+    // Match guide canvas backing store to the pane canvas (uvToCanvas returns backing-store px)
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = paneEl.clientWidth;
+    const cssH = paneEl.clientHeight;
+    if (!cssW || !cssH) return;
+    const physW = Math.round(cssW * dpr);
+    const physH = Math.round(cssH * dpr);
+    guideCanvas.width  = physW;
+    guideCanvas.height = physH;
+    guideCanvas.style.width  = cssW + 'px';
+    guideCanvas.style.height = cssH + 'px';
+    const ctx = guideCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, physW, physH);
+
+    // Dim-outside-the-net: fill the texture area minus each panel rect (evenodd)
+    const panels: any[] = pane.panels ?? [];
+    if (panels.length) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      const [bx0, by0] = pane.uvToCanvas(0, 0);
+      const [bx1, by1] = pane.uvToCanvas(1, 1);
+      ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+      for (const p of panels) {
+        const r = p.uvRect;
+        const [x0, y0] = pane.uvToCanvas(r.u0, r.v0);
+        const [x1, y1] = pane.uvToCanvas(r.u1, r.v1);
+        ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      }
+      ctx.fill('evenodd');
+      ctx.restore();
+    }
+
+    // Guide lines (types filtered by user toggles)
+    const guides: any[] = pane.guides ?? [];
+    for (const g of guides) {
+      if (!this.pkgGuideTypes.has(g.type)) continue;
+      ctx.strokeStyle = g.color ?? '#888888';
+      ctx.lineWidth = g.type === 'panel' ? dpr : 2 * dpr;
+      ctx.setLineDash(g.type === 'fold' ? [6 * dpr, 4 * dpr] : []);
+      ctx.globalAlpha = g.type === 'panel' ? 0.5 : 1;
+      ctx.beginPath();
+      for (const [a, b] of (g.segments ?? [])) {
+        const [x0, y0] = pane.uvToCanvas(a[0] / pane.canvasWidth, a[1] / pane.canvasHeight);
+        const [x1, y1] = pane.uvToCanvas(b[0] / pane.canvasWidth, b[1] / pane.canvasHeight);
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Panel labels centred on each panel rect
+    if (panels.length) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${11 * dpr}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const p of panels) {
+        const r = p.uvRect;
+        const [cx, cy] = pane.uvToCanvas((r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2);
+        ctx.fillText(p.label, cx, cy);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private _worldParams(): Record<string, unknown> {
+    const p: Record<string, unknown> = {
+      seed: this.worldSeed,
+      border: this.worldBorder,
+      radius: this.worldRadius,
+      pattern: this.worldPattern,
+      streetWidth: this.worldStreetWidth,
+      plazaRadius: this.worldPlazaRadius,
+      lotsRadial: this.worldLotsRadial,
+      lotsAngular: this.worldLotsAngular,
+      parkChance: this.worldParkChance,
+      waterChance: this.worldWaterChance,
+      elevation: this.worldElevation,
+      warp: this.worldWarp,
+      clouds: this.worldClouds,
+      cloudDensity: this.worldCloudDensity,
+      holograms: this.worldHolograms,
+      sidewalks: this.worldSidewalks,
+      roadPaint: this.worldRoadPaint,
+      streetLights: this.worldStreetLights,
+      trafficLights: this.worldTrafficLights,
+      cornerStyle: this.worldCornerStyle,
+      roofStyle: this.worldRoofStyle,
+      signage: this.worldSignage,
+      landmarks: this.worldLandmarks,
+      awnings: this.worldAwnings,
+      streetFurniture: this.worldStreetFurniture,
+      powerLines: this.worldPowerLines,
+      parkedCars: this.worldParkedCars,
+      nightMode: this.worldNightMode,
+      streetTrees: this.worldStreetTrees,
+      bicycles: this.worldBicycles,
+      lanterns: this.worldLanterns,
+      railway: this.worldRailway,
+      rooftops: this.worldRooftops,
+      facadeDetail: this.worldFacadeDetail,
+      detailedBuildings: this.worldDetailedBuildings,
+      pedestrians: this.worldPedestrians,
+      pedestrianDensity: this.worldPedestrianDensity,
+      fog: this.worldFog,
+      palette: this.worldPalette,
+      leafColor: this.worldLeafColor !== '#ffffff' ? this.worldLeafColor : undefined,
+      leafColorVar: this.worldLeafColorVar,
+      traffic: this.worldTrafficRunning,
+      weather: this.worldWeather,
+      worldMode: this.worldMode,
+      tileRadius: this.worldTileRadius,
+      tileDetail: this.worldTileDetail,
+      voidGrid: this.worldVoidGrid,
+      borderGlow: this.worldBorderGlow,
+      terrainApron: this.worldTerrainApron,
+      voidExtent: this.worldVoidExtent,
+      voidLineWidth: this.worldVoidLineWidth,
+      borderGlowHeight: this.worldBorderGlowHeight,
+    };
+    if (this.worldPattern === 'radial') {
+      p['spokeCount'] = this.worldSpokeCount;
+      p['ringCount'] = this.worldRingCount;
+    } else {
+      p['gridCols'] = this.worldGridCols;
+      p['gridRows'] = this.worldGridRows;
+      p['junctionVariety'] = this.worldJunctionVariety;
+      p['terraces'] = this.worldTerraces;
+      p['shotengai'] = this.worldShotengai;
+    }
+    return p;
+  }
+
+  worldGenerate(): void {
+    // Re-enters the mode → reframes the camera. Use for Generate button.
+    const sm = this.shapeManager as any;
+    sm.world?.enterCityMode(this._worldParams());
+    this.worldHasWorld = true;
+    this.worldEnabledRegions = null;
+    this.worldRefreshRegions();
+    this.scene3dMarkDirty();
+  }
+
+  worldRefreshRegions(): void {
+    const regions = (this.shapeManager as any).world?.regions;
+    this.worldRegions = Array.isArray(regions) ? regions : [];
+    this.worldEnabledRegions = null;
+  }
+
+  worldToggleRegion(id: number): void {
+    const sm = this.shapeManager as any;
+    sm.world?.toggleRegion(id);
+    const active = sm.world?.activeRegions;
+    this.worldEnabledRegions = Array.isArray(active) ? active : null;
+    this.scene3dMarkDirty();
+  }
+
+  worldEnableAllRegions(): void {
+    const sm = this.shapeManager as any;
+    sm.world?.setActiveRegions(null);
+    this.worldEnabledRegions = null;
+    this.scene3dMarkDirty();
+  }
+
+  worldSetTimeOfDay(t: number): void {
+    this.worldTimeOfDay = t;
+    (this.shapeManager as any).world?.setTimeOfDay(t);
+  }
+
+  worldToggleDayCycle(): void {
+    const sm = this.shapeManager as any;
+    if (this.worldDayCyclePlaying) {
+      sm.world?.stopDayCycle();
+      this.worldDayCyclePlaying = false;
+    } else {
+      sm.world?.playDayCycle(this.worldDayCycleSec);
+      this.worldDayCyclePlaying = true;
+    }
+  }
+
+  worldApplyCycleSpeed(): void {
+    if (!this.worldDayCyclePlaying) return;
+    const sm = this.shapeManager as any;
+    sm.world?.stopDayCycle();
+    sm.world?.playDayCycle(this.worldDayCycleSec);
+  }
+
+  worldSetRenderStyle(style: string | null): void {
+    this.worldRenderStyle = style;
+    (this.shapeManager as any).world?.setRenderStyle(style);
+  }
+
+  worldInitGradeKeys(): void {
+    const keys = (this.shapeManager as any).world?.timeGradeKeys;
+    if (keys) {
+      this.worldGradeKeys = {
+        night: { ...this.worldGradeKeys['night'], ...(keys['night'] ?? {}) },
+        dawn:  { ...this.worldGradeKeys['dawn'],  ...(keys['dawn']  ?? {}) },
+        noon:  { ...this.worldGradeKeys['noon'],  ...(keys['noon']  ?? {}) },
+        dusk:  { ...this.worldGradeKeys['dusk'],  ...(keys['dusk']  ?? {}) },
+      };
+    }
+  }
+
+  worldSetCinematicGrade(on: boolean): void {
+    this.worldCinematicGrade = on;
+    (this.shapeManager as any).world?.setCinematicGrade(on);
+  }
+
+  worldSetOverrideLighting(on: boolean): void {
+    this.worldOverrideGlobalLighting = on;
+    (this.shapeManager as any).world?.setOverrideGlobalLighting(on);
+  }
+
+  worldSetGradeKey(field: string, value: number): void {
+    const phase = this.worldGradePhase;
+    this.worldGradeKeys = {
+      ...this.worldGradeKeys,
+      [phase]: { ...this.worldGradeKeys[phase], [field]: value },
+    };
+    (this.shapeManager as any).world?.setTimeGradeKey(phase, { [field]: value });
+  }
+
+  worldApplyStyle(name: string): void {
+    const sm = this.shapeManager as any;
+    sm.world?.applyStyle(name);
+    // Sync sliders back from the pack's merged params
+    const p = sm.world?.params;
+    if (!p) return;
+    if (p.border != null) this.worldBorder = p.border;
+    if (p.pattern != null) this.worldPattern = p.pattern;
+    if (p.seed != null) this.worldSeed = p.seed;
+    if (p.radius != null) this.worldRadius = p.radius;
+    if (p.elevation != null) this.worldElevation = p.elevation;
+    if (p.warp != null) this.worldWarp = p.warp;
+    if (p.palette != null) this.worldPalette = p.palette;
+    if (p.leafColor != null) this.worldLeafColor = p.leafColor;
+    if (p.leafColorVar != null) this.worldLeafColorVar = p.leafColorVar;
+    if (p.fog != null) this.worldFog = p.fog;
+    if (p.clouds != null) this.worldClouds = p.clouds;
+    if (p.cloudDensity != null) this.worldCloudDensity = p.cloudDensity;
+    if (p.holograms != null) this.worldHolograms = p.holograms;
+    if (p.worldMode != null) this.worldMode = p.worldMode;
+    if (p.tileRadius != null) this.worldTileRadius = p.tileRadius;
+    if (p.tileDetail != null) this.worldTileDetail = p.tileDetail;
+    if (p.voidGrid != null) this.worldVoidGrid = p.voidGrid;
+    if (p.borderGlow != null) this.worldBorderGlow = p.borderGlow;
+    if (p.terrainApron != null) this.worldTerrainApron = p.terrainApron;
+    if (p.voidExtent != null) this.worldVoidExtent = p.voidExtent;
+    if (p.voidLineWidth != null) this.worldVoidLineWidth = p.voidLineWidth;
+    if (p.borderGlowHeight != null) this.worldBorderGlowHeight = p.borderGlowHeight;
+    if (p.weather != null) this.worldWeather = p.weather;
+    if (p.nightMode != null) this.worldNightMode = p.nightMode;
+    if (p.streetWidth != null) this.worldStreetWidth = p.streetWidth;
+    if (p.parkChance != null) this.worldParkChance = p.parkChance;
+    if (p.waterChance != null) this.worldWaterChance = p.waterChance;
+    if (p.powerLines != null) this.worldPowerLines = p.powerLines;
+    if (p.railway != null) this.worldRailway = p.railway;
+    if (p.signage != null) this.worldSignage = p.signage;
+    const t = sm.world?.timeOfDay;
+    if (t != null) this.worldTimeOfDay = t;
+  }
+
+  worldToggleTraffic(): void {
+    this.worldTrafficRunning = !this.worldTrafficRunning;
+    this.worldParamChanged();
+  }
+
+  worldToggleTurntable(): void {
+    this.worldTurntableOn = !this.worldTurntableOn;
+    (this.shapeManager as any).world?.setTurntable(this.worldTurntableOn ? 6 : 0);
+  }
+
+  worldClear(): void {
+    const sm = this.shapeManager as any;
+    sm.world?.exitCityMode();
+    sm.world?.clear?.();
+    this.worldHasWorld = false;
+    this._worldMeshIdsKey = '';
+    this.worldEnabledRegions = null;
+    this.worldRegions = [];
+    this.worldTimeOfDay = null;
+    this.worldDayCyclePlaying = false;
+    this.worldRenderStyle = null;
+    this.worldTrafficRunning = false;
+    if (this.worldTurntableOn) {
+      (this.shapeManager as any).world?.setTurntable(0);
+      this.worldTurntableOn = false;
+    }
+    this.scene3dWorldPanelOpen = false;
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
+  }
+
+  worldRandomizeSeed(): void {
+    this.worldSeed = (Math.random() * 1e9) | 0 || 1;
+    (this.shapeManager as any).world?.updateCity({ seed: this.worldSeed });
+    this.scene3dMarkDirty();
+  }
+
+  worldToggleStreamFollow(): void {
+    this.worldStreamFollow = !this.worldStreamFollow;
+    (this.shapeManager as any).world?.setStreamFollow(this.worldStreamFollow);
+    if (this.worldStreamFollow) {
+      this._startStreamStats();
+    } else {
+      this._stopStreamStats();
+    }
+  }
+
+  private _startStreamStats(): void {
+    this._stopStreamStats();
+    this._streamStatsTimer = setInterval(() => {
+      const s = (this.shapeManager as any).world?.getStreamStats?.();
+      if (!s) return;
+      const pending = s.pending ? ` (+${s.pending})` : '';
+      const workers = s.workers != null ? ` · workers ${s.workers ? 'on' : 'off'}` : '';
+      this.worldStreamStats = `focus ${s.focusTile?.[0] ?? 0},${s.focusTile?.[1] ?? 0} · window ${s.window} · live ${s.live}${pending}${workers}`;
+    }, 500);
+  }
+
+  private _stopStreamStats(): void {
+    if (this._streamStatsTimer != null) { clearInterval(this._streamStatsTimer); this._streamStatsTimer = null; }
+    this.worldStreamStats = '';
+  }
+
+  worldParamChanged(): void {
+    if (this._worldDebounce) clearTimeout(this._worldDebounce);
+    if (!this.worldHasWorld) return;
+    if (this.worldMode !== 'tiled' && this.worldStreamFollow) {
+      this.worldStreamFollow = false;
+      (this.shapeManager as any).world?.setStreamFollow(false);
+      this._stopStreamStats();
+    }
+    this._worldDebounce = setTimeout(() => {
+      (this.shapeManager as any).world?.updateCity(this._worldParams());
+      this.scene3dMarkDirty();
+      // Skip the O(n) mesh rebuild for selective regens that don't change mesh IDs.
+      const s3d = (this.shapeManager as any).scene3d;
+      const newIds = (s3d?.getAllMeshes?.() ?? [] as any[]).map((m: any) => m.id ?? m.nodeId).join('\n');
+      if (newIds !== this._worldMeshIdsKey) {
+        this._worldMeshIdsKey = newIds;
+        this.scene3dWorldPanelOpen = false;
+        this.scene3dRefreshMeshes();
+        this.scene3dWorldPanelOpen = true;
+      }
+    }, 10);
   }
 
   scene3dSetArrayToolMode(mode: 'line' | 'grid' | 'radial'): void {
@@ -4513,6 +8351,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (sm.canUndo3D) {
       sm.undo3D?.();
       this.scene3dRefreshMeshes();
+      this.uiRefreshLayers();
     }
   }
 
@@ -4521,6 +8360,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (sm.canRedo3D) {
       sm.redo3D?.();
       this.scene3dRefreshMeshes();
+      this.uiRefreshLayers();
     }
   }
 
@@ -4541,6 +8381,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager as any;
     sm.scene3d?.enableShadows?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias)
       ?? sm.enableShadows3D?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias);
+    sm.scene3d?.setShadowStrength3D?.(this.scene3dShadowStrength);
     this.scene3dMarkDirty();
   }
 
@@ -4592,14 +8433,25 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dApplyLighting(): void {
-    const s3d = (this.shapeManager as any).scene3d;
+    const sm = this.shapeManager as any;
+    const s3d = sm.scene3d;
     if (!s3d) return;
-    s3d.setDirectionalLight(
-      +this.scene3dLightDirX, +this.scene3dLightDirY, +this.scene3dLightDirZ,
-      1, 1, 1, +this.scene3dLightIntensity);
-    s3d.setAmbientLight(
-      +this.scene3dAmbientR, +this.scene3dAmbientG, +this.scene3dAmbientB,
-      +this.scene3dAmbientIntensity);
+    sm.setLightAngles3D?.(this.scene3dLightAzimuth, this.scene3dLightElevation);
+    sm.setLightIntensity3D?.(+this.scene3dLightIntensity);
+    const kc = this.hexToRgba01(this.scene3dKeyLightColorHex);
+    sm.setLightColor3D?.(kc[0], kc[1], kc[2]);
+    const ac = this.hexToRgba01(this.scene3dAmbientColorHex);
+    this.scene3dAmbientR = ac[0]; this.scene3dAmbientG = ac[1]; this.scene3dAmbientB = ac[2];
+    s3d.setAmbientLight?.(ac[0], ac[1], ac[2], +this.scene3dAmbientIntensity);
+    this.scene3dMarkDirty();
+  }
+
+  scene3dApplyWind(): void {
+    (this.shapeManager as any).setSceneWind3D?.({
+      dirDeg:   this.sceneWindDirDeg,
+      strength: +this.sceneWindStrength,
+      speed:    +this.sceneWindSpeed,
+    });
     this.scene3dMarkDirty();
   }
 
@@ -4622,6 +8474,24 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       far: +this.scene3dFogFar,
       density: +this.scene3dFogDensity,
     });
+  }
+
+  scene3dSetEnhancedVisuals(on: boolean): void {
+    this.scene3dEnhancedVisuals = on;
+    (this.shapeManager as any).setEnhancedVisuals3D?.(on);
+    if (on) {
+      this.scene3dGlassQuality = true;
+    }
+  }
+
+  scene3dSetGlassQuality(on: boolean): void {
+    this.scene3dGlassQuality = on;
+    (this.shapeManager as any).setGlassQuality3D?.(on);
+  }
+
+  scene3dSetAerialPerspective(v: number): void {
+    this.scene3dAerialPerspective = v;
+    (this.shapeManager as any).setAerialPerspective3D?.(v);
   }
 
   scene3dSetTextureFilter(filter: 'nearest' | 'linear'): void {
@@ -5101,7 +8971,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // ── Grease Pencil ──────────────────────────────────────────────
   gpPanelVisible = false;
 
-  openGpPanel(): void  { this.gpPanelVisible = true; }
+  openGpPanel(): void  { this._exitAllScene3dModes(); this.gpPanelVisible = true; }
 
   closeGpPanel(): void {
     this.gpPanelVisible = false;
@@ -5119,6 +8989,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   showPublishShareDialog = false;
   publishShareViewUrl = '';
   publishShareEmbedCode = '';
+
+  // ── Export Modal ──────────────────────────────────────────────
+  showExportModal = false;
+  exportModalTab: 'image' | 'scene' | 'workfile' = 'image';
+  exportCartTitle = '';
+  exportCartAuthor = '';
+  exportCartDescription = '';
+  exportCartBusy = false;
+  exportCartSounds: string[] = [];
 
   // ── Screencast Keys ───────────────────────────────────────────
   screenscastKeysEnabled = false;
@@ -5217,13 +9096,16 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.lastSavedThumbnailJSON = '';
     this.lastThumbnailTime = 0;
 
-    // WebGPU bootstrap
+    // WebGPU bootstrap — run outside Angular's zone so Salsa's canvas.addEventListener
+    // calls don't get Zone.js-wrapped and trigger CD on every pointer event.
+    // afterRendererBoot is explicitly re-entered into the zone because the await
+    // continuation resumes in the outer (non-Angular) zone context.
     if (!isRendererLive) {
-      console.log('[IllustrationInit] cold start — startWebGPURendering');
-      await startWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot(false));
+      await this.ngZone.runOutsideAngular(() => startWebGPURendering('webgpuCanvas'));
+      this.ngZone.run(() => this.afterRendererBoot(false));
     } else {
-      console.log('[IllustrationInit] renderer already live — reinitializeWebGPURendering');
-      await reinitializeWebGPURendering('webgpuCanvas').then(() => this.afterRendererBoot(true));
+      await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering('webgpuCanvas'));
+      this.ngZone.run(() => this.afterRendererBoot(true));
     }
 
     this.canvas = this.canvasRef.nativeElement;
@@ -5285,14 +9167,19 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // input listeners
     this.onMouseMove = (event: MouseEvent) => {
       if (event.target !== this.canvas) return;
-      if (this.selectedShapeType) this.shapeManager.updatePreviewShapePosition(event);
-      // Update raster brush cursor position
-      if (this.showBrushCursor) {
-        this.brushCursorX = event.clientX;
-        this.brushCursorY = event.clientY;
-      }
+      // Skip zone entry when nothing needs Angular CD (e.g. city mode, no active tool).
+      if (!this.selectedShapeType && !this.showBrushCursor) return;
+      this.ngZone.run(() => {
+        if (this.selectedShapeType) this.shapeManager.updatePreviewShapePosition(event);
+        if (this.showBrushCursor) {
+          this.brushCursorX = event.clientX;
+          this.brushCursorY = event.clientY;
+        }
+      });
     };
-    document.addEventListener('mousemove', this.onMouseMove);
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('mousemove', this.onMouseMove);
+    });
 
     this.onClick = (event: MouseEvent) => {
       if (event.target !== this.canvas) return;
@@ -5357,6 +9244,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.setPenColor('#9B59B6');
   }
 
+  private _updateGizmoPosition(delayMs = 320): void {
+    clearTimeout(this._gizmoPosTimer);
+    this._gizmoPosTimer = setTimeout(() => {
+      const panelOpen = this.scene3dWorldPanelOpen || this.scene3dArrayToolActive || this.scene3dEditCharPanelOpen || this.scene3dEditBuildingPanelOpen || this.scene3dEditFoliagePanelOpen || this.scene3dEditBlockPanelOpen || this.scene3dPkgCreatorOpen || this.scene3dCreatorPanelOpen;
+      (this.shapeManager as any)?.setViewGizmoPosition3D?.({
+        corner: 'top-left',
+        offsetX: panelOpen ? 337 : 82,
+        offsetY: 52,
+      });
+    }, delayMs);
+  }
+
   private afterRendererBoot(isReinit = false) {
     // Prefer getting WorldManager first so we can extract any renderer/device it holds
     this.worldManager = WorldManager.getInstance();
@@ -5381,46 +9280,90 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Must run after shapeManager is assigned above.
     if (isReinit) this._setupEphemeraOverlay();
 
+    this.authoringApi = new SceneAuthoringAPI(this.shapeManager);
+
+    if (isDevMode()) {
+      (window as any).salsa = this.authoringApi;
+    }
+
     this.loadPolygonPresets();
     this.markLoaded('renderer');
 
     // Must run before any render frame — enables the preRenderCallback that syncs
     // the 2D illustration camera to the 3D orthographic projection each frame.
     (this.shapeManager as any).enableAutoSyncIllustrationCamera3D?.();
+    this._updateGizmoPosition(0);
 
     const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
       .subscribe(() => {
-        this.markLoaded('sceneApplied');
-        sceneAppliedOnce.unsubscribe();
-        if (!this.isViewerMode && !this.illustration?.isCustomThumbnail) {
-          this.saveThumbnail();
-        }
+        this.ngZone.run(() => {
+          this.markLoaded('sceneApplied');
+          sceneAppliedOnce.unsubscribe();
+          if (!this.isViewerMode && !this.illustration?.isCustomThumbnail) {
+            this.saveThumbnail();
+          }
+        });
       });
 
+    this._cityBuildSub?.unsubscribe();
+    this._cityBuildSub = (this.shapeManager as any).world?.onCityBuildStateChange?.subscribe(
+      ({ building, reason }: { building: boolean; reason: 'load' | 'edit' }) => {
+        this.ngZone.run(() => {
+          this.cityBuilding = building;
+          this.cityBuildReason = reason;
+        });
+      }
+    ) ?? null;
+
     this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
-      if (this.selectedLayerIds.has(this.hoveredLayerId!)) {
-        this.selectedLayerIds = new Set(selectedIds);
-        const selectedId = this.selectedLayerIds.values().next().value;
-        this.selectedNode = this.getNodeById(selectedId);
-      } else {
-        selectedIds = selectedIds.filter(id => id !== this.hoveredLayerId);
-        this.selectedLayerIds = new Set(selectedIds);
-        const selectedId = this.selectedLayerIds.values().next().value;
-        this.selectedNode = this.getNodeById(selectedId);
-      }
+      this.ngZone.run(() => {
+        if (this.selectedLayerIds.has(this.hoveredLayerId!)) {
+          this.selectedLayerIds = new Set(selectedIds);
+          const selectedId = this.selectedLayerIds.values().next().value;
+          this.selectedNode = this.getNodeById(selectedId);
+        } else {
+          selectedIds = selectedIds.filter(id => id !== this.hoveredLayerId);
+          this.selectedLayerIds = new Set(selectedIds);
+          const selectedId = this.selectedLayerIds.values().next().value;
+          this.selectedNode = this.getNodeById(selectedId);
+        }
 
-      if (selectedIds.length === 1) {
-        const nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
-        this.shapeColor = '#' + nodeColor;
-        this.shapeHexInputDraft = nodeColor;
+        if (selectedIds.length === 1) {
+          const nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
+          this.shapeColor = '#' + nodeColor;
+          this.shapeHexInputDraft = nodeColor;
 
-        // Sync balloon sidebar when an existing speech balloon is selected
-        this._syncBalloonSidebar(selectedIds[0]);
+          // Sync balloon sidebar when an existing speech balloon is selected
+          this._syncBalloonSidebar(selectedIds[0]);
 
-        // Sync live text sidebar when an existing LiveTextNode is selected
-        this._syncLiveTextSidebar(selectedIds[0]);
-      }
-    }); 
+          // Sync live text sidebar when an existing LiveTextNode is selected
+          this._syncLiveTextSidebar(selectedIds[0]);
+        }
+
+        // 3D type-flag detection — covers viewport clicks (which don't go through scene3dSelectMesh).
+        // Same id space as scene3dSelectMesh; isPackageNode resolves root/panel/pivot ids.
+        // Loop rather than just [0] so multi-select finds whichever element is typed.
+        const sm3d = this.shapeManager as any;
+        let pkgFound = false, charFound = false;
+        for (const sid of selectedIds) {
+          if (!pkgFound) {
+            const pkgId = sm3d.packaging?.isPackageNode?.(sid);
+            if (pkgId) {
+              this.scene3dSelectedIsPackage = true;
+              this.pkgSelectedId = pkgId;
+              pkgFound = true;
+            }
+          }
+          if (!charFound && sm3d.isProceduralBody3D?.(sid)) {
+            this.scene3dSelectedIsCharacter = true;
+            charFound = true;
+          }
+          if (pkgFound && charFound) break;
+        }
+        if (!pkgFound) { this.scene3dSelectedIsPackage = false; this.pkgSelectedId = null; }
+        if (!charFound) { this.scene3dSelectedIsCharacter = false; }
+      });
+    });
 
     // Sync controlPanelActiveTool when the selection toolbar component changes the tool
     this.selectionToolSubscription = this.rasterSelectionService.tool$.subscribe((tool: string) => {
@@ -5436,44 +9379,62 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     });
 
     this._sceneGraphChangedSub = this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
-      if (this.controlPanelActiveTool.startsWith('drawing') || this.controlPanelActiveTool.startsWith('shape')) {
-        this._addRecentColor(this.selectedPenColor);
-      }
-      const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
-      const parsed = JSON.parse(currentSceneJSON);
-      this.layerTree = this.buildLayerTree(parsed.root);
-      this.refreshRasterLayers();
-      this.sceneChanged$.next(currentSceneJSON);
-
-      // Array panel: re-sync params when gizmo drags update an active array group
-      if (this.scene3dIsArrayGroup && this.scene3dSelectedMeshId) {
-        this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
-      }
-
-      // Blend shapes: keep weights in sync when mesh is selected
-      if (this.scene3dSelectedMeshId && !this.scene3dIsArrayGroup) {
-        const freshShapes = (this.shapeManager as any).getBlendShapes3D?.(this.scene3dSelectedMeshId);
-        if (freshShapes) this.scene3dBlendShapes = freshShapes;
-      }
-
-      // Array tool: sync count drift from scroll wheel; sync radial params if in radial mode
-      if (this.scene3dArrayToolActive) {
-        const liveCount = (this.shapeManager as any).getArrayToolCount?.();
-        if (typeof liveCount === 'number') this.scene3dArrayToolCount = liveCount;
-        if (this.scene3dArrayToolMode === 'radial') this._scene3dSyncRadialToolStrip();
-      }
-
-      // Array tool: detect post-commit — ArrayToolController internally creates & selects an ArrayGroup3D
-      if (this.scene3dArrayToolActive) {
-        const sm = this.shapeManager as any;
-        const selectedId: string | null = sm.getSelectedNode3D?.() ?? sm.getSelectedMeshId3D?.() ?? null;
-        if (selectedId && sm.isArrayGroup3D?.(selectedId)) {
-          this.scene3dArrayToolActive = false;
-          sm.disableArrayTool?.();
-          this.scene3dRefreshMeshes();
-          this.scene3dSelectMesh(selectedId);
+      this.ngZone.run(() => {
+        if (this.scene3dWorldPanelOpen) return;
+        if (this.controlPanelActiveTool.startsWith('drawing') || this.controlPanelActiveTool.startsWith('shape')) {
+          this._addRecentColor(this.selectedPenColor);
         }
-      }
+        if (!this._suppressLayerTreeRebuild) {
+          // Use lightweight structure JSON when available — avoids re-serializing 3D mesh geometry
+          const sm2 = this.shapeManager as any;
+          const structJSON = sm2.getSceneStructureJSON?.() ?? this.shapeManager.getSceneGraphJSON();
+          const parsed = JSON.parse(structJSON);
+          this.layerTree = this.buildLayerTree(parsed.root);
+          this.refreshRasterLayers();
+          this.sceneChanged$.next('__scene_' + Date.now());
+        }
+
+        // Array panel: re-sync params when gizmo drags update an active array group
+        if (this.scene3dIsArrayGroup && this.scene3dSelectedMeshId) {
+          this._scene3dSyncArrayPanel(this.scene3dSelectedMeshId);
+        }
+
+        // Blend shapes: keep weights in sync when mesh is selected
+        if (this.scene3dSelectedMeshId && !this.scene3dIsArrayGroup) {
+          const freshShapes = (this.shapeManager as any).getBlendShapes3D?.(this.scene3dSelectedMeshId);
+          if (freshShapes) this.scene3dBlendShapes = freshShapes;
+        }
+
+        // Array tool: sync count drift from scroll wheel; sync radial params if in radial mode
+        if (this.scene3dArrayToolActive) {
+          const liveCount = (this.shapeManager as any).getArrayToolCount?.();
+          if (typeof liveCount === 'number') this.scene3dArrayToolCount = liveCount;
+          if (this.scene3dArrayToolMode === 'radial') this._scene3dSyncRadialToolStrip();
+        }
+
+        // Decal tool: refresh Id set when ghost mode places a new decal
+        if (this.scene3dDecalToolActive) {
+          this.scene3dRefreshMeshes();
+        }
+
+        // Array tool: detect post-commit — ArrayToolController internally creates & selects an ArrayGroup3D
+        if (this.scene3dArrayToolActive) {
+          const sm = this.shapeManager as any;
+          const selectedId: string | null = sm.getSelectedNode3D?.() ?? sm.getSelectedMeshId3D?.() ?? null;
+          if (selectedId && sm.isArrayGroup3D?.(selectedId)) {
+            this.scene3dArrayToolActive = false;
+            sm.disableArrayTool?.();
+            this.scene3dRefreshMeshes();
+            this.scene3dSelectMesh(selectedId);
+          }
+        }
+
+        // Sync camera node list whenever the scene graph changes
+        this.scene3dRefreshCameraNodes();
+
+        // Vector outliner: refresh when a shape is committed (e.g. freeform polygon)
+        if (this.activeVectorLayerId) this.refreshVectorShapes();
+      });
     });
 
     this._rasterLayersSub = this.rasterBrushService.layers$.subscribe(layers => {
@@ -5494,6 +9455,30 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this._currentAnimFrame = f;
     });
 
+    // View state — drives camera mode bar + 2D panel visibility
+    this._viewStateSub = (this.shapeManager as any).onViewStateChanged3D?.subscribe?.(() => {
+      this.applyViewUI3D((this.shapeManager as any).getViewRules3D?.() ?? {});
+    });
+    this.applyViewUI3D((this.shapeManager as any).getViewRules3D?.() ?? {});
+    this._playStateSub = (this.shapeManager as any).onPlayStateChanged3D?.subscribe?.(() => {
+      this.scene3dViewIsPlaying = (this.shapeManager as any).isPlaying3D ?? false;
+    });
+    this._cameraCutsSub = (this.shapeManager as any).onCameraCutsChanged3D?.subscribe?.(() => {
+      this.ngZone.run(() => this.scene3dRefreshCuts());
+    });
+    this._uiEventOff = (this.shapeManager as any).onUIEvent?.((e: any) => {
+      this.ngZone.run(() => this._handleUIEvent(e));
+    }) ?? null;
+    this._uiSelectionOff = (this.shapeManager as any).onShapeSelectionChanged?.((ids: string[]) => {
+      this.ngZone.run(() => {
+        this.uiSelectedShapeId = ids[0] ?? null;
+        if (this.activeVectorLayerId) this.refreshVectorShapes();
+      });
+    }) ?? null;
+    this._pathEditedOff = (this.shapeManager as any).onPathEdited?.((path: any) => {
+      this.ngZone.run(() => { this.isPathEditActive = path != null; });
+    }) ?? null;
+
     // Subscribe to raster stroke end to trigger auto-save (raster drawing bypasses scene graph events)
     try {
       const rasterSub = (this.shapeManager as any).onRasterStrokeEnd?.(async () => {
@@ -5505,6 +9490,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         this._addRecentColor(this.rasterBrushColor);
         // Notify OPFS auto-save service of stroke end
         this.autoSaveService.notifyStrokeEnd();
+        if (this.scene3dPkgCreatorOpen) {
+          (this.shapeManager as any).syncLiveTextures3D?.();
+        }
         try {
           const enrichedJson = (this.shapeManager as any).getSceneGraphJSONWithRasterData
             ? await (this.shapeManager as any).getSceneGraphJSONWithRasterData('image/webp')
@@ -5579,7 +9567,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         // Keep animation timeline layer list in sync
         this.animationService.refreshTimeline();
       } catch (e) {
-        console.log(e);
         console.warn('Failed to load raster layers from ShapeManager', e);
         this.rasterLayers = [];
       }
@@ -5594,6 +9581,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   selectRasterLayer(layerId: string, event?: MouseEvent) {
     event?.stopPropagation();
+    this.setActiveTool('');
     try {
       this.shapeManager?.selectRasterLayer?.(layerId);
       this.selectedRasterLayerId = layerId;
@@ -5611,6 +9599,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   handleHotkeys(event: KeyboardEvent) {
+    if (this.scene3dViewIsPlaying) return; // game loop owns the keyboard during Play Mode
     const target = event.target as HTMLElement;
     const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
@@ -5736,6 +9725,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     switch (event.key) {
       case 'Escape':
+        if (this.scene3dDecalToolActive) {
+          this.scene3dDecalToolActive = false;
+          (this.shapeManager as any).exitDecalPlaceMode3D?.();
+          break;
+        }
         if (this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife') {
           this.scene3dEditTool = 'select';
           this._knifeStart = null;
@@ -5765,12 +9759,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         if (this.rasterSelectionService.info.hasSelection) {
           this.rasterSelectionService.deleteSelection();
         } else {
+          // Clean up local layer-tree state for any selected nodes
           this.layerTree!.children = this.pruneDeletedLayers(this.layerTree!.children, this.selectedLayerIds);
           this.selectedLayerIds.forEach(id => {
             this.layerDitherConfigs.delete(id);
             this.layerFrameLinkConfigs.delete(id);
           });
-          this.shapeManager.deleteSelectedShapes();
+          // deleteSelectedShapes() removed — engine owns the Delete key for 2D canvas shapes
         }
         break;
       case 'f': this.toggleFullscreen(); break;
@@ -6204,6 +10199,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   setActiveTool(activeTool: string, event?: MouseEvent) {
+    if (activeTool && activeTool === this.controlPanelActiveTool) activeTool = '';
+    if (activeTool) this.showEphemeraPanel = false;
     const prevTool = this.controlPanelActiveTool;
     if (activeTool !== this.controlPanelActiveTool) {
       this.controlPanelActiveTool = activeTool;
@@ -6305,6 +10302,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
 
     // shapes
+    if (this.controlPanelActiveTool.startsWith('shape')) {
+      this.shapeManager.setShapeColor(this.selectedPenColor);
+    }
     if (this.controlPanelActiveTool === 'shape:square') this.setPreviewShapeSelected(ShapeType.Rectangle, event!);
     else if (this.controlPanelActiveTool === 'shape:circle') this.setPreviewShapeSelected(ShapeType.Circle, event!);
     else if (this.controlPanelActiveTool === 'shape:triangle') this.setPreviewShapeSelected(ShapeType.Triangle, event!);
@@ -6315,9 +10315,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     else this.setPreviewShapeSelected(null, event!);
 
     // Freeform polygon drawing
-    this.controlPanelActiveTool === 'polygon:freeform'
-      ? this.shapeManager.enablePolygonDrawing?.()
-      : this.shapeManager.disablePolygonDrawing?.();
+    if (this.controlPanelActiveTool === 'polygon:freeform') {
+      this.shapeManager.setShapeColor(this.selectedPenColor);
+      this.shapeManager.enablePolygonDrawing?.();
+    } else {
+      this.shapeManager.disablePolygonDrawing?.();
+    }
 
     // ── Flood fill tool ──
     if (this.controlPanelActiveTool === 'fill') {
@@ -6446,6 +10449,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       return Array.from(is.selectedNodes).map((n: any) => n.id ?? n.getId?.()).filter(Boolean);
     }
     return (this.shapeManager as any).getSelectedShapeIds?.() ?? [];
+  }
+
+  /** Convert any Salsa color format ([0..1] triple, [0..255] triple, {r,g,b}, or hex) → CSS hex for color inputs. */
+  private _buildingColorToHex(v: unknown): string {
+    if (typeof v === 'string') return v.startsWith('#') ? v : `#${v}`;
+    const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, n)) * (n <= 1 ? 255 : 1)).toString(16).padStart(2, '0');
+    if (Array.isArray(v) && v.length >= 3) return `#${toHex(v[0])}${toHex(v[1])}${toHex(v[2])}`;
+    if (v && typeof v === 'object') {
+      const o = v as any;
+      return `#${toHex(o.r ?? 0)}${toHex(o.g ?? 0)}${toHex(o.b ?? 0)}`;
+    }
+    return '#000000';
   }
 
   private _hexToRgba01(hex: string): { r: number; g: number; b: number; a: number } {
@@ -6706,7 +10721,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (!sm.createEffectedText) return;
     const result = sm.createEffectedText(this._buildTextCaptureConfig(), this._buildEffectChain());
     if (result) {
-      console.log('[TextEffect] preview created', result.width, '×', result.height);
       // GPU texture is created; renderer will pick it up if needed.
       // For now this is a preview trigger — the texture lives until next call.
     }
@@ -6724,8 +10738,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const estH = capture.fontSize * 1.4;
     const destX = Math.round((canvasSize.w - estW) / 2);
     const destY = Math.round((canvasSize.h - estH) / 2);
-    const success = await sm.stampEffectedText(destX, destY, capture, this._buildEffectChain());
-    console.log('[TextEffect] stamped:', success);
+    await sm.stampEffectedText(destX, destY, capture, this._buildEffectChain());
   }
 
   /** Toggle animated effects (wave/glitch time param). */
@@ -7115,7 +11128,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       });
     }
     this.activePanelLayoutId = layout?.getId?.() ?? null;
-    console.log('[PanelLayout] created', this.activePanelLayoutId);
     this._refreshPanelGuides();
   }
 
@@ -7342,6 +11354,75 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     document.body.removeChild(link);
   }
 
+  // ── Export Modal ──────────────────────────────────────────────
+
+  openExportModal(): void {
+    this.exportCartTitle = this.illustrationTitle ?? this.illustration?.name ?? 'Untitled';
+    this.exportCartAuthor = '';
+    this.exportCartDescription = '';
+    this.exportCartBusy = false;
+    this.exportModalTab = 'image';
+    this.refreshExportCartSounds();
+    this.showExportModal = true;
+  }
+
+  private refreshExportCartSounds(): void {
+    const sounds: { assetId: string }[] = (this.shapeManager as any).listUISounds?.() ?? [];
+    this.exportCartSounds = sounds.map((s: any) => s.assetId ?? s);
+  }
+
+  closeExportModal(): void {
+    this.showExportModal = false;
+  }
+
+  exportModalImage(): void {
+    this.downloadCanvasViewAsPng();
+    this.closeExportModal();
+  }
+
+  async exportModalFrogcart(): Promise<void> {
+    if (this.exportCartBusy) return;
+    this.exportCartBusy = true;
+    try {
+      const sm = this.shapeManager as any;
+      const blob: Blob | undefined = await sm.exportFrogcart?.({
+        title:       this.exportCartTitle || 'Untitled',
+        author:      this.exportCartAuthor || undefined,
+        description: this.exportCartDescription || undefined,
+      });
+      if (!blob) { this.exportCartBusy = false; return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(this.exportCartTitle || 'scene').replace(/[^a-z0-9_\-]/gi, '_')}.frogcart`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.closeExportModal();
+    } catch (e) {
+      console.error('[Export] frogcart failed', e);
+    }
+    this.exportCartBusy = false;
+  }
+
+  async exportModalWorkfile(): Promise<void> {
+    await this.exportFrogFile();
+    this.closeExportModal();
+  }
+
+  async exportTransparentPng(): Promise<void> {
+    const sm = this.shapeManager as any;
+    const blob: Blob | null = await sm.exportIllustrationTransparentPNG?.();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'frogmarks_transparent.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   setPreviewShapeSelected(shapeType: ShapeType | null, event: MouseEvent) {
     this.selectedShapeType = shapeType;
     this.shapeManager.setPreviewShape(shapeType as any, event);
@@ -7434,8 +11515,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       const cfg = this.layerDitherConfigs.get(layer.layerId);
       if (cfg !== undefined) layer.ditherConfig = { ...cfg } as any;
     }
-    console.log('[V2 Save] ditherConfig:', this.ditherConfig.enabled,
-      'layers with dither:', state.layers.filter(l => (l.ditherConfig as any)?.enabled).length);
 
     // Attach document size (null = infinite canvas)
     state.documentSize = (this.shapeManager as any).getDocumentSize?.() ?? null;
@@ -7452,10 +11531,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       shadowMapSize: this.scene3dShadowMapSize,
       shadowExtent: this.scene3dShadowExtent,
       shadowBias: this.scene3dShadowBias,
-      lightDirX: this.scene3dLightDirX, lightDirY: this.scene3dLightDirY, lightDirZ: this.scene3dLightDirZ,
-      lightIntensity: this.scene3dLightIntensity,
+      shadowStrength: this.scene3dShadowStrength,
+      ssaoEnabled: this.scene3dSSAOEnabled,
+      ssaoRadius: this.scene3dSSAORadius, ssaoIntensity: this.scene3dSSAOIntensity,
+      ssaoPower: this.scene3dSSAOPower, ssaoBias: this.scene3dSSAOBias,
+      ssaoResolutionScale: this.scene3dSSAOResolutionScale, ssaoSamples: this.scene3dSSAOSamples,
+      lightAzimuth: this.scene3dLightAzimuth, lightElevation: this.scene3dLightElevation,
+      lightIntensity: this.scene3dLightIntensity, keyLightColor: this.scene3dKeyLightColorHex,
       ambientR: this.scene3dAmbientR, ambientG: this.scene3dAmbientG, ambientB: this.scene3dAmbientB,
-      ambientIntensity: this.scene3dAmbientIntensity,
+      ambientIntensity: this.scene3dAmbientIntensity, ambientColor: this.scene3dAmbientColorHex,
       ps1Jitter: this.scene3dPS1Jitter, ps1Snap: this.scene3dPS1Snap,
       ps1Affine: this.scene3dPS1Affine, ps1ColorDepth: this.scene3dPS1ColorDepth,
       frustumCulling: this.scene3dFrustumCulling,
@@ -7471,6 +11555,31 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       gridVisible: this.scene3dGridVisible,
       gridOpacity: this.scene3dGridOpacity,
       gridColor: [...this.scene3dGridColor] as [number, number, number],
+      // Post-processing
+      bloomEnabled: this.scene3dBloomEnabled, bloomThreshold: this.scene3dBloomThreshold, bloomIntensity: this.scene3dBloomIntensity,
+      colorGradeEnabled: this.scene3dColorGradeEnabled, colorGradeBrightness: this.scene3dColorGradeBrightness,
+      colorGradeContrast: this.scene3dColorGradeContrast, colorGradeSaturation: this.scene3dColorGradeSaturation,
+      colorGradeTint: this.scene3dColorGradeTint,
+      vignetteEnabled: this.scene3dVignetteEnabled, vignetteIntensity: this.scene3dVignetteIntensity,
+      vignetteRadius: this.scene3dVignetteRadius, vignetteSoftness: this.scene3dVignetteSoftness,
+      // Fog
+      fogMode: this.scene3dFogMode, fogColor: this.scene3dFogColor,
+      fogNear: this.scene3dFogNear, fogFar: this.scene3dFogFar, fogDensity: this.scene3dFogDensity,
+      // Background
+      bgMode: this.scene3dBgMode, bgColor1: this.scene3dBgColor1, bgColor2: this.scene3dBgColor2,
+      // Visual quality
+      enhancedVisuals: this.scene3dEnhancedVisuals, glassQuality: this.scene3dGlassQuality,
+      aerialPerspective: this.scene3dAerialPerspective, textureFilter: this.scene3dTextureFilter,
+      // Wind
+      windDirDeg: this.sceneWindDirDeg, windStrength: this.sceneWindStrength, windSpeed: this.sceneWindSpeed,
+      // IBL intensity (image itself is not serializable — user must re-upload; intensity is preserved)
+      iblIntensity: this.scene3dIblIntensity,
+      // PS1 extended
+      ps1LoRes: this.scene3dPS1LoRes, ps1ResW: this.scene3dPS1ResW, ps1ResH: this.scene3dPS1ResH,
+      ps1Dither: this.scene3dPS1Dither, ps1DitherStrength: this.scene3dPS1DitherStrength,
+      ps1UVQuantize: this.scene3dPS1UVQuantize, ps1UVSteps: this.scene3dPS1UVSteps,
+      // Cinematic cuts (host owns persistence)
+      cameraCuts: this.scene3dCameraCuts.length ? this.scene3dCameraCuts : undefined,
     };
 
     const sm3d = this.shapeManager as any;
@@ -7532,7 +11641,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Step 1: Save state metadata to DB (no pixel/blob URLs in no-cloud mode)
     try {
       await firstValueFrom(this.illustrationService.saveState(illId, state));
-      console.log('[V2 Save] state saved successfully');
     } catch (e) {
       console.error('[V2 Save] state save failed', e);
       return;
@@ -7720,8 +11828,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       }
     };
 
-    const counts = await Promise.all(layers.map(uploadLayer));
-    const uploaded = counts.reduce((a, b) => a + b, 0);
+    await Promise.all(layers.map(uploadLayer));
 
     // Mark uploaded layers clean (only remove IDs from the snapshot, preserving any added during upload)
     for (const id of dirtySnapshot) {
@@ -7733,7 +11840,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this._uploadedLayerIds.add(layer.layerId);
     }
 
-    console.log(`[V2 Save] pixel data uploads complete: ${uploaded}/${layers.length} layer(s)`);
   }
 
   /** Call after a restore/import to mark all layers as needing re-upload. */
@@ -7748,13 +11854,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Local-only: OPFS is the only source — no SQL state, no blob downloads
     if (this.syncMode === 2) {
       const opfsDocId = 'local-' + (this.illustration?.uuid ?? '');
-      console.log('[V2 Load] local-only — opfsDocId:', opfsDocId);
       try {
         this.animationService.beginBulkRestore();
         const result = await this.autoSaveService.loadDocument(opfsDocId).finally(() => {
           this.animationService.endBulkRestore();
         });
-        console.log('[V2 Load] loadDocument result:', result?.success, 'layers:', result?.layers?.length ?? 'n/a');
         if (result?.success) {
           this.refreshRasterLayers();
           const stillExists = this.rasterLayers.some(l => l.id === this.selectedRasterLayerId);
@@ -7801,7 +11905,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     // ── Pending .frog import (from dashboard) ──
     if (this.frogFileService.pendingImport) {
-      console.log('[V2 Load] applying pending .frog import');
       const pending = this.frogFileService.pendingImport;
       this.frogFileService.pendingImport = null; // consume it
       await this.applyFrogImport(pending);
@@ -7831,9 +11934,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       opfsSavedAt = typeof raw === 'number' ? raw : (raw ? new Date(raw).getTime() : 0);
       if (isNaN(opfsSavedAt)) opfsSavedAt = 0;
     }
-    const opfsMetaSavedAt = opfsMeta?.savedAt ?? 0;
     const backendSavedAt = savedAtRes?.savedAt ?? 0;
-    console.log(`[V2 Load] OPFS pixels savedAt=${opfsSavedAt}, OPFS meta savedAt=${opfsMetaSavedAt}, Backend savedAt=${backendSavedAt}`);
 
     // Use OPFS pixels when they exist and are at least as fresh as the server.
     // The metadata file is a bonus — if it's missing (e.g. first load after migration)
@@ -7846,13 +11947,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (!useOpfs) {
       try {
         stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
-        console.log('[V2 Load] Backend state fetched');
       } catch (e) {
         console.warn('[V2 Load] loadState failed', e);
       }
     }
 
-    console.log(`[V2 Load] Decision: ${useOpfs ? 'OPFS (fully local)' : 'Backend'}`);
 
     if (useOpfs) {
       try {
@@ -7864,7 +11963,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
           this.animationService.endBulkRestore();
         });
         if (result.success) {
-          console.log('[V2 Load] ✅ loadDocument() restored from OPFS, layers:', result.layers.length);
 
           this.refreshRasterLayers();
 
@@ -7882,7 +11980,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
             try {
               const r = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
               effectiveMeta = r?.resultObject ?? null;
-              if (effectiveMeta) console.log('[V2 Load] No OPFS meta — using backend state for extended metadata');
             } catch (e) {
               console.warn('[V2 Load] Could not fetch backend state for extended metadata', e);
             }
@@ -7955,6 +12052,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
                 console.timeLog('[V2 Load] total', 'texture-lib-restored');
               }
               this.scene3dRefreshMeshes?.();
+              this.uiRefreshLayers?.();
               console.timeLog('[V2 Load] total', 'scene3d-restore-done');
             } catch (e) {
               console.warn('[V2 Load] Failed to restore 3D node state from OPFS meta (per-mesh)', e);
@@ -7972,11 +12070,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
                 console.timeLog('[V2 Load] total', 'texture-lib-restored');
               }
               this.scene3dRefreshMeshes?.();
+              this.uiRefreshLayers?.();
               console.timeLog('[V2 Load] total', 'scene3d-restore-done');
             } catch (e) {
               console.warn('[V2 Load] Failed to restore 3D node state from OPFS meta', e);
             }
           }
+          (this.shapeManager as any).restoreProceduralFromSave3D?.();
           this._scene3dLoadSnapSettings();
           this._loadScene3dGrid();
           console.timeEnd('[V2 Load] total');
@@ -8000,7 +12100,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // If OPFS had no data on this device, surface an empty-state prompt so the
     // user knows they need to import a .frogmarks file to restore their work.
     if (this.syncMode === 1) {
-      console.log('[V2 Load] no-cloud mode — no OPFS data on this device');
       this.noCloudEmptyState = true;
       requestAnimationFrame(() => this.markLoaded('sceneApplied'));
       return;
@@ -8010,7 +12109,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (useOpfs && !stateRes) {
       try {
         stateRes = await firstValueFrom(this.illustrationService.loadState(this.illustration.id));
-        console.log('[V2 Load] OPFS failed — fetched full backend state as fallback');
       } catch (e) {
         console.warn('[V2 Load] loadState fallback failed', e);
       }
@@ -8020,9 +12118,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     // ── V2 path ──
     if (state && state.version >= 2 && state.layers?.length > 0) {
-      console.log('[V2 Load] restoring v2 state, layers:', state.layers.length,
-        state.layers.map(l => ({ id: l.layerId, pixelDataUrl: l.pixelDataUrl, animated: l.animated,
-          cels: l.cels?.map(c => ({ celId: c.celId, pixelDataUrl: c.pixelDataUrl })) })));
 
       // 1. Apply scene graph
       if (state.sceneGraph) {
@@ -8077,7 +12172,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       console.timeLog('[V2 Load] total', 'raster-layers-fetched');
 
       // 3. Import raster layers into engine
-      console.log(`[V2 Load] importPayload: ${importPayload.length} layer(s) to import`, importPayload.map(p => p.id));
       if (importPayload.length > 0 && (this.shapeManager as any)?.importRasterLayersFromDataURLs) {
         try {
           // Clear the auto-created "Background" layer before importing saved layers
@@ -8194,6 +12288,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
             console.timeLog('[V2 Load] total', 'texture-lib-restored');
           }
           this.scene3dRefreshMeshes?.();
+          this.uiRefreshLayers?.();
           console.timeLog('[V2 Load] total', 'scene3d-restore-done');
         } catch (e) {
           console.warn('[V2 Load] Failed to restore 3D node state (per-mesh)', e);
@@ -8211,11 +12306,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
             console.timeLog('[V2 Load] total', 'texture-lib-restored');
           }
           this.scene3dRefreshMeshes?.();
+          this.uiRefreshLayers?.();
           console.timeLog('[V2 Load] total', 'scene3d-restore-done');
         } catch (e) {
           console.warn('[V2 Load] Failed to restore 3D node state', e);
         }
       }
+      (this.shapeManager as any).restoreProceduralFromSave3D?.();
       this._scene3dLoadSnapSettings();
       this._loadScene3dGrid();
       console.timeEnd('[V2 Load] total');
@@ -8286,37 +12383,70 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.scene3dShadowMapSize = s.shadowMapSize ?? this.scene3dShadowMapSize;
       this.scene3dShadowExtent = s.shadowExtent ?? this.scene3dShadowExtent;
       this.scene3dShadowBias = s.shadowBias ?? this.scene3dShadowBias;
+      this.scene3dShadowStrength = s.shadowStrength ?? this.scene3dShadowStrength;
       if (s.shadowsEnabled) {
         s3d?.enableShadows?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias)
           ?? sm.enableShadows3D?.(this.scene3dShadowMapSize, this.scene3dShadowExtent, this.scene3dShadowBias);
+        s3d?.setShadowStrength3D?.(this.scene3dShadowStrength);
       } else {
         s3d?.disableShadows?.() ?? sm.disableShadows3D?.();
       }
     }
-    if (s.lightDirX !== undefined || s.lightIntensity !== undefined) {
-      this.scene3dLightDirX = s.lightDirX ?? this.scene3dLightDirX;
-      this.scene3dLightDirY = s.lightDirY ?? this.scene3dLightDirY;
-      this.scene3dLightDirZ = s.lightDirZ ?? this.scene3dLightDirZ;
+    if (s.ssaoEnabled !== undefined) {
+      this.scene3dSSAOEnabled         = s.ssaoEnabled;
+      this.scene3dSSAORadius          = s.ssaoRadius          ?? this.scene3dSSAORadius;
+      this.scene3dSSAOIntensity       = s.ssaoIntensity       ?? this.scene3dSSAOIntensity;
+      this.scene3dSSAOPower           = s.ssaoPower           ?? this.scene3dSSAOPower;
+      this.scene3dSSAOBias            = s.ssaoBias            ?? this.scene3dSSAOBias;
+      this.scene3dSSAOResolutionScale = s.ssaoResolutionScale ?? this.scene3dSSAOResolutionScale;
+      this.scene3dSSAOSamples         = s.ssaoSamples         ?? this.scene3dSSAOSamples;
+      s3d?.setSSAO3D?.(s.ssaoEnabled, {
+        radius: this.scene3dSSAORadius, intensity: this.scene3dSSAOIntensity,
+        power: this.scene3dSSAOPower, bias: this.scene3dSSAOBias,
+        resolutionScale: this.scene3dSSAOResolutionScale, samples: this.scene3dSSAOSamples,
+      });
+    }
+    if (s.lightAzimuth !== undefined || s.lightElevation !== undefined || s.lightIntensity !== undefined
+        || s.lightDirX !== undefined) {
       this.scene3dLightIntensity = s.lightIntensity ?? this.scene3dLightIntensity;
+      if (s.keyLightColor) this.scene3dKeyLightColorHex = s.keyLightColor;
       this.scene3dAmbientR = s.ambientR ?? this.scene3dAmbientR;
       this.scene3dAmbientG = s.ambientG ?? this.scene3dAmbientG;
       this.scene3dAmbientB = s.ambientB ?? this.scene3dAmbientB;
       this.scene3dAmbientIntensity = s.ambientIntensity ?? this.scene3dAmbientIntensity;
-      s3d?.setDirectionalLight?.(
-        this.scene3dLightDirX, this.scene3dLightDirY, this.scene3dLightDirZ,
-        1, 1, 1, this.scene3dLightIntensity);
+      if (s.ambientColor) {
+        this.scene3dAmbientColorHex = s.ambientColor;
+      } else {
+        // back-compat: derive hex from the RGB floats for docs saved before ambientColor existed
+        const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
+        this.scene3dAmbientColorHex = `#${toHex(this.scene3dAmbientR)}${toHex(this.scene3dAmbientG)}${toHex(this.scene3dAmbientB)}`;
+      }
+      if (s.lightAzimuth !== undefined || s.lightElevation !== undefined) {
+        this.scene3dLightAzimuth = s.lightAzimuth ?? this.scene3dLightAzimuth;
+        this.scene3dLightElevation = s.lightElevation ?? this.scene3dLightElevation;
+        sm.setLightAngles3D?.(this.scene3dLightAzimuth, this.scene3dLightElevation);
+        sm.setLightIntensity3D?.(this.scene3dLightIntensity);
+        const kc = this.hexToRgba01(this.scene3dKeyLightColorHex);
+        sm.setLightColor3D?.(kc[0], kc[1], kc[2]);
+      } else if (s.lightDirX !== undefined) {
+        s3d?.setDirectionalLight?.(s.lightDirX, s.lightDirY, s.lightDirZ, 1, 1, 1, this.scene3dLightIntensity);
+      }
       s3d?.setAmbientLight?.(
         this.scene3dAmbientR, this.scene3dAmbientG, this.scene3dAmbientB, this.scene3dAmbientIntensity);
     }
     if (s.ps1Jitter !== undefined || s.ps1Snap !== undefined) {
-      this.scene3dPS1Jitter = s.ps1Jitter ?? this.scene3dPS1Jitter;
-      this.scene3dPS1Snap = s.ps1Snap ?? this.scene3dPS1Snap;
-      this.scene3dPS1Affine = s.ps1Affine ?? this.scene3dPS1Affine;
-      this.scene3dPS1ColorDepth = s.ps1ColorDepth ?? this.scene3dPS1ColorDepth;
-      s3d?.setPS1Config?.({
-        vertexJitter: this.scene3dPS1Jitter, snapGridSize: this.scene3dPS1Snap,
-        affineWarp: this.scene3dPS1Affine, colorDepth: this.scene3dPS1ColorDepth,
-      });
+      this.scene3dPS1Jitter         = s.ps1Jitter         ?? this.scene3dPS1Jitter;
+      this.scene3dPS1Snap           = s.ps1Snap           ?? this.scene3dPS1Snap;
+      this.scene3dPS1Affine         = s.ps1Affine         ?? this.scene3dPS1Affine;
+      this.scene3dPS1ColorDepth     = s.ps1ColorDepth     ?? this.scene3dPS1ColorDepth;
+      this.scene3dPS1LoRes          = s.ps1LoRes          ?? this.scene3dPS1LoRes;
+      this.scene3dPS1ResW           = s.ps1ResW           ?? this.scene3dPS1ResW;
+      this.scene3dPS1ResH           = s.ps1ResH           ?? this.scene3dPS1ResH;
+      this.scene3dPS1Dither         = s.ps1Dither         ?? this.scene3dPS1Dither;
+      this.scene3dPS1DitherStrength = s.ps1DitherStrength ?? this.scene3dPS1DitherStrength;
+      this.scene3dPS1UVQuantize     = s.ps1UVQuantize     ?? this.scene3dPS1UVQuantize;
+      this.scene3dPS1UVSteps        = s.ps1UVSteps        ?? this.scene3dPS1UVSteps;
+      this.scene3dApplyPS1();
     }
     if (s.frustumCulling !== undefined) this.scene3dSetFrustumCulling(s.frustumCulling);
     if (s.animSyncWithTimeline !== undefined) this.scene3dAnimSyncWithTimeline = s.animSyncWithTimeline;
@@ -8345,6 +12475,59 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       if (s.gridOpacity !== undefined) this.scene3dGridOpacity = s.gridOpacity;
       if (s.gridColor !== undefined) this.scene3dGridColor = [...s.gridColor] as [number, number, number];
       this.applyScene3dGrid();
+    }
+    // Post-processing
+    if (s.bloomEnabled !== undefined || s.colorGradeEnabled !== undefined || s.vignetteEnabled !== undefined) {
+      this.scene3dBloomEnabled         = s.bloomEnabled         ?? this.scene3dBloomEnabled;
+      this.scene3dBloomThreshold       = s.bloomThreshold       ?? this.scene3dBloomThreshold;
+      this.scene3dBloomIntensity       = s.bloomIntensity       ?? this.scene3dBloomIntensity;
+      this.scene3dColorGradeEnabled    = s.colorGradeEnabled    ?? this.scene3dColorGradeEnabled;
+      this.scene3dColorGradeBrightness = s.colorGradeBrightness ?? this.scene3dColorGradeBrightness;
+      this.scene3dColorGradeContrast   = s.colorGradeContrast   ?? this.scene3dColorGradeContrast;
+      this.scene3dColorGradeSaturation = s.colorGradeSaturation ?? this.scene3dColorGradeSaturation;
+      if (s.colorGradeTint)            this.scene3dColorGradeTint = s.colorGradeTint;
+      this.scene3dVignetteEnabled      = s.vignetteEnabled      ?? this.scene3dVignetteEnabled;
+      this.scene3dVignetteIntensity    = s.vignetteIntensity    ?? this.scene3dVignetteIntensity;
+      this.scene3dVignetteRadius       = s.vignetteRadius       ?? this.scene3dVignetteRadius;
+      this.scene3dVignetteSoftness     = s.vignetteSoftness     ?? this.scene3dVignetteSoftness;
+      this.scene3dApplyPostProcessing();
+    }
+    // Fog
+    if (s.fogMode !== undefined) {
+      this.scene3dFogMode    = s.fogMode as any;
+      this.scene3dFogColor   = s.fogColor   ?? this.scene3dFogColor;
+      this.scene3dFogNear    = s.fogNear    ?? this.scene3dFogNear;
+      this.scene3dFogFar     = s.fogFar     ?? this.scene3dFogFar;
+      this.scene3dFogDensity = s.fogDensity ?? this.scene3dFogDensity;
+      this.scene3dApplyFog();
+    }
+    // Background
+    if (s.bgMode !== undefined) {
+      this.scene3dBgMode   = s.bgMode as any;
+      this.scene3dBgColor1 = s.bgColor1 ?? this.scene3dBgColor1;
+      this.scene3dBgColor2 = s.bgColor2 ?? this.scene3dBgColor2;
+      this.scene3dApplySceneBg();
+    }
+    // Visual quality / texture
+    if (s.enhancedVisuals !== undefined) this.scene3dSetEnhancedVisuals(s.enhancedVisuals);
+    if (s.glassQuality !== undefined) this.scene3dSetGlassQuality(s.glassQuality);
+    if (s.aerialPerspective !== undefined) this.scene3dSetAerialPerspective(s.aerialPerspective);
+    if (s.textureFilter !== undefined) this.scene3dSetTextureFilter(s.textureFilter as any);
+    // Wind
+    if (s.windDirDeg !== undefined || s.windStrength !== undefined || s.windSpeed !== undefined) {
+      this.sceneWindDirDeg   = s.windDirDeg   ?? this.sceneWindDirDeg;
+      this.sceneWindStrength = s.windStrength  ?? this.sceneWindStrength;
+      this.sceneWindSpeed    = s.windSpeed     ?? this.sceneWindSpeed;
+      this.scene3dApplyWind();
+    }
+    // IBL intensity (UI state only — image must be re-uploaded)
+    if (s.iblIntensity !== undefined) this.scene3dIblIntensity = s.iblIntensity;
+    // Cinematic cuts (host owns persistence)
+    if (s.cameraCuts?.length) {
+      const sm = this.shapeManager as any;
+      sm.setCameraCuts3D?.(s.cameraCuts);
+      this.scene3dCameraCuts = s.cameraCuts;
+      this.scene3dRefreshCameraNodes();
     }
   }
 
@@ -8388,7 +12571,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sm.setDitherInvertPattern?.(this.ditherConfig.invertPattern);
     sm.setDitherDuotoneBias?.(this.ditherConfig.duotoneBias);
     sm.setDitherTintOpacity?.(this.ditherConfig.tintOpacity);
-    console.log('[V2 Load] dither config restored:', this.ditherConfig.enabled ? 'ENABLED' : 'disabled', this.ditherConfig.algorithm);
   }
 
 
@@ -8677,6 +12859,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSub?.unsubscribe();
+    this._cityBuildSub?.unsubscribe();
     this.autoSaveSubscription?.unsubscribe();
     this._metaFlushSub?.unsubscribe();
     this.thumbnailSaveSubscription?.unsubscribe();
@@ -8686,21 +12869,39 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._rasterLayersSub?.unsubscribe();
     this._rasterActiveLayerSub?.unsubscribe();
     this._currentFrameSub?.unsubscribe();
+    this._cameraCutsSub?.unsubscribe();
+    this._uiEventOff?.();
+    this._uiSelectionOff?.();
+    this._pathEditedOff?.();
+    this._stopUiTick();
     this._scene3dViewportSub?.unsubscribe?.();
     this._scene3dResizeObserver?.disconnect();
     this._artboardViewportSub?.unsubscribe?.();
     this.autoSaveService.disable();
 
+    this._stopStreamStats();
+    if (this._pkgFoldRaf != null) { cancelAnimationFrame(this._pkgFoldRaf); this._pkgFoldRaf = undefined; }
+    if (this._pkgDimDebounce) clearTimeout(this._pkgDimDebounce);
     this._scene3dStopGizmoLoop();
     this._scene3dStopHandleLoop();
     if (this._textEffectAnimFrame != null) { cancelAnimationFrame(this._textEffectAnimFrame); this._textEffectAnimFrame = null; }
 
+    this.scene3dEndPlacePick();
+    this._hideCharmPreview();
+    if (this.scene3dIdleEnabled && this.scene3dEditCharBodyId) {
+      (this.shapeManager as any).setIdleAnimation3D?.(this.scene3dEditCharBodyId, false);
+    }
+    clearInterval(this._statsInterval);
     clearTimeout(this._snapFadeTimer);
     clearTimeout(this._charPreviewTimer);
     clearTimeout(this._bodyParamTimer);
     clearTimeout(this._hairParamTimer);
     clearTimeout(this._clothingParamTopTimer);
     clearTimeout(this._clothingParamBottomTimer);
+    clearTimeout(this._clothingParamShoesTimer);
+    clearTimeout(this._clothingParamSocksTimer);
+    clearTimeout(this._clothingParamUndershirtTimer);
+    clearTimeout(this._clothingParamUnderpantsTimer);
     clearTimeout(this._scene3dHtmlDebounce);
     clearTimeout(this._scene3dFlashTimer);
     clearTimeout(this._toolsSwapTimer);
@@ -8893,6 +13094,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     try {
       const sm = this.shapeManager as any;
 
+      const { default: JSZip } = await import('jszip');
       const salsaBlob: Blob = await sm.packProject();
       const zip = await JSZip.loadAsync(salsaBlob);
 
@@ -8933,6 +13135,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     (event.target as HTMLInputElement).value = '';
     if (!file) return;
     try {
+      const { default: JSZip } = await import('jszip');
       const zip = await JSZip.loadAsync(file);
       const frogmarksRaw = await zip.file('frogmarks-state.json')?.async('string');
       const meta = frogmarksRaw ? JSON.parse(frogmarksRaw) : null;
@@ -9093,5 +13296,153 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       console.error('[frogmarksLoad]', e);
       this.notifyService.error('Could not load project. The file may be corrupted or from a newer version of Frogmarks.');
     }
+  }
+
+  // ── GARP Skins ────────────────────────────────────────────────────────────
+
+  scene3dToggleGarpPanel(): void {
+    this.garpPanelOpen = !this.garpPanelOpen;
+    if (this.garpPanelOpen) this._refreshGarpPools();
+  }
+
+  private _refreshGarpPools(): void {
+    const sm = this.shapeManager as any;
+    const rawPools: any[] = sm.garp?.listPools?.() ?? [];
+    this.garpPools = rawPools.map((p: any) => {
+      // listPools() returns skins as a count (number); getPool() may return the full skin list
+      const full = sm.garp?.getPool?.(p.id);
+      const skinsRaw = Array.isArray(full?.skins) ? full.skins
+                     : Array.isArray(p.skins)      ? p.skins
+                     : [];
+      return { ...p, skins: skinsRaw };
+    });
+    if (this.garpPools.length > 0 && !this.garpPools.find((p: any) => p.id === this.garpActivePoolId)) {
+      this.garpActivePoolId = this.garpPools[0].id;
+    }
+  }
+
+  get garpActivePool(): { id: string; name: string; slots: Array<{ name: string; live: boolean }>; skins: Array<{ name: string }> } | null {
+    return this.garpPools.find(p => p.id === this.garpActivePoolId) ?? null;
+  }
+
+  get garpCanSave(): boolean {
+    return !!this.garpNewSkinName.trim() && !this.garpSaving && Object.keys(this.garpSlotSources).length > 0;
+  }
+
+  async garpUploadSlotImage(slotName: string, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.garpSlotSources = { ...this.garpSlotSources, [slotName]: reader.result as string };
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async garpUseCanvas(slotName: string): Promise<void> {
+    const sm = this.shapeManager as any;
+    const dataUrl: string | null = await sm.exportActiveLayerDataUrl?.() ?? null;
+    if (!dataUrl) { console.warn('[GARP] exportActiveLayerDataUrl: no active raster layer'); return; }
+    this.garpSlotSources = { ...this.garpSlotSources, [slotName]: dataUrl };
+  }
+
+  garpGetSlotRegions(slotName: string): Array<{ label: string; u0: number; v0: number; u1: number; v1: number }> {
+    const key = `${this.garpActivePoolId}:${slotName}`;
+    if (!this.garpSlotRegionsCache[key]) {
+      const sm = this.shapeManager as any;
+      this.garpSlotRegionsCache[key] = sm.garpSlotRegions3D?.(this.garpActivePoolId, slotName) ?? [];
+    }
+    return this.garpSlotRegionsCache[key];
+  }
+
+  garpStartPaint(slotName: string): void {
+    const sm = this.shapeManager as any;
+    const meshId: string | null = sm.paintGarpSlot3D?.(this.garpActivePoolId, slotName) ?? null;
+    if (!meshId) return;
+    this.garpPaintMeshId = meshId;
+    this.garpPaintSlot = slotName;
+    this.garpPaintSkinName = '';
+    // Open UV Editor on the paint preview so the user can see what they're painting
+    this.scene3dSelectedMeshId = meshId;
+    this.openUVEditor();
+  }
+
+  async garpSaveFromPaint(): Promise<void> {
+    if (!this.garpPaintMeshId || this.garpSaving) return;
+    const name = this.garpPaintSkinName.trim();
+    if (!name) return;
+    const pool = this.garpActivePool;
+    const existingNames = (Array.isArray(pool?.skins) ? pool.skins : []).map((s: any) => s.name as string);
+    if (existingNames.includes(name)) {
+      if (!confirm(`A skin named "${name}" already exists. Overwrite?`)) return;
+    }
+    this.garpSaving = true;
+    try {
+      const sm = this.shapeManager as any;
+      const errs: string[] = await sm.saveMeshAsGarpSkin3D?.(this.garpPaintMeshId, name) ?? [];
+      if (errs.length) console.warn('[GARP] saveMeshAsGarpSkin3D warnings:', errs);
+      this.garpPaintMeshId = null;
+      this.garpPaintSlot = null;
+      this.garpPaintSkinName = '';
+      this.closeUVEditor();
+      this._refreshGarpPools();
+      this.scene3dMarkDirty();
+    } finally {
+      this.garpSaving = false;
+    }
+  }
+
+  garpCancelPaint(): void {
+    (this.shapeManager as any).cancelGarpPaint3D?.();
+    this.garpPaintMeshId = null;
+    this.garpPaintSlot = null;
+    this.garpPaintSkinName = '';
+    this.closeUVEditor();
+  }
+
+  async garpSaveSkin(): Promise<void> {
+    const name = this.garpNewSkinName.trim();
+    if (!name || !this.garpActivePoolId || this.garpSaving) return;
+    const pool = this.garpActivePool;
+    if (!pool) return;
+
+    const slots: Record<string, { kind: 'image'; dataUrl: string }> = {};
+    for (const slot of pool.slots) {
+      const src = this.garpSlotSources[slot.name];
+      if (src) slots[slot.name] = { kind: 'image', dataUrl: src };
+    }
+    if (Object.keys(slots).length === 0) return;
+
+    const existingNames = (Array.isArray(pool.skins) ? pool.skins : []).map((s: any) => s.name as string);
+    if (existingNames.includes(name)) {
+      if (!confirm(`A skin named "${name}" already exists. Overwrite?`)) return;
+    }
+
+    this.garpSaving = true;
+    try {
+      const sm = this.shapeManager as any;
+      const errs: string[] = await sm.addGarpSkin3D?.(this.garpActivePoolId, name, slots) ?? [];
+      if (errs.length) console.warn('[GARP] addGarpSkin3D warnings:', errs);
+      this.garpNewSkinName = '';
+      this.garpSlotSources = {};
+      this._refreshGarpPools();
+      this.scene3dMarkDirty();
+    } finally {
+      this.garpSaving = false;
+    }
+  }
+
+  async garpDeleteSkin(poolId: string, skinName: string): Promise<void> {
+    if (!confirm(`Delete skin "${skinName}"?`)) return;
+    const sm = this.shapeManager as any;
+    await sm.removeGarpSkin3D?.(poolId, skinName);
+    this._refreshGarpPools();
+    this.scene3dMarkDirty();
+  }
+
+  garpRegenerateCity(): void {
+    (this.shapeManager as any).world?.updateCity(this._worldParams());
+    this.scene3dMarkDirty();
   }
 }

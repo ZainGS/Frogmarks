@@ -19,7 +19,6 @@ export class AuthorizeGuard  {
   }
 
   private handleAuthorization(isAuthenticated: boolean, state: RouterStateSnapshot) {
-    console.log("A");
     if (!isAuthenticated) {
       this.router.navigate(ApplicationPaths.LoginPathComponents, {
         queryParams: {

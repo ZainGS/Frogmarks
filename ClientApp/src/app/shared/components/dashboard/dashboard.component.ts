@@ -26,9 +26,10 @@ import { LocalIllustrationService, LocalIllustration } from 'app/shared/services
 import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
 import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-illustration-dialog.component';
 import { LocalInferenceService } from '../../services/inference/local-inference.service';
+import { PlayerCartService } from '../../services/player-cart.service';
 
 type DashboardItem = Board | Illustration;
 
@@ -96,6 +97,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
   nameControl = new FormControl<string>('');
   @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef<HTMLInputElement>>;
   @ViewChild('gridContainer') gridContainerEl?: ElementRef;
+  @ViewChild('paginationSentinel') private _paginationSentinel?: ElementRef;
+
+  private _cloudPageIndex = 0;
+  private _cloudHasMore = false;
+  private _isLoadingMore = false;
+  private _pageObserver?: IntersectionObserver;
 
   // Justified grid
   gridRows: GridRow[] = [];
@@ -463,6 +470,8 @@ onKeydown(e: KeyboardEvent) {
   // Filtering
   isFrogmarksGalaxyActive: boolean = false;
   isFrogPlayerActive: boolean = false;
+  isPlayerDragOver = false;
+  private _playerDragCounter = 0;
   isTemplatesActive: boolean = false;
   isDesignCenterActive: boolean = true;
   isFavoritesFilterActive: boolean = false;
@@ -597,7 +606,8 @@ onKeydown(e: KeyboardEvent) {
     public skinService: FroguiSkinService,
     private skinInspector: SkinInspectorService,
     private opfsMetadataService: OpfsMetadataService,
-    public localInference: LocalInferenceService) {
+    public localInference: LocalInferenceService,
+    private playerCartService: PlayerCartService) {
       this._boardService = boardService;
       this._illustrationService = illustrationService;
       this._teamService = teamService;
@@ -961,6 +971,7 @@ onKeydown(e: KeyboardEvent) {
     window.removeEventListener('scroll', this.scrollListener, true);
     window.removeEventListener('resize', this.onResize);
     this._resizeObserver?.disconnect();
+    this._pageObserver?.disconnect();
     this._sessionExpiredSub?.unsubscribe();
     this._inspectorPreviewSub?.unsubscribe();
     this._galleryPreviewSub?.unsubscribe();
@@ -1244,6 +1255,39 @@ onKeydown(e: KeyboardEvent) {
       this.isUpdatesActive = false;
       this.isTemplatesActive = false;
     }
+  }
+
+  onPlayerDragEnter(e: DragEvent): void {
+    e.preventDefault();
+    this._playerDragCounter++;
+    this.isPlayerDragOver = true;
+  }
+
+  onPlayerDragOver(e: DragEvent): void {
+    e.preventDefault(); // must preventDefault to allow drop
+  }
+
+  onPlayerDragLeave(_e: DragEvent): void {
+    this._playerDragCounter--;
+    if (this._playerDragCounter <= 0) { this._playerDragCounter = 0; this.isPlayerDragOver = false; }
+  }
+
+  onPlayerDrop(e: DragEvent): void {
+    e.preventDefault();
+    this._playerDragCounter = 0;
+    this.isPlayerDragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this._openCart(file);
+  }
+
+  onPlayerFileInput(e: Event): void {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) this._openCart(file);
+  }
+
+  private _openCart(blob: Blob): void {
+    this.playerCartService.pendingCart = blob;
+    this.router.navigate(['/player']);
   }
 
   frogPlayerClicked(): void {
@@ -1717,7 +1761,31 @@ onKeydown(e: KeyboardEvent) {
     const local = (item as any).thumbnailDataUrl;
     if (local) return local;
     const url = (item as any).thumbnailUrl;
-    return url && url !== '' ? url : 'https://placehold.jp/ffffff/ffffff/150x150.png';
+    if (url && url !== '') return url;
+    return this._generatePlaceholderSvg((item as any).name || 'Untitled');
+  }
+
+  private _generatePlaceholderSvg(name: string): string {
+    const hue = this._nameToHue(name);
+    const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+      <defs>
+        <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="hsl(${hue},55%,38%)"/>
+          <stop offset="100%" stop-color="hsl(${(hue + 40) % 360},60%,28%)"/>
+        </linearGradient>
+      </defs>
+      <rect width="150" height="150" fill="url(#g)"/>
+      <text x="75" y="90" text-anchor="middle" font-family="system-ui,sans-serif"
+            font-size="48" font-weight="700" fill="rgba(255,255,255,0.9)">${initials}</text>
+    </svg>`;
+    return 'data:image/svg+xml;base64,' + btoa(svg);
+  }
+
+  private _nameToHue(name: string): number {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+    return h % 360;
   }
 
   gridViewClicked() {
@@ -2451,6 +2519,7 @@ onKeydown(e: KeyboardEvent) {
   async downloadLocalBackup(): Promise<void> {
     this.isBackingUp = true;
     try {
+      const { default: JSZip } = await import('jszip');
       const root = await navigator.storage.getDirectory();
       const zip = new JSZip();
       await this._addDirToZip(root, zip, '');
@@ -2474,13 +2543,20 @@ onKeydown(e: KeyboardEvent) {
   private loadAllItems() {
     if (!this.currentTeam?.id) {
       this.isLoadingItems = false;
+      this._cloudHasMore = false;
       this._loadLocalItemsOnly();
       return;
     }
+
+    this._cloudPageIndex = 0;
+    this._cloudHasMore = false;
+    this._pageObserver?.disconnect();
+
+    const PAGE_SIZE = 24;
     const cloudPromises = [
       this._boardService.getBoardsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
         .pipe(catchError(err => { console.error('[Dashboard] boards fetch failed:', err); return of(null); })),
-      this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive)
+      this._illustrationService.getIllustrationsByTeamId(this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive, 'name', 'desc', 0, PAGE_SIZE)
         .pipe(catchError(err => { console.error('[Dashboard] illustrations fetch failed:', err); return of(null); })),
     ];
 
@@ -2496,18 +2572,17 @@ onKeydown(e: KeyboardEvent) {
           });
         }
 
-        if (illustrationsRes?.resultObject) {
-          illustrationsRes.resultObject.forEach((illustration: Illustration) => {
-            this.listItems.push({ ...illustration, type: 'illustration' });
-            if (illustration.isFavorite && illustration.uuid) this.favorites.add(illustration.uuid);
-          });
-        }
+        const illustrationPage: Illustration[] = illustrationsRes?.resultObject ?? [];
+        illustrationPage.forEach((illustration: Illustration) => {
+          this.listItems.push({ ...illustration, type: 'illustration' });
+          if (illustration.isFavorite && illustration.uuid) this.favorites.add(illustration.uuid);
+        });
+
+        this._cloudHasMore = illustrationPage.length >= PAGE_SIZE;
 
         // Merge local IndexedDB items, skipping any already represented by a cloud record
         try {
-          const cloudIds = new Set<number>(
-            (illustrationsRes?.resultObject ?? []).map((i: Illustration) => i.id).filter(Boolean)
-          );
+          const cloudIds = new Set<number>(illustrationPage.map((i: Illustration) => i.id).filter(Boolean));
           const localItems: LocalIllustration[] = await this.localIllustrationService.getAll(this.isArchivedFilterActive);
           const archiveFiltered = this.isArchivedFilterActive ? localItems.filter(i => i.isArchived) : localItems;
           const filtered = this.isFavoritesFilterActive ? archiveFiltered.filter(i => i.isFavorite) : archiveFiltered;
@@ -2524,12 +2599,54 @@ onKeydown(e: KeyboardEvent) {
         this._applyFilters();
         this.isLoadingItems = false;
         this.isLoading = false;
+
+        if (this._cloudHasMore) this._setupPageObserver();
       },
       error: (err) => {
         console.error('[Dashboard] forkJoin error:', err);
         this.isLoadingItems = false;
         this.isLoading = false;
       }
+    });
+  }
+
+  private _setupPageObserver(): void {
+    this._pageObserver?.disconnect();
+    // Wait one tick for Angular to render the sentinel element
+    setTimeout(() => {
+      const sentinel = this._paginationSentinel?.nativeElement;
+      if (!sentinel) return;
+      this._pageObserver = new IntersectionObserver(entries => {
+        if (entries[0]?.isIntersecting && this._cloudHasMore && !this._isLoadingMore) {
+          this._loadMoreCloudIllustrations();
+        }
+      }, { rootMargin: '200px' });
+      this._pageObserver.observe(sentinel);
+    });
+  }
+
+  private _loadMoreCloudIllustrations(): void {
+    if (!this.currentTeam?.id || this._isLoadingMore || !this._cloudHasMore) return;
+    this._isLoadingMore = true;
+    this._cloudPageIndex++;
+    const PAGE_SIZE = 24;
+
+    this._illustrationService.getIllustrationsByTeamId(
+      this.currentTeam.id!, '', this.isFavoritesFilterActive, this.isArchivedFilterActive,
+      'name', 'desc', this._cloudPageIndex, PAGE_SIZE
+    ).pipe(catchError(err => {
+      console.error('[Dashboard] page fetch failed:', err);
+      return of(null);
+    })).subscribe((res: any) => {
+      const page: Illustration[] = res?.resultObject ?? [];
+      page.forEach((illustration: Illustration) => {
+        this.listItems.push({ ...illustration, type: 'illustration' });
+        if (illustration.isFavorite && illustration.uuid) this.favorites.add(illustration.uuid);
+      });
+      this._cloudHasMore = page.length >= PAGE_SIZE;
+      this._isLoadingMore = false;
+      this._applyFilters();
+      if (!this._cloudHasMore) this._pageObserver?.disconnect();
     });
   }
 }

@@ -16,6 +16,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   private sm: any = null;
   private _activateSub?: Subscription;
   private _changeSub?: { unsubscribe(): void };
+  private _deleteSub?: { unsubscribe(): void };
   private _newlyCreatedIds = new Set<string>();
   private _pendingNewProjectResult: any = null;
 
@@ -42,6 +43,7 @@ export class StudioComponent implements OnInit, OnDestroy {
 
     this.sm = ShapeManager.getInstance();
     await this.sm.whenWebGPUReady?.();
+    this.sm.bootAndWarm?.(); // fire-and-forget: warms all pipelines while user browses shell
 
     // Point the shell at our IndexedDB illustration store so project IDs match.
     this.sm.shell?.setDocumentSource?.({
@@ -50,6 +52,7 @@ export class StudioComponent implements OnInit, OnDestroy {
         return items.map(i => ({
           id:               i.uuid,
           name:             i.name,
+          kind:             i.kind ?? 'illustration',
           thumbnailDataUrl: i.thumbnailDataUrl,
           lastModified:     i.updatedAt,
         }));
@@ -66,12 +69,18 @@ export class StudioComponent implements OnInit, OnDestroy {
     await this.sm.shell?.load?.();
     this.sm.setShellLogo?.('assets/images/logo.png');
 
-    this._activateSub = this.sm.shell?.onActivate?.subscribe(({ id, kind }: any) => {
-      this.ngZone.run(() => this._handleActivation(id, kind));
+    this._activateSub = this.sm.shell?.onActivate?.subscribe(({ id, kind, dashboardKind }: any) => {
+      this.ngZone.run(() => this._handleActivation(id, kind, dashboardKind));
     });
 
     this._changeSub = this.sm.shell?.onChange?.subscribe(() => {
       this.ngZone.run(() => this._refreshAria());
+    });
+
+    this._deleteSub = this.sm.shell?.onProjectDelete?.subscribe(({ id }: { id: string }) => {
+      this.localIllustrationService.delete(id).then(() => {
+        this.sm.shell?.notifyProjectsChanged?.();
+      });
     });
 
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
@@ -82,24 +91,29 @@ export class StudioComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
+    this._deleteSub?.unsubscribe();
     this.sm?.shell?.destroyScene?.();
     const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
     if (webgpuCanvas) webgpuCanvas.style.pointerEvents = '';
   }
 
-  private _handleActivation(id: string, kind: string): void {
+  private _handleActivation(id: string, kind: string, dashboardKind?: string): void {
     switch (kind) {
       case 'project':
         if (this._newlyCreatedIds.has(id)) {
           this._newlyCreatedIds.delete(id);
-          this._openNewProject(id);
+          this._openNewProject(id, dashboardKind);
         } else {
-          this._openProject(id);
+          this._openProject(id, dashboardKind);
         }
         break;
       case 'empty':
         if (id === '__new_project__') {
-          this._initiateNewProject();
+          if (dashboardKind === 'packaging') {
+            this._initiateNewPackagingProject();
+          } else {
+            this._initiateNewProject();
+          }
         } else {
           this.showInstallDialog = true;
         }
@@ -110,17 +124,29 @@ export class StudioComponent implements OnInit, OnDestroy {
     }
   }
 
-  private _openProject(projectId: string): void {
-    this.router.navigate(['/illustration/local', projectId]);
+  private _openProject(projectId: string, dashboardKind?: string): void {
+    if (dashboardKind === 'packaging') {
+      this.router.navigate(['/packaging/local', projectId]);
+    } else {
+      this.router.navigate(['/illustration/local', projectId]);
+    }
+  }
+
+  private async _initiateNewPackagingProject(): Promise<void> {
+    const name = 'Product Packaging';
+    const item = await this.localIllustrationService.create(name, undefined, 'packaging');
+    this.router.navigate(['/packaging/local', item.uuid]);
   }
 
   private _initiateNewProject(): void {
+    if (this.dialog.openDialogs.length > 0) return;
     const dialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
       panelClass: 'new-illustration-dialog',
       disableClose: false,
       enterAnimationDuration: '0ms',
       data: { isLoggedIn: false },
+      position: { top: '100%' },
     });
     dialogRef.afterClosed().subscribe(async (result: any) => {
       if (!result) return;
@@ -139,7 +165,11 @@ export class StudioComponent implements OnInit, OnDestroy {
     });
   }
 
-  private _openNewProject(projectId: string): void {
+  private _openNewProject(projectId: string, dashboardKind?: string): void {
+    if (dashboardKind === 'packaging') {
+      this.router.navigate(['/packaging/local', projectId]);
+      return;
+    }
     const result = this._pendingNewProjectResult;
     this._pendingNewProjectResult = null;
     if (result?.bounded && result.docW && result.docH) {

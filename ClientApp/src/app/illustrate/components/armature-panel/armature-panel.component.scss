@@ -1,4 +1,4 @@
-$accent:  #e07b30;
+$accent:  #4caf96;
 $bg:      #1a1a1a;
 $border:  rgba(255, 255, 255, 0.1);
 $text:    rgba(255, 255, 255, 0.85);
@@ -550,6 +550,21 @@ $muted:   rgba(255, 255, 255, 0.45);
   min-width: 22px;
   text-align: right;
   flex-shrink: 0;
+}
+
+.ar-select-xs {
+  flex: none;
+  width: 36px;
+  background: #252525;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 2px 2px;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+  option { background: #252525; }
 }
 
 .ar-select-sm {

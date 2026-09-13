@@ -102,6 +102,8 @@ export interface RasterLayer {
   clipped: boolean;
   lockTransparency: boolean;
   collapsed?: boolean;        // only meaningful for folders
+  systemOwner?: string;       // set by Salsa for engine-managed layers (e.g. 'packaging') — hide from UI
+  packageOwnerId?: string;    // which package node owns this layer (from Salsa getVectorLayers)
 }
 
 // ── Enums ──────────────────────────────────────────────────────

@@ -228,6 +228,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 
 // Add CORS policy
 builder.Services.AddCors(options =>

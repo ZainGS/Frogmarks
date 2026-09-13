@@ -74,12 +74,14 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   private _placementJointCount = 0;
 
   skeletonsCollapsed = false;
-  jointsCollapsed = false;
+  jointsCollapsed = true;
   bindCollapsed = false;
-  weightPaintCollapsed = false;
+  weightPaintCollapsed = true;
   clipsCollapsed = false;
-  retargetCollapsed = false;
-  armatureToolMode: 'move' | 'rotate' = 'move';
+  retargetCollapsed = true;
+  armatureToolMode: 'move' | 'rotate' = 'rotate';
+  showSpringBones = true;
+  showFkBones = true;
   selectedJointIdx: number | null = null;
   renamingIdx: number | null = null;
   renameValue = '';
@@ -160,17 +162,22 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
 
   // ── Pose Library ──────────────────────────────────────────────────
   poseLibraryCollapsed = false;
-  poses: Array<{ id: string; name: string }> = [];
+  poses: Array<{ id: string; name: string; region?: string }> = [];
+  poseRegionFilter: string = 'all';
+  get filteredPoses() {
+    if (this.poseRegionFilter === 'all') return this.poses;
+    return this.poses.filter(p => p.region === this.poseRegionFilter);
+  }
   newPoseName = '';
   renamingPoseId: string | null = null;
   renamePoseValue = '';
 
   // ── Preset Poses ──────────────────────────────────────────────────
-  presetPosesCollapsed = false;
+  presetPosesCollapsed = true;
   presetPoseNames: string[] = [];
 
   // ── Spring / Jiggle ───────────────────────────────────────────────
-  springCollapsed = false;
+  springCollapsed = true;
   springChains: any[] = [];
   selectedSpringChainId: string | null = null;
   springStiffness = 0.5;
@@ -204,6 +211,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
       this.refreshMeshes();
       this.sm?.enterArmatureMode3D?.(this.bindMeshId || undefined);
       this.sm?.setArmatureBgMode3D?.({ mode: this.bgMode });
+      this.sm?.setArmatureToolMode3D?.('rotate');
       this.refreshSkeletons();
     }
   }
@@ -332,6 +340,10 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.sm?.setArmatureBgMode3D?.({ mode: this.bgMode });
   }
 
+  setBoneVisibility(showSpring: boolean, showFk: boolean): void {
+    this.sm?.setBoneVisibility3D?.(showSpring, showFk);
+  }
+
   setToolMode(mode: 'move' | 'rotate'): void {
     this.armatureToolMode = mode;
     this.sm?.setArmatureToolMode3D?.(mode);
@@ -380,7 +392,10 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
         this.sm?.showBoneOverlay3D?.(this.activeSkeleton?.id ?? null, this.bindMeshId || undefined);
       }
     } else if (this.skeletons.length > 0) {
-      this.activeSkeleton = this.skeletons[0];
+      // Prefer the skeleton bound to the initial mesh (e.g. the selected character)
+      const boundId = this.initialMeshId ? this.sm?.getSkeletonIdForMesh3D?.(this.initialMeshId) : null;
+      const preferred = boundId ? this.skeletons.find(s => s.id === boundId) : null;
+      this.activeSkeleton = preferred ?? this.skeletons[0];
       this.sm?.showBoneOverlay3D?.(this.activeSkeleton.id, this.bindMeshId || undefined);
     }
 
@@ -906,9 +921,24 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.refreshPoses();
   }
 
+  exportPoseForClaude(): void {
+    const pose: string = this.sm?.exportPoseData3D?.(this.activeSkeleton?.id) ?? '';
+    const body: string = this.initialMeshId ? (this.sm?.exportBodyData3D?.(this.initialMeshId) ?? '') : '';
+    const text = [pose, body].filter(s => s).join('\n\n');
+    if (!text) return;
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
+
   applyPose(poseId: string): void {
     if (!this.activeSkeleton) return;
     this.sm?.applyPose3D?.(this.activeSkeleton.id, poseId);
+  }
+
+  setPoseRegion(poseId: string, region: string): void {
+    if (!this.activeSkeleton) return;
+    this.sm?.setPoseRegion3D?.(this.activeSkeleton.id, poseId, region || null);
+    const pose = this.poses.find(p => p.id === poseId);
+    if (pose) pose.region = region || undefined;
   }
 
   startRenamePose(poseId: string, currentName: string, event: Event): void {

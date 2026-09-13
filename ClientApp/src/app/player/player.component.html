@@ -1,0 +1,35 @@
+<div class="player-shell"
+     (dragenter)="!isLoaded && onDragEnter($event)"
+     (dragover)="!isLoaded && onDragOver($event)"
+     (dragleave)="!isLoaded && onDragLeave($event)"
+     (drop)="!isLoaded && onDrop($event)">
+
+  <!-- Canvas (always mounted so WebGPU has a target) -->
+  <canvas #webgpuCanvas id="playerCanvas" class="player-canvas" [class.hidden]="!isLoaded"></canvas>
+
+  <!-- Header bar (shown when a cart is loaded) -->
+  <div class="player-header" *ngIf="isLoaded">
+    <span class="player-header-title">{{ cartTitle }}</span>
+    <span class="player-header-author" *ngIf="cartAuthor">by {{ cartAuthor }}</span>
+    <button class="player-exit-btn" (click)="goHome()" title="Exit player">✕ Exit</button>
+  </div>
+
+  <!-- Drop zone (shown when nothing loaded) -->
+  <div class="player-drop-zone" *ngIf="!isLoaded && !isLoading" [class.drag-over]="isDragOver">
+    <div class="player-drop-icon">💿</div>
+    <div class="player-drop-heading">Frogmarks Player</div>
+    <div class="player-drop-sub">Drop a <code>.frogcart</code> file here to play it</div>
+    <label class="player-file-btn">
+      Choose file
+      <input type="file" accept=".frogcart" style="display:none" (change)="onFileInput($event)">
+    </label>
+    <div class="player-error" *ngIf="errorMsg">{{ errorMsg }}</div>
+  </div>
+
+  <!-- Loading spinner -->
+  <div class="player-loading" *ngIf="isLoading">
+    <div class="player-loading-spinner"></div>
+    <div class="player-loading-label">Loading…</div>
+  </div>
+
+</div>

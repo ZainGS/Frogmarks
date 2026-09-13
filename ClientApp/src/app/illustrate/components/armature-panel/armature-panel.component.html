@@ -51,6 +51,28 @@
       </ng-container>
     </div>
 
+    <!-- ── Tool mode toggle (above Joints) ─────────────────── -->
+    <div *ngIf="activeSkeleton" class="ar-btn-pair" style="margin-bottom:8px">
+      <button class="ar-op-btn" style="flex:1"
+              [class.ar-active]="armatureToolMode === 'rotate'"
+              (click)="setToolMode('rotate')">Rotate</button>
+      <button class="ar-op-btn" style="flex:1"
+              [class.ar-active]="armatureToolMode === 'move'"
+              (click)="setToolMode('move')">Move</button>
+    </div>
+    <div *ngIf="activeSkeleton" style="display:flex;gap:12px;margin-bottom:8px;padding:0 2px">
+      <label class="ar-checkbox-row" style="font-size:10px;color:rgba(255,255,255,0.5);gap:4px">
+        <input type="checkbox" [(ngModel)]="showFkBones"
+               (ngModelChange)="setBoneVisibility(showSpringBones, $event)">
+        Skeleton
+      </label>
+      <label class="ar-checkbox-row" style="font-size:10px;color:rgba(76,175,150,0.7);gap:4px">
+        <input type="checkbox" [(ngModel)]="showSpringBones"
+               (ngModelChange)="setBoneVisibility($event, showFkBones)">
+        Spring
+      </label>
+    </div>
+
     <!-- ── Joints ───────────────────────────────────────────── -->
     <div class="ar-section" *ngIf="activeSkeleton">
       <div class="ar-section-title ar-section-title-toggle" (click)="jointsCollapsed = !jointsCollapsed">
@@ -58,16 +80,6 @@
       </div>
 
       <ng-container *ngIf="!jointsCollapsed">
-
-        <!-- Tool mode toggle -->
-        <div class="ar-btn-pair" style="margin-bottom:8px">
-          <button class="ar-op-btn" style="flex:1"
-                  [class.ar-active]="armatureToolMode === 'move'"
-                  (click)="setToolMode('move')">Move</button>
-          <button class="ar-op-btn" style="flex:1"
-                  [class.ar-active]="armatureToolMode === 'rotate'"
-                  (click)="setToolMode('rotate')">Rotate</button>
-        </div>
 
         <!-- Primary: place in viewport -->
         <div style="margin-bottom:6px">
@@ -412,18 +424,43 @@
 
       <ng-container *ngIf="!poseLibraryCollapsed">
         <!-- Capture row -->
-        <div class="ar-form-row" style="margin-bottom:6px">
+        <div class="ar-form-row" style="margin-bottom:4px">
           <input type="text" class="ar-text ar-text-inline" placeholder="Pose name…"
                  [(ngModel)]="newPoseName"
                  (keydown.enter)="capturePose()">
           <button class="ar-op-btn" (click)="capturePose()">+ Capture</button>
         </div>
+        <div style="margin-bottom:6px">
+          <button class="ar-op-btn ar-op-secondary" style="width:100%;font-size:11px"
+                  (click)="exportPoseForClaude()"
+                  title="Copy current pose + body proportions to clipboard — paste to Claude with a description to bake into a pose or clip">
+            📋 Copy pose + body for Claude
+          </button>
+        </div>
+
+        <!-- Region filter -->
+        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">
+          <button *ngFor="let r of ['all','left','right','top','bottom','center']"
+                  class="ar-op-btn ar-op-xs"
+                  [class.ar-active]="poseRegionFilter === r"
+                  (click)="poseRegionFilter = r">{{ r }}</button>
+        </div>
 
         <!-- Pose list -->
         <div class="ar-list">
-          <div *ngFor="let p of poses" class="ar-list-row">
+          <div *ngFor="let p of filteredPoses" class="ar-list-row">
             <ng-container *ngIf="renamingPoseId !== p.id; else poseRenameRow">
               <span class="ar-clip-name">{{ p.name }}</span>
+              <select class="ar-select-xs" [ngModel]="p.region || ''"
+                      (ngModelChange)="setPoseRegion(p.id, $event)"
+                      title="Region tag">
+                <option value="">—</option>
+                <option value="left">L</option>
+                <option value="right">R</option>
+                <option value="top">T</option>
+                <option value="bottom">B</option>
+                <option value="center">C</option>
+              </select>
               <button class="ar-op-btn ar-op-xs" (click)="applyPose(p.id)" title="Apply pose">Apply</button>
               <button class="ar-op-btn ar-op-xs ar-op-ghost"
                       (click)="startRenamePose(p.id, p.name, $event)" title="Rename">✎</button>
@@ -438,7 +475,9 @@
               <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="cancelRenamePose()">✕</button>
             </ng-template>
           </div>
-          <div *ngIf="poses.length === 0" class="ar-hint">No poses captured yet.</div>
+          <div *ngIf="filteredPoses.length === 0" class="ar-hint">
+            {{ poses.length === 0 ? 'No poses captured yet.' : 'No poses in this region.' }}
+          </div>
         </div>
       </ng-container>
     </div>

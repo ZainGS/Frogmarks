@@ -556,6 +556,163 @@ body.theme-retro-chrome .lt-panel {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4D  SELECTION TOOLBAR PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .sel-toolbar {
+  font-family: 'Courier New', monospace !important;
+
+  .sel-param-label, .sel-param-unit {
+    color: var(--rc-text-label) !important;
+    font-size: 10px !important;
+    font-family: 'Courier New', monospace !important;
+  }
+
+  .sel-divider {
+    background: var(--rc-bevel-mid) !important;
+    height: 1px !important;
+  }
+
+  // All buttons: base chrome style
+  button {
+    background: #404040 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    cursor: pointer !important;
+    &:hover:not(:disabled) { background: #555555 !important; }
+    &:disabled { opacity: 0.35 !important; cursor: default !important; }
+  }
+
+  // Active tool button — green sunken bevel
+  .sel-tool-btn.active {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+    svg { stroke: var(--rc-green-txt) !important; }
+  }
+
+  // Commit action button
+  .sel-action-btn.commit {
+    background: rgba(46, 107, 40, 0.3) !important;
+    border-color: var(--rc-green-hi) !important;
+    color: var(--rc-green-txt) !important;
+    &:hover:not(:disabled) { background: rgba(46, 107, 40, 0.6) !important; }
+  }
+
+  // Cancel action button
+  .sel-action-btn.cancel {
+    background: rgba(139, 26, 26, 0.3) !important;
+    border-color: var(--rc-danger-hi) !important;
+    color: #ff9090 !important;
+    &:hover:not(:disabled) { background: rgba(139, 26, 26, 0.6) !important; }
+  }
+
+  // Danger hover (Delete)
+  .sel-action-btn.danger:hover:not(:disabled) {
+    border-color: var(--rc-danger-hi) !important;
+    color: #ff9090 !important;
+  }
+
+  // Number input
+  .sel-param-num {
+    background: #111 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    &:focus { outline: 1px solid var(--rc-green-hi) !important; border-color: var(--rc-green) !important; }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4E  SPEECH BALLOON PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .bp-panel {
+  font-family: 'Courier New', monospace !important;
+
+  label { color: var(--rc-text-label) !important; font-size: 10px !important; }
+  hr    { border-color: var(--rc-bevel-mid) !important; }
+
+  select, input[type="number"], input[type="text"] {
+    background: #111 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    padding: 2px 4px !important;
+  }
+
+  // All buttons: base chrome bevel
+  button {
+    background: #404040 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    cursor: pointer !important;
+    &:hover:not(:disabled) { background: #555555 !important; }
+  }
+
+  // Toggle buttons (Writing H/V, Tail direction) — active = green sunken
+  .bp-seg-btn.bp-seg-active {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 4F  PANEL LAYOUT PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+body.theme-retro-chrome .pl-panel {
+  font-family: 'Courier New', monospace !important;
+
+  label { color: var(--rc-text-label) !important; font-size: 10px !important; }
+  hr    { border-color: var(--rc-bevel-mid) !important; }
+
+  select {
+    background: #111 !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+    color: var(--rc-text) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    padding: 2px 4px !important;
+  }
+
+  // Create Layout button: chrome bevel, green-tinted primary
+  .pl-create-btn {
+    background: var(--rc-green) !important;
+    border: 2px solid !important;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+    color: var(--rc-green-txt) !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important;
+    border-radius: 0 !important;
+    cursor: pointer !important;
+    letter-spacing: 0.5px !important;
+    &:hover { background: var(--rc-green-hi) !important; }
+  }
+}
+
+
 // Tool subpanel — slide-out from left toolbar (position: fixed; top: 0)
 // The entire panel gets the chrome shell + green header treatment.
 // Padding is removed so the green header sits flush at the top edge.
@@ -1260,6 +1417,31 @@ body.theme-retro-chrome .tool-subpanel {
   border-bottom: 4px solid var(--rc-green) !important;
 }
 
+// Top-bar view segmented buttons (2D Ortho / 2D Persp / 3D Free / Illus / Scene)
+body.theme-retro-chrome .scene-view-seg {
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+body.theme-retro-chrome .scene-view-btn {
+  background: var(--rc-surface) !important;
+  color: var(--rc-text-muted) !important;
+  border: none !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  font-weight: normal !important;
+  &:hover { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+  & + & { border-left: 1px solid #222 !important; }
+
+  &.active {
+    background: var(--rc-green) !important;
+    color: var(--rc-green-txt) !important;
+    font-weight: bold !important;
+  }
+}
+
 // Share button — bright white chrome with black text
 body.theme-retro-chrome .top-toolbar-btn.share-btn {
   background: #e8e8e8 !important;
@@ -1697,4 +1879,289 @@ body.theme-retro-chrome .right-column {
 
 body.theme-retro-chrome .right-column.no-timeline {
   border-right: 4px solid var(--rc-green);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 13  NEW ILLUSTRATION DIALOG  (.nid)
+// Activation: body.theme-retro-chrome  (same as all other sections)
+// Default theme is fully preserved — every rule is scoped here.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Darker backdrop for the dialog
+body.theme-retro-chrome .cdk-overlay-backdrop {
+  background-color: rgba(0, 0, 0, 0.78) !important;
+}
+
+// CDK dialog surface — keep transparent so .nid paints the chrome shell
+body.theme-retro-chrome .new-illustration-dialog .mdc-dialog__surface,
+body.theme-retro-chrome .new-illustration-dialog .mat-mdc-dialog-surface {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+// ── Root shell ────────────────────────────────────────────────────────────
+body.theme-retro-chrome .nid {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+// ── Header — green title strip ────────────────────────────────────────────
+body.theme-retro-chrome .nid-header {
+  background: var(--rc-green) !important;
+  border-bottom: 2px solid var(--rc-bevel-lt) !important;
+  padding: 6px 10px !important;
+}
+
+body.theme-retro-chrome .nid-title {
+  color: var(--rc-green-txt) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+}
+
+body.theme-retro-chrome .nid-close {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-size: 11px !important;
+  transition: background 0.05s !important;
+
+  &:hover { background: var(--rc-surface-hi) !important; color: #fff !important; }
+}
+
+// ── Labels ────────────────────────────────────────────────────────────────
+body.theme-retro-chrome .nid-label {
+  color: var(--rc-text-label) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 11px !important;
+  letter-spacing: 0.8px !important;
+}
+
+// ── Toggle buttons (Bounded/Infinite, Portrait/Landscape/Square) ──────────
+body.theme-retro-chrome .nid-toggle button,
+body.theme-retro-chrome .nid-orient button {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text-muted) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 12px !important;
+  padding: 3px 12px !important;
+  transition: background 0.05s !important;
+
+  &.on {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+
+  &:hover:not(.on) {
+    background: var(--rc-surface-hi) !important;
+    color: var(--rc-text) !important;
+  }
+}
+
+// ── Preset select ─────────────────────────────────────────────────────────
+body.theme-retro-chrome .nid-select {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 12px !important;
+
+  &:focus { outline: 1px solid var(--rc-green-hi) !important; border-color: var(--rc-green) !important; }
+  option  { background: var(--rc-panel-bg) !important; }
+}
+
+// ── Dimension inputs ──────────────────────────────────────────────────────
+body.theme-retro-chrome .nid-num {
+  background: #111 !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 13px !important;
+
+  &:focus { outline: 1px solid var(--rc-green-hi) !important; border-color: var(--rc-green) !important; }
+}
+
+body.theme-retro-chrome .nid-x    { color: var(--rc-bevel-mid) !important; font-size: 14px !important; }
+body.theme-retro-chrome .nid-unit { color: var(--rc-text-muted) !important; font-size: 12px !important; font-family: 'Courier New', monospace !important; }
+
+body.theme-retro-chrome .nid-lock {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text-muted) !important;
+
+  mat-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; line-height: 14px !important; }
+  &:hover  { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+}
+
+body.theme-retro-chrome .nid-aspect-row {
+  color: var(--rc-text-muted) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 11px !important;
+}
+
+body.theme-retro-chrome .nid-warn {
+  color: #c87820 !important;
+  font-size: 10px !important;
+  font-family: 'Courier New', monospace !important;
+}
+
+// ── Aspect-ratio preview box — sunken bevel with green tint ───────────────
+body.theme-retro-chrome .nid-preview-box {
+  background: rgba(59, 97, 81, 0.45) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+  border-radius: 0 !important;
+  box-shadow: inset 0 0 8px rgba(79, 122, 104, 0.35) !important;
+  transition: width 0.05s, height 0.05s !important;
+}
+
+// ── Storage section — section header green bar style ──────────────────────
+body.theme-retro-chrome .nid-storage-section > .nid-label {
+  color: var(--rc-green-hi) !important;
+  border-left: 3px solid var(--rc-green) !important;
+  background: #1c1c1c !important;
+  padding: 2px 6px !important;
+  font-size: 9px !important;
+  letter-spacing: 1px !important;
+}
+
+// ── Sync mode option buttons ──────────────────────────────────────────────
+body.theme-retro-chrome .nid-sync-btn {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text-muted) !important;
+  transition: background 0.05s !important;
+
+  &.on {
+    background: rgba(59, 97, 81, 0.25) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    border-left: 3px solid var(--rc-green-hi) !important;
+    color: var(--rc-green-txt) !important;
+  }
+
+  &:hover:not(.on):not(.nid-sync-btn--disabled) {
+    background: var(--rc-surface-hi) !important;
+    color: var(--rc-text) !important;
+  }
+
+  &.nid-sync-btn--disabled { opacity: 0.25 !important; }
+}
+
+body.theme-retro-chrome .nid-sync-label {
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.5px !important;
+}
+
+body.theme-retro-chrome .nid-sync-desc {
+  color: var(--rc-text-muted) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 11px !important;
+}
+
+body.theme-retro-chrome .nid-sync-icon { color: var(--rc-green-hi) !important; }
+
+// ── Hint icon (?) — square chrome style ──────────────────────────────────
+body.theme-retro-chrome .nid-hint-icon {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text-muted) !important;
+  width: 16px !important;
+  height: 16px !important;
+  line-height: 14px !important;
+  font-size: 9px !important;
+
+  &:hover {
+    background: var(--rc-green) !important;
+    border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
+    color: var(--rc-green-txt) !important;
+  }
+}
+
+// Tooltip panel
+body.theme-retro-chrome .nid-hint-tip {
+  background: var(--rc-panel-bg) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  border-radius: 0 !important;
+  color: var(--rc-text) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5) !important;
+
+  &::after { display: none !important; } // remove arrow pointer; chrome panels don't have them
+}
+
+body.theme-retro-chrome .nid-sync-hint {
+  color: var(--rc-text-muted) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+
+  &--warn { color: #c87820 !important; }
+}
+
+body.theme-retro-chrome .nid-infinite-hint {
+  color: var(--rc-text-muted) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────
+body.theme-retro-chrome .nid-footer {
+  border-top: 2px solid var(--rc-bevel-dk) !important;
+  padding: 8px 12px 12px !important;
+}
+
+body.theme-retro-chrome .nid-btn {
+  border-radius: 0 !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  letter-spacing: 0.5px !important;
+  padding: 5px 16px !important;
+  transition: background 0.05s !important;
+}
+
+body.theme-retro-chrome .nid-btn-cancel {
+  background: var(--rc-surface) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-text) !important;
+
+  &:hover { background: var(--rc-surface-hi) !important; }
+}
+
+body.theme-retro-chrome .nid-btn-create {
+  background: var(--rc-green) !important;
+  border: 2px solid !important;
+  border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
+  color: var(--rc-green-txt) !important;
+  text-transform: uppercase !important;
+
+  &:hover { background: var(--rc-green-hi) !important; }
 }

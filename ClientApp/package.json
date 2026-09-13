@@ -2,17 +2,23 @@
   "name": "frogmarks",
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=18.19"
+  },
   "scripts": {
     "ng": "ng",
     "prestart": "node aspnetcore-https.cjs",
     "start": "run-script-os",
     "start:windows": "ng serve --port 44452 --ssl --ssl-cert \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.pem\" --ssl-key \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.key\"",
     "start:default": "ng serve --port 44452 --ssl --ssl-cert \"$HOME/.aspnet/https/${npm_package_name}.pem\" --ssl-key \"$HOME/.aspnet/https/${npm_package_name}.key\"",
+    "start:fresh": "run-script-os",
+    "start:fresh:windows": "rmdir /s /q .angular\\cache 2>nul & ng serve --port 44452 --ssl --ssl-cert \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.pem\" --ssl-key \"%APPDATA%\\ASP.NET\\https\\%npm_package_name%.key\"",
+    "start:fresh:default": "rm -rf .angular/cache && ng serve --port 44452 --ssl --ssl-cert \"$HOME/.aspnet/https/${npm_package_name}.pem\" --ssl-key \"$HOME/.aspnet/https/${npm_package_name}.key\"",
     "build": "ng build",
     "build:ssr": "ng run Frogmarks:server:dev",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "postinstall": "ngcc --properties es2015 browser module main"
+    "postinstall": "echo postinstall ok"
   },
   "private": true,
   "dependencies": {
@@ -26,19 +32,13 @@
     "@angular/platform-browser-dynamic": "^17.3.12",
     "@angular/platform-server": "^17.3.12",
     "@angular/router": "^17.3.12",
-    "@azure/msal-angular": "^3.0.23",
-    "@azure/msal-browser": "^3.20.0",
     "@splinetool/runtime": "^1.10.77",
     "@zaings/salsa": "file:../../../salsa",
     "bootstrap": "^5.3.3",
     "gifenc": "^1.0.3",
-    "jquery": "^3.6.0",
     "jszip": "^3.10.1",
     "mp4-muxer": "^5.2.2",
-    "node": "18.19",
-    "oidc-client": "^1.11.5",
-    "popper.js": "^1.16.0",
-    "run-script-os": "^1.1.6",
+    "oidc-client-ts": "^3.1.0",
     "rxjs": "~7.5.6",
     "three": "^0.180.0",
     "tslib": "^2.4.0",
@@ -60,6 +60,9 @@
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "^2.0.0",
+    "node": "18.19",
+    "run-script-os": "^1.1.6",
+    "sharp": "^0.35.3",
     "typescript": "^5.4.5"
   },
   "overrides": {

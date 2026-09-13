@@ -1,4 +1,4 @@
-import { Component, Inject, Optional } from '@angular/core';
+import { Component, Inject, Optional, ViewEncapsulation } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 
 export interface NewIllustrationDialogData {
@@ -10,7 +10,8 @@ export interface NewIllustrationDialogData {
 @Component({
   selector: 'app-new-illustration-dialog',
   templateUrl: './new-illustration-dialog.component.html',
-  styleUrls: ['./new-illustration-dialog.component.scss']
+  styleUrls: ['./new-illustration-dialog.component.scss'],
+  encapsulation: ViewEncapsulation.None,
 })
 export class NewIllustrationDialogComponent {
 

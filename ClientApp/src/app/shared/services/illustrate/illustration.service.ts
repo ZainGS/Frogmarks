@@ -111,6 +111,7 @@ export interface IllustrationStateDto {
   bgColor?: string | null;
   dotColor?: string | null;
   paperGrain?: { type: string; scale: number; strength: number } | null;
+  packaging?: PackagingStateDto | null;
   scene3dGlobalSettings?: {
     // Camera
     cameraMode?: string;
@@ -121,11 +122,36 @@ export interface IllustrationStateDto {
     shadowMapSize?: number;
     shadowExtent?: number;
     shadowBias?: number;
+    shadowStrength?: number;
+    // SSAO
+    ssaoEnabled?: boolean;
+    ssaoRadius?: number; ssaoIntensity?: number; ssaoPower?: number; ssaoBias?: number;
+    ssaoResolutionScale?: number; ssaoSamples?: number;
     // Lighting
-    lightDirX?: number; lightDirY?: number; lightDirZ?: number; lightIntensity?: number;
+    lightAzimuth?: number; lightElevation?: number; lightIntensity?: number;
+    keyLightColor?: string;
+    lightDirX?: number; lightDirY?: number; lightDirZ?: number; // legacy — kept for backward compat reads
     ambientR?: number; ambientG?: number; ambientB?: number; ambientIntensity?: number;
+    ambientColor?: string;
     // PS1 renderer
     ps1Jitter?: number; ps1Snap?: number; ps1Affine?: number; ps1ColorDepth?: number;
+    ps1LoRes?: boolean; ps1ResW?: number; ps1ResH?: number;
+    ps1Dither?: boolean; ps1DitherStrength?: number; ps1UVQuantize?: boolean; ps1UVSteps?: number;
+    // Post-processing
+    bloomEnabled?: boolean; bloomThreshold?: number; bloomIntensity?: number;
+    colorGradeEnabled?: boolean; colorGradeBrightness?: number; colorGradeContrast?: number;
+    colorGradeSaturation?: number; colorGradeTint?: string;
+    vignetteEnabled?: boolean; vignetteIntensity?: number; vignetteRadius?: number; vignetteSoftness?: number;
+    // Fog
+    fogMode?: string; fogColor?: string; fogNear?: number; fogFar?: number; fogDensity?: number;
+    // Background
+    bgMode?: string; bgColor1?: string; bgColor2?: string;
+    // Visual quality
+    enhancedVisuals?: boolean; glassQuality?: boolean; aerialPerspective?: number; textureFilter?: string;
+    // Wind
+    windDirDeg?: number; windStrength?: number; windSpeed?: number;
+    // IBL
+    iblIntensity?: number;
     // Frustum / animation player
     frustumCulling?: boolean;
     animSyncWithTimeline?: boolean;
@@ -142,7 +168,17 @@ export interface IllustrationStateDto {
     gridVisible?: boolean;
     gridOpacity?: number;
     gridColor?: [number, number, number];
+    // Cinematic cuts (host-owned persistence)
+    cameraCuts?: { cameraId: string; frame: number }[];
   } | null;
+}
+
+export interface PackagingStateDto {
+  packagingId: string;
+  style: 'simpleBox';
+  params: { width: number; height: number; depth: number; bleed?: number; dpi?: number };
+  dielineLayerId: string;
+  foldAmount: number;
 }
 
 export interface CelStatusItem {

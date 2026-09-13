@@ -194,29 +194,29 @@ export class BoardComponent implements OnInit {
   cursorSelected: boolean = true;
   panHandSelected: boolean = false;
 
-  selectedStamp: string = "assets/stamps/star.png"; // Default stamp
+  selectedStamp: string = "assets/stamps/star.webp"; // Default stamp
   selectedStampColor: string = "#FFFFFF";
   selectedStampSize: number = 0.10;
   stampPalette: string[] = [
-    "assets/stamps/star.png",
-    "assets/stamps/heart.png", 
-    "assets/stamps/check.png",
-    "assets/stamps/arrow.png",
-    "assets/stamps/circle.png",
-    "assets/stamps/x.png",
-    "assets/stamps/thumbs_up.png",
-    "assets/stamps/icecream/icecream_strawberry.png"
+    "assets/stamps/star.webp",
+    "assets/stamps/heart.webp", 
+    "assets/stamps/check.webp",
+    "assets/stamps/arrow.webp",
+    "assets/stamps/circle.webp",
+    "assets/stamps/x.webp",
+    "assets/stamps/thumbs_up.webp",
+    "assets/stamps/icecream/icecream_strawberry.webp"
   ];
 
   iceCreamStamps: string[] = [
-    "assets/stamps/icecream/icecream_chocolate.png",
-    "assets/stamps/icecream/icecream_chocolate2.png", 
-    "assets/stamps/icecream/icecream_matcha.png",
-    "assets/stamps/icecream/icecream_matcha2.png",
-    "assets/stamps/icecream/icecream_strawberry.png",
-    "assets/stamps/icecream/icecream_strawberry2.png",
-    "assets/stamps/icecream/icecream_vanilla.png",
-    "assets/stamps/icecream/icecream_vanilla2.png"
+    "assets/stamps/icecream/icecream_chocolate.webp",
+    "assets/stamps/icecream/icecream_chocolate2.webp", 
+    "assets/stamps/icecream/icecream_matcha.webp",
+    "assets/stamps/icecream/icecream_matcha2.webp",
+    "assets/stamps/icecream/icecream_strawberry.webp",
+    "assets/stamps/icecream/icecream_strawberry2.webp",
+    "assets/stamps/icecream/icecream_vanilla.webp",
+    "assets/stamps/icecream/icecream_vanilla2.webp"
   ];
 
 getRandomIceCreamStamp(): string {
@@ -861,7 +861,6 @@ onNodeFillColorSelected(layerId: string, color: string) {
             await this.setBoardSceneGraph(this.board.sceneGraphData);
             
             const rawSceneGraph = JSON.parse(this.board.sceneGraphData);
-            console.log(rawSceneGraph);
             this.layerTree = this.buildLayerTree(rawSceneGraph.root); // Top-level
 
             // Fallback: if no event within a frame, consider applied
@@ -1358,9 +1357,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
     if (!this.board) return;
     if (currentJSON !== this.lastSavedJSON) {
       this.lastSavedJSON = currentJSON; // Update last saved JSON
-      this.boardService.saveBoard(this.board.id, currentJSON).subscribe(() => {
-        console.log('Board auto-saved.');
-      });
+      this.boardService.saveBoard(this.board.id, currentJSON).subscribe();
     }
   }
 
@@ -1382,12 +1379,9 @@ onNodeFillColorSelected(layerId: string, color: string) {
     const now = Date.now();
 
     if (currentSceneGraphJSON !== this.lastSavedThumbnailJSON) {
-        console.log("SceneGraph changed, updating thumbnail...");
         this.saveThumbnail();
         this.lastSavedThumbnailJSON = currentSceneGraphJSON; // Update snapshot
         this.lastThumbnailTime = now;
-    } else {
-        console.log("No changes detected, skipping thumbnail update.");
     }
   }
 

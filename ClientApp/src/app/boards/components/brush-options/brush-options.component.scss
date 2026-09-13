@@ -24,7 +24,7 @@ $radius: 6px;
 .brush-panel-header {
   font-weight: 700;
   font-size: 13px;
-  padding-bottom: 6px;
+  padding: 0 8px 6px;
   border-bottom: 1px solid $border;
   display: flex;
   align-items: center;
@@ -216,7 +216,7 @@ $radius: 6px;
 /* ── Quick controls (below grid) ─────────────────────────────── */
 
 .quick-controls {
-  padding-top: 6px;
+  padding: 6px 8px 0;
   border-top: 1px solid $border;
   display: flex;
   flex-direction: column;
@@ -258,7 +258,7 @@ $radius: 6px;
   flex: 1;
   overflow-y: auto;
   min-height: 200px;
-  padding: 4px 0;
+  padding: 4px 8px 8px;
   scrollbar-width: thin;
   scrollbar-color: $border transparent;
 }
@@ -266,7 +266,7 @@ $radius: 6px;
 .editor-footer {
   display: flex;
   gap: 4px;
-  padding-top: 6px;
+  padding: 6px 8px 0;
   border-top: 1px solid $border;
   flex-wrap: wrap;
 }
@@ -645,7 +645,7 @@ $radius: 6px;
 .import-row {
   display: flex;
   gap: 4px;
-  padding-top: 6px;
+  padding: 6px 8px 0;
   border-top: 1px solid $border;
   margin-top: 4px;
 }
