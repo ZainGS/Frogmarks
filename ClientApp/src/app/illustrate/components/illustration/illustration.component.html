@@ -1468,6 +1468,28 @@
                               title="Convert to editable path">✒</button>
                     </div>
                   </details>
+
+                  <!-- Align / Distribute / Flip — visible when shapes are selected -->
+                  <div *ngIf="selectedLayerIds.size > 0" class="vector-align-panel">
+                    <div class="vector-align-row">
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('left')" title="Align left edges">⬛⬜⬜</button>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('centerX')" title="Align centers (X)">⬜⬛⬜</button>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('right')" title="Align right edges">⬜⬜⬛</button>
+                      <span class="vector-align-sep"></span>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('top')" title="Align top edges">⬛⬜</button>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('middleY')" title="Align centers (Y)">⬜⬛</button>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 2" (click)="vectorAlign('bottom')" title="Align bottom edges">⬜⬜</button>
+                    </div>
+                    <div class="vector-align-row">
+                      <span class="vector-align-label">Distrib</span>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 3" (click)="vectorDistribute('x')" title="Distribute evenly (X)">↔</button>
+                      <button class="scene3d-icon-btn" [disabled]="selectedLayerIds.size < 3" (click)="vectorDistribute('y')" title="Distribute evenly (Y)">↕</button>
+                      <span class="vector-align-sep"></span>
+                      <span class="vector-align-label">Flip</span>
+                      <button class="scene3d-icon-btn" (click)="vectorFlip('horizontal')" title="Flip horizontal">⇔</button>
+                      <button class="scene3d-icon-btn" (click)="vectorFlip('vertical')" title="Flip vertical">⇕</button>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- ═══ 3D Scene Panel (shown when 3D scene entry is selected) ═══ -->
@@ -2120,6 +2142,13 @@
                             </div>
                         </ng-container>
                     </details>
+
+                    <!-- Particle emitters — Scene tab outliner -->
+                    <app-particle-emitters
+                        #particleEmitters
+                        [shapeManager]="$any(shapeManager)"
+                        [selectedId]="selectedParticleEmitterId">
+                    </app-particle-emitters>
 
                     <!-- Normal mesh panel (hidden for array groups) -->
                     <div *ngIf="scene3dSelectedMeshId && !scene3dIsArrayGroup">
@@ -3375,14 +3404,6 @@
                         </div>
                     </details>
 
-                    <details class="scene3d-details" #particlesDetails>
-                        <summary>Particles</summary>
-                        <app-particle-emitters
-                            #particleEmitters
-                            [shapeManager]="$any(shapeManager)">
-                        </app-particle-emitters>
-                    </details>
-
                     <details class="scene3d-details">
                         <summary>Grid Visibility</summary>
                         <div class="scene3d-toggle-row">
@@ -3722,6 +3743,61 @@
                                    (input)="onLayerDitherHalftoneFrequencyChange(selectedRasterLayerId, $any($event.target).value)">
                             <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ getLayerDitherConfig(selectedRasterLayerId).halftoneFrequency }}</span>
                         </div>
+                    </div>
+
+                    <!-- Edge Effects (GPU algorithms only — bayer/halftone/blue_noise/noise) -->
+                    <div *ngIf="isGpuDitherAlgorithm(getLayerDitherConfig(selectedRasterLayerId).algorithm)">
+                        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+                            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Edge Effects</label>
+                        </div>
+                        <!-- Edge Width -->
+                        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                            <label style="width: 50px; color:#aaa; font-size: 10px;">Width px</label>
+                            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                                   [value]="getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0"
+                                   (input)="onLayerDitherEdgeWidthChange(selectedRasterLayerId, $any($event.target).value)">
+                            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0 }}</span>
+                        </div>
+                        <!-- Edge sub-controls (only when width > 0) -->
+                        <ng-container *ngIf="(getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0) > 0">
+                            <!-- Mode segmented control -->
+                            <div style="display: flex; gap: 2px; margin-bottom: 5px;">
+                                <button class="scene3d-btn scene3d-btn-sm"
+                                        [class.scene3d-btn-active]="($any(getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'content'"
+                                        (click)="onLayerDitherEdgeModeChange(selectedRasterLayerId, 'content')"
+                                        title="Ramp toward stroke/content boundary">Stroke</button>
+                                <button class="scene3d-btn scene3d-btn-sm"
+                                        [class.scene3d-btn-active]="($any(getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'canvas'"
+                                        (click)="onLayerDitherEdgeModeChange(selectedRasterLayerId, 'canvas')"
+                                        title="Ramp toward document border (vignette)">Canvas</button>
+                                <button class="scene3d-btn scene3d-btn-sm"
+                                        [class.scene3d-btn-active]="($any(getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'both'"
+                                        (click)="onLayerDitherEdgeModeChange(selectedRasterLayerId, 'both')"
+                                        title="Whichever boundary is nearer">Both</button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                                <label style="width: 50px; color:#aaa; font-size: 10px;">Fade</label>
+                                <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                                       [value]="mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeFade ?? 0) * 100)"
+                                       (input)="onLayerDitherEdgeFadeChange(selectedRasterLayerId, $any($event.target).value)">
+                                <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeFade ?? 0) * 100) }}%</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                                <label style="width: 50px; color:#aaa; font-size: 10px;">Shrink</label>
+                                <input type="range" min="-100" max="100" step="1" style="flex: 1;"
+                                       [value]="mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeShrink ?? 0) * 100)"
+                                       (input)="onLayerDitherEdgeShrinkChange(selectedRasterLayerId, $any($event.target).value)">
+                                <span style="min-width: 30px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeShrink ?? 0) * 100) }}%</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                                <label style="width: 50px; color:#aaa; font-size: 10px;">Density</label>
+                                <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                                       [value]="mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeDensity ?? 0) * 100)"
+                                       (input)="onLayerDitherEdgeDensityChange(selectedRasterLayerId, $any($event.target).value)">
+                                <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((getLayerDitherConfig(selectedRasterLayerId).edgeDensity ?? 0) * 100) }}%</span>
+                                <button class="scene3d-icon-btn" (click)="onLayerDitherEdgeSeedReroll(selectedRasterLayerId)" title="Re-roll which dots drop out">↻</button>
+                            </div>
+                        </ng-container>
                     </div>
                 </div>
             </div>

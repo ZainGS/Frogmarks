@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy } from '@angular/core';
+import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 
 export interface ParticleEmitterRecord {
   id: string;
@@ -87,8 +87,9 @@ function makeRecord(id: string, preset?: string): ParticleEmitterRecord {
   templateUrl: './particle-emitters.component.html',
   styleUrls: ['./particle-emitters.component.scss'],
 })
-export class ParticleEmittersComponent implements OnDestroy {
+export class ParticleEmittersComponent implements OnChanges, OnDestroy {
   @Input() shapeManager: any = null;
+  @Input() selectedId: string | null = null;
 
   emitters: ParticleEmitterRecord[] = [];
   editingId: string | null = null;
@@ -183,9 +184,16 @@ export class ParticleEmittersComponent implements OnDestroy {
     this._cfgDebounce = setTimeout(() => this._flush(rec), 50);
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['selectedId'] && this.selectedId) {
+      const exists = this.emitters.some(e => e.id === this.selectedId);
+      if (exists) this.openEdit(this.selectedId);
+    }
+  }
+
   onPositionChange(rec: ParticleEmitterRecord): void {
     const node = this.shapeManager?.getParticleEmitter3D?.(rec.id);
-    node?.setPosition3D?.(rec.posX, rec.posY, rec.posZ);
+    node?.setXYZ?.(rec.posX, rec.posY, rec.posZ);
   }
 
   onDirectionChange(rec: ParticleEmitterRecord): void {

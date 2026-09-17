@@ -882,6 +882,35 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.updateLayerDitherField(layerId, 'halftoneFrequency', +freq);
   }
 
+  onLayerDitherEdgeWidthChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeWidth', +value);
+  }
+
+  onLayerDitherEdgeFadeChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeFade', +value / 100);
+  }
+
+  onLayerDitherEdgeShrinkChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeShrink', +value / 100);
+  }
+
+  onLayerDitherEdgeDensityChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeDensity', +value / 100);
+  }
+
+  onLayerDitherEdgeSeedReroll(layerId: string): void {
+    const current = (this.getLayerDitherConfig(layerId) as any)['edgeSeed'] ?? 0;
+    this.updateLayerDitherField(layerId, 'edgeSeed', (current + 1) % 65536);
+  }
+
+  onLayerDitherEdgeModeChange(layerId: string, mode: 'content' | 'canvas' | 'both'): void {
+    this.updateLayerDitherField(layerId, 'edgeMode', mode);
+  }
+
+  isGpuDitherAlgorithm(algorithm: DitherAlgorithm): boolean {
+    return ['bayer', 'halftone_dot', 'halftone_line', 'halftone_diamond', 'blue_noise', 'noise'].includes(algorithm as string);
+  }
+
   // Color helpers
   private hexToRgba01(hex: string): [number, number, number, number] {
     hex = hex.replace('#', '');
@@ -1474,6 +1503,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.refreshVectorShapes();
   }
 
+  vectorAlign(dir: 'left' | 'centerX' | 'right' | 'top' | 'middleY' | 'bottom'): void {
+    (this.shapeManager as any)?.alignSelectedShapes?.(dir);
+  }
+
+  vectorDistribute(axis: 'x' | 'y'): void {
+    (this.shapeManager as any)?.distributeSelectedShapes?.(axis);
+  }
+
+  vectorFlip(axis: 'horizontal' | 'vertical'): void {
+    (this.shapeManager as any)?.flipSelectedShapes?.(axis);
+  }
+
   importSVGPath(): void {
     const d = this.svgImportD.trim();
     if (!d) return;
@@ -1605,6 +1646,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // Selection-driven package mode
   scene3dSelectedIsPackage = false;
   pkgSelectedId: string | null = null;
+  // Selection-driven particle emitter panel
+  selectedParticleEmitterId: string | null = null;
   // Dieline pane handle (from attachDielinePane) — LIVE handle, re-use on resize/setDimensions
   private _pkgDielinePane: any = null;
   pkgGuideTypes = new Set<string>(['cut', 'fold', 'bleed', 'panel', 'slit']);
@@ -9362,6 +9405,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         }
         if (!pkgFound) { this.scene3dSelectedIsPackage = false; this.pkgSelectedId = null; }
         if (!charFound) { this.scene3dSelectedIsCharacter = false; }
+
+        // Particle emitter selection
+        const firstId = selectedIds[0] ?? null;
+        if (firstId && sm3d.getParticleEmitter3D?.(firstId)) {
+          this.selectedParticleEmitterId = firstId;
+        } else {
+          this.selectedParticleEmitterId = null;
+        }
       });
     });
 
@@ -9622,6 +9673,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     // Global undo/redo routing by active context.
     if (ctrlKey && (event.key === 'z' || event.key === 'Z')) {
+      // 2D object stack takes priority — engine already consumed via stopImmediatePropagation
+      const sm2d = this.shapeManager as any;
+      if (!event.shiftKey && sm2d.canUndo2DShapes) { event.preventDefault(); return; }
+      if (event.shiftKey && sm2d.canRedo2DShapes) { event.preventDefault(); return; }
       // Ctrl+Z or Cmd+Z -> undo; if Shift pressed, do redo.
       if (this.is3DContextActive) {
         if (event.shiftKey) {
@@ -9641,6 +9696,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
 
     if (ctrlKey && (event.key === 'y' || event.key === 'Y')) {
+      // 2D object stack takes priority
+      const sm2d = this.shapeManager as any;
+      if (sm2d.canRedo2DShapes) { event.preventDefault(); return; }
       // Ctrl+Y or Cmd+Y -> redo
       if (this.is3DContextActive) {
         this.scene3dRedo();
@@ -12551,6 +12609,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       invertPattern: config.invertPattern ?? false,
       duotoneBias: config.duotoneBias ?? 0.5,
       tintOpacity: config.tintOpacity ?? 1.0,
+      edgeWidth: config.edgeWidth ?? 0,
+      edgeFade: config.edgeFade ?? 0,
+      edgeShrink: config.edgeShrink ?? 0,
+      edgeDensity: config.edgeDensity ?? 0,
+      edgeSeed: config.edgeSeed ?? 0,
+      edgeMode: config.edgeMode ?? 'content',
     };
 
     const sm = this.shapeManager;

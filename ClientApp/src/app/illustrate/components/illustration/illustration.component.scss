@@ -2814,6 +2814,30 @@ svg {
     &:focus { outline: 1px solid #9B59B6; }
 }
 
+.vector-align-panel {
+    padding: 4px 0 2px;
+    border-top: 1px solid #333;
+    margin-top: 4px;
+}
+
+.vector-align-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 0;
+}
+
+.vector-align-sep {
+    flex: 1;
+}
+
+.vector-align-label {
+    font-size: 9px;
+    color: #777;
+    padding: 0 3px;
+    white-space: nowrap;
+}
+
 .scene3d-section-label {
     font-size: 9px;
     font-weight: 700;

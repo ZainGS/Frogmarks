@@ -312,6 +312,13 @@ export interface DitherConfig {
   invertPattern: boolean;
   duotoneBias: number;
   tintOpacity: number;
+  // Edge/boundary effects (GPU ordered algorithms only)
+  edgeWidth: number;
+  edgeFade: number;
+  edgeShrink: number;
+  edgeDensity: number;
+  edgeSeed: number;
+  edgeMode: 'content' | 'canvas' | 'both';
 }
 
 export const DEFAULT_DITHER_CONFIG: DitherConfig = {
@@ -330,6 +337,12 @@ export const DEFAULT_DITHER_CONFIG: DitherConfig = {
   invertPattern: false,
   duotoneBias: 0.5,
   tintOpacity: 1.0,
+  edgeWidth: 0,
+  edgeFade: 0,
+  edgeShrink: 0,
+  edgeDensity: 0,
+  edgeSeed: 0,
+  edgeMode: 'content',
 };
 
 export interface DitherAlgorithmOption {
