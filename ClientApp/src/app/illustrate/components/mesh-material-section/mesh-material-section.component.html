@@ -1,0 +1,202 @@
+<details class="scene3d-details">
+    <summary>Material</summary>
+
+    <!-- Single-material mode (no submesh slots) -->
+    <ng-container *ngIf="scene3dSubmeshes.length === 0">
+        <div class="scene3d-material-row">
+            <label>Style</label>
+            <select class="scene3d-select" [ngModel]="scene3dRenderStyle" (ngModelChange)="scene3dSetRenderStyle($event)">
+                <option value="default">Default (PBR)</option>
+                <option value="gouraud">Gouraud (PS1)</option>
+                <option value="cel">Cel / Toon</option>
+                <option value="cel-hd">Cel-HD</option>
+                <option value="sketch">Sketch</option>
+                <option value="ink">Ink / Manga</option>
+                <option value="unlit">Unlit</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="scene3dRenderStyle === 'sketch'">
+            <label title="Scene-wide. 1 = off-white paper with a colour wash · 0 = full colour with pencil hatching · 0.75 = the classic look">Paper</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="scene3dSketchPaper" (ngModelChange)="sketchPaperEdited.emit($event)">
+            <span class="scene3d-val">{{ scene3dSketchPaper | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Color</label>
+            <input type="color" [(ngModel)]="scene3dMeshColor" (input)="scene3dUpdateMeshColor()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Opacity</label>
+            <input type="range" min="0" max="100" step="1" [value]="scene3dMeshOpacity * 100" (input)="scene3dMeshOpacity = +$any($event.target).value / 100; scene3dUpdateMeshOpacity()">
+            <span class="scene3d-val">{{ mathRound(scene3dMeshOpacity * 100) }}%</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Roughness</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dMeshRoughness" (input)="scene3dUpdateMeshRoughness()">
+            <span class="scene3d-val">{{ scene3dMeshRoughness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Metalness</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dMeshMetalness" (input)="scene3dUpdateMeshMetalness()">
+            <span class="scene3d-val">{{ scene3dMeshMetalness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="scene3dMeshMetalness > 0.05">
+            <label style="flex:1">Matte (no reflections)</label>
+            <input type="checkbox" [(ngModel)]="scene3dMeshNoEnvReflection" (change)="scene3dUpdateMeshNoEnvReflection()" title="Ignore sky reflections — use for painted metals, powder coat, etc.">
+        </div>
+        <div class="scene3d-material-row">
+            <label style="flex:1">True mirror</label>
+            <input type="checkbox" [(ngModel)]="scene3dMeshPlanarReflector" (change)="scene3dUpdateMeshPlanarReflector()" title="Pixel-exact mirror reflection — one per scene. Use roughness ~0 for crispness.">
+        </div>
+        <div class="scene3d-material-row">
+            <label style="flex:1">No fog</label>
+            <select [(ngModel)]="scene3dMeshNoFog" (change)="scene3dUpdateMeshNoFog()" title="Skip the scene fog for this object (sky domes, clouds, backdrops). Hard edge only = fogged as usual unless Global settings, Fog, Hard edge is on.">
+                <option value="">Off</option>
+                <option value="always">Always</option>
+                <option value="hardEdge">Hard edge only</option>
+            </select>
+        </div>
+        <ng-container *ngIf="scene3dSurfacesList.length > 0">
+        <div class="scene3d-sub-header">Surface Material</div>
+        <div class="scene3d-material-row">
+            <label>Surface</label>
+            <select class="scene3d-select" [(ngModel)]="groundSurface">
+                <option *ngFor="let s of scene3dSurfacesList" [value]="s">{{ scene3dFormatSurfaceName(s) }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="groundSurface !== 'grass' && groundSurface !== 'asphalt' && groundSurface !== 'dirt'">
+            <label>Tile (mm)</label>
+            <input type="number" min="50" max="2000" step="50" [(ngModel)]="groundTileMm" class="scene3d-number-input">
+        </div>
+        <div class="scene3d-material-row" *ngIf="groundSurface === 'radialMedallion'">
+            <label>Ring (mm)</label>
+            <input type="number" min="100" max="2000" step="50" [(ngModel)]="groundRingMm" class="scene3d-number-input">
+        </div>
+        <div class="scene3d-material-row" *ngIf="groundSurface === 'radialMedallion'">
+            <label>Wedges</label>
+            <input type="number" min="4" max="32" step="1" [(ngModel)]="groundWedges" class="scene3d-number-input">
+        </div>
+        <div class="scene3d-material-row" *ngIf="groundSurface !== 'grass' && groundSurface !== 'asphalt' && groundSurface !== 'dirt'">
+            <label>Grout (mm)</label>
+            <input type="number" min="1" max="100" step="1" [(ngModel)]="groundGroutMm" class="scene3d-number-input">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Tint</label>
+            <input type="color" [(ngModel)]="groundTintHex">
+        </div>
+        <div class="scene3d-material-row" *ngIf="groundSurface === 'grass'">
+            <label>Dirt tint</label>
+            <input type="color" [(ngModel)]="groundDirtTintHex">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Extent (m)</label>
+            <input type="number" min="1" max="500" step="1" [(ngModel)]="groundExtentM" class="scene3d-number-input">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Weathering</label>
+            <select class="scene3d-select" [(ngModel)]="groundWeather">
+                <option value="new">New</option>
+                <option value="worn">Worn</option>
+                <option value="ancient">Ancient</option>
+                <option value="mossy">Mossy</option>
+                <option value="dirty">Dirty</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Moss tint</label>
+            <input type="color" [(ngModel)]="groundMossTintHex">
+        </div>
+        <div class="scene3d-toggle-row">
+            <label>Wear track</label>
+            <input type="checkbox" [(ngModel)]="groundWearTrack">
+        </div>
+        <div class="scene3d-material-row">
+            <button class="scene3d-btn scene3d-btn-sm" (click)="applyGroundMaterial()">Apply Surface</button>
+            <button class="scene3d-btn scene3d-btn-sm" (click)="clearGroundMaterial()"
+                    title="Remove the procedural surface (keeps any diffuse texture)">Clear Surface</button>
+        </div>
+        </ng-container>
+        <ng-container *ngIf="scene3dSelectedMeshType === 'box' || scene3dSelectedMeshType === 'plane'">
+        <div class="scene3d-sub-header">Scatter (P5)</div>
+        <div class="scene3d-material-row">
+            <label>Flowers</label>
+            <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterFlowers">
+            <span class="scene3d-val">{{ groundScatterFlowers | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Tall grass</label>
+            <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterTallGrass">
+            <span class="scene3d-val">{{ groundScatterTallGrass | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Bushes</label>
+            <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterBushes">
+            <span class="scene3d-val">{{ groundScatterBushes | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Pebbles</label>
+            <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterPebbles">
+            <span class="scene3d-val">{{ groundScatterPebbles | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Rocks</label>
+            <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterRocks">
+            <span class="scene3d-val">{{ groundScatterRocks | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row" style="gap:4px">
+            <button class="scene3d-btn scene3d-btn-sm" (click)="applyGroundScatter()">Scatter</button>
+            <button class="scene3d-btn scene3d-btn-sm" *ngIf="groundScatterGroupId" (click)="clearGroundScatter()">Clear</button>
+        </div>
+        </ng-container>
+    </ng-container>
+
+    <!-- Multi-material slots mode -->
+    <ng-container *ngIf="scene3dSubmeshes.length > 0">
+        <div class="scene3d-submesh-list">
+            <div *ngFor="let slot of scene3dSubmeshes; let i = index" class="scene3d-submesh-slot">
+                <div class="scene3d-submesh-header">
+                    <input class="scene3d-submesh-label-input" [(ngModel)]="slot.label"
+                           (change)="scene3dUpdateSubmeshLabel(i)"
+                           [title]="'Slot ' + i + ' label'">
+                    <button class="scene3d-move-btn" (click)="scene3dRemoveSubmesh(i)" title="Remove slot">✕</button>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Style</label>
+                    <select class="scene3d-select" [(ngModel)]="slot.renderStyle"
+                            (ngModelChange)="scene3dUpdateSubmeshRenderStyle(i, $event)">
+                        <option value="default">Default</option>
+                        <option value="cel">Cel / Toon</option>
+                        <option value="cel-hd">Cel-HD</option>
+                        <option value="sketch">Sketch</option>
+                        <option value="ink">Ink / Manga</option>
+                        <option value="unlit">Unlit</option>
+                    </select>
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Color</label>
+                    <input type="color" [(ngModel)]="slot.color" (input)="scene3dUpdateSubmeshColor(i)">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Opacity</label>
+                    <input type="range" min="0" max="100" step="1" [value]="slot.opacity * 100"
+                           (input)="slot.opacity = +$any($event.target).value / 100; scene3dUpdateSubmeshOpacity(i)">
+                    <span class="scene3d-val">{{ mathRound(slot.opacity * 100) }}%</span>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px">
+            <button class="scene3d-btn" style="flex:1"
+                    (click)="scene3dAddSubmesh()"
+                    title="Add a new material slot">+ Add Slot</button>
+            <button class="scene3d-btn" style="flex:1"
+                    (click)="scene3dClearSubmeshes()"
+                    title="Revert to single-material mode">↩ Single</button>
+        </div>
+    </ng-container>
+
+    <!-- Add first slot button (transitions single → multi) -->
+    <ng-container *ngIf="scene3dSubmeshes.length === 0">
+        <button class="scene3d-btn" style="margin-top:6px;width:100%"
+                (click)="scene3dAddSubmesh()"
+                title="Add a material slot to enable per-part materials">+ Add Material Slot</button>
+    </ng-container>
+</details>

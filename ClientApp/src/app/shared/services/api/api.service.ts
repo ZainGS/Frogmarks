@@ -20,37 +20,38 @@ export class ApiService {
     this.scope = this.configService.systemConfiguration.roleScope;
   }
 
+  // Every helper sends the login cookie: the API is on another origin and authenticates by the accessToken cookie
+  // (without withCredentials these calls were anonymous and fail once their endpoint requires login).
   get<T>(endpoint: string): Observable<T> {
-    return this.http.get<any>(`${this.apiUrl}/${endpoint}`).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.get<any>(`${this.apiUrl}/${endpoint}`, { withCredentials: true }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   getAllById<T>(endpoint: string, id: string | number): Observable<T[]> {
-    return this.http.get<T[]>(`${this.apiUrl}/${endpoint}/${id}`).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.get<T[]>(`${this.apiUrl}/${endpoint}/${id}`, { withCredentials: true }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   create<T>(endpoint: string, model: T): Observable<T> {
-    console.log(`${this.apiUrl}/${endpoint}`);
-    return this.http.post<T>(`${this.apiUrl}/${endpoint}`, model).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.post<T>(`${this.apiUrl}/${endpoint}`, model, { withCredentials: true }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   getById<T>(endpoint: string, id: string | number, options = {}): Observable<T> {
-    return this.http.get<T>(`${this.apiUrl}/${endpoint}/${id}`, options).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.get<T>(`${this.apiUrl}/${endpoint}/${id}`, { withCredentials: true, ...options }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   update<T>(endpoint: string, model: T): Observable<T> {
-    return this.http.put<T>(`${this.apiUrl}/${endpoint}`, model).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.put<T>(`${this.apiUrl}/${endpoint}`, model, { withCredentials: true }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   delete<T>(endpoint: string, id: number): Observable<T> {
-    return this.http.delete<T>(`${this.apiUrl}/${endpoint}/${id}`).pipe(catchError((error) => this.handleError<T>(error)));
+    return this.http.delete<T>(`${this.apiUrl}/${endpoint}/${id}`, { withCredentials: true }).pipe(catchError((error) => this.handleError<T>(error)));
   }
 
   uploadDocuments(endpoint: string, formData: FormData): Observable<HttpEvent<any>> {
-    return this.http.post(`${this.apiUrl}/${endpoint}`, formData, { reportProgress: true, observe: 'events' }).pipe(catchError((error) => this.handleError<FormData>(error)));
+    return this.http.post(`${this.apiUrl}/${endpoint}`, formData, { reportProgress: true, observe: 'events', withCredentials: true }).pipe(catchError((error) => this.handleError<FormData>(error)));
   }
 
   downloadDocument<T>(endpoint: string): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/${endpoint}`, { responseType: 'blob' })
+    return this.http.get(`${this.apiUrl}/${endpoint}`, { responseType: 'blob', withCredentials: true })
       .pipe(catchError(error => this.handleError<T>(error)));
   }
 
@@ -65,25 +66,18 @@ export class ApiService {
       order = 'desc';
     }
     const requestUrl = `${this.apiUrl}/${endpoint}?${filter}&sort=${sort}&order=${order}&pageIndex=${pageIndex + 1}&pageSize=${pageSize}`;
-    return this.http.get<any>(requestUrl).pipe(catchError(error => this.handleError<T>(error)));
+    return this.http.get<any>(requestUrl, { withCredentials: true }).pipe(catchError(error => this.handleError<T>(error)));
   }
 
   downloadFile<T>(endpoint: string, id: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/${endpoint}/${id}`, { responseType: 'blob' })
+    return this.http.get(`${this.apiUrl}/${endpoint}/${id}`, { responseType: 'blob', withCredentials: true })
       .pipe(catchError(error => this.handleError<T>(error)));
   }
 
   handleError<T>(error: any): Observable<never> {
-    if (error.status === 401) {
-      //excluding redirection if were are displaying error messsage in the UI for anything
-      if (error.url.includes('/api/whatever')) {
-        return throwError(() => error);
-      }
-      else {
-        this.router.navigate(['/unauthorized']);
-      }
-      return throwError(() => error);
-    }
+    // Signed out / session expired: AuthInterceptor has already tried a refresh and dropped to local mode (the user
+    // signs in from the header). No redirect — there is no unauthorized page.
+    if (error.status === 401) return throwError(() => error);
 
     if (error.status === 500) {
       this.notify.error();

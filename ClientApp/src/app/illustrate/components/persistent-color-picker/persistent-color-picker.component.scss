@@ -1,0 +1,272 @@
+// The editor keeps `.persistent-color-picker` on the host (its `.tool-subpanel.visible ~ &` rule needs the sibling).
+
+// The editor's element-level rules (they don't reach into child components) — kept so the picker looks the same.
+* { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), auto !important; }
+
+.picker-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 0;
+    flex-shrink: 0;
+    width: 150px;
+}
+
+.picker-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    gap: 7px;
+    border-left: 1px solid #2e2e2e;
+    width: 58px;
+    flex-shrink: 0;
+}
+
+.picker-swap {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    .swap-bg-square {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        bottom: 0;
+        right: 0;
+        border: 2px solid #555;
+    }
+
+    .swap-fg-square {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        top: 0;
+        left: 0;
+        border: 2px solid #999;
+    }
+
+    .swap-icon {
+        position: absolute;
+        top: -1px;
+        right: -1px;
+        font-size: 10px;
+        color: #888;
+        line-height: 1;
+        pointer-events: none;
+    }
+
+    &:hover .swap-icon { color: #ccc; }
+}
+
+.picker-action-btn {
+    width: 36px;
+    height: 36px;
+    background: #222;
+    border: 1px solid #3a3a3a;
+    color: #888;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    padding: 0;
+    flex-shrink: 0;
+
+    &:hover:not(:disabled) { background: #2e2e2e; color: #ccc; }
+    &:disabled { opacity: 0.35; cursor: default; }
+}
+
+.reset-icon {
+    position: relative;
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+
+    .reset-white {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        bottom: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #555;
+    }
+
+    .reset-black {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        top: 0;
+        left: 0;
+        background: #111;
+        border: 1px solid #666;
+    }
+}
+
+.hue-ring {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: conic-gradient(
+        hsl(0, 100%, 50%),
+        hsl(30, 100%, 50%),
+        hsl(60, 100%, 50%),
+        hsl(90, 100%, 50%),
+        hsl(120, 100%, 50%),
+        hsl(150, 100%, 50%),
+        hsl(180, 100%, 50%),
+        hsl(210, 100%, 50%),
+        hsl(240, 100%, 50%),
+        hsl(270, 100%, 50%),
+        hsl(300, 100%, 50%),
+        hsl(330, 100%, 50%),
+        hsl(360, 100%, 50%)
+    );
+    position: relative;
+    cursor: crosshair;
+    flex-shrink: 0;
+
+    /* Hollow out the center to form a ring */
+    &::after {
+        content: '';
+        position: absolute;
+        top: 17px;
+        left: 17px;
+        right: 17px;
+        bottom: 17px;
+        border-radius: 50%;
+        background: #1a1a1a;
+    }
+}
+
+.hue-ring-thumb {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #fff;
+    border: 2px solid #222;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    margin: -5px 0 0 -5px;
+    z-index: 3;
+    pointer-events: none;
+    transform-origin: 5px 5px;
+}
+
+.sb-square {
+    position: absolute;
+    /* Center the square inside the ring hole */
+    $inset: 23px;
+    $ring: 150px;
+    $hole: $ring - $inset * 2; /* 104px */
+    $side: 72px; /* fits inside the 104px circle */
+    width: $side;
+    height: $side;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    cursor: crosshair;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+.sb-indicator {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 2px rgba(0,0,0,0.6);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.persistent-swatch-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    max-width: 180px;
+}
+
+.persistent-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 3px;
+    border: 2px solid #555;
+    flex-shrink: 0;
+}
+
+.persistent-hex-input {
+    flex: 1;
+    min-width: 0;
+    background: #333;
+    color: #ccc;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 2px 4px;
+    font-family: monospace;
+}
+
+.persistent-opacity-input {
+    width: 34px;
+    flex-shrink: 0;
+    background: #333;
+    color: #ccc;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 2px 3px;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; }
+}
+
+.persistent-opacity-pct {
+    color: #888;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.recent-colors-row {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 6px 6px;
+    overflow: hidden;
+    align-items: center;
+    flex: none;
+    width: 38px;
+    border-left: 1px solid #333;
+}
+
+.recent-color-dot {
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.1s, border-color 0.1s;
+    &:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.5); }
+    &.recent-color-dot--active { border-color: #fff; }
+    &.recent-color-dot--placeholder {
+        border: 1.5px dashed #555;
+        background: transparent !important;
+        cursor: default;
+        pointer-events: none;
+    }
+}

@@ -21,9 +21,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { SkinBuilderComponent } from './shared/components/skin-builder/skin-builder.component';
 
 import { AppComponent } from './app.component';
-import { ApiAuthorizationModule } from '../../src/api-authorization/api-authorization.module';
-import { AuthorizeGuard } from '../../src/api-authorization/authorize.guard';
-import { AuthorizeInterceptor } from '../../src/api-authorization/authorize.interceptor';
+import { SharedUiModule } from './shared/shared-ui.module';
 import { NavMenuComponent } from './shared/components/nav-menu/nav-menu.component';
 import { HomeComponent } from './shared/components/home/home.component';
 import { AuthInterceptor } from './shared/interceptors/auth.interceptor';
@@ -34,28 +32,12 @@ import { CheckYourEmailComponent } from './shared/components/check-your-email/ch
 import { BoardComponent } from './boards/components/board/board.component';
 import { InviteModalComponent } from './shared/components/invite-modal/invite-modal.component';
 import { UpgradeModalComponent } from './shared/components/upgrade-modal/upgrade-modal.component';
-import { ColorPickerComponent } from './shared/components/color-picker/color-picker.component';
-import { IllustrationComponent } from './illustrate/components/illustration/illustration.component';
 import { ExploreFeedComponent } from './shared/components/explore-feed/explore-feed.component';
-import { BrushOptionsComponent } from './boards/components/brush-options/brush-options.component';
-import { CurveEditorComponent } from './boards/components/curve-editor/curve-editor.component';
-import { RasterLayersComponent } from './boards/components/raster-layers/raster-layers.component';
-import { SelectionToolbarComponent } from './boards/components/selection-toolbar/selection-toolbar.component';
-import { AnimationTimelineComponent } from './illustrate/components/animation-timeline/animation-timeline.component';
-import { AnimationExportComponent } from './illustrate/components/animation-export/animation-export.component';
 import { NewIllustrationDialogComponent } from './shared/components/new-illustration-dialog/new-illustration-dialog.component';
 import { FmIconComponent } from './shared/components/fm-icon/fm-icon.component';
-import { ClothBuilderComponent } from './illustrate/components/cloth-builder/cloth-builder.component';
-import { ParticleEmittersComponent } from './illustrate/components/particle-emitters/particle-emitters.component';
-import { MeshEditPanelComponent } from './illustrate/components/mesh-edit-panel/mesh-edit-panel.component';
-import { ArmaturePanelComponent } from './illustrate/components/armature-panel/armature-panel.component';
-import { EphemeraPanel } from './illustrate/components/ephemera-panel/ephemera-panel.component';
-import { GreasePencilPanelComponent } from './illustrate/components/grease-pencil-panel/grease-pencil-panel.component';
-import { UvEditorPanelComponent } from './illustrate/components/uv-editor-panel/uv-editor-panel.component';
 import { DocsComponent } from './shared/components/docs/docs.component';
 import { StudioComponent } from './shared/components/studio/studio.component';
 import { PackageEditorComponent } from './package-designer/package-editor/package-editor.component';
-import { AuthoringPanelComponent } from './illustrate/components/authoring-panel/authoring-panel.component';
 import { PlayerComponent } from './player/player.component';
 
 
@@ -68,29 +50,13 @@ import { PlayerComponent } from './player/player.component';
     ExploreFeedComponent,
     InviteModalComponent,
     UpgradeModalComponent,
-    ColorPickerComponent,
     BoardComponent,
-    IllustrationComponent,
-    BrushOptionsComponent,
-    CurveEditorComponent,
-    RasterLayersComponent,
-    SelectionToolbarComponent,
-    AnimationTimelineComponent,
-    AnimationExportComponent,
     NewIllustrationDialogComponent,
-    ClothBuilderComponent,
-    ParticleEmittersComponent,
-    MeshEditPanelComponent,
-    ArmaturePanelComponent,
-    EphemeraPanel,
-    GreasePencilPanelComponent,
-    UvEditorPanelComponent,
     SkinBuilderComponent,
     FmIconComponent,
     DocsComponent,
     StudioComponent,
     PackageEditorComponent,
-    AuthoringPanelComponent,
     PlayerComponent,
   ],
   imports: [
@@ -114,7 +80,7 @@ import { PlayerComponent } from './player/player.component';
     MatAutocompleteModule,
     MatTooltipModule,
     MatExpansionModule,
-    ApiAuthorizationModule,
+    SharedUiModule,
     RouterModule.forRoot([
       { path: '', component: StudioComponent, pathMatch: 'full' },
       { path: 'home', component: HomeComponent },
@@ -123,9 +89,10 @@ import { PlayerComponent } from './player/player.component';
       { path: 'dashboard', component: DashboardComponent},
       { path: 'dashboard-old', component: DashboardComponent},
       { path: 'board/:id', component: BoardComponent},
-      { path: 'illustration/local/:id', component: IllustrationComponent, data: { local: true } },
-      { path: 'illustration/:id', component: IllustrationComponent},
-      { path: 'view/:id', component: IllustrationComponent, data: { viewer: true } },
+      // The Illustrate editor is lazy-loaded (audit Phase 4.1): ~2.3 MB of editor code no longer ships with the shell.
+      // Same URLs: /illustration/:id, /illustration/local/:id, /view/:id (viewer data is inherited by the child route).
+      { path: 'illustration', loadChildren: () => import('./illustrate/illustrate.module').then(m => m.IllustrateModule) },
+      { path: 'view', data: { viewer: true }, loadChildren: () => import('./illustrate/illustrate.module').then(m => m.IllustrateModule) },
       { path: 'docs', component: DocsComponent },
       { path: 'packaging/local/:id', component: PackageEditorComponent, data: { local: true } },
       { path: 'packaging/:id',       component: PackageEditorComponent },
@@ -136,7 +103,6 @@ import { PlayerComponent } from './player/player.component';
   providers: [
     {
       provide: HTTP_INTERCEPTORS,
-      //useClass: AuthorizeInterceptor, multi: true
       useClass: AuthInterceptor, multi: true
     },
   ],

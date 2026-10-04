@@ -4,6 +4,7 @@ using Frogmarks.Models;
 using Frogmarks.Models.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -31,6 +32,7 @@ namespace Frogmarks.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
@@ -49,7 +51,7 @@ namespace Frogmarks.Controllers
                 var accessTokenCookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
-                    //Secure = true, // Set to true in production to use HTTPS
+                    Secure = true,   // required with SameSite=None (browsers drop the cookie otherwise); dev runs on https too
                     SameSite = SameSiteMode.None,
                     Expires = DateTime.UtcNow.AddMinutes(15)
                 };
@@ -57,7 +59,7 @@ namespace Frogmarks.Controllers
                 var refreshTokenCookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
-                    //Secure = true, // Set to true in production to use HTTPS
+                    Secure = true,   // required with SameSite=None (browsers drop the cookie otherwise); dev runs on https too
                     SameSite = SameSiteMode.None,
                     Expires = DateTime.UtcNow.AddDays(7)
                 };
@@ -116,10 +118,12 @@ namespace Frogmarks.Controllers
             return Ok(new { message = "Token refreshed successfully", userId = uid });
         }
 
-        // For Swagger Token
+        // For Swagger Token: Development only — elsewhere it was an anonymous signing oracle for the real JWT key
+        // (audit Phase 1.7).
         [HttpGet("generate-token")]
-        public IActionResult GenerateToken()
+        public IActionResult GenerateToken([FromServices] IWebHostEnvironment env)
         {
+            if (!env.IsDevelopment()) return NotFound();
             var token = GenerateJwtToken("exampleuser");
             return Ok(new { Token = token });
         }

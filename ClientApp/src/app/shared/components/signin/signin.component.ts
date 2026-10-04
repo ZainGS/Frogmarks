@@ -22,7 +22,7 @@ export class SignInComponent implements OnInit {
                 console.log('Response headers:', response.headers.keys());
                 // console.log('Token validated');
                 // console.log(response);
-                this.router.navigate(['dashboard']);
+                void this.router.navigate(['dashboard']);
               },
               error: (error) => {
                 console.error('Token validation failed', error);

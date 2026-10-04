@@ -1,0 +1,69 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+
+// The editor's element-level rules (they don't reach into child components) — kept so the bar looks the same.
+* { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), auto !important; }
+
+// The host carries the editor's `.scene-view-bar` layout (class set on <app-scene-view-bar>).
+
+.scene-view-seg {
+    display: flex;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.scene-view-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 0 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+    height: 26px;
+    line-height: 26px;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    &.active {
+        background: rgba(153, 63, 244, 0.3);
+        color: #dac5ff;
+        font-weight: 600;
+    }
+
+    & + & { border-left: 1px solid rgba(255, 255, 255, 0.1); }
+}
+
+.scene-view-icon-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    padding: 0 7px;
+    font-size: 13px;
+
+    &.active {
+        background: rgba(153, 63, 244, 0.3);
+        border-color: rgba(153, 63, 244, 0.5);
+        color: #dac5ff;
+    }
+}
+
+.scene-view-play-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    padding: 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 34px;
+
+    &.playing {
+        background: rgba(220, 70, 50, 0.25);
+        border-color: rgba(220, 70, 50, 0.45);
+        color: #ffb0a0;
+    }
+}

@@ -40,7 +40,7 @@ export class ExploreFeedComponent implements OnInit {
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
-    this.loadMangaFromMangaDex();
+    void this.loadMangaFromMangaDex();
   }
 
   private async loadMangaFromMangaDex() {

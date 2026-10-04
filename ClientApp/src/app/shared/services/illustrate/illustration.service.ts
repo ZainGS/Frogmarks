@@ -99,6 +99,8 @@ export interface IllustrationStateDto {
   animation: AnimationStateDto | null;
   layers: LayerStateDto[];
   savedAt?: number;  // epoch ms — used for OPFS-vs-backend freshness comparison
+  revision?: number;      // server revision of this state (load / save response) — optimistic concurrency
+  baseRevision?: number;  // save request: the revision this client last saw (server answers 409 if it moved)
   ditherConfig?: DitherConfigDto | null;
   documentSize?: { w: number; h: number } | null;
   scene3dNodesGzip?: string | null;       // legacy gzip+base64 — only present on old saves
@@ -123,6 +125,8 @@ export interface IllustrationStateDto {
     shadowExtent?: number;
     shadowBias?: number;
     shadowStrength?: number;
+    /** Salsa P14 shadow quality preset ('low' | 'medium' | 'high' | 'ultra'; 'custom' / absent = the fields above). */
+    shadowQuality?: string;
     // SSAO
     ssaoEnabled?: boolean;
     ssaoRadius?: number; ssaoIntensity?: number; ssaoPower?: number; ssaoBias?: number;
@@ -142,8 +146,12 @@ export interface IllustrationStateDto {
     colorGradeEnabled?: boolean; colorGradeBrightness?: number; colorGradeContrast?: number;
     colorGradeSaturation?: number; colorGradeTint?: string;
     vignetteEnabled?: boolean; vignetteIntensity?: number; vignetteRadius?: number; vignetteSoftness?: number;
+    filmEnabled?: boolean; filmGrain?: number; filmGrainSize?: number; filmAberration?: number;
+    filmHalation?: number; filmHalationTint?: string;
     // Fog
-    fogMode?: string; fogColor?: string; fogNear?: number; fogFar?: number; fogDensity?: number;
+    fogMode?: string; fogColor?: string; fogNear?: number; fogFar?: number; fogDensity?: number; fogHardEdge?: boolean;
+    /** Fog horizon (Salsa sm.setFogHorizon3D; applied after fogHardEdge). Absent = the defaults. */
+    fogHorizon?: { buildingsOnly?: boolean; includeAttachments?: boolean; fadeM?: number; fadeStyle?: 'dither' | 'dither-coarse'; silhouetteOutlines?: boolean };
     // Background
     bgMode?: string; bgColor1?: string; bgColor2?: string;
     // Visual quality
@@ -170,6 +178,8 @@ export interface IllustrationStateDto {
     gridColor?: [number, number, number];
     // Cinematic cuts (host-owned persistence)
     cameraCuts?: { cameraId: string; frame: number }[];
+    /** GARP vending can designs per skin (Salsa keeps only the packed sheet; the source list lives here). */
+    garpCanDesigns?: Record<string, string[]>;
   } | null;
 }
 

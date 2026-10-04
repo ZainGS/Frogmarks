@@ -1,5 +1,6 @@
 import { Component, Input, NgZone } from '@angular/core';
 import { runAuthoringSession, SceneAuthoringAPI, type CallModel } from '@zaings/salsa';
+import { ConfigurationService } from '../../../shared/services/api/configuration.service';
 
 export interface AuthoringToolResult {
   name: string;
@@ -37,7 +38,7 @@ export class AuthoringPanelComponent {
 
   private lastPrompt = '';
 
-  constructor(private ngZone: NgZone) {}
+  constructor(private ngZone: NgZone, private config: ConfigurationService) {}
 
   async send(): Promise<void> {
     if (!this.prompt.trim() || this.running || !this.authoring) return;
@@ -76,7 +77,7 @@ export class AuthoringPanelComponent {
       .join(', ');
     const lastMsg = this.resultText ? `Last AI message: "${this.resultText.slice(0, 300)}". ` : '';
     this.prompt = `Continue from where you left off. Original task: "${this.lastPrompt}". ${lastMsg}Tools used so far: ${toolSummary}. Keep building until the task is complete.`;
-    this.send();
+    void this.send();
   }
 
   get stoppedLabel(): string {
@@ -94,9 +95,10 @@ export class AuthoringPanelComponent {
 
   /** POST to the ASP.NET Core proxy — holds the Anthropic key server-side. */
   callModel: CallModel = async (req) => {
-    const res = await fetch('/api/authoring', {
+    const res = await fetch(`${this.config.systemConfiguration.apiUri}/api/authoring`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      credentials: 'include',   // the endpoint requires sign-in; the API may be on another origin
+      headers: { 'content-type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },   // CSRF header (raw fetch skips the interceptor)
       body: JSON.stringify({
         ...req,
         model: this.selectedModel,

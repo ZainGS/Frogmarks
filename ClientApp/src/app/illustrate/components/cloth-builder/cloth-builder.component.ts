@@ -2,6 +2,7 @@ import {
   Component, Input, Output, EventEmitter,
   ViewChild, ElementRef, OnChanges, AfterViewInit, OnDestroy, NgZone, HostListener
 } from '@angular/core';
+import ShapeManager from '@zaings/salsa/shape-manager';
 
 export interface ClothStitch {
   a: number;
@@ -27,6 +28,77 @@ export interface ClothBuilderResult {
   bendStiffnessMap: Float32Array | null;
 }
 
+/** The builder's initial inputs for editing an existing cloth mesh, or for a new one (meshId omitted). */
+export interface ClothBuilderInit {
+  existingMeshId: string | null;
+  grid: any;
+  physics: any;
+  simMode: 'none' | 'hang' | 'drape';
+  simPositions: Float32Array | null;
+  dropPosition: [number, number, number];
+}
+
+export function clothBuilderInitFor(sm: ShapeManager | null, meshId?: string): ClothBuilderInit {
+  if (meshId && sm) {
+    const cfg = sm.scene3d?.getClothConfig(meshId);
+    const node = sm.scene3d?.getMesh(meshId);
+    const rawPos = (node as any)?.simState?.positions;
+    return {
+      existingMeshId: meshId,
+      grid: cfg?.grid ?? null,
+      physics: cfg?.physics ?? null,
+      simMode: (node as any)?.simState?.simulationMode ?? 'none',
+      simPositions: rawPos ? Float32Array.from(rawPos) : null,
+      dropPosition: sm.getIllustrationCenter3D() ?? [0, 0, 0],
+    };
+  }
+  return { existingMeshId: null, grid: null, physics: null, simMode: 'none', simPositions: null,
+           dropPosition: sm?.getIllustrationCenter3D() ?? [0, 0, 0] };
+}
+
+/** Commit a builder result to the scene: replace / create the cloth mesh, then stitches and bend stiffness.
+ *  Returns the cloth mesh id (null if nothing was created). */
+export function applyClothBuilderResult(sm: ShapeManager, result: ClothBuilderResult): string | null {
+  const s3d = sm.scene3d;
+  if (!s3d) return null;
+
+  const { grid, physics, simulatedPositions, simMode, existingMeshId, previewMeshId, stitches, bendStiffnessMap } = result;
+  let targetMeshId: string | null = null;
+
+  if (existingMeshId) {
+    s3d.replaceClothMesh(existingMeshId, grid, physics, simulatedPositions ?? undefined, simMode !== 'none' ? simMode : 'none');
+    if (previewMeshId && previewMeshId !== existingMeshId) {
+      s3d.deleteMesh(previewMeshId);
+    }
+    targetMeshId = existingMeshId;
+  } else if (previewMeshId) {
+    s3d.replaceClothMesh(previewMeshId, grid, physics, simulatedPositions ?? undefined, simMode !== 'none' ? simMode : 'none');
+    targetMeshId = previewMeshId;
+  } else {
+    const center: [number,number,number] = sm.getIllustrationCenter3D() ?? [0, 0, 0];
+    const created = s3d.createClothMesh(center[0], center[1], center[2], grid, physics, simulatedPositions ?? undefined, 'Cloth');
+    targetMeshId = created?.id ?? null;
+  }
+
+  // Apply stitches
+  if (targetMeshId && Array.isArray(stitches) && stitches.length > 0) {
+    try {
+      s3d.clearClothStitches(targetMeshId);
+      for (const stitch of stitches) {
+        s3d.addClothStitch(targetMeshId, stitch.a, stitch.b, stitch.restLength);
+      }
+    } catch (e) { console.warn('[Cloth] Failed to apply stitches', e); }
+  }
+
+  // Apply bend stiffness map
+  if (targetMeshId && bendStiffnessMap instanceof Float32Array && bendStiffnessMap.length > 0) {
+    try {
+      s3d.setClothBendStiffness(targetMeshId, bendStiffnessMap);
+    } catch (e) { console.warn('[Cloth] Failed to apply bend stiffness', e); }
+  }
+  return targetMeshId;
+}
+
 @Component({
   selector: 'app-cloth-builder',
   templateUrl: './cloth-builder.component.html',
@@ -39,8 +111,8 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
   @Input() initialPhysics: any = null;
   @Input() initialSimMode: 'none' | 'hang' | 'drape' = 'none';
   @Input() initialSimPositions: Float32Array | null = null;
-  @Input() scene3dManager: any = null;
-  @Input() shapeManager: any = null;
+  @Input() scene3dManager: ShapeManager['scene3d'] | null = null;
+  @Input() shapeManager: ShapeManager = null;
   @Input() dropPosition: [number, number, number] = [0, 0, 0];
 
   @Output() created = new EventEmitter<ClothBuilderResult>();
@@ -358,7 +430,7 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
       try {
         const [px, py, pz] = this.dropPosition;
         const mesh = this.scene3dManager?.createClothMesh?.(px, py, pz, this._buildGridConfig(), this._buildPhysicsConfig());
-        this.previewMeshId = mesh?.id ?? mesh?.nodeId ?? null;
+        this.previewMeshId = mesh?.id ?? null;
       } catch (e) {
         console.warn('[Cloth] createClothMesh for preview failed', e);
       }
@@ -438,7 +510,8 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
         console.warn('[ClothBuilder] attachClothPreviewCanvas not found');
         return;
       }
-      const result = attachHost.attachClothPreviewCanvas(
+      // Current Salsa returns a dispose function; the render() branch below is for a renderer object (kept as is).
+      const result: any = attachHost.attachClothPreviewCanvas(
         meshId, this.previewCanvasRef!.nativeElement, { bgColor: [0.05, 0.05, 0.08, 1], orbitEnabled: true }
       );
       // Detect renderer by presence of render() — bare dispose fn (old Salsa) won't have it.
@@ -476,10 +549,7 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
         const capturedGen = this._simGeneration;
         const tick = () => {
           if (this._simGeneration !== capturedGen) return;
-          // Resolve mesh node each tick — scene3d uses getNode or getMesh depending on version
-          const node = this.scene3dManager?.getNode?.(capturedMeshId) ??
-                       this.scene3dManager?.getMesh?.(capturedMeshId) ??
-                       capturedMeshId;
+          const node = this.scene3dManager?.getMesh(capturedMeshId) ?? capturedMeshId;   // (getNode never existed)
           renderer.render?.(node);
           this._previewRafId = requestAnimationFrame(tick);
         };
@@ -1037,7 +1107,8 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
         const dup = this.stitches.some(s => (s.a === viASlot && s.b === bestSlot) || (s.a === bestSlot && s.b === viASlot));
 
         if (!dup && this.previewMeshId) {
-          this.scene3dManager?.addClothStitch?.(this.previewMeshId, viADense, bestDense, restLen, side);
+          // (a 5th `side` argument was passed here; the engine takes 4 and ignored it)
+          this.scene3dManager?.addClothStitch(this.previewMeshId, viADense, bestDense, restLen);
         }
 
         // Sync stitch list from Salsa — Salsa returns dense indices, convert to slot for display
@@ -1120,7 +1191,8 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
         );
       } catch { /* best-effort restore */ }
     } else if (this.previewMeshId && !this.existingMeshId) {
-      this.scene3dManager?.removeNode?.(this.previewMeshId);
+      // Cancel in create mode drops the preview cloth (removeNode never existed, so it used to stay in the scene)
+      this.scene3dManager?.deleteMesh(this.previewMeshId);
     }
 
     this.cancelled.emit();

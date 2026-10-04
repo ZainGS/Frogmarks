@@ -13,8 +13,8 @@ import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-i
   styleUrls: ['./studio.component.scss']
 })
 export class StudioComponent implements OnInit, OnDestroy {
-  private sm: any = null;
-  private _activateSub?: Subscription;
+  private sm: ShapeManager = null;
+  private _activateSub?: { unsubscribe(): void };
   private _changeSub?: { unsubscribe(): void };
   private _deleteSub?: { unsubscribe(): void };
   private _newlyCreatedIds = new Set<string>();
@@ -42,11 +42,11 @@ export class StudioComponent implements OnInit, OnDestroy {
     }
 
     this.sm = ShapeManager.getInstance();
-    await this.sm.whenWebGPUReady?.();
-    this.sm.bootAndWarm?.(); // fire-and-forget: warms all pipelines while user browses shell
+    await this.sm.whenWebGPUReady();
+    this.sm.bootAndWarm(); // fire-and-forget: warms all pipelines while user browses shell
 
     // Point the shell at our IndexedDB illustration store so project IDs match.
-    this.sm.shell?.setDocumentSource?.({
+    this.sm.shell?.setDocumentSource({
       listProjects: async () => {
         const items = await this.localIllustrationService.getAll(false);
         return items.map(i => ({
@@ -64,10 +64,12 @@ export class StudioComponent implements OnInit, OnDestroy {
       },
       deleteProject: (id: string) => this.localIllustrationService.delete(id),
       renameProject: (id: string, name: string) => this.localIllustrationService.rename(id, name),
+      // Required by the interface; only used when createProject is absent
+      newProjectId: () => crypto.randomUUID(),
     });
 
-    await this.sm.shell?.load?.();
-    this.sm.setShellLogo?.('assets/images/logo.png');
+    await this.sm.shell?.load();
+    this.sm.setShellLogo('assets/images/logo.png');
 
     this._activateSub = this.sm.shell?.onActivate?.subscribe(({ id, kind, dashboardKind }: any) => {
       this.ngZone.run(() => this._handleActivation(id, kind, dashboardKind));
@@ -78,13 +80,14 @@ export class StudioComponent implements OnInit, OnDestroy {
     });
 
     this._deleteSub = this.sm.shell?.onProjectDelete?.subscribe(({ id }: { id: string }) => {
-      this.localIllustrationService.delete(id).then(() => {
-        this.sm.shell?.notifyProjectsChanged?.();
+      void this.localIllustrationService.delete(id).then(() => {
+        // (notifyProjectsChanged never existed — the shell list never refreshed after a delete)
+        void this.sm.shell?.refreshProjects();
       });
     });
 
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
-    await this.sm.shell?.initializeScene?.(shellCanvas);
+    await this.sm.shell?.initializeScene(shellCanvas);
     this._refreshAria();
   }
 
@@ -92,7 +95,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
     this._deleteSub?.unsubscribe();
-    this.sm?.shell?.destroyScene?.();
+    this.sm?.shell?.destroyScene();
     const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
     if (webgpuCanvas) webgpuCanvas.style.pointerEvents = '';
   }
@@ -110,7 +113,7 @@ export class StudioComponent implements OnInit, OnDestroy {
       case 'empty':
         if (id === '__new_project__') {
           if (dashboardKind === 'packaging') {
-            this._initiateNewPackagingProject();
+            void this._initiateNewPackagingProject();
           } else {
             this._initiateNewProject();
           }
@@ -126,16 +129,16 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   private _openProject(projectId: string, dashboardKind?: string): void {
     if (dashboardKind === 'packaging') {
-      this.router.navigate(['/packaging/local', projectId]);
+      void this.router.navigate(['/packaging/local', projectId]);
     } else {
-      this.router.navigate(['/illustration/local', projectId]);
+      void this.router.navigate(['/illustration/local', projectId]);
     }
   }
 
   private async _initiateNewPackagingProject(): Promise<void> {
     const name = 'Product Packaging';
     const item = await this.localIllustrationService.create(name, undefined, 'packaging');
-    this.router.navigate(['/packaging/local', item.uuid]);
+    void this.router.navigate(['/packaging/local', item.uuid]);
   }
 
   private _initiateNewProject(): void {
@@ -150,40 +153,40 @@ export class StudioComponent implements OnInit, OnDestroy {
     });
     dialogRef.afterClosed().subscribe(async (result: any) => {
       if (!result) return;
-      const project = await this.sm.shell?.createProject?.(result.name ?? 'Untitled');
+      const project = await this.sm.shell?.createProject(result.name ?? 'Untitled');
       const id = project?.id;
       if (!id) return;
       // Remove from _newlyCreatedIds so onActivate (if it fires) treats it as an existing project open
       this._newlyCreatedIds.delete(id);
       if (result.bounded && result.docW && result.docH) {
-        this.router.navigate(['/illustration/local', id], {
+        void this.router.navigate(['/illustration/local', id], {
           queryParams: { docW: result.docW, docH: result.docH },
         });
       } else {
-        this.router.navigate(['/illustration/local', id]);
+        void this.router.navigate(['/illustration/local', id]);
       }
     });
   }
 
   private _openNewProject(projectId: string, dashboardKind?: string): void {
     if (dashboardKind === 'packaging') {
-      this.router.navigate(['/packaging/local', projectId]);
+      void this.router.navigate(['/packaging/local', projectId]);
       return;
     }
     const result = this._pendingNewProjectResult;
     this._pendingNewProjectResult = null;
     if (result?.bounded && result.docW && result.docH) {
-      this.router.navigate(['/illustration/local', projectId], {
+      void this.router.navigate(['/illustration/local', projectId], {
         queryParams: { docW: result.docW, docH: result.docH },
       });
     } else {
-      this.router.navigate(['/illustration/local', projectId]);
+      void this.router.navigate(['/illustration/local', projectId]);
     }
   }
 
   private _refreshAria(): void {
-    const slots    = this.sm?.shell?.getSlots?.()    ?? [];
-    const projects = this.sm?.shell?.getProjects?.() ?? [];
+    const slots    = this.sm?.shell?.getSlots()    ?? [];
+    const projects = this.sm?.shell?.getProjects() ?? [];
     this.ariaSlots = [
       ...slots.map((s: any)    => ({ id: s.id,   name: s.name  ?? s.id })),
       ...projects.map((p: any) => ({ id: p.id,   name: p.name  ?? 'Untitled' })),

@@ -67,32 +67,6 @@ $muted:  rgba(255, 255, 255, 0.45);
 
 // ── Selection tabs ────────────────────────────────────────────────
 
-.uv-sel-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.uv-tab {
-  flex: 1;
-  background: #2a2a2a;
-  border: 1px solid #555;
-  color: $muted;
-  padding: 5px 0;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-
-  &:hover { background: #383838; color: #fff; }
-
-  &.active {
-    background: rgba($accent, 0.2);
-    border-color: $accent;
-    color: lighten($accent, 20%);
-    font-weight: 600;
-  }
-}
-
 // ── Sections ──────────────────────────────────────────────────────
 
 .uv-section {
@@ -123,18 +97,6 @@ $muted:  rgba(255, 255, 255, 0.45);
 
 .uv-chevron { font-size: 9px; flex-shrink: 0; }
 
-.uv-active-badge {
-  margin-left: auto;
-  font-size: 9px;
-  font-weight: 700;
-  background: rgba($accent, 0.25);
-  border: 1px solid rgba($accent, 0.5);
-  color: lighten($accent, 20%);
-  border-radius: 3px;
-  padding: 1px 5px;
-  letter-spacing: 0.5px;
-}
-
 // ── Controls ──────────────────────────────────────────────────────
 
 .uv-btn {
@@ -158,30 +120,11 @@ $muted:  rgba(255, 255, 255, 0.45);
   &:last-child { margin-bottom: 0; }
 }
 
-.uv-btn-primary {
-  background: rgba($accent, 0.2);
-  border-color: rgba($accent, 0.5);
-  color: lighten($accent, 10%);
-  &:hover { background: rgba($accent, 0.3); }
-}
-
 .uv-btn-active {
   background: rgba($accent, 0.25);
   border-color: $accent;
   color: #fff;
   &:hover { background: rgba($accent, 0.35); }
-}
-
-.uv-range {
-  flex: 1;
-  accent-color: $accent;
-}
-
-.uv-btn-row {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
-  &:last-child { margin-bottom: 0; }
 }
 
 .uv-field-row {
@@ -199,31 +142,6 @@ $muted:  rgba(255, 255, 255, 0.45);
   flex-shrink: 0;
   min-width: 44px;
 }
-
-.uv-hint {
-  font-size: 10px;
-  color: $muted;
-  line-height: 1.5;
-}
-
-.uv-num {
-  width: 56px;
-  background: #252525;
-  border: 1px solid #555;
-  color: #ddd;
-  border-radius: 3px;
-  padding: 3px 5px;
-  font-size: 11px;
-  text-align: right;
-  flex-shrink: 0;
-  -moz-appearance: textfield;
-
-  &::-webkit-inner-spin-button,
-  &::-webkit-outer-spin-button { opacity: 0; }
-  &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
-}
-
-.uv-num-sm { width: 44px; }
 
 .uv-select {
   width: 100%;

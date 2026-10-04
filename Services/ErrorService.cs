@@ -60,7 +60,7 @@ namespace Frogmarks.Services
             List<string> outputList = new List<string>();
             Regex regex = new Regex(@"([^\)]*\)) in (.*):line (\d)*$");
 
-            List<string> stackTraceLines = GetUserStackTraceLines(fullStackTrace);
+            List<string> stackTraceLines = GetStackTraceLines(fullStackTrace);
             foreach (string stackTraceLine in stackTraceLines)
             {
                 if(!regex.IsMatch(stackTraceLine))

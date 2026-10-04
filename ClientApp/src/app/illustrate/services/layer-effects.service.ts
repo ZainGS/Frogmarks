@@ -1,0 +1,537 @@
+import { Injectable } from '@angular/core';
+import ShapeManager from '@zaings/salsa/shape-manager';
+import { hexToRgba01, rgba01ToHex } from '../utils/color-utils';
+import { DEFAULT_DITHER_CONFIG, DEFAULT_FRAME_LINK_ANIMATION, DitherAlgorithm, DitherColorMode, DitherConfig, DITHER_ALGORITHM_OPTIONS, FrameLinkAnimation, FrameLinkAnimationType, FrameLinkLoopMode, FRAME_LINK_TYPE_OPTIONS, FRAME_LINK_LOOP_MODE_OPTIONS } from 'app/boards/models/brush-preset.model';
+
+/** A default dither config with its own colour arrays — the alpha handlers write foregroundColor[3] /
+ *  backgroundColor[3] in place, which on a shallow copy changed DEFAULT_DITHER_CONFIG itself (every later layer
+ *  inherited the edited alpha). */
+function freshDitherConfig(): DitherConfig {
+  return {
+    ...DEFAULT_DITHER_CONFIG,
+    foregroundColor: [...DEFAULT_DITHER_CONFIG.foregroundColor] as DitherConfig['foregroundColor'],
+    backgroundColor: [...DEFAULT_DITHER_CONFIG.backgroundColor] as DitherConfig['backgroundColor'],
+  };
+}
+
+/** What the 2D layer effects need from the editor that hosts them. */
+export interface LayerEffectsHost {
+  shapeManager(): ShapeManager;
+  markStateDirty(): void;
+  /** Current pen colour — seeds duotone foreground colours. */
+  penColor(): string;
+  /** Frame Link needs the timeline: turn animation mode on if it is off. */
+  ensureAnimationMode(): void;
+}
+
+/**
+ * 2D layer effects: the global dither, per-layer dither (incl. GPU edge effects) and per-layer Frame Link
+ * animation. Component-scoped (provided by IllustrationComponent); persistence reads / writes these configs.
+ * Extracted from illustration.component (refactor-plan 2.10a).
+ */
+@Injectable()
+export class LayerEffectsService {
+  private host!: LayerEffectsHost;
+  bind(host: LayerEffectsHost): void { this.host = host; }
+  private get shapeManager(): ShapeManager { return this.host.shapeManager(); }
+
+  // Dither effect
+  ditherConfig: DitherConfig = freshDitherConfig();
+
+  ditherAlgorithmOptions = DITHER_ALGORITHM_OPTIONS;
+
+  onDitherEnabledChange(enabled: boolean): void {
+    this.ditherConfig.enabled = enabled;
+    // Seed FG from the current pen color when enabling
+    if (enabled && this.ditherConfig.colorMode === 'duotone') {
+      const fgRgba = hexToRgba01(this.host.penColor() || '#000000');
+      fgRgba[3] = this.ditherConfig.foregroundColor[3];
+      this.ditherConfig.foregroundColor = fgRgba;
+      this.shapeManager.setDitherForegroundColor(fgRgba[0], fgRgba[1], fgRgba[2], fgRgba[3]);
+    }
+    this.shapeManager.setDitherEnabled(enabled);
+    this.host.markStateDirty();
+  }
+
+  onDitherAlgorithmChange(algorithm: DitherAlgorithm): void {
+    this.ditherConfig.algorithm = algorithm;
+    this.shapeManager.setDitherAlgorithm(algorithm);
+    this.host.markStateDirty();
+  }
+
+  onDitherColorLevelsChange(levels: number): void {
+    this.ditherConfig.colorLevels = +levels;
+    this.shapeManager.setDitherColorLevels(+levels);
+    this.host.markStateDirty();
+  }
+
+  onDitherStrengthChange(strength: number): void {
+    this.ditherConfig.strength = +strength;
+    this.shapeManager.setDitherStrength(+strength / 100);
+    this.host.markStateDirty();
+  }
+
+  onDitherPatternScaleChange(scale: number): void {
+    this.ditherConfig.patternScale = +scale;
+    this.shapeManager.setDitherPatternScale(+scale);
+    this.host.markStateDirty();
+  }
+
+  onDitherPerChannelChange(perChannel: boolean): void {
+    this.ditherConfig.perChannel = perChannel;
+    this.shapeManager.setDitherPerChannel(perChannel);
+    this.host.markStateDirty();
+  }
+
+  onDitherBayerLevelChange(level: number): void {
+    this.ditherConfig.bayerLevel = +level;
+    this.shapeManager.setDitherBayerLevel(+level);
+    this.host.markStateDirty();
+  }
+
+  onDitherHalftoneAngleChange(angle: number): void {
+    this.ditherConfig.halftoneAngle = +angle;
+    this.shapeManager.setDitherHalftoneAngle(+angle);
+    this.host.markStateDirty();
+  }
+
+  onDitherHalftoneFrequencyChange(freq: number): void {
+    this.ditherConfig.halftoneFrequency = +freq;
+    this.shapeManager.setDitherHalftoneFrequency(+freq);
+    this.host.markStateDirty();
+  }
+
+  onDitherHalftoneShapeChange(algorithm: DitherAlgorithm): void {
+    this.ditherConfig.algorithm = algorithm;
+    this.shapeManager.setDitherAlgorithm(algorithm);
+    this.host.markStateDirty();
+  }
+
+  get ditherStrengthPercent(): number {
+    return Math.round(this.ditherConfig.strength * 100);
+  }
+
+  set ditherStrengthPercent(val: number) {
+    this.ditherConfig.strength = val / 100;
+    this.shapeManager.setDitherStrength(val / 100);
+    this.host.markStateDirty();
+  }
+
+  onDitherColorModeChange(mode: DitherColorMode): void {
+    this.ditherConfig.colorMode = mode;
+    // Seed duotone FG from the current pen color
+    if (mode === 'duotone') {
+      const fgRgba = hexToRgba01(this.host.penColor() || '#000000');
+      fgRgba[3] = this.ditherConfig.foregroundColor[3]; // preserve alpha
+      this.ditherConfig.foregroundColor = fgRgba;
+      this.shapeManager.setDitherForegroundColor(fgRgba[0], fgRgba[1], fgRgba[2], fgRgba[3]);
+    }
+    this.shapeManager.setDitherColorMode(mode);
+    this.host.markStateDirty();
+  }
+
+  onDitherForegroundColorChange(hex: string): void {
+    const c = hexToRgba01(hex);
+    this.ditherConfig.foregroundColor = c;
+    this.shapeManager.setDitherForegroundColor(c[0], c[1], c[2], c[3]);
+    this.host.markStateDirty();
+  }
+
+  onDitherBackgroundColorChange(hex: string): void {
+    const c = hexToRgba01(hex);
+    this.ditherConfig.backgroundColor = c;
+    this.shapeManager.setDitherBackgroundColor(c[0], c[1], c[2], c[3]);
+    this.host.markStateDirty();
+  }
+
+  onDitherSwapColors(): void {
+    const tmp = [...this.ditherConfig.foregroundColor] as [number, number, number, number];
+    this.ditherConfig.foregroundColor = [...this.ditherConfig.backgroundColor] as [number, number, number, number];
+    this.ditherConfig.backgroundColor = tmp;
+    this.shapeManager.swapDitherColors();
+    this.host.markStateDirty();
+  }
+
+  onDitherInvertPatternChange(invert: boolean): void {
+    this.ditherConfig.invertPattern = invert;
+    this.shapeManager.setDitherInvertPattern(invert);
+    this.host.markStateDirty();
+  }
+
+  onDitherDuotoneBiasChange(value: number): void {
+    this.ditherConfig.duotoneBias = +value / 100;
+    this.shapeManager.setDitherDuotoneBias(+value / 100);
+    this.host.markStateDirty();
+  }
+
+  onDitherTintOpacityChange(opacity: number): void {
+    this.ditherConfig.tintOpacity = +opacity / 100;
+    this.shapeManager.setDitherTintOpacity(+opacity / 100);
+    this.host.markStateDirty();
+  }
+
+  get ditherTintPercent(): number {
+    return Math.round(this.ditherConfig.tintOpacity * 100);
+  }
+
+  get ditherFgHex(): string {
+    return rgba01ToHex(this.ditherConfig.foregroundColor);
+  }
+
+  get ditherBgHex(): string {
+    return rgba01ToHex(this.ditherConfig.backgroundColor);
+  }
+
+  get ditherFgAlphaPercent(): number {
+    return Math.round(this.ditherConfig.foregroundColor[3] * 100);
+  }
+
+  get ditherBgAlphaPercent(): number {
+    return Math.round(this.ditherConfig.backgroundColor[3] * 100);
+  }
+
+  onDitherFgAlphaChange(alpha: number): void {
+    this.ditherConfig.foregroundColor[3] = +alpha / 100;
+    const c = this.ditherConfig.foregroundColor;
+    this.shapeManager.setDitherForegroundColor(c[0], c[1], c[2], c[3]);
+    this.host.markStateDirty();
+  }
+
+  onDitherBgAlphaChange(alpha: number): void {
+    this.ditherConfig.backgroundColor[3] = +alpha / 100;
+    const c = this.ditherConfig.backgroundColor;
+    this.shapeManager.setDitherBackgroundColor(c[0], c[1], c[2], c[3]);
+    this.host.markStateDirty();
+  }
+
+  // Per-layer dither
+  layerDitherConfigs: Map<string, DitherConfig> = new Map();
+
+  getLayerDitherEnabled(layerId: string): boolean {
+    return this.layerDitherConfigs.get(layerId)?.enabled ?? false;
+  }
+
+  onLayerDitherEnabledChange(layerId: string, enabled: boolean): void {
+    if (enabled) {
+      if (!this.layerDitherConfigs.has(layerId)) {
+        const cfg = { ...freshDitherConfig(), enabled: true };
+        // Seed FG from pen color
+        if (cfg.colorMode === 'duotone') {
+          const fgRgba = hexToRgba01(this.host.penColor() || '#000000');
+          fgRgba[3] = cfg.foregroundColor[3];
+          cfg.foregroundColor = fgRgba;
+        }
+        this.layerDitherConfigs.set(layerId, cfg);
+      } else {
+        const cfg = this.layerDitherConfigs.get(layerId)!;
+        cfg.enabled = true;
+        this.layerDitherConfigs.set(layerId, cfg);
+      }
+      this.shapeManager.setLayerDitherConfig(layerId, this.layerDitherConfigs.get(layerId)!);
+    } else {
+      if (this.layerDitherConfigs.has(layerId)) {
+        const cfg = this.layerDitherConfigs.get(layerId)!;
+        cfg.enabled = false;
+        this.layerDitherConfigs.set(layerId, cfg);
+      }
+      this.shapeManager.setLayerDitherConfig(layerId, undefined);
+    }
+    this.host.markStateDirty();
+  }
+
+  getLayerDitherConfig(layerId: string): DitherConfig {
+    return this.layerDitherConfigs.get(layerId) ?? freshDitherConfig();
+  }
+
+  updateLayerDitherField(layerId: string, field: keyof DitherConfig, value: any): void {
+    const cfg = this.getLayerDitherConfig(layerId);
+    (cfg as any)[field] = value;
+    this.layerDitherConfigs.set(layerId, cfg);
+    if (cfg.enabled) {
+      this.shapeManager.setLayerDitherConfig(layerId, cfg);
+    }
+    this.host.markStateDirty();
+  }
+
+  onLayerDitherAlgorithmChange(layerId: string, algorithm: DitherAlgorithm): void {
+    this.updateLayerDitherField(layerId, 'algorithm', algorithm);
+  }
+
+  onLayerDitherStrengthChange(layerId: string, strength: number): void {
+    this.updateLayerDitherField(layerId, 'strength', +strength / 100);
+  }
+
+  onLayerDitherColorLevelsChange(layerId: string, levels: number): void {
+    this.updateLayerDitherField(layerId, 'colorLevels', +levels);
+  }
+
+  onLayerDitherColorModeChange(layerId: string, mode: DitherColorMode): void {
+    this.updateLayerDitherField(layerId, 'colorMode', mode);
+    // Seed duotone FG from pen color
+    if (mode === 'duotone') {
+      const cfg = this.getLayerDitherConfig(layerId);
+      const fgRgba = hexToRgba01(this.host.penColor() || '#000000');
+      fgRgba[3] = cfg.foregroundColor[3]; // preserve alpha
+      this.updateLayerDitherField(layerId, 'foregroundColor', fgRgba);
+    }
+  }
+
+  onLayerDitherFgChange(layerId: string, hex: string): void {
+    this.updateLayerDitherField(layerId, 'foregroundColor', hexToRgba01(hex));
+  }
+
+  onLayerDitherBgChange(layerId: string, hex: string): void {
+    this.updateLayerDitherField(layerId, 'backgroundColor', hexToRgba01(hex));
+  }
+
+  onLayerDitherFgAlphaChange(layerId: string, alpha: number): void {
+    const cfg = this.getLayerDitherConfig(layerId);
+    cfg.foregroundColor[3] = +alpha / 100;
+    this.updateLayerDitherField(layerId, 'foregroundColor', [...cfg.foregroundColor]);
+  }
+
+  onLayerDitherBgAlphaChange(layerId: string, alpha: number): void {
+    const cfg = this.getLayerDitherConfig(layerId);
+    cfg.backgroundColor[3] = +alpha / 100;
+    this.updateLayerDitherField(layerId, 'backgroundColor', [...cfg.backgroundColor]);
+  }
+
+  onLayerDitherSwapColors(layerId: string): void {
+    const cfg = this.getLayerDitherConfig(layerId);
+    const tmp = [...cfg.foregroundColor] as [number, number, number, number];
+    cfg.foregroundColor = [...cfg.backgroundColor] as [number, number, number, number];
+    cfg.backgroundColor = tmp;
+    this.layerDitherConfigs.set(layerId, cfg);
+    if (cfg.enabled) this.shapeManager.setLayerDitherConfig(layerId, cfg);
+    this.host.markStateDirty();
+  }
+
+  /** Sync the UI-side layerDitherConfigs map from the engine's per-layer dither state. */
+  _syncLayerDitherConfigsFromEngine(): void {
+    const sm = this.shapeManager;
+    if (!sm?.getLayerDitherConfig) return;
+    const layers = sm.getRasterLayers() ?? [];
+    for (const layer of layers) {
+      try {
+        const raw = sm.getLayerDitherConfig(layer.id);
+        if (raw && raw.enabled !== undefined) {
+          this.layerDitherConfigs.set(layer.id, { ...raw });
+        }
+      } catch { /* API may not exist */ }
+    }
+  }
+
+  onLayerDitherInvertChange(layerId: string, invert: boolean): void {
+    this.updateLayerDitherField(layerId, 'invertPattern', invert);
+  }
+
+  onLayerDitherBiasChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'duotoneBias', +value / 100);
+  }
+
+  onLayerDitherTintChange(layerId: string, opacity: number): void {
+    this.updateLayerDitherField(layerId, 'tintOpacity', +opacity / 100);
+  }
+
+  onLayerDitherScaleChange(layerId: string, scale: number): void {
+    this.updateLayerDitherField(layerId, 'patternScale', +scale);
+  }
+
+  onLayerDitherPerChannelChange(layerId: string, perChannel: boolean): void {
+    this.updateLayerDitherField(layerId, 'perChannel', perChannel);
+  }
+
+  onLayerDitherBayerLevelChange(layerId: string, level: number): void {
+    this.updateLayerDitherField(layerId, 'bayerLevel', +level);
+  }
+
+  onLayerDitherHalftoneShapeChange(layerId: string, algorithm: DitherAlgorithm): void {
+    this.updateLayerDitherField(layerId, 'algorithm', algorithm);
+  }
+
+  onLayerDitherHalftoneAngleChange(layerId: string, angle: number): void {
+    this.updateLayerDitherField(layerId, 'halftoneAngle', +angle);
+  }
+
+  onLayerDitherHalftoneFrequencyChange(layerId: string, freq: number): void {
+    this.updateLayerDitherField(layerId, 'halftoneFrequency', +freq);
+  }
+
+  onLayerDitherEdgeWidthChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeWidth', +value);
+  }
+
+  onLayerDitherEdgeFadeChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeFade', +value / 100);
+  }
+
+  onLayerDitherEdgeShrinkChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeShrink', +value / 100);
+  }
+
+  onLayerDitherEdgeDensityChange(layerId: string, value: number): void {
+    this.updateLayerDitherField(layerId, 'edgeDensity', +value / 100);
+  }
+
+  onLayerDitherEdgeSeedReroll(layerId: string): void {
+    const current = (this.getLayerDitherConfig(layerId) as any)['edgeSeed'] ?? 0;
+    this.updateLayerDitherField(layerId, 'edgeSeed', (current + 1) % 65536);
+  }
+
+  onLayerDitherEdgeModeChange(layerId: string, mode: 'content' | 'canvas' | 'both'): void {
+    this.updateLayerDitherField(layerId, 'edgeMode', mode);
+  }
+
+  isGpuDitherAlgorithm(algorithm: DitherAlgorithm): boolean {
+    return ['bayer', 'halftone_dot', 'halftone_line', 'halftone_diamond', 'blue_noise', 'noise'].includes(algorithm as string);
+  }
+
+  frameLinkTypeOptions = FRAME_LINK_TYPE_OPTIONS;
+
+  frameLinkLoopModeOptions = FRAME_LINK_LOOP_MODE_OPTIONS;
+
+  layerFrameLinkConfigs = new Map<string, FrameLinkAnimation>();
+
+  getLayerFrameLinkConfig(layerId: string): FrameLinkAnimation {
+    if (!this.layerFrameLinkConfigs.has(layerId)) {
+      // Try reading from engine first
+      const sm = this.shapeManager;
+      const existing = sm?.getLayerFrameLinkAnimation(layerId);
+      this.layerFrameLinkConfigs.set(layerId, existing ? { ...existing } : { ...DEFAULT_FRAME_LINK_ANIMATION });
+    }
+    return this.layerFrameLinkConfigs.get(layerId)!;
+  }
+
+  updateFrameLinkField<K extends keyof FrameLinkAnimation>(layerId: string, field: K, value: FrameLinkAnimation[K]): void {
+    const cfg = this.getLayerFrameLinkConfig(layerId);
+    (cfg as any)[field] = value;
+    this.layerFrameLinkConfigs.set(layerId, cfg);
+    this.host.markStateDirty();
+    if (cfg.enabled) {
+      this.shapeManager?.setLayerFrameLinkAnimation(layerId, cfg);
+    }
+  }
+
+  onFrameLinkEnabledChange(layerId: string, enabled: boolean): void {
+    const cfg = this.getLayerFrameLinkConfig(layerId);
+    cfg.enabled = enabled;
+    this.layerFrameLinkConfigs.set(layerId, cfg);
+    const sm = this.shapeManager;
+    if (enabled) {
+      sm?.setLayerFrameLinkAnimation(layerId, cfg);
+      // Auto-enable animation mode so the user sees the effect immediately
+      this.host.ensureAnimationMode();
+    } else {
+      sm?.setLayerFrameLinkAnimation(layerId, undefined);
+    }
+    this.host.markStateDirty();
+  }
+
+  onFrameLinkTypeChange(layerId: string, type: FrameLinkAnimationType): void {
+    this.updateFrameLinkField(layerId, 'type', type);
+  }
+
+  onFrameLinkAmplitudeChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'amplitude', +v);
+  }
+
+  onFrameLinkFrequencyChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'frequency', +v);
+  }
+
+  onFrameLinkSpeedChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'speed', +v / 100);
+  }
+
+  onFrameLinkDirectionChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'direction', +v);
+  }
+
+  onFrameLinkPhaseChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'phase', +v / 100);
+  }
+
+  onFrameLinkLoopModeChange(layerId: string, mode: FrameLinkLoopMode): void {
+    this.updateFrameLinkField(layerId, 'loopMode', mode);
+  }
+
+  onFrameLinkDisplaceXChange(layerId: string, v: boolean): void {
+    this.updateFrameLinkField(layerId, 'displaceX', v);
+  }
+
+  onFrameLinkDisplaceYChange(layerId: string, v: boolean): void {
+    this.updateFrameLinkField(layerId, 'displaceY', v);
+  }
+
+  onFrameLinkRippleCenterXChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'rippleCenterX', +v / 100);
+  }
+
+  onFrameLinkRippleCenterYChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'rippleCenterY', +v / 100);
+  }
+
+  onFrameLinkOctavesChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'noiseOctaves', +v);
+  }
+
+  onFrameLinkLacunarityChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'noiseLacunarity', +v / 10);
+  }
+
+  onFrameLinkPersistenceChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'noisePersistence', +v / 100);
+  }
+
+  onFrameLinkSeedChange(layerId: string, v: number): void {
+    this.updateFrameLinkField(layerId, 'shakeSeed', +v);
+  }
+
+  /**
+   * Apply a saved dither configuration to both the local UI state and the engine.
+   */
+  _applyDitherConfig(config: any): void {
+    this.ditherConfig = {
+      enabled: config.enabled ?? false,
+      algorithm: config.algorithm ?? 'halftone_dot',
+      colorLevels: config.colorLevels ?? 2,
+      bayerLevel: config.bayerLevel ?? 2,
+      halftoneAngle: config.halftoneAngle ?? 45,
+      halftoneFrequency: config.halftoneFrequency ?? 40,
+      strength: config.strength ?? 1.0,
+      patternScale: config.patternScale ?? 0.25,
+      perChannel: config.perChannel ?? false,
+      colorMode: config.colorMode ?? 'duotone',
+      foregroundColor: config.foregroundColor ?? [0, 0, 0, 1],
+      backgroundColor: config.backgroundColor ?? [1, 1, 1, 0],
+      invertPattern: config.invertPattern ?? false,
+      duotoneBias: config.duotoneBias ?? 0.5,
+      tintOpacity: config.tintOpacity ?? 1.0,
+      edgeWidth: config.edgeWidth ?? 0,
+      edgeFade: config.edgeFade ?? 0,
+      edgeShrink: config.edgeShrink ?? 0,
+      edgeDensity: config.edgeDensity ?? 0,
+      edgeSeed: config.edgeSeed ?? 0,
+      edgeMode: config.edgeMode ?? 'content',
+    };
+
+    const sm = this.shapeManager;
+    sm.setDitherEnabled(this.ditherConfig.enabled);
+    sm.setDitherAlgorithm(this.ditherConfig.algorithm);
+    sm.setDitherColorLevels(this.ditherConfig.colorLevels);
+    sm.setDitherBayerLevel(this.ditherConfig.bayerLevel);
+    sm.setDitherHalftoneAngle(this.ditherConfig.halftoneAngle);
+    sm.setDitherHalftoneFrequency(this.ditherConfig.halftoneFrequency);
+    sm.setDitherStrength(this.ditherConfig.strength);
+    sm.setDitherPatternScale(this.ditherConfig.patternScale);
+    sm.setDitherPerChannel(this.ditherConfig.perChannel);
+    sm.setDitherColorMode(this.ditherConfig.colorMode);
+    const fg = this.ditherConfig.foregroundColor;
+    sm.setDitherForegroundColor(fg[0], fg[1], fg[2], fg[3]);
+    const bg = this.ditherConfig.backgroundColor;
+    sm.setDitherBackgroundColor(bg[0], bg[1], bg[2], bg[3]);
+    sm.setDitherInvertPattern(this.ditherConfig.invertPattern);
+    sm.setDitherDuotoneBias(this.ditherConfig.duotoneBias);
+    sm.setDitherTintOpacity(this.ditherConfig.tintOpacity);
+  }
+}

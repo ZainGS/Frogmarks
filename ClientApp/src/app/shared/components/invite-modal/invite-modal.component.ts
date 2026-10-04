@@ -79,7 +79,7 @@ export class InviteModalComponent {
 
   copyLink() {
     const inviteLink = this.inviteForm.get('inviteLink')?.value;
-    navigator.clipboard.writeText(inviteLink).then(() => {``
+    void navigator.clipboard.writeText(inviteLink).then(() => {``
       alert('Link copied to clipboard!');
     });
   }

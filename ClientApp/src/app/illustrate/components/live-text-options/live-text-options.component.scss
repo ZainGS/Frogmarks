@@ -1,0 +1,14 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.shader-status {
+  &.success {
+    background: rgba(#27ae60, 0.2);
+    color: #2ecc71;
+  }
+  &.error {
+    background: rgba(#e74c3c, 0.2);
+    color: #e74c3c;
+  }
+}

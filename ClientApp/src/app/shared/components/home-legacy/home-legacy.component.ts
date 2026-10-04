@@ -33,7 +33,7 @@ export class HomeLegacyComponent implements OnInit, OnDestroy {
     if (this.emailForm.valid) {
       var email: string = this.emailForm.controls['email'].value;
       this.authService.sendSignInEmail(email).subscribe(x => {
-        this.router.navigate(['/check-your-email'], { state: { email: email } });
+        void this.router.navigate(['/check-your-email'], { state: { email: email } });
       });
     }
   }

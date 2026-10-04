@@ -1,10 +1,10 @@
-﻿using AutoMapper;
+﻿using Microsoft.Extensions.Caching.Memory;
+using AutoMapper;
 using Frogmarks.Auth;
 using Frogmarks.Data;
 using Frogmarks.Models.Auth;
 using Frogmarks.Models.Board;
 using Frogmarks.Models.Email;
-using Frogmarks.SignalR.Optimizers;
 using Frogmarks.Utilities;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +36,27 @@ namespace Frogmarks.Services
         private readonly TokenGenerator _tokenGenerator;
         private readonly ILogger<EmailService> _logger;
 
+        private readonly IMemoryCache _cache;
+        private readonly string _frontendBaseUrl;
+        private readonly byte[] _tokenHashKey;
+
+        /// <summary>
+        /// Email tokens are stored as HMAC-SHA256(server key, token), never in plain text (security audit 2026-10-04,
+        /// Phase 1.5): a database leak no longer hands out live sign-in links / codes, and the 6-digit re-auth codes can't
+        /// be brute-forced offline without the server key. Lookups hash the incoming value the same way.
+        /// </summary>
+        private string HashToken(string raw)
+        {
+            using var hmac = new System.Security.Cryptography.HMACSHA256(_tokenHashKey);
+            return Convert.ToHexString(hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw)));
+        }
+
+        /// <summary>Stored form of a re-auth code: keeps the "reauth:" marker (the attempt limit finds live codes by it),
+        /// binds the code to its email.</summary>
+        private string StoredReauthCode(string email, string code) => "reauth:" + HashToken(email.Trim().ToLowerInvariant() + ":" + code);
+        /// <summary>Wrong re-auth codes allowed per email before the live code is thrown away (audit Phase 1.5).</summary>
+        private const int MaxReauthAttempts = 5;
+
         public EmailService(ApplicationDbContext context, 
             IMapper mapper, 
             IOptions<AzureCommunicationServicesSettings> acsSettings, 
@@ -43,8 +64,15 @@ namespace Frogmarks.Services
             IUserService userService,
             IHttpContextAccessor httpContextAccessor,
             TokenGenerator tokenGenerator,
-            ILogger<EmailService> logger)
+            ILogger<EmailService> logger,
+            IMemoryCache cache,
+            IConfiguration configuration)
         {
+            _cache = cache;
+            // Links in emails point at the frontend. Set Frontend:BaseUrl per environment (was hardcoded to localhost).
+            _frontendBaseUrl = (configuration["Frontend:BaseUrl"] ?? "https://localhost:44452").TrimEnd('/');
+            _tokenHashKey = System.Text.Encoding.UTF8.GetBytes("frogmarks-email-token:" + (configuration["JwtSettings:SecretKey"]
+                ?? throw new InvalidOperationException("JwtSettings:SecretKey is required (email tokens are HMAC-hashed with it).")));
             _context = context;
             _mapper = mapper;
             _userManager = userManager;
@@ -74,7 +102,7 @@ namespace Frogmarks.Services
                 {
                     Id = (existingEmailToken != null) ? (existingEmailToken.Id) : 0,
                     Email = email,
-                    Token = newTokenString,
+                    Token = HashToken(newTokenString),   // the raw token only goes into the email
                     Expiration = DateTime.UtcNow.AddMinutes(15)
                 };
 
@@ -83,8 +111,7 @@ namespace Frogmarks.Services
                 await _context.SaveChangesAsync();
 
                 // Send the Email
-                //string signInLink = $"https://frogmarks.com/signin?token={token}";
-                string signInLink = $"https://localhost:44452/signin?token={newTokenString}";
+                string signInLink = $"{_frontendBaseUrl}/signin?token={Uri.EscapeDataString(newTokenString)}";
 
                 // Setup SMTP Client (ex: Azure Communication Service)
                 var emailClient = new EmailClient(_acsSettings.ConnectionString);
@@ -119,10 +146,15 @@ namespace Frogmarks.Services
         {
             try
             {
-                var emailToken = await _context.EmailTokens.SingleOrDefaultAsync(et => et.Token == token && et.Expiration > DateTime.UtcNow);
+                // Re-auth codes ("reauth:NNNNNN") share the EmailTokens table; they are only valid on verify-reauth-code (which
+                // also needs the email). Here they would match ANY user's live code by guessing 6 digits (audit Phase 1.5).
+                if (string.IsNullOrEmpty(token) || token.StartsWith("reauth:", StringComparison.Ordinal))
+                    return new ResultModel<string>(ResultType.Failure, "Invalid or expired token.", "false");
+                var tokenHash = HashToken(token);
+                var emailToken = await _context.EmailTokens.SingleOrDefaultAsync(et => et.Token == tokenHash && et.Expiration > DateTime.UtcNow);
                 if (emailToken == null)
                 {
-                    _logger.LogWarning("Invalid or expired email token: {Token}", token);
+                    _logger.LogWarning("Invalid or expired email token");   // never log the token itself
                     return new ResultModel<string>(ResultType.Failure, "Invalid or expired token.", "false");
                 }
 
@@ -176,6 +208,10 @@ namespace Frogmarks.Services
                 _httpContextAccessor.HttpContext.Response.Cookies.Append("accessToken", accessToken, accessTokenCookieOptions);
                 _httpContextAccessor.HttpContext.Response.Cookies.Append("refreshToken", refreshToken, refreshTokenCookieOptions);
 
+                // Magic links are single-use (they were replayable until expiry — audit Phase 1.5)
+                _context.EmailTokens.Remove(emailToken);
+                await _context.SaveChangesAsync();
+
                 _logger.LogInformation("User logged in with email: {Email}", emailToken.Email);
                 return new ResultModel<string>(ResultType.Success, resultObject: "true");
             }
@@ -193,8 +229,8 @@ namespace Frogmarks.Services
                 if (string.IsNullOrWhiteSpace(email))
                     return new ResultModel<string>(ResultType.Failure, "Email is required.");
 
-                var code = Random.Shared.Next(100_000, 1_000_000).ToString();
-                var stored = $"reauth:{code}";
+                var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString();   // CSPRNG (audit Phase 1.5)
+                var stored = StoredReauthCode(email, code);
 
                 var existing = await _context.EmailTokens.FirstOrDefaultAsync(t => t.Email!.ToLower() == email.ToLower());
                 if (existing != null)
@@ -236,14 +272,31 @@ namespace Frogmarks.Services
         {
             try
             {
-                var stored = $"reauth:{code}";
+                var stored = StoredReauthCode(email, code ?? "");
                 var emailToken = await _context.EmailTokens.SingleOrDefaultAsync(t =>
                     t.Email!.ToLower() == email.ToLower() &&
                     t.Token == stored &&
                     t.Expiration > DateTime.UtcNow);
 
+                var attemptsKey = "reauth-fail:" + email.ToLowerInvariant();
                 if (emailToken == null)
+                {
+                    // Attempt limit: after MaxReauthAttempts wrong codes the live code is discarded (request a new one)
+                    var failures = _cache.GetOrCreate(attemptsKey, e => { e.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15); return 0; }) + 1;
+                    _cache.Set(attemptsKey, failures, TimeSpan.FromMinutes(15));
+                    if (failures >= MaxReauthAttempts)
+                    {
+                        var live = await _context.EmailTokens
+                            .Where(t => t.Email!.ToLower() == email.ToLower() && t.Token!.StartsWith("reauth:"))
+                            .ToListAsync();
+                        _context.EmailTokens.RemoveRange(live);
+                        await _context.SaveChangesAsync();
+                        _cache.Remove(attemptsKey);
+                        return new ResultModel<string>(ResultType.Failure, "Too many attempts. Request a new code.");
+                    }
                     return new ResultModel<string>(ResultType.Failure, "Invalid or expired code.");
+                }
+                _cache.Remove(attemptsKey);
 
                 var user = await _userManager.FindByEmailAsync(email);
                 if (user == null)

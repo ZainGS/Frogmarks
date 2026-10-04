@@ -1,0 +1,131 @@
+<div class="scene3d-material-row">
+    <label title="Brows, mouth, nose, hair shadow and blush, on top of the eyes. Characters saved before the face kit start with it off.">Face kit</label>
+    <input type="checkbox" [ngModel]="!!face.scene3dFaceKit" (ngModelChange)="face.scene3dSetFaceKitEnabled($event)">
+</div>
+<ng-container *ngIf="face.scene3dFaceKit">
+    <div class="eye-proc-group">Expression</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+        <button *ngFor="let e of face.scene3dFaceExpressionNames" class="scene3d-btn scene3d-btn-sm"
+                [class.scene3d-btn-active]="face.scene3dFacePreviewExpr === e"
+                (click)="face.scene3dPreviewFaceExpression(e)" title="Preview on the face">{{ e | titlecase }}</button>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="The expression the character holds between animations (saved)">Resting</label>
+        <span class="scene3d-val" style="flex:1">{{ face.scene3dFaceKit.expression | titlecase }}</span>
+        <button class="scene3d-btn scene3d-btn-sm" (click)="face.scene3dSetRestingFaceExpression()"
+                [disabled]="face.scene3dFacePreviewExpr === face.scene3dFaceKit.expression" title="Keep the previewed expression">Use preview</button>
+    </div>
+
+    <div class="eye-proc-group">Brows</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="face.scene3dFaceKit.browStyle" (ngModelChange)="face.scene3dFaceKitChanged()">
+            <option *ngFor="let s of face.scene3dFaceBrowStyles" [value]="s">{{ s | titlecase }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Thickness</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.browThickness" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.browThickness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Length</label>
+        <input type="range" min="0.5" max="1.5" step="0.05" [(ngModel)]="face.scene3dFaceKit.browLength" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.browLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Height</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.browHeight" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.browHeight | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="+ lifts the outer end (sharp), − drops it (soft)">Tilt</label>
+        <input type="range" min="-1" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.browTilt" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.browTilt | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Brow colour follows the hair (darkened)">Hair colour</label>
+        <input type="checkbox" [ngModel]="!face.scene3dFaceKit.browColor" (ngModelChange)="face.scene3dFaceBrowFollowHair($event)">
+        <input *ngIf="face.scene3dFaceKit.browColor" type="color" [(ngModel)]="face.scene3dFaceKit.browColor" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Draw the brows over the bangs (anime style)">Over hair</label>
+        <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.browsThroughHair" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+
+    <div class="eye-proc-group">Mouth</div>
+    <div class="scene3d-material-row">
+        <label>Width</label>
+        <input type="range" min="0.2" max="0.9" step="0.02" [(ngModel)]="face.scene3dFaceKit.mouthWidth" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.mouthWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Line</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.mouthThickness" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.mouthThickness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="From just under the nose (0) to the chin (1)">Position</label>
+        <input type="range" min="0" max="1" step="0.02" [(ngModel)]="face.scene3dFaceKit.mouthHeight" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.mouthHeight | number:'1.2-2' }}</span>
+    </div>
+
+    <div class="eye-proc-group">Nose</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="face.scene3dFaceKit.noseStyle" (ngModelChange)="face.scene3dFaceKitChanged()">
+            <option *ngFor="let s of face.scene3dFaceNoseStyles" [value]="s">{{ s | titlecase }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="face.scene3dFaceKit.noseStyle !== 'none'">
+        <label>Size</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.noseSize" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.noseSize | number:'1.2-2' }}</span>
+    </div>
+
+    <div class="eye-proc-group">Shading</div>
+    <div class="scene3d-material-row">
+        <label>Blush</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.blush" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <input type="color" [(ngModel)]="face.scene3dFaceKit.blushColor" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Blush lines</label>
+        <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.blushLines" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Cheeks</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.cheekShade" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.cheekShade | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="The bangs' hard shadow across the forehead">Hair shadow</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.hairShadow" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.hairShadow | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="face.scene3dFaceKit.hairShadow > 0">
+        <label>Shadow depth</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.hairShadowDepth" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.hairShadowDepth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="How much scene light reaches the eyes (0 = classic full-bright)">Eye shading</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.eyeShade" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.eyeShade | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Show the eyes through bangs that hang over them">Eyes over hair</label>
+        <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.eyesThroughHair" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+
+    <div class="eye-proc-group">Life</div>
+    <div class="scene3d-material-row">
+        <label title="Chance that a blink comes with a small brow raise">Brow raise</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.lifeBrowRaise" (ngModelChange)="face.scene3dFaceKitChanged()">
+        <span class="scene3d-val">{{ face.scene3dFaceKit.lifeBrowRaise | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Now and then a short smile while idle">Idle smiles</label>
+        <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.lifeSmile" (ngModelChange)="face.scene3dFaceKitChanged()">
+    </div>
+</ng-container>

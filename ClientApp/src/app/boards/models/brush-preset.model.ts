@@ -291,7 +291,13 @@ export type DitherAlgorithm =
   | 'halftone_line'
   | 'halftone_diamond'
   | 'blue_noise'
-  | 'noise';
+  | 'noise'
+  | 'floyd_steinberg'
+  | 'atkinson'
+  | 'jarvis_judice_ninke'
+  | 'stucki'
+  | 'sierra'
+  | 'sierra_lite';
 
 export type DitherColorMode = 'quantize' | 'duotone';
 
@@ -351,12 +357,18 @@ export interface DitherAlgorithmOption {
 }
 
 export const DITHER_ALGORITHM_OPTIONS: DitherAlgorithmOption[] = [
-  { value: 'bayer',            label: 'Bayer (Crosshatch)' },
-  { value: 'halftone_dot',     label: 'Halftone — Dot' },
-  { value: 'halftone_line',    label: 'Halftone — Line' },
-  { value: 'halftone_diamond', label: 'Halftone — Diamond' },
-  { value: 'blue_noise',       label: 'Blue Noise (Organic)' },
-  { value: 'noise',            label: 'Random Noise' },
+  { value: 'bayer',               label: 'Bayer (Crosshatch)' },
+  { value: 'halftone_dot',        label: 'Halftone — Dot' },
+  { value: 'halftone_line',       label: 'Halftone — Line' },
+  { value: 'halftone_diamond',    label: 'Halftone — Diamond' },
+  { value: 'blue_noise',          label: 'Blue Noise (Organic)' },
+  { value: 'noise',               label: 'Random Noise' },
+  { value: 'floyd_steinberg',     label: 'Floyd-Steinberg (WASM)' },
+  { value: 'atkinson',            label: 'Atkinson (WASM)' },
+  { value: 'jarvis_judice_ninke', label: 'Jarvis-Judice-Ninke (WASM)' },
+  { value: 'stucki',              label: 'Stucki (WASM)' },
+  { value: 'sierra',              label: 'Sierra (WASM)' },
+  { value: 'sierra_lite',         label: 'Sierra Lite (WASM)' },
 ];
 
 export interface BayerLevelOption {

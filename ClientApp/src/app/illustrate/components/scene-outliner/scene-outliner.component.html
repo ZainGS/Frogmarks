@@ -1,0 +1,80 @@
+<div class="scene3d-mesh-list" *ngIf="outliner.scene3dHierarchy.length > 0">
+    <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: outliner.scene3dHierarchy, depth: 0, inChar: false }"></ng-container>
+</div>
+
+<ng-template #outlinerNodes let-nodes="nodes" let-depth="depth" let-inChar="inChar">
+    <ng-container *ngFor="let node of nodes; trackBy: outliner.trackByNodeId">
+        <!-- Hide loose procedural body part meshes at the top level — they're listed under their Character row instead -->
+        <ng-container *ngIf="inChar || !outliner.scene3dCharPartIds.has(node.id)">
+        <div class="scene3d-mesh-item"
+             [class.active]="selectedMeshId === node.id"
+             [class.scene3d-multi-selected]="selectedMeshIds.has(node.id) && selectedMeshIds.size > 1"
+             [class.scene3d-node-hidden]="!node.visible"
+             [style.paddingLeft.px]="8 + depth * 16"
+             (click)="act({ kind: 'select', id: node.id, event: $event })"
+             (mouseenter)="node.character || (!node.thinWrapper && node.type !== '3DMeshGroup') ? outliner.scene3dSetHovered(node.id) : null"
+             (mouseleave)="node.character || (!node.thinWrapper && node.type !== '3DMeshGroup') ? outliner.scene3dSetHovered(null) : null">
+            <button class="scene3d-eye-btn"
+                    [class.scene3d-eye-hidden]="!node.visible"
+                    (click)="outliner.scene3dToggleVisibility(node); $event.stopPropagation()"
+                    [title]="node.visible ? 'Hide' : 'Show'">👁</button>
+            <span *ngIf="node.thinWrapper && outliner.scene3dBuildingIds.has(node.id)" class="scene3d-node-icon">🏛</span>
+            <span *ngIf="node.thinWrapper && outliner.scene3dFoliageIds.has(node.id)" class="scene3d-node-icon">🌿</span>
+            <span *ngIf="node.thinWrapper && outliner.scene3dBlockIds.has(node.id)" class="scene3d-node-icon">🏘</span>
+            <span *ngIf="node.thinWrapper && outliner.scene3dPackageIds.has(node.id)" class="scene3d-node-icon">📦</span>
+            <span *ngIf="node.thinWrapper && outliner.scene3dCDKitIds.has(node.id)" class="scene3d-node-icon">💿</span>
+            <span *ngIf="node.thinWrapper && !outliner.scene3dBuildingIds.has(node.id) && !outliner.scene3dFoliageIds.has(node.id) && !outliner.scene3dBlockIds.has(node.id) && !outliner.scene3dPackageIds.has(node.id) && !outliner.scene3dCDKitIds.has(node.id)" class="scene3d-node-icon">🏙</span>
+            <span *ngIf="!node.thinWrapper && node.type === '3DArrayGroup'" class="scene3d-node-icon">⊞</span>
+            <span *ngIf="!node.thinWrapper && node.type === '3DMeshGroup'" class="scene3d-node-icon"
+                  (click)="outliner.scene3dToggleGroupCollapse(node.id); $event.stopPropagation()">
+                {{ outliner.scene3dCollapsedGroups.has(node.id) ? '▶' : '▼' }}
+            </span>
+            <span *ngIf="node.character" class="scene3d-node-icon">👤</span>
+            <span *ngIf="outliner.scene3dScriptIds.has(node.id)" class="scene3d-node-icon" title="Has a script behavior">📜</span>
+            <span *ngIf="!node.thinWrapper && node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-node-icon">{{ outliner.scene3dCharacterBodyIds.has(node.id) ? '👤' : '⬡' }}</span>
+            <span *ngIf="!node.thinWrapper && outliner.scene3dRenamingId !== node.id" class="scene3d-mesh-name"
+                  (dblclick)="outliner.scene3dStartRename(node, $event)">{{ outliner.scene3dCharacterBodyIds.has(node.id) ? 'Character' : node.name }}<span *ngIf="node.type === '3DArrayGroup' && node.instanceCount != null" class="scene3d-array-badge"> ×{{ node.instanceCount }}</span></span>
+            <span *ngIf="node.thinWrapper" class="scene3d-mesh-name">{{ node.name }}</span>
+            <button *ngIf="node.thinWrapper && outliner.scene3dPackageIds.has(node.id)" class="scene3d-mesh-delete"
+                    (click)="act({ kind: 'deletePackage', id: node.id }); $event.stopPropagation()"
+                    title="Delete package">✕</button>
+            <button *ngIf="node.thinWrapper && outliner.scene3dCreatorIds.has(node.id)" class="scene3d-mesh-delete"
+                    (click)="creator.scene3dOutlinerDeleteCreator(node.id); $event.stopPropagation()"
+                    title="Delete">✕</button>
+            <button *ngIf="node.thinWrapper && outliner.scene3dDecalIds.has(node.id)" class="scene3d-mesh-delete"
+                    (click)="decal.scene3dOutlinerDeleteDecal(node.id); $event.stopPropagation()"
+                    title="Delete decal">✕</button>
+            <button *ngIf="node.thinWrapper && outliner.scene3dCDKitIds.has(node.id)" class="scene3d-mesh-delete"
+                    (click)="act({ kind: 'deleteCDKit', id: node.id }); $event.stopPropagation()"
+                    title="Delete CD Kit">✕</button>
+            <input *ngIf="!node.thinWrapper && outliner.scene3dRenamingId === node.id" class="scene3d-rename-input"
+                   [(ngModel)]="outliner.scene3dRenamingName"
+                   (blur)="outliner.scene3dCommitRename(node)"
+                   (keydown.enter)="outliner.scene3dCommitRename(node)"
+                   (keydown.escape)="outliner.scene3dCancelRename()"
+                   (click)="$event.stopPropagation()"
+                   autofocus>
+            <button *ngIf="!node.thinWrapper && outliner.scene3dClothIds.has(node.id)" class="scene3d-move-btn scene3d-cloth-edit-btn"
+                    (click)="act({ kind: 'editCloth', id: node.id }); $event.stopPropagation()"
+                    title="Edit cloth mesh">✎</button>
+            <button *ngIf="!node.thinWrapper" class="scene3d-move-btn" (click)="act({ kind: 'move', id: node.id, dir: 'up' }); $event.stopPropagation()" title="Move up">↑</button>
+            <button *ngIf="!node.thinWrapper" class="scene3d-move-btn" (click)="act({ kind: 'move', id: node.id, dir: 'down' }); $event.stopPropagation()" title="Move down">↓</button>
+            <button *ngIf="!node.thinWrapper && node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-move-btn"
+                    (click)="act({ kind: 'duplicate', id: node.id }); $event.stopPropagation()"
+                    title="Duplicate mesh (Ctrl+D)">⧉</button>
+            <!-- Player: plain meshes + the Character row (its id IS the body mesh); not a character's parts (face / hair / garments) -->
+            <button *ngIf="!node.thinWrapper && !inChar && (node.character || (node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup')) && viewTarget === 'scene'"
+                    class="scene3d-move-btn scene3d-player-btn"
+                    [class.active]="anim.scene3dPlayerObjectId === node.id"
+                    (click)="anim.scene3dSetPlayerObject(node.id); $event.stopPropagation()"
+                    title="{{ anim.scene3dPlayerObjectId === node.id ? 'Clear Player avatar' : 'Set as Player avatar (third-person follow target)' }}">🕹</button>
+            <button *ngIf="!node.thinWrapper" class="scene3d-mesh-delete"
+                    (click)="deleteNode(node); $event.stopPropagation()"
+                    [title]="outliner.scene3dDecalIds.has(node.id) ? 'Delete decal' : node.type === '3DMeshGroup' || node.type === '3DArrayGroup' ? 'Delete group' : 'Delete mesh'">✕</button>
+        </div>
+        <ng-container *ngIf="!node.thinWrapper && node.type === '3DMeshGroup' && node.children?.length && !outliner.scene3dCollapsedGroups.has(node.id)">
+            <ng-container *ngTemplateOutlet="outlinerNodes; context: { nodes: node.children, depth: depth + 1, inChar: inChar || !!node.character }"></ng-container>
+        </ng-container>
+        </ng-container><!-- /scene3dCharPartIds filter -->
+    </ng-container>
+</ng-template>

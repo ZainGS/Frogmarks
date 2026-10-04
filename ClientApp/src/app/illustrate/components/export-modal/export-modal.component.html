@@ -1,0 +1,70 @@
+<div class="export-modal-overlay" (click)="close.emit()">
+  <div class="export-modal" (click)="$event.stopPropagation()">
+    <div class="export-modal-header">
+      <span class="export-modal-title">Export</span>
+      <button class="export-modal-close" (click)="close.emit()">✕</button>
+    </div>
+    <div class="export-modal-body">
+      <nav class="export-modal-nav">
+        <button class="export-modal-nav-item" [class.active]="tab === 'image'" (click)="tab = 'image'">
+          <span class="export-modal-nav-icon">🖼</span>
+          <span class="export-modal-nav-label">Export Image</span>
+          <span class="export-modal-nav-ext">.png</span>
+        </button>
+        <button class="export-modal-nav-item" [class.active]="tab === 'scene'" (click)="tab = 'scene'; refreshExportCartSounds()">
+          <span class="export-modal-nav-icon">💿</span>
+          <span class="export-modal-nav-label">Export Scene</span>
+          <span class="export-modal-nav-ext">.frogcart</span>
+        </button>
+        <button class="export-modal-nav-item" [class.active]="tab === 'workfile'" (click)="tab = 'workfile'">
+          <span class="export-modal-nav-icon">🐸</span>
+          <span class="export-modal-nav-label">Export Workfile</span>
+          <span class="export-modal-nav-ext">.frogmarks</span>
+        </button>
+      </nav>
+
+      <div class="export-modal-panel">
+
+        <!-- Image panel -->
+        <ng-container *ngIf="tab === 'image'">
+          <div class="export-modal-panel-title">Export Image</div>
+          <p class="export-modal-panel-desc">Download a PNG snapshot of the current canvas view.</p>
+          <button class="export-modal-action-btn" (click)="exportImage()">Download PNG</button>
+        </ng-container>
+
+        <!-- Scene panel -->
+        <ng-container *ngIf="tab === 'scene'">
+          <div class="export-modal-panel-title">Export Scene</div>
+          <p class="export-modal-panel-desc">Package your scene as a standalone <code>.frogcart</code> file that can be shared and played in the Frogmarks Player.</p>
+          <div class="export-modal-field">
+            <label class="export-modal-field-label">Title</label>
+            <input class="export-modal-field-input" [(ngModel)]="files.exportCartTitle" placeholder="Untitled">
+          </div>
+          <div class="export-modal-field">
+            <label class="export-modal-field-label">Author</label>
+            <input class="export-modal-field-input" [(ngModel)]="files.exportCartAuthor" placeholder="Your name">
+          </div>
+          <div class="export-modal-field">
+            <label class="export-modal-field-label">Description</label>
+            <textarea class="export-modal-field-input export-modal-field-textarea" [(ngModel)]="files.exportCartDescription" placeholder="Optional description" rows="3"></textarea>
+          </div>
+          <div class="export-cart-sounds" *ngIf="files.exportCartSounds.length > 0">
+            <span class="export-cart-sounds-label">🔊 {{ files.exportCartSounds.length }} sound{{ files.exportCartSounds.length === 1 ? '' : 's' }} will be bundled</span>
+            <span class="export-cart-sounds-ids">{{ files.exportCartSounds.join(', ') }}</span>
+          </div>
+          <button class="export-modal-action-btn" (click)="files.exportModalFrogcart()" [disabled]="files.exportCartBusy">
+            {{ files.exportCartBusy ? 'Packaging…' : 'Export .frogcart' }}
+          </button>
+        </ng-container>
+
+        <!-- Workfile panel -->
+        <ng-container *ngIf="tab === 'workfile'">
+          <div class="export-modal-panel-title">Export Workfile</div>
+          <p class="export-modal-panel-desc">Download the full editable project file. Use this to back up your work or open it on another device.</p>
+          <button class="export-modal-action-btn" (click)="exportWorkfile()">Download .frogmarks</button>
+        </ng-container>
+
+      </div>
+    </div>
+  </div>
+</div>

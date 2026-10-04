@@ -1,0 +1,87 @@
+<div class="tool-label">EDIT BLOCK</div>
+
+<!-- ── Style (saved with the block; overrides the Environment style) ── -->
+<div class="scene3d-array-strip-label">Style</div>
+<div class="scene3d-material-row">
+    <label>Style</label>
+    <select class="scene3d-select" [ngModel]="blockStyleRender" (ngModelChange)="scene3dSetBlockStyleRender($event)">
+        <option value="">Not set</option>
+        <option value="default">PBR</option>
+        <option value="cel">Cel</option>
+        <option value="cel-hd">Cel HD</option>
+        <option value="sketch">Sketch</option>
+        <option value="ink">Ink</option>
+        <option value="gouraud">Gouraud (PS1)</option>
+    </select>
+</div>
+<div class="scene3d-toggle-row" *ngIf="blockStyleRender === 'cel' || blockStyleRender === 'cel-hd'">
+    <label>Toon shadows</label>
+    <input type="checkbox" [ngModel]="blockStyleToon" (ngModelChange)="scene3dSetBlockStyleFlag('toonShadow', $event)">
+</div>
+<div class="scene3d-toggle-row">
+    <label>Rim light</label>
+    <input type="checkbox" [ngModel]="blockStyleRim" (ngModelChange)="scene3dSetBlockStyleFlag('rimLight', $event)">
+</div>
+
+<!-- ── Stats ── -->
+<div class="scene3d-array-strip-label">Stats</div>
+<div class="scene3d-material-row" *ngIf="blockStats">
+    <label>Buildings</label>
+    <span class="scene3d-val">{{ blockStats.buildings }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="blockStats">
+    <label>Geometries</label>
+    <span class="scene3d-val">{{ blockStats.distinctInstancedGeometries }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="blockStats">
+    <label>Instances</label>
+    <span class="scene3d-val">{{ blockStats.totalInstances }}</span>
+</div>
+
+<!-- ── Buildings in block ── -->
+<div class="scene3d-array-strip-label">Buildings</div>
+<div *ngIf="blockBuildingList.length === 0" class="scene3d-material-row" style="opacity:0.5">
+    <label>None yet</label>
+</div>
+<div *ngFor="let b of blockBuildingList" class="scene3d-material-row">
+    <label style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.archetype || ('Building ' + (b.index + 1)) }}</label>
+    <button class="scene3d-btn scene3d-btn-sm" (click)="editBuilding.emit(b.index)" title="Edit this building's params">✎</button>
+    <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dRemoveBuildingFromBlock(b.index)" title="Remove">✕</button>
+</div>
+
+<!-- ── Add building ── -->
+<div class="scene3d-array-strip-label">Add Building</div>
+<div class="scene3d-material-row" *ngIf="scene3dBuildingArchetypes.length">
+    <label>Archetype</label>
+    <select class="scene3d-select" [(ngModel)]="blockAddArchetype">
+        <option *ngFor="let a of scene3dBuildingArchetypes" [value]="a">{{ a }}</option>
+    </select>
+</div>
+<div class="scene3d-material-row">
+    <label>X (m)</label>
+    <input type="number" class="scene3d-number-input" step="1" [(ngModel)]="blockAddX">
+</div>
+<div class="scene3d-material-row">
+    <label>Z (m)</label>
+    <input type="number" class="scene3d-number-input" step="1" [(ngModel)]="blockAddZ">
+</div>
+<div class="scene3d-material-row">
+    <label>Rotation</label>
+    <input type="range" min="0" max="6.28" step="0.01" [(ngModel)]="blockAddRy">
+    <span class="scene3d-val">{{ blockAddRy | number:'1.2-2' }}</span>
+</div>
+<button class="scene3d-btn" style="width:100%;margin-top:4px" (click)="scene3dAddBuildingToBlock()">Add Building</button>
+
+<!-- ── Scale ── -->
+<div class="scene3d-array-strip-label">Scale</div>
+<div class="scene3d-material-row">
+    <label>Units/m</label>
+    <input type="range" min="0.01" max="1" step="0.01" [(ngModel)]="blockScale">
+    <span class="scene3d-val">{{ blockScale | number:'1.2-2' }}</span>
+</div>
+<button class="scene3d-btn" style="width:100%;margin-top:4px" (click)="scene3dApplyBlockScale()">Apply Scale</button>
+
+<!-- ── Actions ── -->
+<div style="margin-top:12px;display:flex;gap:6px">
+    <button class="scene3d-btn" style="flex:1" (click)="deleteBlock.emit()" title="Remove this block and all its buildings">Delete</button>
+</div>

@@ -1,0 +1,76 @@
+
+<!-- Header -->
+<div class="cd-header">
+  <span class="cd-title">💿 CD Designer</span>
+  <button class="cd-done-btn" (click)="exit.emit()" title="Exit designer and return to scene">Done</button>
+</div>
+
+<!-- Component picker -->
+<div class="cd-row">
+  <label class="cd-label">View</label>
+  <select class="cd-select" [(ngModel)]="cdActiveComponent" (ngModelChange)="cdSetComponent($event)">
+    <option value="complete">Complete</option>
+    <option value="frontInsert">Front Insert</option>
+    <option value="trayCard">Tray Card</option>
+    <option value="disc">Disc</option>
+    <option value="booklet">Booklet</option>
+  </select>
+</div>
+
+<!-- Case style toggle — always visible -->
+<div class="cd-row">
+  <label class="cd-label">Case</label>
+  <div class="cd-seg-group">
+    <button class="cd-seg-btn" [class.active]="!trayClear"
+            (click)="cdSetTrayClear(false)" title="Classic black tray">Black</button>
+    <button class="cd-seg-btn" [class.active]="trayClear"
+            (click)="cdSetTrayClear(true)" title="All-clear tray">Clear</button>
+  </div>
+</div>
+
+<!-- Scrub slider — Complete only -->
+<div class="cd-row" *ngIf="cdActiveComponent === 'complete'">
+  <label class="cd-label">Open</label>
+  <input type="range" min="0" max="1" step="0.01" class="cd-slider"
+         [(ngModel)]="cdScrub" (input)="cdSetScrub(cdScrub)">
+  <span class="cd-val">{{ (cdScrub * 100) | number:'1.0-0' }}%</span>
+</div>
+
+<!-- Art upload — piece only -->
+<ng-container *ngIf="cdActiveComponent !== 'complete'">
+  <div class="cd-section-label">Art Upload</div>
+  <div class="cd-upload-zone"
+       (dragover)="$event.preventDefault()"
+       (drop)="cdOnDrop($event)"
+       (click)="cdFileInput.click()"
+       title="Drop an image or click to browse">
+    <div class="cd-upload-icon">🖼</div>
+    <div class="cd-upload-hint">Drop image or click to browse</div>
+  </div>
+  <input #cdFileInput type="file" accept="image/*" style="display:none"
+         (change)="cdUploadArt($event)">
+  <div class="cd-spec-row">
+    <span *ngIf="cdActiveComponent === 'frontInsert'">Front Insert — 120 × 120 mm</span>
+    <span *ngIf="cdActiveComponent === 'trayCard'">Tray Card — 150 × 118 mm</span>
+    <span *ngIf="cdActiveComponent === 'disc'">Disc — 120 mm Ø</span>
+    <span *ngIf="cdActiveComponent === 'booklet'">Booklet — 118 × 120 mm</span>
+  </div>
+  <!-- Fold flaps slider — Tray Card only -->
+  <div class="cd-row" *ngIf="cdActiveComponent === 'trayCard'">
+    <label class="cd-label">Fold</label>
+    <input type="range" min="0" max="1" step="0.01" class="cd-slider"
+           [(ngModel)]="cdTrayCardFold" (input)="cdSetTrayCardFold(cdTrayCardFold)">
+    <span class="cd-val">{{ (cdTrayCardFold * 100) | number:'1.0-0' }}%</span>
+  </div>
+</ng-container>
+
+<!-- Export row -->
+<div class="cd-section-label" style="margin-top:12px">Export</div>
+<div class="cd-btn-row">
+  <button class="cd-btn cd-btn-primary" (click)="cdExportPrintPDF()"
+          title="Export a print-ready PDF — all four pieces, lossless, sized to real dieline dimensions">Print PDF…</button>
+</div>
+<div class="cd-btn-row" style="margin-top:4px">
+  <button class="cd-btn" (click)="cdExportPrintSet()"
+          title="Export individual print-ready PNGs for each piece at 300 DPI">Save as PNGs</button>
+</div>

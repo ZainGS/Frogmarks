@@ -1,0 +1,807 @@
+<div *ngIf="!hair.scene3dHairParams">
+    <button class="scene3d-btn" style="width:100%" (click)="hair.scene3dInitHair()">Generate Hair</button>
+</div>
+<ng-container *ngIf="hair.scene3dHairParams">
+    <!-- Hair type first: every group below shows only the controls the chosen build reads (HAIR_CONTROL_MODES). -->
+    <div class="eye-proc-group">Hair type</div>
+    <div class="scene3d-material-row">
+        <label title="Styled = big anime locks (presets) · Chunky = cap + bangs + tails · Cards = alpha hair cards">Mode</label>
+        <div style="display:flex;gap:2px">
+            <button class="bp-seg-btn" [class.bp-seg-active]="hair.scene3dHairParams.hairMode === 'locks'"
+                    (click)="hair.scene3dSetHairMode('locks')">Styled</button>
+            <button class="bp-seg-btn" [class.bp-seg-active]="hair.scene3dHairParams.hairMode !== 'cards' && hair.scene3dHairParams.hairMode !== 'locks'"
+                    (click)="hair.scene3dSetHairMode('chunky')">Chunky</button>
+            <button class="bp-seg-btn" [class.bp-seg-active]="hair.scene3dHairParams.hairMode === 'cards'"
+                    (click)="hair.scene3dSetHairMode('cards')">Cards</button>
+        </div>
+    </div>
+    <ng-container *ngIf="hair.scene3dHairStyles.length">
+        <div class="eye-proc-group">Style</div>
+        <div class="scene3d-material-row">
+            <label title="Anime lock styles: big shaped locks + a clean fringe (keeps the hair colours)">Style</label>
+            <select [ngModel]="hair.scene3dHairParams.hairMode === 'locks' ? hair.scene3dHairParams.hairStyle : ''"
+                    (ngModelChange)="hair.scene3dApplyHairStyle($event)">
+                <option value="" disabled>— pick a style —</option>
+                <option *ngFor="let s of hair.scene3dHairStyles" [value]="s.name">{{ s.label }}</option>
+            </select>
+            <button class="bp-seg-btn" *ngIf="hair.scene3dHairParams.hairMode === 'locks'" title="Re-roll the per-lock variation"
+                    (click)="hair.scene3dVaryHairStyle()">Vary</button>
+        </div>
+    </ng-container>
+    <ng-container *ngIf="hair.scene3dHairParams.hairMode === 'locks'">
+        <div class="eye-proc-group">Fringe</div>
+        <div class="scene3d-material-row">
+            <label>Shape</label>
+            <select [(ngModel)]="hair.scene3dHairParams.fringeStyle" (ngModelChange)="hair.scene3dHairParamChanged()">
+                <option *ngFor="let f of hair.hairFringeStyles" [value]="f.value">{{ f.label }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Fringe tip line (lower = longer; below ~0.15 the bangs cover the eyes)">Height</label>
+            <input type="range" min="-0.2" max="0.6" step="0.01"
+                   [(ngModel)]="hair.scene3dHairParams.fringeHeight" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.fringeHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Locks</label>
+            <input type="range" min="3" max="11" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.fringeCount" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.fringeCount }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Sweep direction / part position">Side</label>
+            <input type="range" min="-1" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.fringeSide" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.fringeSide | number:'1.2-2' }}</span>
+        </div>
+        <div class="eye-proc-group">Length + locks</div>
+        <div class="scene3d-material-row">
+            <label title="Back length (0.3 nape · 0.75 bob · 3 mid-back)">Back</label>
+            <input type="range" min="0" max="4.5" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.hairLength" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.hairLength | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('sideLength')">
+            <label>Sides</label>
+            <input type="range" min="0" max="4.5" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.sideLength" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.sideLength | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Fewer = bigger, chunkier locks">Lock count</label>
+            <input type="range" min="8" max="24" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.lockCount" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockCount }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Lock width</label>
+            <input type="range" min="0.6" max="1.6" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lockWidth" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.1" max="0.6" step="0.01"
+                   [(ngModel)]="hair.scene3dHairParams.lockThickness" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockThickness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="How far the hair stands off the head">Volume</label>
+            <input type="range" min="0" max="0.3" step="0.01"
+                   [(ngModel)]="hair.scene3dHairParams.lockVolume" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockVolume | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="0 = blunt cut (hime) · 1 = sharp anime points">Tips</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lockTaper" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockTaper | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('lockFlick')">
+            <label title="−1 curl under (bob) · +1 flick out">Flick</label>
+            <input type="range" min="-1" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lockFlick" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockFlick | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('lockJitter')">
+            <label>Messiness</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lockJitter" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockJitter | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('lockLayers')">
+            <label title="2 = layered tips at different lengths">Layers</label>
+            <input type="range" min="1" max="2" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.lockLayers" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lockLayers }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Antenna locks on the crown">Ahoge</label>
+            <input type="range" min="0" max="2" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.ahoge" (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.ahoge }}</span>
+        </div>
+        <div class="eye-proc-group">Curl + volume</div>
+        <div class="scene3d-material-row">
+            <label title="Wave / curl on the crown, side and tail locks">Curl</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [ngModel]="hair.scene3dHairParams.lockCurl ?? 0"
+                   (ngModelChange)="hair.scene3dHairParams.lockCurl = $event; hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.lockCurl ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <ng-container *ngIf="(hair.scene3dHairParams.lockCurl ?? 0) > 0">
+            <div class="scene3d-material-row">
+                <label title="Wave = S-waves · Spiral = ringlet curls">Curl type</label>
+                <select [ngModel]="hair.scene3dHairParams.lockCurlType ?? 'wave'"
+                        (ngModelChange)="hair.scene3dHairParams.lockCurlType = $event; hair.scene3dHairParamChanged()">
+                    <option value="wave">Wave</option>
+                    <option value="spiral">Spiral (ringlets)</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Waves per head height">Curl freq</label>
+                <input type="range" min="0.5" max="6" step="0.25"
+                       [ngModel]="hair.scene3dHairParams.lockCurlFreq ?? 2"
+                       (ngModelChange)="hair.scene3dHairParams.lockCurlFreq = $event; hair.scene3dHairParamChanged()">
+                <span class="scene3d-val">{{ (hair.scene3dHairParams.lockCurlFreq ?? 2) | number:'1.2-2' }}</span>
+            </div>
+        </ng-container>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('lockSpike')">
+            <label title="Shonen spikes: the crown locks stand out from the head instead of hanging">Spikes</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [ngModel]="hair.scene3dHairParams.lockSpike ?? 0"
+                   (ngModelChange)="hair.scene3dHairParams.lockSpike = $event; hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.lockSpike ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Afro / curly volume: a big round mass">Poof</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [ngModel]="hair.scene3dHairParams.hairPoof ?? 0"
+                   (ngModelChange)="hair.scene3dHairParams.hairPoof = $event; hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.hairPoof ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" style="opacity:0.6;font-size:11px">
+            Styled hair also uses Crown / Hairline, Buns, Facial hair, Side locks, Tails and Colour below; the Chunky / Cards-only controls are hidden.
+            <ng-container *ngIf="cp.hairGathered"> Gathered: Sides, Flick, Messiness, Layers and Spikes only shape loose hair, so they are hidden.</ng-container>
+        </div>
+    </ng-container>
+    <div class="eye-proc-group">{{ cp.hairControlMode === 'locks' ? 'Crown + hairline' : 'Cap' }}</div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('verticalOffset') && !cp.hairBuzzOn" title="Raises the bang hairline">
+        <label>V offset</label>
+        <input type="range" min="0.6" max="0.8" step="0.02"
+               [(ngModel)]="hair.scene3dHairParams.verticalOffset"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.verticalOffset | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('capThickness')"
+         [title]="hair.scene3dHairParams.hairMode === 'cards' && hair.scene3dHairParams.cardifyCap ? 'Cardified cap: only moves the bangs off the forehead — use Volume for puff' : ''">
+        <label>Thickness</label>
+        <input type="range" min="-0.5" max="0.25" step="0.01"
+               [(ngModel)]="hair.scene3dHairParams.capThickness"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.capThickness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('volume')">
+        <label title="Floats the cap (and hanging scalp hair) off the skull">Volume</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.volume"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.volume | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('capSweep')">
+        <label title="Side part: sweep the whole cap hair mass to one side">Cap sweep</label>
+        <input type="range" min="-1" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.capSweep"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ (hair.scene3dHairParams.capSweep ?? 0) | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('backLength') && !cp.hairBuzzOn">
+        <label>Back len</label>
+        <input type="range" min="0" max="4" step="0.1"
+               [(ngModel)]="hair.scene3dHairParams.backLength"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.backLength | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Crown</label>
+        <input type="range" min="0" max="0.5" step="0.01"
+               [(ngModel)]="hair.scene3dHairParams.crownRound"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.crownRound | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Hairline</label>
+        <input type="range" min="0" max="0.6" step="0.01"
+               [(ngModel)]="hair.scene3dHairParams.hairlineFront"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.hairlineFront | number:'1.2-2' }}</span>
+    </div>
+
+    <ng-container *ngIf="cp.hairShow('spikeCap') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Spiky</div>
+    <div class="scene3d-material-row">
+        <label>Spiky</label>
+        <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.spikeCap"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.spikeCap">
+        <div class="scene3d-material-row">
+            <label>Pattern</label>
+            <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.spikePattern"
+                    (ngModelChange)="hair.scene3dHairParamChanged()">
+                <option value="radial">Radial (porcupine)</option>
+                <option value="linear">Linear (swept back)</option>
+                <option value="grid">Grid (liberty)</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0.1" max="2" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.spikeLength"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.spikeLength ?? 0.5) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Jitter</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.spikeJitter"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.spikeJitter ?? 0) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('buzzCut')">
+    <div class="eye-proc-group">Buzz</div>
+    <div class="scene3d-material-row">
+        <label title="A short cap hugging the scalp: hides bangs, side locks, tails, drape, length, buns and spikes">Buzz cut</label>
+        <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.buzzCut"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('sideCut')">
+    <div class="eye-proc-group">Undercut</div>
+    <div class="scene3d-material-row">
+        <label>Side cut</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.sideCut"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ (hair.scene3dHairParams.sideCut ?? 0) | number:'1.2-2' }}</span>
+    </div>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('bunStyle') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Buns</div>
+    <div class="scene3d-material-row">
+        <label [title]="cp.hairShow('verticalOffset') ? '' : 'Styled hair: any bun style makes one bun at the back of the head'">Style</label>
+        <select class="scene3d-select" [ngModel]="hair.scene3dHairParams.bunStyle || 'none'"
+                (ngModelChange)="hair.scene3dHairParams.bunStyle = $event; hair.scene3dHairParamChanged()">
+            <option value="none">Off</option>
+            <option value="round">Round (top)</option>
+            <option value="space">Space (two side)</option>
+            <option value="long">Long (man bun)</option>
+        </select>
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.bunStyle && hair.scene3dHairParams.bunStyle !== 'none'">
+        <div class="scene3d-material-row">
+            <label [title]="cp.hairControlMode === 'locks' ? 'Styled bun size (0.15 to 1.2 of the head width)' : ''">Size</label>
+            <input type="range" step="0.01"
+                   [min]="cp.hairControlMode === 'locks' ? 0.15 : 0.05" [max]="cp.hairControlMode === 'locks' ? 1.2 : 0.5"
+                   [(ngModel)]="hair.scene3dHairParams.bunSize"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.bunSize ?? 0.15) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    </ng-container>
+
+    <div class="eye-proc-group">Facial Hair</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.facialHair"
+                (ngModelChange)="hair.scene3dHairParamChanged()">
+            <option value="none">None</option>
+            <option value="stubble">Stubble</option>
+            <option value="mustache">Mustache</option>
+            <option value="goatee">Goatee</option>
+            <option value="full">Full beard</option>
+            <option value="sideburns">Sideburns</option>
+        </select>
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.facialHair && hair.scene3dHairParams.facialHair !== 'none' && hair.scene3dHairParams.facialHair !== 'stubble'">
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0.02" max="0.5" step="0.01"
+                   [(ngModel)]="hair.scene3dHairParams.beardLength"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.beardLength ?? 0.1) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    <ng-container *ngIf="hair.scene3dHairParams.facialHair && hair.scene3dHairParams.facialHair !== 'none'">
+        <div class="scene3d-material-row">
+            <label>Density</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.beardDensity"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.beardDensity ?? 0.5) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('scalpLength') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Length</div>
+    <div class="scene3d-material-row">
+        <label title="Hanging scalp hair past the hairline (0 = cap only). Curl and Layering shape these strands.">Length</label>
+        <input type="range" min="0" max="2" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.scalpLength"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.scalpLength | number:'1.2-2' }}</span>
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.scalpLength > 0">
+        <div class="scene3d-material-row">
+            <label>Front</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lengthFront"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lengthFront | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Side</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lengthSide"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lengthSide | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Back</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.lengthBack"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.lengthBack | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Bluntness</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.scalpBluntness"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.scalpBluntness | number:'1.2-2' }}</span>
+        </div>
+
+    <div class="eye-proc-group">Curl</div>
+    <div class="scene3d-material-row">
+        <label>Type</label>
+        <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.curlType"
+                (ngModelChange)="hair.scene3dHairParamChanged()">
+            <option value="none">None</option>
+            <option value="wave">Wave</option>
+            <option value="spiral">Spiral</option>
+        </select>
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.curlType && hair.scene3dHairParams.curlType !== 'none'">
+        <div class="scene3d-material-row">
+            <label>Amount</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.curlAmount"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.curlAmount | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Frequency</label>
+            <input type="range" min="0.5" max="8" step="0.5"
+                   [(ngModel)]="hair.scene3dHairParams.curlFreq"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.curlFreq | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Jitter</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.curlPhaseJitter"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.curlPhaseJitter | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <div class="eye-proc-group">Layering</div>
+    <div class="scene3d-material-row">
+        <label>Layering</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.layering"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.layering | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Chop</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.chop"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.chop | number:'1.2-2' }}</span>
+    </div>
+    </ng-container>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('partingStyle') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Bangs</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.partingStyle"
+                (ngModelChange)="hair.scene3dHairParamChanged()">
+            <option value="fringe">Fringe</option>
+            <option value="parted">Parted</option>
+            <option value="swept">Swept</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Part pos</label>
+        <input type="range" min="-1" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.partingPosition"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.partingPosition | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Part width</label>
+        <input type="range" min="0" max="0.5" step="0.01"
+               [(ngModel)]="hair.scene3dHairParams.partingWidth"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.partingWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Count</label>
+        <input type="range" min="0" max="12" step="1"
+               [(ngModel)]="hair.scene3dHairParams.bangCount"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.bangCount }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Length</label>
+        <input type="range" min="0" max="2.5" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.bangLength"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.bangLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Curve</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.bangCurve"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.bangCurve | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Pointy</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.bangPointiness"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.bangPointiness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>V offset</label>
+        <input type="range" min="-0.8" max="0.8" step="0.02"
+               [(ngModel)]="hair.scene3dHairParams.bangOffset"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.bangOffset | number:'1.2-2' }}</span>
+    </div>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('sideLock') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Side Locks</div>
+    <div class="scene3d-material-row">
+        <label>Enable</label>
+        <input type="checkbox"
+               [(ngModel)]="hair.scene3dHairParams.sideLock"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.sideLock">
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0" max="3" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.sideLockLength"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.sideLockLength | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0" max="0.5" step="0.01"
+                   [(ngModel)]="hair.scene3dHairParams.sideLockWidth"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.sideLockWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Count</label>
+            <input type="range" min="1" max="6" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.sideLockCount"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.sideLockCount }}</span>
+        </div>
+    </ng-container>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('tailStyle') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Tails</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.tailStyle"
+                (ngModelChange)="hair.scene3dHairParamChanged()">
+            <option *ngFor="let t of hair.hairTailStyles" [value]="t.value">{{ t.label }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('gather')">
+        <label title="Pull the hair back into the tail / bun tie">Gathered</label>
+        <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.gather" (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <ng-container *ngIf="hair.scene3dHairParams.tailStyle !== 'none'">
+        <ng-container *ngIf="cp.hairShow('tailForm')">
+            <div class="scene3d-material-row">
+                <label title="How each tail is built: a bundle of locks, a 3-strand braid or an ojou-sama drill curl">Form</label>
+                <select class="scene3d-select" [ngModel]="hair.scene3dHairParams.tailForm ?? 'bundle'"
+                        (ngModelChange)="hair.scene3dHairParams.tailForm = $event; hair.scene3dHairParamChanged()">
+                    <option *ngFor="let f of hair.hairTailForms" [value]="f.value">{{ f.label }}</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row" *ngIf="hair.scene3dHairParams.tailForm === 'drill'">
+                <label title="Spiral turns of the drill curl">Drill turns</label>
+                <input type="range" min="2" max="7" step="0.5"
+                       [ngModel]="hair.scene3dHairParams.drillTurns ?? 4"
+                       (ngModelChange)="hair.scene3dHairParams.drillTurns = $event; hair.scene3dHairParamChanged()">
+                <span class="scene3d-val">{{ (hair.scene3dHairParams.drillTurns ?? 4) | number:'1.1-1' }}</span>
+            </div>
+            <div class="scene3d-material-row" *ngIf="(hair.scene3dHairParams.tailForm ?? 'bundle') === 'bundle'">
+                <label>Tail locks</label>
+                <input type="range" min="3" max="8" step="1"
+                       [(ngModel)]="hair.scene3dHairParams.tailLocks" (ngModelChange)="hair.scene3dHairParamChanged()">
+                <span class="scene3d-val">{{ hair.scene3dHairParams.tailLocks }}</span>
+            </div>
+        </ng-container>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="-0.5" max="0.8" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailHeight"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Spread</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailSpread"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailSpread | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0" max="10" step="0.1"
+                   [(ngModel)]="hair.scene3dHairParams.tailLength"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailLength | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.1" max="0.8" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailThickness"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailThickness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('tailStartTaper')">
+            <label>Start taper</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailStartTaper"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailStartTaper | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="!(cp.hairControlMode === 'locks' && hair.scene3dHairParams.tailForm === 'drill')">
+            <label>End taper</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailTaper"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailTaper | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Curl</label>
+            <input type="range" min="-1" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.tailCurl"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.tailCurl | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="cp.hairShow('tailTip')">
+            <label>Tip</label>
+            <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.tailTip"
+                    (ngModelChange)="hair.scene3dHairParamChanged()">
+                <option value="point">Point</option>
+                <option value="flare">Flare</option>
+                <option value="blunt">Blunt</option>
+            </select>
+        </div>
+    </ng-container>
+    </ng-container>
+
+    <ng-container *ngIf="cp.hairShow('frontDrape') && !cp.hairBuzzOn">
+    <div class="eye-proc-group">Front drape</div>
+    <div class="scene3d-material-row">
+        <label>Amount</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.frontDrape"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrape ?? 0) | number:'1.2-2' }}</span>
+    </div>
+    <ng-container *ngIf="(hair.scene3dHairParams.frontDrape ?? 0) > 0">
+        <div class="scene3d-material-row">
+            <label>Side</label>
+            <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.frontDrapeSide"
+                    (ngModelChange)="hair.scene3dHairParamChanged()">
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="both">Both</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Origin</label>
+            <div style="display:flex;gap:3px">
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="(hair.scene3dHairParams.frontDrapeOrigin ?? 'back') === 'back'"
+                        (click)="hair.scene3dHairParams.frontDrapeOrigin = 'back'; hair.scene3dHairParamChanged()"
+                        title="Roots in back hair, crests over the shoulder from behind">Back</button>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="hair.scene3dHairParams.frontDrapeOrigin === 'front'"
+                        (click)="hair.scene3dHairParams.frontDrapeOrigin = 'front'; hair.scene3dHairParamChanged()"
+                        title="Falls straight from above the ear down the front of the neck">Front</button>
+            </div>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0.5" max="5" step="0.1"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeLength"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeLength ?? 1) | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Wave W</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeWaveX"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeWaveX ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Wave D</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeWaveZ"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeWaveZ ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Strays</label>
+            <input type="range" min="0" max="6" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeStrays"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeStrays ?? 0) }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="(hair.scene3dHairParams.frontDrapeStrays ?? 0) > 0">
+            <label>Stray W</label>
+            <input type="range" min="0" max="2" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeStrayX"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeStrayX ?? 0.7) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="(hair.scene3dHairParams.frontDrapeStrays ?? 0) > 0">
+            <label>Stray D</label>
+            <input type="range" min="0" max="2" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.frontDrapeStrayZ"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeStrayZ ?? 0.4) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    </ng-container>
+
+    <div class="eye-proc-group">Colour</div>
+    <div class="scene3d-material-row">
+        <label>Root</label>
+        <input type="color"
+               [(ngModel)]="hair.scene3dHairParams.rootColor"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Gradient</label>
+        <input type="checkbox"
+               [(ngModel)]="hair.scene3dHairParams.gradient"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <div class="scene3d-material-row" *ngIf="hair.scene3dHairParams.gradient">
+        <label title="Only used with Gradient on (off = the root colour all the way)">Tip</label>
+        <input type="color"
+               [(ngModel)]="hair.scene3dHairParams.tipColor"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <div class="scene3d-material-row" *ngIf="hair.scene3dHairParams.gradient">
+        <label>Tip fade</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.tipFade"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.tipFade | number:'1.2-2' }}</span>
+    </div>
+
+    <div class="eye-proc-group">Render</div>
+    <div class="scene3d-material-row" *ngIf="cp.hairShow('chunkiness')">
+        <label>Chunkiness</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.chunkiness"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.chunkiness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Sheen</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="hair.scene3dHairParams.sheen"
+               (ngModelChange)="hair.scene3dHairParamChanged()">
+        <span class="scene3d-val">{{ hair.scene3dHairParams.sheen | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="(hair.scene3dHairParams.sheen ?? 0) > 0">
+        <label title="Cel / Cel-HD: draw the sheen as one crisp highlight band (the anime angel ring) instead of a soft gloss. Needs Sheen above 0.">Highlight band</label>
+        <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.sheenBand" (ngModelChange)="hair.scene3dHairParamChanged()">
+    </div>
+    <ng-container *ngIf="cp.hairShow('cardWidth')">
+        <div class="scene3d-material-row">
+            <label>Card width</label>
+            <input type="range" min="0.6" max="3.0" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.cardWidth"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.cardWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Per clump</label>
+            <input type="range" min="1" max="12" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.cardsPerClump"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.cardsPerClump }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Segments</label>
+            <input type="range" min="4" max="16" step="2"
+                   [(ngModel)]="hair.scene3dHairParams.cardSegments"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.cardSegments }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Strand den.</label>
+            <input type="range" min="2" max="12" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.strandDensity"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.strandDensity | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Alpha cut</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.alphaCutoff"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.alphaCutoff | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Cardify cap</label>
+            <input type="checkbox"
+                   [(ngModel)]="hair.scene3dHairParams.cardifyCap"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+        </div>
+        <div class="scene3d-material-row" *ngIf="hair.scene3dHairParams.cardifyCap">
+            <label>Cap layers</label>
+            <input type="range" min="1" max="6" step="1"
+                   [(ngModel)]="hair.scene3dHairParams.capLayers"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.capLayers }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Card detail</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="hair.scene3dHairParams.cardDetail"
+                   (ngModelChange)="hair.scene3dHairParamChanged()">
+            <span class="scene3d-val">{{ hair.scene3dHairParams.cardDetail | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
+            (click)="hair.scene3dRemoveHair()">Remove Hair</button>
+    <button class="scene3d-btn" style="width:100%;margin-top:4px"
+            (click)="hair.scene3dBakeHair()">Save as Part</button>
+    <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+    <div class="scene3d-material-row">
+        <label>Diffuse</label>
+        <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+            Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('hair', $event)">
+        </label>
+        <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['hair']"
+                (click)="cp.scene3dClearCharPartTexture('hair')" title="Clear texture">✕</button>
+    </div>
+</ng-container>

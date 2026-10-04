@@ -375,13 +375,6 @@ $muted:   rgba(255, 255, 255, 0.45);
   white-space: nowrap;
 }
 
-.ar-joint-pos {
-  font-size: 9px;
-  color: $muted;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .ar-xyz-row {
   display: flex;
   align-items: center;
@@ -441,26 +434,6 @@ $muted:   rgba(255, 255, 255, 0.45);
 }
 
 // ── Details/summary (collapsible numeric add) ─────────────────────
-
-.ar-details {
-  margin-bottom: 0;
-
-  &[open] .ar-details-summary::before { content: '▾ '; }
-}
-
-.ar-details-summary {
-  font-size: 10px;
-  color: $muted;
-  cursor: pointer;
-  list-style: none;
-  padding: 2px 0;
-  user-select: none;
-
-  &::before { content: '▸ '; }
-  &::-webkit-details-marker { display: none; }
-
-  &:hover { color: #aaa; }
-}
 
 // ── Leaf tag ──────────────────────────────────────────────────────
 
@@ -581,3 +554,33 @@ $muted:   rgba(255, 255, 255, 0.45);
   &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
   option { background: #252525; }
 }
+
+// ── Animation & Global Library ────────────────────────────────────
+
+.ar-compat-chip {
+  display: inline-block;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+
+  &-ok   { background: rgba(76, 175, 80, 0.2);  color: #81c784; border: 1px solid rgba(76, 175, 80, 0.35); }
+  &-warn { background: rgba(255, 160, 0, 0.2);  color: #ffb74d; border: 1px solid rgba(255, 160, 0, 0.35); }
+  &-bad  { background: rgba(229, 57, 53, 0.2);  color: #e57373; border: 1px solid rgba(229, 57, 53, 0.35); }
+}
+
+.ar-lib-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: rgba(255, 255, 255, 0.04); border-radius: 4px; }
+}
+
+.ar-lib-icon { font-size: 13px; flex: none; }
+.ar-lib-preview { flex: none; }

@@ -1,0 +1,180 @@
+<div class="menubar-item">
+    <div class="menubar-btn" [class.active]="editor.showFileMenu"
+         (click)="editor.toggleFileMenu(); $event.stopPropagation()">File</div>
+    <div *ngIf="editor.showFileMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+        <div class="edit-menu-item" (click)="editor.saveNow(); editor.closeAllMenus()">
+            <span>Save</span><span class="shortcut">Ctrl+S</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" [class.disabled]="files.frogmarksSaving" (click)="files.frogmarksSave(); editor.closeAllMenus()">
+            <span>{{ files.frogmarksSaving ? 'Saving…' : 'Save .frogmarks…' }}</span>
+            <span *ngIf="!files.frogmarksSaving && storage.opfsSizeLabel" class="shortcut">{{ storage.opfsSizeLabel }}</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.openFrogmarksPicker(); editor.closeAllMenus()">
+            <span>Open .frogmarks…</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.imports.importImageAsNewLayer(); editor.closeAllMenus()">
+            <span>Import Image as Layer</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.imports.importImageToCurrentLayer(); editor.closeAllMenus()">
+            <span>Import Image to Layer</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.doc.downloadCanvasViewAsPng(); editor.closeAllMenus()">
+            <span>Export as PNG</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.doc.exportTransparentPng(); editor.closeAllMenus()">
+            <span>Export Transparent PNG</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.doc.newIllustrationButtonClicked(); editor.closeAllMenus()">
+            <span>New Board</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.doc.duplicateIllustrationButtonClicked(); editor.closeAllMenus()">
+            <span>Duplicate Board</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.doc.setCurrentViewAsThumbnail(); editor.closeAllMenus()">
+            <span>Capture Thumbnail</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.toggleFullscreen(); editor.closeAllMenus()">
+            <span>Toggle Full Screen</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.toggleUI(true); editor.closeAllMenus()">
+            <span>Toggle UI</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.toggleLayerTree(); editor.closeAllMenus()">
+            <span>Toggle Layer Tree</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="storage.openSyncModeDialog(); editor.closeAllMenus()">
+            <span>Storage mode…</span>
+            <span class="shortcut" style="font-size:10px; opacity:.6">
+              {{ persist.syncMode === 0 ? 'Cloud' : persist.syncMode === 1 ? 'No-cloud' : 'Local' }}
+            </span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" [class.disabled]="files.isPublishing" (click)="files.publishIllustration()">
+            <span>{{ files.isPublishing ? 'Publishing…' : (persist.illustration?.isPublic ? 'Republish' : 'Publish…') }}</span>
+        </div>
+        <div *ngIf="persist.illustration?.isPublic" class="edit-menu-item" (click)="files.unpublishIllustration()">
+            <span>Unpublish</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.doc.returnToDashboard(); editor.closeAllMenus()">
+            <span>Back to Dashboard</span>
+        </div>
+    </div>
+</div>
+<div class="menubar-item">
+    <div class="menubar-btn" [class.active]="editor.showEditMenu"
+         (click)="editor.toggleEditMenu(); $event.stopPropagation()">Edit</div>
+    <div *ngIf="editor.showEditMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+        <div class="edit-menu-item" (click)="editor.rasterUndo(); editor.closeAllMenus()">
+            <span>Undo</span><span class="shortcut">Ctrl+Z</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterRedo(); editor.closeAllMenus()">
+            <span>Redo</span><span class="shortcut">Ctrl+Y</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.cut(); editor.closeAllMenus()">
+            <span>Cut</span><span class="shortcut">Ctrl+X</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.copy(); editor.closeAllMenus()">
+            <span>Copy</span><span class="shortcut">Ctrl+C</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.paste(); editor.closeAllMenus()">
+            <span>Paste</span><span class="shortcut">Ctrl+V</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.imports.pasteImageFromClipboard(); editor.closeAllMenus()">
+            <span>Paste Image</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.deleteSelection(); editor.closeAllMenus()">
+            <span>Delete</span><span class="shortcut">Del</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.selectAll(); editor.closeAllMenus()">
+            <span>Select All</span><span class="shortcut">Ctrl+A</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.deselectAll(); editor.closeAllMenus()">
+            <span>Deselect</span><span class="shortcut">Ctrl+D</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.invertSelection(); editor.closeAllMenus()">
+            <span>Invert Selection</span><span class="shortcut">Ctrl+Shift+I</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterSelectionService.info.hasSelection && editor.rasterSelectionService.beginTransform(); editor.closeAllMenus()">
+            <span>Free Transform</span><span class="shortcut">Ctrl+T</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterFlipHorizontal(); editor.closeAllMenus()">
+            <span>Flip Horizontal</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterFlipVertical(); editor.closeAllMenus()">
+            <span>Flip Vertical</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterRotate(90); editor.closeAllMenus()">
+            <span>Rotate 90° CW</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterRotate(-90); editor.closeAllMenus()">
+            <span>Rotate 90° CCW</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.rasterSelectionService.info.hasSelection"
+             (click)="editor.rasterRotate(180); editor.closeAllMenus()">
+            <span>Rotate 180°</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="hud.toggleScreencastKeys(); editor.closeAllMenus()">
+            <span>{{ hud.screencastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.artboard.openResizeDialog(); editor.closeAllMenus()">
+            <span>Resize Canvas…</span>
+        </div>
+    </div>
+</div>
+<div class="menubar-item">
+    <div class="menubar-btn" [class.active]="editor.showAnimationMenu"
+         (click)="editor.toggleAnimationMenu(); $event.stopPropagation()">Animation</div>
+    <div *ngIf="editor.showAnimationMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+        <div class="edit-menu-item" (click)="editor.toggleAnimationMode(); editor.closeAllMenus()">
+            <span>{{ editor.animationEnabled ? '✓ Animation Enabled' : 'Enable Animation' }}</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" [class.disabled]="!editor.animationEnabled"
+             (click)="editor.menuInsertFrame(); editor.closeAllMenus()">
+            <span>Insert Frame</span><span class="shortcut">F7</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.animationEnabled"
+             (click)="editor.menuDeleteFrame(); editor.closeAllMenus()">
+            <span>Delete Frame</span>
+        </div>
+        <div class="edit-menu-item" [class.disabled]="!editor.animationEnabled"
+             (click)="editor.menuAddFrames(); editor.closeAllMenus()">
+            <span>Add 12 Frames</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" [class.disabled]="!editor.animationEnabled"
+             (click)="editor.menuAddCel(); editor.closeAllMenus()">
+            <span>Add Cel</span><span class="shortcut">F5</span>
+        </div>
+    </div>
+</div>
+<div class="menubar-item">
+    <div class="menubar-btn" [class.active]="editor.showViewMenu"
+         (click)="editor.toggleViewMenu(); $event.stopPropagation()">View</div>
+    <div *ngIf="editor.showViewMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+        <div class="edit-menu-item" (click)="editor.toggleRetroTheme(); editor.closeAllMenus()">
+            <span>Retro Chrome</span>
+            <span class="shortcut" *ngIf="editor.retroThemeActive">✓</span>
+        </div>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item" (click)="editor.showShortcutCheatsheet = true; editor.closeAllMenus()">
+            <span>Keyboard Shortcuts</span><span class="shortcut">?</span>
+        </div>
+    </div>
+</div>

@@ -50,9 +50,9 @@ export class RasterBrushService {
   refreshPresets(): void {
     const sm = this.sm;
     if (!sm) return;
-    const presets = (sm.getBrushPresets?.() ?? []) as BrushPreset[];
+    const presets = (sm.getBrushPresets() ?? []) as BrushPreset[];
     this._presets$.next(presets);
-    this._activePresetId$.next(sm.getActiveBrushPresetId?.() ?? null);
+    this._activePresetId$.next(sm.getActiveBrushPresetId() ?? null);
   }
 
   setActivePreset(id: string): void {
@@ -63,7 +63,7 @@ export class RasterBrushService {
   getActivePreset(): BrushPreset | null {
     const id = this._activePresetId$.value;
     if (!id) return null;
-    return (this.sm?.getBrushPreset?.(id) as BrushPreset | undefined) ?? null;
+    return (this.sm?.getBrushPreset(id) as BrushPreset | undefined) ?? null;
   }
 
   // ── Tool activation ─────────────────────────────────────────
@@ -100,7 +100,7 @@ export class RasterBrushService {
 
   /** Mutate current preset's maxSize/minSize and re-register */
   updatePresetSize(minSize: number, maxSize: number): void {
-    const engine = this.sm?.getRasterPaintEngine?.();
+    const engine = this.sm?.getRasterPaintEngine();
     const id = this._activePresetId$.value;
     if (!engine || !id) return;
     const preset = engine.getPreset?.(id);
@@ -133,7 +133,7 @@ export class RasterBrushService {
     // Forward to Salsa engine
     const sm = this.sm;
     if (sm) {
-      (sm as any).setActiveStabilization?.({ method, level, pullStringLength });
+      sm.setActiveStabilization({ method, level, pullStringLength });
     }
   }
 
@@ -161,13 +161,13 @@ export class RasterBrushService {
 
   setBrushBleed(settings: BrushBleed): void {
     const id = this._activePresetId$.value;
-    if (id) (this.sm as any)?.setBrushBleed?.(id, settings);
+    if (id) this.sm?.setBrushBleed(id, settings);
     this._mutatePreset(p => { p.bleed = settings; });
   }
 
   setBrushSmudge(settings: BrushSmudge): void {
     const id = this._activePresetId$.value;
-    if (id) (this.sm as any)?.setBrushSmudge?.(id, settings);
+    if (id) this.sm?.setBrushSmudge(id, settings);
     this._mutatePreset(p => { p.smudge = settings; });
   }
 
@@ -181,45 +181,45 @@ export class RasterBrushService {
   // ── Brush Grain (per-brush dab alpha modulation) ────────────
 
   setBrushGrain(settings: CanvasGrainSettings): void {
-    this.sm?.setBrushGrain?.(settings);
+    this.sm?.setBrushGrain(settings);
   }
 
   getBrushGrain(): CanvasGrainSettings | null {
-    return (this.sm?.getBrushGrain?.() as CanvasGrainSettings | undefined) ?? null;
+    return (this.sm?.getBrushGrain() as CanvasGrainSettings | undefined) ?? null;
   }
 
   // ── Dual Brush (texture overlay per dab) ────────────────────
 
   setDualBrush(settings: any): void {
     const id = this._activePresetId$.value;
-    if (id) this.sm?.setBrushDualBrush?.(id, settings);
+    if (id) this.sm?.setBrushDualBrush(id, settings);
   }
 
   // ── Color Jitter (per-dab HSB/opacity randomization) ────────
 
   setColorJitter(jitter: any): void {
     const id = this._activePresetId$.value;
-    if (id) this.sm?.setBrushColorJitter?.(id, jitter);
+    if (id) this.sm?.setBrushColorJitter(id, jitter);
   }
 
   // ── Wet Edges (watercolor edge darkening) ───────────────────
 
   setWetEdges(settings: any): void {
     const id = this._activePresetId$.value;
-    if (id) this.sm?.setBrushWetEdges?.(id, settings);
+    if (id) this.sm?.setBrushWetEdges(id, settings);
   }
 
   // ── Stroke Texture (continuous strip along stroke path) ─────
 
   setStrokeTexture(settings: any): void {
     const id = this._activePresetId$.value;
-    if (id) this.sm?.setBrushStrokeTexture?.(id, settings);
+    if (id) this.sm?.setBrushStrokeTexture(id, settings);
   }
 
   // ── Brush Pack Import ───────────────────────────────────────
 
   importBrushPack(json: string): string[] {
-    const ids = this.sm?.importBrushPresets?.(json) ?? [];
+    const ids = this.sm?.importBrushPresets(json) ?? [];
     this.refreshPresets();
     return ids;
   }
@@ -227,15 +227,15 @@ export class RasterBrushService {
   // ── Paper Grain (global canvas paper material) ──────────────
 
   setPaperGrain(settings: CanvasGrainSettings): void {
-    this.sm?.setPaperGrain?.(settings);
+    this.sm?.setPaperGrain(settings);
   }
 
   getPaperGrain(): CanvasGrainSettings | null {
-    return (this.sm?.getPaperGrain?.() as CanvasGrainSettings | undefined) ?? null;
+    return (this.sm?.getPaperGrain() as CanvasGrainSettings | undefined) ?? null;
   }
 
   getAvailableGrainTypes(): CanvasGrainType[] {
-    return (this.sm?.getAvailableGrainTypes?.() as CanvasGrainType[] | undefined) ?? [];
+    return (this.sm?.getAvailableGrainTypes() as CanvasGrainType[] | undefined) ?? [];
   }
 
   // ── Texture ─────────────────────────────────────────────────
@@ -305,7 +305,7 @@ export class RasterBrushService {
 
   /** Store a preview image dataURL on any preset (not just the active one). */
   updatePresetIcon(id: string, iconDataUrl: string | null): void {
-    const engine = this.sm?.getRasterPaintEngine?.();
+    const engine = this.sm?.getRasterPaintEngine();
     if (!engine) return;
     const preset = engine.getPreset?.(id) as BrushPreset | undefined;
     if (!preset) return;
@@ -318,8 +318,8 @@ export class RasterBrushService {
 
   refreshLayers(): void {
     // Use microtask delay so the engine has time to process GPU changes
-    Promise.resolve().then(() => {
-      const raw: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+    void Promise.resolve().then(() => {
+      const raw: RasterLayer[] = this.sm?.getRasterLayers() ?? [];
       // Normalize: ensure type defaults to 'layer', map engine '3d-divider' → '3d-scene'
       const layers = raw.map(l => ({
         ...l,
@@ -342,8 +342,8 @@ export class RasterBrushService {
   addLayer(name: string): void {
     this.sm?.addRasterLayer(name);
     // refreshLayers is async (microtask) — select the new layer once it arrives
-    Promise.resolve().then(() => {
-      const raw: RasterLayer[] = this.sm?.getRasterLayers?.() ?? [];
+    void Promise.resolve().then(() => {
+      const raw: RasterLayer[] = this.sm?.getRasterLayers() ?? [];
       const layers = raw.map(l => ({
         ...l,
         type: (l.type === '3d-divider' as any ? '3d-scene' : l.type ?? 'layer') as any,
@@ -387,19 +387,19 @@ export class RasterBrushService {
   }
 
   setLayerName(id: string, name: string): void {
-    this.sm?.setNodeName?.(id, name);
+    this.sm?.setNodeName(id, name);
     this.refreshLayers();
   }
 
   // ── Layer compositor properties (Phase 2) ───────────────────
 
   setLayerBlendMode(id: string, mode: LayerBlendMode): void {
-    (this.sm as any)?.rasterLayerManager?.setBlendMode(id, mode);
+    this.sm?.rasterLayerManager?.setBlendMode(id, mode);
     this.refreshLayers();
   }
 
   setLayerOpacity(id: string, opacity: number): void {
-    (this.sm as any)?.rasterLayerManager?.setOpacity(id, opacity);
+    this.sm?.rasterLayerManager?.setOpacity(id, opacity);
     this.refreshLayers();
   }
 
@@ -421,51 +421,51 @@ export class RasterBrushService {
   // ── Layer folders & 3D scene ────────────────────────────────
 
   addFolder(name?: string): void {
-    (this.sm as any)?.addRasterFolder?.(name ?? 'Folder');
+    this.sm?.addRasterFolder(name ?? 'Folder');
     this.refreshLayers();
   }
 
   setFolderCollapsed(id: string, collapsed: boolean): void {
-    (this.sm as any)?.setRasterFolderCollapsed?.(id, collapsed);
+    this.sm?.setRasterFolderCollapsed(id, collapsed);
     this.refreshLayers();
   }
 
   setLayerParent(layerId: string, parentId: string | null): void {
-    (this.sm as any)?.setRasterLayerParent?.(layerId, parentId);
+    this.sm?.setRasterLayerParent(layerId, parentId);
     this.refreshLayers();
   }
 
   add3DScene(name?: string): void {
-    (this.sm as any)?.addRaster3DScene?.(name) ?? (this.sm as any)?.addRaster3DDivider?.(name);
+    this.sm?.addRaster3DScene(name) ?? this.sm?.addRaster3DDivider(name);
     this.refreshLayers();
   }
 
   duplicateLayer(id: string): void {
-    (this.sm as any)?.duplicateLayer?.(id);
+    void this.sm?.duplicateLayer(id);
     this.refreshLayers();
   }
 
   mergeLayerDown(id: string): void {
-    (this.sm as any)?.mergeLayerDown?.(id);
+    void this.sm?.mergeLayerDown(id);
     this.refreshLayers();
   }
 
   addReferenceImageLayer(name: string, file: File | Blob): void {
-    (this.sm as any)?.addReferenceImageLayer?.(name, file);
+    void this.sm?.addReferenceImageLayer(name, file);
     this.refreshLayers();
   }
 
   remove3DScene(): void {
-    (this.sm as any)?.removeRaster3DScene?.() ?? (this.sm as any)?.removeRaster3DDivider?.();
+    this.sm?.removeRaster3DScene() ?? this.sm?.removeRaster3DDivider();
     this.refreshLayers();
   }
 
   has3DScene(): boolean {
-    const sm: any = this.sm as any;
+    const sm = this.sm;
     if (typeof sm?.hasRaster3DScene === 'function') {
       return !!sm.hasRaster3DScene();
     }
-    return !!sm?.hasRaster3DDivider?.();
+    return !!sm?.hasRaster3DDivider();
   }
 
   // ── Undo / Redo ─────────────────────────────────────────────
@@ -476,7 +476,7 @@ export class RasterBrushService {
   // ── Private helpers ─────────────────────────────────────────
 
   private _mutatePreset(mutate: (p: BrushPreset) => void): void {
-    const engine = this.sm?.getRasterPaintEngine?.();
+    const engine = this.sm?.getRasterPaintEngine();
     const id = this._activePresetId$.value;
     if (!engine || !id) return;
     const preset = engine.getPreset?.(id) as BrushPreset | undefined;

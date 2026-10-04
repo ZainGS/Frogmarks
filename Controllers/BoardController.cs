@@ -82,6 +82,10 @@ namespace Frogmarks.Controllers
         {
             try
             {
+                // Explore is disabled until it is designed (security audit 2026-10-04: it returned every user's items).
+                // Publishing a public feed should filter IsPublic and be [AllowAnonymous] — see the audit doc.
+                return Ok(new ResultModel<IEnumerable<BoardDto>>(ResultType.Success, resultObject: Array.Empty<BoardDto>()));
+#pragma warning disable CS0162 // unreachable while Explore is disabled
                 // Pre-allocate the HashSet length and then assign values to avoid internal HashSet resizing.
                 var splitIds = cachedThumbnailBoardIds?.Split(',') ?? Array.Empty<string>();
                 var boardIds = new HashSet<long>(splitIds.Length);
@@ -95,6 +99,7 @@ namespace Frogmarks.Controllers
                 var boards = await _boardService.SearchBoards(name, teamId, favorites, sortBy, sortDirection, pageIndex, pageSize, boardIds, isArchived);
                 return Ok(boards);
             }
+#pragma warning restore CS0162
             catch (Exception ex)
             {
                 return HandleErrorActionResult(ex);

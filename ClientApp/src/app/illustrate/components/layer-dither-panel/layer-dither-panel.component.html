@@ -1,0 +1,221 @@
+<div class="form-check" style="margin-bottom: 6px;">
+    <input class="form-check-input" type="checkbox"
+           [checked]="fx.getLayerDitherEnabled(selectedRasterLayerId)"
+           (change)="fx.onLayerDitherEnabledChange(selectedRasterLayerId, $any($event.target).checked)">
+    <label class="form-check-label" style="color: #ccc; font-size: 11px;">Layer Dither</label>
+</div>
+
+<div *ngIf="fx.getLayerDitherEnabled(selectedRasterLayerId)" style="padding-left: 4px;">
+    <!-- Algorithm -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 50px; color:#aaa; font-size: 10px;">Algorithm</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm"
+                (ngModelChange)="fx.onLayerDitherAlgorithmChange(selectedRasterLayerId, $event)">
+            <option *ngFor="let opt of fx.ditherAlgorithmOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Color Mode -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 50px; color:#aaa; font-size: 10px;">Mode</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).colorMode"
+                (ngModelChange)="fx.onLayerDitherColorModeChange(selectedRasterLayerId, $event)">
+            <option *ngFor="let opt of colorModeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Duotone colors -->
+    <div *ngIf="fx.getLayerDitherConfig(selectedRasterLayerId).colorMode === 'duotone'">
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+            <label style="width: 20px; color:#aaa; font-size: 10px;">FG</label>
+            <input type="color" [value]="rgba01ToHex(fx.getLayerDitherConfig(selectedRasterLayerId).foregroundColor)"
+                   (input)="fx.onLayerDitherFgChange(selectedRasterLayerId, $any($event.target).value)"
+                   style="width: 22px; height: 22px; padding: 0; border: 1px solid #555; border-radius: 3px; cursor: pointer;">
+            <label style="color:#aaa; font-size: 9px; width: 12px;">α</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).foregroundColor[3] * 100)"
+                   (input)="fx.onLayerDitherFgAlphaChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 22px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).foregroundColor[3] * 100) }}%</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 20px; color:#aaa; font-size: 10px;">BG</label>
+            <input type="color" [value]="rgba01ToHex(fx.getLayerDitherConfig(selectedRasterLayerId).backgroundColor)"
+                   (input)="fx.onLayerDitherBgChange(selectedRasterLayerId, $any($event.target).value)"
+                   style="width: 22px; height: 22px; padding: 0; border: 1px solid #555; border-radius: 3px; cursor: pointer;">
+            <label style="color:#aaa; font-size: 9px; width: 12px;">α</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).backgroundColor[3] * 100)"
+                   (input)="fx.onLayerDitherBgAlphaChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 22px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).backgroundColor[3] * 100) }}%</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 5px;">
+            <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 6px;"
+                    (click)="fx.onLayerDitherSwapColors(selectedRasterLayerId)">⇄ Swap</button>
+        </div>
+        <!-- Bias -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Bias</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).duotoneBias * 100)"
+                   (input)="fx.onLayerDitherBiasChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 22px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).duotoneBias * 100) }}%</span>
+        </div>
+        <!-- Tint -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Tint</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).tintOpacity * 100)"
+                   (input)="fx.onLayerDitherTintChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).tintOpacity * 100) }}%</span>
+        </div>
+    </div>
+
+    <!-- Levels -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 50px; color:#aaa; font-size: 10px;">Levels</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).colorLevels"
+                (ngModelChange)="fx.onLayerDitherColorLevelsChange(selectedRasterLayerId, $event)">
+            <option *ngFor="let opt of colorLevelOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Strength -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 50px; color:#aaa; font-size: 10px;">Strength</label>
+        <input type="range" min="0" max="100" step="1" style="flex: 1;"
+               [value]="mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).strength * 100)"
+               (input)="fx.onLayerDitherStrengthChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerDitherConfig(selectedRasterLayerId).strength * 100) }}%</span>
+    </div>
+
+    <!-- Scale -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 50px; color:#aaa; font-size: 10px;">Scale</label>
+        <input type="range" min="0.25" max="8" step="0.25" style="flex: 1;"
+               [value]="fx.getLayerDitherConfig(selectedRasterLayerId).patternScale"
+               (input)="fx.onLayerDitherScaleChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerDitherConfig(selectedRasterLayerId).patternScale }}</span>
+    </div>
+
+    <!-- Per-Channel -->
+    <div style="margin-bottom: 5px;">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox"
+                   [checked]="fx.getLayerDitherConfig(selectedRasterLayerId).perChannel"
+                   (change)="fx.onLayerDitherPerChannelChange(selectedRasterLayerId, $any($event.target).checked)">
+            <label class="form-check-label" style="color: #ccc; font-size: 9px;">Per-Channel</label>
+        </div>
+    </div>
+
+    <!-- Invert Pattern -->
+    <div style="margin-bottom: 5px;">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox"
+                   [checked]="fx.getLayerDitherConfig(selectedRasterLayerId).invertPattern"
+                   (change)="fx.onLayerDitherInvertChange(selectedRasterLayerId, $any($event.target).checked)">
+            <label class="form-check-label" style="color: #ccc; font-size: 9px;">Invert Pattern</label>
+        </div>
+    </div>
+
+    <!-- Bayer settings (only when algorithm = 'bayer') -->
+    <div *ngIf="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm === 'bayer'">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Bayer</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Matrix</label>
+            <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                    [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).bayerLevel"
+                    (ngModelChange)="fx.onLayerDitherBayerLevelChange(selectedRasterLayerId, $event)">
+                <option *ngFor="let opt of bayerLevelOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Halftone settings (when algorithm starts with 'halftone_') -->
+    <div *ngIf="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm.startsWith('halftone_')">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Halftone</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Shape</label>
+            <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                    [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm"
+                    (ngModelChange)="fx.onLayerDitherHalftoneShapeChange(selectedRasterLayerId, $event)">
+                <option *ngFor="let opt of halftoneShapeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+            </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Angle</label>
+            <input type="range" min="0" max="360" step="1" style="flex: 1;"
+                   [value]="fx.getLayerDitherConfig(selectedRasterLayerId).halftoneAngle"
+                   (input)="fx.onLayerDitherHalftoneAngleChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerDitherConfig(selectedRasterLayerId).halftoneAngle }}°</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Freq</label>
+            <input type="range" min="2" max="200" step="1" style="flex: 1;"
+                   [value]="fx.getLayerDitherConfig(selectedRasterLayerId).halftoneFrequency"
+                   (input)="fx.onLayerDitherHalftoneFrequencyChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerDitherConfig(selectedRasterLayerId).halftoneFrequency }}</span>
+        </div>
+    </div>
+
+    <!-- Edge Effects (GPU algorithms only — bayer/halftone/blue_noise/noise) -->
+    <div *ngIf="fx.isGpuDitherAlgorithm(fx.getLayerDitherConfig(selectedRasterLayerId).algorithm)">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Edge Effects</label>
+        </div>
+        <!-- Edge Width -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Width px</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="fx.getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0"
+                   (input)="fx.onLayerDitherEdgeWidthChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0 }}</span>
+        </div>
+        <!-- Edge sub-controls (only when width > 0) -->
+        <ng-container *ngIf="(fx.getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0) > 0">
+            <!-- Mode segmented control -->
+            <div style="display: flex; gap: 2px; margin-bottom: 5px;">
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'content'"
+                        (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'content')"
+                        title="Ramp toward stroke/content boundary">Stroke</button>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'canvas'"
+                        (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'canvas')"
+                        title="Ramp toward document border (vignette)">Canvas</button>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'both'"
+                        (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'both')"
+                        title="Whichever boundary is nearer">Both</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Fade</label>
+                <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                       [value]="mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeFade ?? 0) * 100)"
+                       (input)="fx.onLayerDitherEdgeFadeChange(selectedRasterLayerId, $any($event.target).value)">
+                <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeFade ?? 0) * 100) }}%</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Shrink</label>
+                <input type="range" min="-100" max="100" step="1" style="flex: 1;"
+                       [value]="mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeShrink ?? 0) * 100)"
+                       (input)="fx.onLayerDitherEdgeShrinkChange(selectedRasterLayerId, $any($event.target).value)">
+                <span style="min-width: 30px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeShrink ?? 0) * 100) }}%</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Density</label>
+                <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                       [value]="mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeDensity ?? 0) * 100)"
+                       (input)="fx.onLayerDitherEdgeDensityChange(selectedRasterLayerId, $any($event.target).value)">
+                <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound((fx.getLayerDitherConfig(selectedRasterLayerId).edgeDensity ?? 0) * 100) }}%</span>
+                <button class="scene3d-icon-btn" (click)="fx.onLayerDitherEdgeSeedReroll(selectedRasterLayerId)" title="Re-roll which dots drop out">↻</button>
+            </div>
+        </ng-container>
+    </div>
+</div>

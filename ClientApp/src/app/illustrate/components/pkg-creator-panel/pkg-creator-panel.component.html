@@ -1,0 +1,117 @@
+<div class="tool-label">PACKAGE CREATOR</div>
+<div style="padding: 4px 8px;">
+
+    <!-- View mode toggle -->
+    <div class="scene3d-row scene3d-array-mode-row" style="padding:0 0 8px 0;">
+        <button class="scene3d-btn scene3d-btn-sm" [class.active]="pkg.pkgViewMode==='3d'"
+                (click)="pkg.pkgSetViewMode('3d')" title="3D view — orbit and paint on the box">3D</button>
+        <button class="scene3d-btn scene3d-btn-sm" [class.active]="pkg.pkgViewMode==='split'"
+                (click)="pkg.pkgSetViewMode('split')" title="Split — 3D box + flat dieline pane">Split</button>
+        <button class="scene3d-btn scene3d-btn-sm" [class.active]="pkg.pkgViewMode==='2d'"
+                (click)="pkg.pkgSetViewMode('2d')" title="2D — flat dieline pane only">2D</button>
+    </div>
+
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [ngModel]="pkg.pkgStyle" (ngModelChange)="pkg.pkgSetStyle($event)"
+                title="Box style — converts the live box when creator is open">
+            <option value="simpleBox">Simple Box</option>
+            <option value="tuckEnd">Tuck End</option>
+            <option value="sleeve">Sleeve</option>
+            <option value="rollEndMailer">Roll-End Mailer</option>
+            <option value="rigidTwoPiece">Rigid Two-Piece</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="pkg.pkgStyle === 'tuckEnd'">
+        <label>Tuck</label>
+        <select class="scene3d-select" [(ngModel)]="pkg.pkgTuckStyle" (ngModelChange)="pkg.pkgDimChanged()">
+            <option value="reverse">Reverse (RTE)</option>
+            <option value="straight">Straight (STE)</option>
+        </select>
+    </div>
+
+    <div class="eye-proc-group">Dimensions (mm)</div>
+    <div class="scene3d-material-row">
+        <label>Width</label>
+        <input type="range" min="20" max="400" step="1" [(ngModel)]="pkg.pkgWidth" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgWidth }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Height</label>
+        <input type="range" min="20" max="400" step="1" [(ngModel)]="pkg.pkgHeight" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgHeight }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Depth</label>
+        <input type="range" min="10" max="300" step="1" [(ngModel)]="pkg.pkgDepth" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgDepth }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Bleed</label>
+        <input type="range" min="0" max="10" step="0.5" [(ngModel)]="pkg.pkgBleed" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgBleed }}</span>
+    </div>
+    <!-- Roll-End Mailer params -->
+    <div class="scene3d-material-row" *ngIf="pkg.pkgStyle === 'rollEndMailer'">
+        <label>Corner locks</label>
+        <input type="checkbox" [(ngModel)]="pkg.pkgLockTabs" (ngModelChange)="pkg.pkgDimChanged()" style="accent-color:#4a9eff;">
+    </div>
+    <div class="scene3d-material-row" *ngIf="pkg.pkgStyle === 'rollEndMailer'">
+        <label>Lid rest open</label>
+        <input type="range" min="0" max="0.95" step="0.05" [(ngModel)]="pkg.pkgRestOpenAmount" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgRestOpenAmount | number:'1.2-2' }}</span>
+    </div>
+    <!-- Rigid Two-Piece params -->
+    <div class="scene3d-material-row" *ngIf="pkg.pkgStyle === 'rigidTwoPiece'">
+        <label>Lid depth</label>
+        <input type="range" min="0" max="100" step="1" [(ngModel)]="pkg.pkgLidDepth" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgLidDepth > 0 ? pkg.pkgLidDepth + 'mm' : 'full' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="pkg.pkgStyle === 'rigidTwoPiece'">
+        <label>Board</label>
+        <input type="range" min="0.5" max="5" step="0.5" [(ngModel)]="pkg.pkgBoardThickness" (ngModelChange)="pkg.pkgDimChanged()">
+        <span class="scene3d-val">{{ pkg.pkgBoardThickness }}mm</span>
+    </div>
+
+    <div class="scene3d-material-row">
+        <label>Board</label>
+        <div style="display:flex;gap:4px;flex:1;">
+            <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
+                    [class.active]="pkg.pkgBoardPreset==='white'" (click)="pkg.pkgSetBoardPreset('white')">White</button>
+            <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
+                    [class.active]="pkg.pkgBoardPreset==='kraft'" (click)="pkg.pkgSetBoardPreset('kraft')">Kraft</button>
+        </div>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Stage</label>
+        <select class="scene3d-select" [ngModel]="pkg.pkgStageMode" (ngModelChange)="pkg.pkgSetStageMode($event)">
+            <option value="gradient">Studio (gradient)</option>
+            <option value="wavy">Wavy</option>
+            <option value="solid">Solid</option>
+            <option value="checkers">Checkers</option>
+            <option value="dim">Dim</option>
+            <option value="none">None</option>
+        </select>
+    </div>
+
+    <div class="eye-proc-group">Fold Preview</div>
+    <div class="scene3d-row scene3d-array-mode-row" style="padding:0 0 8px 0;">
+        <button class="scene3d-btn scene3d-btn-sm" (click)="pkg.pkgUnfold()" title="Animate to flat dieline">Unfold</button>
+        <button class="scene3d-btn scene3d-btn-sm" (click)="pkg.pkgFold()"   title="Animate to closed box">Fold</button>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Scrub</label>
+        <input type="range" min="0" max="1" step="0.01" [(ngModel)]="pkg.pkgFoldAmount" (input)="pkg.pkgFoldScrub()">
+        <span class="scene3d-val">{{ pkg.pkgFoldAmount | number:'1.2-2' }}</span>
+    </div>
+
+    <div class="eye-proc-group">Export</div>
+    <div style="padding:2px 0 8px;">
+        <button class="scene3d-btn" style="width:100%" (click)="pkg.pkgExportDieline()">↓ Dieline PNG</button>
+    </div>
+
+    <div style="font-size:9px;color:rgba(255,255,255,0.3);padding:4px 0 2px;">
+        alt+drag to orbit · left-drag to paint on box
+    </div>
+
+</div>

@@ -1,4 +1,5 @@
-﻿using Frogmarks.Models.Team;
+﻿using System.Text.Json.Serialization;
+using Frogmarks.Models.Team;
 using Microsoft.AspNetCore.Identity;
 
 namespace Frogmarks.Models
@@ -16,8 +17,8 @@ namespace Frogmarks.Models
         public string? AzureUserIdentifier { get; set; } = null;
 
         public virtual List<TeamUser> TeamUserScopes { get; set; } = new List<TeamUser>();
-        public string? RefreshToken { get; set; }
-        public DateTime? RefreshTokenExpiryTime { get; set; }
+        [JsonIgnore] public string? RefreshToken { get; set; }   // never serialized (audit Phase 1.1)
+        [JsonIgnore] public DateTime? RefreshTokenExpiryTime { get; set; }
 
         public bool IsPro { get; set; } = false;
         public long BlobStorageBytes { get; set; } = 0;

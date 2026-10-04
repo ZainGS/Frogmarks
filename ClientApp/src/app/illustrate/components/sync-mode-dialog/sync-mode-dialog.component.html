@@ -1,0 +1,117 @@
+<div class="smp-card" (click)="$event.stopPropagation()">
+
+  <!-- Step 1: selection -->
+  <ng-container *ngIf="storage.syncModePanelStep === 'select'">
+    <div class="smp-header">
+      <span class="smp-title">Storage mode</span>
+      <button class="smp-close" (click)="storage.closeSyncModeDialog()">✕</button>
+    </div>
+    <div class="smp-body">
+
+      <!-- Cloud -->
+      <div class="smp-btn" role="button" tabindex="0"
+           [class.on]="storage.syncModePanelSelection === 0"
+           (click)="storage.syncModePanelSelection = 0"
+           (keydown.enter)="storage.syncModePanelSelection = 0"
+           (keydown.space)="storage.syncModePanelSelection = 0">
+        <div class="smp-btn-header">
+          <span class="smp-btn-icon">☁</span>
+          <span class="smp-btn-label">Cloud</span>
+          <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+            <span class="smp-hint-tip">Your artwork is securely backed up and synced across your devices. Cloud projects are stored online to enable syncing, sharing, and collaboration. Prefer to keep projects only on your device? Choose Local only mode instead.</span>
+          </span>
+        </div>
+        <span class="smp-btn-desc">Syncs to cloud — accessible from any device.</span>
+      </div>
+
+      <!-- No-cloud -->
+      <div class="smp-btn" role="button" tabindex="0"
+           [class.on]="storage.syncModePanelSelection === 1"
+           (click)="storage.syncModePanelSelection = 1"
+           (keydown.enter)="storage.syncModePanelSelection = 1"
+           (keydown.space)="storage.syncModePanelSelection = 1">
+        <div class="smp-btn-header">
+          <span class="smp-btn-icon">⬡</span>
+          <span class="smp-btn-label">No-cloud</span>
+          <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+            <span class="smp-hint-tip">Illustration settings are saved to the server so you can find this file from any device, but your actual pixel data never leaves this browser. It is stored in OPFS — a private, sandboxed area of your local storage that no other site or service can access. Export a .frogmarks file to move your work to another device.</span>
+          </span>
+        </div>
+        <span class="smp-btn-desc">Metadata saved to server. Pixel data stays on this device — never uploaded to Azure.</span>
+      </div>
+
+      <!-- Local only -->
+      <div class="smp-btn" role="button" tabindex="0"
+           [class.on]="storage.syncModePanelSelection === 2"
+           (click)="storage.syncModePanelSelection = 2"
+           (keydown.enter)="storage.syncModePanelSelection = 2"
+           (keydown.space)="storage.syncModePanelSelection = 2">
+        <div class="smp-btn-header">
+          <span class="smp-btn-icon">⬡</span>
+          <span class="smp-btn-label">Local only</span>
+          <span class="smp-hint-icon" (click)="$event.stopPropagation()">?
+            <span class="smp-hint-tip">Nothing about this illustration is sent to any server. All data — settings, layers, and pixel data — lives entirely in this browser via OPFS and IndexedDB. Maximum privacy. The trade-off: this device is the only copy. Clearing browser storage permanently deletes it, so export a .frogmarks file regularly.</span>
+          </span>
+        </div>
+        <span class="smp-btn-desc">Zero cloud. Everything stored locally in this browser only.</span>
+      </div>
+
+      <!-- Pixel format -->
+      <div class="smp-section-divider">Pixel Format</div>
+      <div class="smp-format-rows">
+        <ng-container *ngFor="let opt of storage.storageFormatOptions">
+          <ng-container *ngIf="opt.id !== 'webp' || storage.webpSupported">
+            <label class="smp-format-row" [class.on]="storage.pixelFormat === opt.id">
+              <input type="radio" name="smpPixelFormat"
+                     [value]="opt.id"
+                     [checked]="storage.pixelFormat === opt.id"
+                     (change)="storage.onPixelFormatChange(opt.id)">
+              <span class="smp-format-name">{{ opt.label }}</span>
+              <span class="smp-format-desc">{{ opt.desc }}</span>
+            </label>
+          </ng-container>
+        </ng-container>
+        <div class="smp-format-note">Takes effect on next save</div>
+      </div>
+
+      <div *ngIf="storage.opfsSizeLabel" class="smp-size-row">
+        <span class="smp-size-icon">💾</span>
+        <span>Scene uses <strong>{{ storage.opfsSizeLabel }}</strong> of browser storage</span>
+      </div>
+
+    </div>
+    <div class="smp-footer">
+      <button class="smp-footer-btn smp-cancel" (click)="storage.closeSyncModeDialog()">Cancel</button>
+      <button class="smp-footer-btn smp-apply"
+              [disabled]="storage.syncModePanelSelection === persist.syncMode"
+              (click)="storage.requestSyncModeChange()">Apply</button>
+    </div>
+  </ng-container>
+
+  <!-- Step 2: confirmation (downgrade warning) -->
+  <ng-container *ngIf="storage.syncModePanelStep === 'confirm'">
+    <div class="smp-header">
+      <span class="smp-title">Confirm storage change</span>
+      <button class="smp-close" (click)="storage.closeSyncModeDialog()">✕</button>
+    </div>
+    <div class="smp-confirm-body">
+      <div class="smp-confirm-icon">⚠</div>
+      <div class="smp-confirm-msg" *ngIf="storage.syncModePanelSelection === 2">
+        Switching to <strong>Local only</strong> will stop all cloud syncing for this illustration.
+        Your pixel data will exist <strong>only in this browser</strong> — if you clear your browser storage it will be gone permanently.
+        <br><br>
+        Export a <strong>.frogmarks</strong> file regularly to keep a backup.
+      </div>
+      <div class="smp-confirm-msg" *ngIf="storage.syncModePanelSelection === 1">
+        Switching to <strong>No-cloud</strong> will stop pixel data uploads to Azure.
+        Your artwork will be stored locally via OPFS on this device only —
+        it will not be accessible from other devices unless you export a <strong>.frogmarks</strong> file.
+      </div>
+    </div>
+    <div class="smp-footer">
+      <button class="smp-footer-btn smp-cancel" (click)="storage.syncModePanelStep = 'select'">← Back</button>
+      <button class="smp-footer-btn smp-apply" (click)="storage._applySyncModeChange()">Confirm</button>
+    </div>
+  </ng-container>
+
+</div>

@@ -1,0 +1,846 @@
+<ng-container *ngIf="cp.charSection === 'top'">
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dTopTab==='top'" (click)="clothing.scene3dTopTab='top'">Top</button>
+        <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dTopTab==='undershirt'" (click)="clothing.scene3dTopTab='undershirt'">Undershirt</button>
+    </div>
+
+    <!-- ── Top sub-tab ── -->
+    <ng-container *ngIf="clothing.scene3dTopTab === 'top'">
+    <div *ngIf="!clothing.scene3dTopParams">
+        <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('top')">Generate Top</button>
+    </div>
+    <ng-container *ngIf="clothing.scene3dTopParams">
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dTopPresets.length > 0">
+            <label>Preset</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dTopPresetName"
+                    (ngModelChange)="clothing.scene3dApplyClothingPreset('top', $event)">
+                <option value="">—</option>
+                <option *ngFor="let p of clothing.scene3dTopPresets" [value]="p">{{ p }}</option>
+            </select>
+        </div>
+        <!-- Clothing fit round 2: the same character-wide switch as on the Bottom tab. -->
+        <div class="scene3d-material-row" title="Skin the clothes fully cover isn't drawn, so it can't poke through (knees, armpits). Off for see-through looks.">
+            <label>Hide body under clothes</label>
+            <input type="checkbox" [ngModel]="clothing.scene3dHideBody" (ngModelChange)="clothing.scene3dSetHideBody($event)">
+        </div>
+
+        <div class="eye-proc-group">Neckline</div>
+        <div class="scene3d-material-row">
+            <label>Shape</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dTopParams.neckline"
+                    (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+                <option value="round">Round</option>
+                <option value="v">V-neck</option>
+                <option value="crew">Crew</option>
+                <option value="collar">Collar</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dTopParams.necklineHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.necklineHeight | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Body</div>
+        <div class="scene3d-material-row">
+            <label>Crop</label>
+            <input type="range" min="-0.5" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dTopParams.hemHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.hemHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Shoulders</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dTopParams.shoulderCoverage"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.shoulderCoverage | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Looseness</label>
+            <input type="range" min="0" max="0.025" step="0.001"
+                   [(ngModel)]="clothing.scene3dTopParams.thickness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.thickness | number:'1.3-3' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Sleeves</div>
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range" min="0" max="1" step="0.02"
+                   [(ngModel)]="clothing.scene3dTopParams.sleeveLength"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.sleeveLength | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dTopParams.sleeveLength > 0">
+            <label>Width</label>
+            <input type="range" min="0" max="0.04" step="0.001"
+                   [(ngModel)]="clothing.scene3dTopParams.sleeveWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.sleeveWidth | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dTopParams.sleeveLength > 0">
+            <label>Cap flare</label>
+            <input type="range" min="0" max="1" step="0.02"
+                   [(ngModel)]="clothing.scene3dTopParams.sleeveCap"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.sleeveCap | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dTopParams.sleeveLength > 0">
+            <label>Inset</label>
+            <input type="range" min="0" max="1.5" step="0.05"
+                   [(ngModel)]="clothing.scene3dTopParams.sleeveInset"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.sleeveInset | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Colour</div>
+        <div class="scene3d-material-row">
+            <label>Base</label>
+            <input type="color" [(ngModel)]="clothing.scene3dTopParams.baseColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Trim</label>
+            <input type="color" [(ngModel)]="clothing.scene3dTopParams.trimColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gradient</label>
+            <input type="checkbox" [(ngModel)]="clothing.scene3dTopParams.gradient"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dTopParams.gradient">
+            <label>Trim width</label>
+            <input type="range" min="0" max="0.5" step="0.02"
+                   [(ngModel)]="clothing.scene3dTopParams.trimWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.trimWidth | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Render</div>
+        <div class="scene3d-material-row">
+            <label>Chunkiness</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dTopParams.chunkiness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('top')">
+            <span class="scene3d-val">{{ clothing.scene3dTopParams.chunkiness | number:'1.2-2' }}</span>
+        </div>
+
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                [class.scene3d-btn-active]="cp.scene3dClothingPaintActive === 'top'"
+                (click)="cp.toggleClothingPaint.emit('top')">
+            {{ cp.scene3dClothingPaintActive === 'top' ? '✎ Painting…' : '✎ Paint' }}
+        </button>
+        <div *ngIf="cp.scene3dClothingPaintActive === 'top'" style="display:flex;gap:4px;margin-top:4px">
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='burn'" (click)="clothing.scene3dSetEraseStyle('burn')" title="Feathered scorch border">Burn</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
+        </div>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                (click)="clothing.scene3dRemoveClothing('top')">Remove Top</button>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                (click)="clothing.scene3dBakeClothing('top')">Save as Part</button>
+        <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+        <div class="scene3d-material-row">
+            <label>Diffuse</label>
+            <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('top', $event)">
+            </label>
+            <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['top']"
+                    (click)="cp.scene3dClearCharPartTexture('top')" title="Clear texture">✕</button>
+        </div>
+        <!-- Pattern -->
+        <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+        <div class="scene3d-material-row">
+            <label>Preset</label>
+            <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('top', $any($event.target).value); $any($event.target).value=''">
+                <option value="">— pick preset —</option>
+                <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Mode</label>
+            <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['top']?.mode" (click)="clothing.scene3dClothingPattern['top'].mode=''; clothing.scene3dApplyClothingPattern('top')">None</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['top']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['top'].mode='stripes'; clothing.scene3dApplyClothingPattern('top')">Stripes</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['top']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['top'].mode='dots'; clothing.scene3dApplyClothingPattern('top')">Dots</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['top']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['top'].mode='diamonds'; clothing.scene3dApplyClothingPattern('top')">◇</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['top']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['top'].mode='checker'; clothing.scene3dApplyClothingPattern('top')">Check</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['top']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['top'].mode='grid'; clothing.scene3dApplyClothingPattern('top')">Grid</button>
+            </div>
+        </div>
+        <ng-container *ngIf="clothing.scene3dClothingPattern['top']?.mode">
+            <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['top'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['top'].colorHex=$event; clothing.scene3dApplyClothingPattern('top')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+            <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['top'].freq" (ngModelChange)="clothing.scene3dClothingPattern['top'].freq=+$event; clothing.scene3dApplyClothingPattern('top')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['top'].freq }}</span></div>
+            <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['top'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['top'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('top')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['top'].angleDeg }}°</span></div>
+            <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['top'].scale" (ngModelChange)="clothing.scene3dClothingPattern['top'].scale=+$event; clothing.scene3dApplyClothingPattern('top')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['top'].scale | number:'1.2-2' }}</span></div>
+        </ng-container>
+    </ng-container>
+    </ng-container><!-- end top sub-tab -->
+
+    <!-- ── Undershirt sub-tab ── -->
+    <ng-container *ngIf="clothing.scene3dTopTab === 'undershirt'">
+        <div *ngIf="!clothing.scene3dUndershirtParams">
+            <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('undershirt')">Generate Undershirt</button>
+        </div>
+        <ng-container *ngIf="clothing.scene3dUndershirtParams">
+            <div class="scene3d-material-row" *ngIf="clothing.scene3dUndershirtPresets.length > 0">
+                <label>Preset</label>
+                <select class="scene3d-select" [(ngModel)]="clothing.scene3dUndershirtPresetName"
+                        (ngModelChange)="clothing.scene3dApplyClothingPreset('undershirt', $event)">
+                    <option value="">—</option>
+                    <option *ngFor="let p of clothing.scene3dUndershirtPresets" [value]="p">{{ p }}</option>
+                </select>
+            </div>
+
+            <div class="eye-proc-group">Fit</div>
+            <div class="scene3d-material-row">
+                <label>Hem extend</label>
+                <input type="range" min="0" max="0.3" step="0.01"
+                       [(ngModel)]="clothing.scene3dUndershirtParams.hemExtend"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                <span class="scene3d-val">{{ clothing.scene3dUndershirtParams.hemExtend | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Crop</label>
+                <input type="range" min="0" max="1" step="0.02"
+                       [(ngModel)]="clothing.scene3dUndershirtParams.crop"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                <span class="scene3d-val">{{ clothing.scene3dUndershirtParams.crop | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Shoulders</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [(ngModel)]="clothing.scene3dUndershirtParams.shoulderCoverage"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                <span class="scene3d-val">{{ clothing.scene3dUndershirtParams.shoulderCoverage | number:'1.2-2' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Neckline</div>
+            <div class="scene3d-material-row">
+                <label>Shape</label>
+                <select class="scene3d-select" [(ngModel)]="clothing.scene3dUndershirtParams.neckline"
+                        (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                    <option value="round">Round</option>
+                    <option value="v">V-neck</option>
+                    <option value="crew">Crew</option>
+                </select>
+            </div>
+
+            <div class="scene3d-material-row">
+                <label>Fit gap</label>
+                <input type="range" min="0.001" max="0.015" step="0.001"
+                       [(ngModel)]="clothing.scene3dUndershirtParams.thickness"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                <span class="scene3d-val">{{ clothing.scene3dUndershirtParams.thickness | number:'1.3-3' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Sleeves</div>
+            <div class="scene3d-material-row">
+                <label>Length</label>
+                <input type="range" min="0" max="1" step="0.02"
+                       [(ngModel)]="clothing.scene3dUndershirtParams.sleeveLength"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+                <span class="scene3d-val">{{ clothing.scene3dUndershirtParams.sleeveLength | number:'1.2-2' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Colour</div>
+            <div class="scene3d-material-row">
+                <label>Base</label>
+                <input type="color" [(ngModel)]="clothing.scene3dUndershirtParams.baseColor"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Trim</label>
+                <input type="color" [(ngModel)]="clothing.scene3dUndershirtParams.trimColor"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
+            </div>
+
+            <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
+                    (click)="clothing.scene3dRemoveClothing('undershirt')">Remove Undershirt</button>
+            <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                    (click)="clothing.scene3dBakeClothing('undershirt')">Save as Part</button>
+
+            <!-- Pattern -->
+            <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+            <div class="scene3d-material-row">
+                <label>Preset</label>
+                <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('undershirt', $any($event.target).value); $any($event.target).value=''">
+                    <option value="">— pick preset —</option>
+                    <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Mode</label>
+                <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['undershirt']?.mode" (click)="clothing.scene3dClothingPattern['undershirt'].mode=''; clothing.scene3dApplyClothingPattern('undershirt')">None</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['undershirt']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['undershirt'].mode='stripes'; clothing.scene3dApplyClothingPattern('undershirt')">Stripes</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['undershirt']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['undershirt'].mode='dots'; clothing.scene3dApplyClothingPattern('undershirt')">Dots</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['undershirt']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['undershirt'].mode='diamonds'; clothing.scene3dApplyClothingPattern('undershirt')">◇</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['undershirt']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['undershirt'].mode='checker'; clothing.scene3dApplyClothingPattern('undershirt')">Check</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['undershirt']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['undershirt'].mode='grid'; clothing.scene3dApplyClothingPattern('undershirt')">Grid</button>
+                </div>
+            </div>
+            <ng-container *ngIf="clothing.scene3dClothingPattern['undershirt']?.mode">
+                <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['undershirt'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['undershirt'].colorHex=$event; clothing.scene3dApplyClothingPattern('undershirt')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+                <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['undershirt'].freq" (ngModelChange)="clothing.scene3dClothingPattern['undershirt'].freq=+$event; clothing.scene3dApplyClothingPattern('undershirt')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['undershirt'].freq }}</span></div>
+                <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['undershirt'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['undershirt'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('undershirt')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['undershirt'].angleDeg }}°</span></div>
+                <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['undershirt'].scale" (ngModelChange)="clothing.scene3dClothingPattern['undershirt'].scale=+$event; clothing.scene3dApplyClothingPattern('undershirt')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['undershirt'].scale | number:'1.2-2' }}</span></div>
+            </ng-container>
+        </ng-container>
+    </ng-container><!-- end undershirt sub-tab -->
+</ng-container>
+
+<ng-container *ngIf="cp.charSection === 'bottom'">
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dBottomTab==='bottom'" (click)="clothing.scene3dBottomTab='bottom'">Bottom</button>
+        <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dBottomTab==='underpants'" (click)="clothing.scene3dBottomTab='underpants'">Underpants</button>
+    </div>
+
+    <!-- ── Bottom sub-tab ── -->
+    <ng-container *ngIf="clothing.scene3dBottomTab === 'bottom'">
+    <div *ngIf="!clothing.scene3dBottomParams">
+        <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('bottom')">Generate Bottom</button>
+    </div>
+    <ng-container *ngIf="clothing.scene3dBottomParams">
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomPresets.length > 0">
+            <label>Preset</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dBottomPresetName"
+                    (ngModelChange)="clothing.scene3dApplyClothingPreset('bottom', $event)">
+                <option value="">—</option>
+                <option *ngFor="let p of clothing.scene3dBottomPresets" [value]="p">{{ p }}</option>
+            </select>
+        </div>
+
+        <div class="eye-proc-group">Style</div>
+        <div class="scene3d-material-row">
+            <label>Type</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dBottomParams.bottomStyle"
+                    (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+                <option value="skirt">Skirt</option>
+                <option value="shorts">Shorts</option>
+                <option value="pants">Pants</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Waist</label>
+            <input type="range" min="0.6" max="1.4" step="0.02"
+                   [(ngModel)]="clothing.scene3dBottomParams.waistWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.waistWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Rise</label>
+            <input type="range" min="-0.5" max="0.5" step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.waistHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.waistHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Length</label>
+            <input type="range"
+                   [min]="clothing.scene3dBottomParams.bottomStyle === 'shorts' ? 0.35 : 0.5"
+                   [max]="clothing.scene3dBottomParams.bottomStyle === 'pants' ? 1 : clothing.scene3dBottomParams.bottomStyle === 'shorts' ? 0.5 : 1.5"
+                   step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.length"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.length | number:'1.2-2' }}</span>
+        </div>
+        <!-- Clothing fit round 2 (Salsa 2026-10-04): the skirt hem's secondary motion in Play (0 = off). -->
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.bottomStyle === 'skirt'" title="How much the hem trails and flares as the character moves in Play. 0 = off.">
+            <label>Skirt swing</label>
+            <input type="range" min="0" max="1.5" step="0.05"
+                   [ngModel]="clothing.scene3dSkirtSwing"
+                   (ngModelChange)="clothing.scene3dSetSkirtSwing($event)">
+            <span class="scene3d-val">{{ clothing.scene3dSkirtSwing | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" title="Skin the clothes fully cover isn't drawn, so it can't poke through (knees, armpits). Off for see-through looks.">
+            <label>Hide body under clothes</label>
+            <input type="checkbox" [ngModel]="clothing.scene3dHideBody" (ngModelChange)="clothing.scene3dSetHideBody($event)">
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.bottomStyle === 'pants' || clothing.scene3dBottomParams.bottomStyle === 'shorts'">
+            <label>Leg Width</label>
+            <input type="range" min="1" max="3" step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.legWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.legWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.bottomStyle === 'pants'">
+            <label>Stack</label>
+            <input type="range" min="0" max="3" step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.stack"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.stack | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.bottomStyle === 'pants'">
+            <label>Taper</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.cuffTaper"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.cuffTaper | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.bottomStyle === 'skirt'">
+            <label>Flare</label>
+            <input type="range" min="1" max="3" step="0.1"
+                   [(ngModel)]="clothing.scene3dBottomParams.flare"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.flare | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Looseness</label>
+            <input type="range" min="0" max="0.025" step="0.001"
+                   [(ngModel)]="clothing.scene3dBottomParams.thickness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.thickness | number:'1.3-3' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Colour</div>
+        <div class="scene3d-material-row">
+            <label>Base</label>
+            <input type="color" [(ngModel)]="clothing.scene3dBottomParams.baseColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Trim</label>
+            <input type="color" [(ngModel)]="clothing.scene3dBottomParams.trimColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gradient</label>
+            <input type="checkbox" [(ngModel)]="clothing.scene3dBottomParams.gradient"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dBottomParams.gradient">
+            <label>Trim width</label>
+            <input type="range" min="0" max="0.5" step="0.02"
+                   [(ngModel)]="clothing.scene3dBottomParams.trimWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.trimWidth | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Render</div>
+        <div class="scene3d-material-row">
+            <label>Chunkiness</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dBottomParams.chunkiness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('bottom')">
+            <span class="scene3d-val">{{ clothing.scene3dBottomParams.chunkiness | number:'1.2-2' }}</span>
+        </div>
+
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                [class.scene3d-btn-active]="cp.scene3dClothingPaintActive === 'bottom'"
+                (click)="cp.toggleClothingPaint.emit('bottom')">
+            {{ cp.scene3dClothingPaintActive === 'bottom' ? '✎ Painting…' : '✎ Paint' }}
+        </button>
+        <div *ngIf="cp.scene3dClothingPaintActive === 'bottom'" style="display:flex;gap:4px;margin-top:4px">
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='burn'" (click)="clothing.scene3dSetEraseStyle('burn')" title="Feathered scorch border">Burn</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
+        </div>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                (click)="clothing.scene3dRemoveClothing('bottom')">Remove Bottom</button>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                (click)="clothing.scene3dBakeClothing('bottom')">Save as Part</button>
+        <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+        <div class="scene3d-material-row">
+            <label>Diffuse</label>
+            <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('bottom', $event)">
+            </label>
+            <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['bottom']"
+                    (click)="cp.scene3dClearCharPartTexture('bottom')" title="Clear texture">✕</button>
+        </div>
+        <!-- Pattern -->
+        <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+        <div class="scene3d-material-row">
+            <label>Preset</label>
+            <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('bottom', $any($event.target).value); $any($event.target).value=''">
+                <option value="">— pick preset —</option>
+                <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Mode</label>
+            <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['bottom']?.mode" (click)="clothing.scene3dClothingPattern['bottom'].mode=''; clothing.scene3dApplyClothingPattern('bottom')">None</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['bottom']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['bottom'].mode='stripes'; clothing.scene3dApplyClothingPattern('bottom')">Stripes</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['bottom']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['bottom'].mode='dots'; clothing.scene3dApplyClothingPattern('bottom')">Dots</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['bottom']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['bottom'].mode='diamonds'; clothing.scene3dApplyClothingPattern('bottom')">◇</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['bottom']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['bottom'].mode='checker'; clothing.scene3dApplyClothingPattern('bottom')">Check</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['bottom']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['bottom'].mode='grid'; clothing.scene3dApplyClothingPattern('bottom')">Grid</button>
+            </div>
+        </div>
+        <ng-container *ngIf="clothing.scene3dClothingPattern['bottom']?.mode">
+            <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['bottom'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['bottom'].colorHex=$event; clothing.scene3dApplyClothingPattern('bottom')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+            <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['bottom'].freq" (ngModelChange)="clothing.scene3dClothingPattern['bottom'].freq=+$event; clothing.scene3dApplyClothingPattern('bottom')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['bottom'].freq }}</span></div>
+            <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['bottom'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['bottom'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('bottom')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['bottom'].angleDeg }}°</span></div>
+            <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['bottom'].scale" (ngModelChange)="clothing.scene3dClothingPattern['bottom'].scale=+$event; clothing.scene3dApplyClothingPattern('bottom')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['bottom'].scale | number:'1.2-2' }}</span></div>
+        </ng-container>
+    </ng-container>
+    </ng-container><!-- end bottom sub-tab -->
+
+    <!-- ── Underpants sub-tab ── -->
+    <ng-container *ngIf="clothing.scene3dBottomTab === 'underpants'">
+        <div *ngIf="!clothing.scene3dUnderpantsParams">
+            <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('underpants')">Generate Underpants</button>
+        </div>
+        <ng-container *ngIf="clothing.scene3dUnderpantsParams">
+            <div class="scene3d-material-row" *ngIf="clothing.scene3dUnderpantsPresets.length > 0">
+                <label>Preset</label>
+                <select class="scene3d-select" [(ngModel)]="clothing.scene3dUnderpantsPresetName"
+                        (ngModelChange)="clothing.scene3dApplyClothingPreset('underpants', $event)">
+                    <option value="">—</option>
+                    <option *ngFor="let p of clothing.scene3dUnderpantsPresets" [value]="p">{{ p }}</option>
+                </select>
+            </div>
+
+            <div class="eye-proc-group">Fit</div>
+            <div class="scene3d-material-row">
+                <label>Leg extend</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [(ngModel)]="clothing.scene3dUnderpantsParams.legExtend"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
+                <span class="scene3d-val">{{ clothing.scene3dUnderpantsParams.legExtend | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Rise</label>
+                <input type="range" min="-0.5" max="0.5" step="0.05"
+                       [(ngModel)]="clothing.scene3dUnderpantsParams.waistHeight"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
+                <span class="scene3d-val">{{ clothing.scene3dUnderpantsParams.waistHeight | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Fit gap</label>
+                <input type="range" min="0.001" max="0.015" step="0.001"
+                       [(ngModel)]="clothing.scene3dUnderpantsParams.thickness"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
+                <span class="scene3d-val">{{ clothing.scene3dUnderpantsParams.thickness | number:'1.3-3' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Colour</div>
+            <div class="scene3d-material-row">
+                <label>Base</label>
+                <input type="color" [(ngModel)]="clothing.scene3dUnderpantsParams.baseColor"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Trim</label>
+                <input type="color" [(ngModel)]="clothing.scene3dUnderpantsParams.trimColor"
+                       (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
+            </div>
+
+            <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
+                    (click)="clothing.scene3dRemoveClothing('underpants')">Remove Underpants</button>
+            <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                    (click)="clothing.scene3dBakeClothing('underpants')">Save as Part</button>
+
+            <!-- Pattern -->
+            <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+            <div class="scene3d-material-row">
+                <label>Preset</label>
+                <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('underpants', $any($event.target).value); $any($event.target).value=''">
+                    <option value="">— pick preset —</option>
+                    <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Mode</label>
+                <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['underpants']?.mode" (click)="clothing.scene3dClothingPattern['underpants'].mode=''; clothing.scene3dApplyClothingPattern('underpants')">None</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['underpants']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['underpants'].mode='stripes'; clothing.scene3dApplyClothingPattern('underpants')">Stripes</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['underpants']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['underpants'].mode='dots'; clothing.scene3dApplyClothingPattern('underpants')">Dots</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['underpants']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['underpants'].mode='diamonds'; clothing.scene3dApplyClothingPattern('underpants')">◇</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['underpants']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['underpants'].mode='checker'; clothing.scene3dApplyClothingPattern('underpants')">Check</button>
+                    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['underpants']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['underpants'].mode='grid'; clothing.scene3dApplyClothingPattern('underpants')">Grid</button>
+                </div>
+            </div>
+            <ng-container *ngIf="clothing.scene3dClothingPattern['underpants']?.mode">
+                <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['underpants'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['underpants'].colorHex=$event; clothing.scene3dApplyClothingPattern('underpants')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+                <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['underpants'].freq" (ngModelChange)="clothing.scene3dClothingPattern['underpants'].freq=+$event; clothing.scene3dApplyClothingPattern('underpants')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['underpants'].freq }}</span></div>
+                <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['underpants'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['underpants'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('underpants')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['underpants'].angleDeg }}°</span></div>
+                <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['underpants'].scale" (ngModelChange)="clothing.scene3dClothingPattern['underpants'].scale=+$event; clothing.scene3dApplyClothingPattern('underpants')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['underpants'].scale | number:'1.2-2' }}</span></div>
+            </ng-container>
+        </ng-container>
+    </ng-container><!-- end underpants sub-tab -->
+</ng-container>
+
+<ng-container *ngIf="cp.charSection === 'shoes'">
+    <div *ngIf="!clothing.scene3dShoeParams">
+        <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('shoes')">Generate Shoes</button>
+    </div>
+    <ng-container *ngIf="clothing.scene3dShoeParams">
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dShoePresets.length > 0">
+            <label>Preset</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dShoePresetName"
+                    (ngModelChange)="clothing.scene3dApplyClothingPreset('shoes', $event)">
+                <option value="">—</option>
+                <option *ngFor="let p of clothing.scene3dShoePresets" [value]="p">{{ p }}</option>
+            </select>
+        </div>
+
+        <div class="eye-proc-group">Style</div>
+        <div class="scene3d-material-row">
+            <label>Type</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dShoeParams.shoeStyle"
+                    (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+                <option value="sneaker">Sneaker</option>
+                <option value="flat">Flat</option>
+                <option value="boot">Boot</option>
+                <option value="heel">Heel</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Sole</label>
+            <input type="range" min="0.01" max="0.08" step="0.005"
+                   [(ngModel)]="clothing.scene3dShoeParams.soleThickness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.soleThickness | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Top cover</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.topCover"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.topCover | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Shaft</label>
+            <input type="range" min="0" max="1.5" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.shaftHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.shaftHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dShoeParams.shoeStyle === 'heel' || clothing.scene3dShoeParams.shoeStyle === 'boot' || clothing.scene3dShoeParams.heelHeight > 0">
+            <label>Heel lift</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.heelHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.heelHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Toe point</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.toePoint"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.toePoint | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Collar</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.ankleCollar"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.ankleCollar | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Looseness</label>
+            <input type="range" min="0" max="0.025" step="0.001"
+                   [(ngModel)]="clothing.scene3dShoeParams.thickness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.thickness | number:'1.3-3' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Colour</div>
+        <div class="scene3d-material-row">
+            <label>Base</label>
+            <input type="color" [(ngModel)]="clothing.scene3dShoeParams.baseColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Trim</label>
+            <input type="color" [(ngModel)]="clothing.scene3dShoeParams.trimColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gradient</label>
+            <input type="checkbox" [(ngModel)]="clothing.scene3dShoeParams.gradient"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dShoeParams.gradient">
+            <label>Trim width</label>
+            <input type="range" min="0" max="0.5" step="0.02"
+                   [(ngModel)]="clothing.scene3dShoeParams.trimWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.trimWidth | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Render</div>
+        <div class="scene3d-material-row">
+            <label>Chunkiness</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="clothing.scene3dShoeParams.chunkiness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('shoes')">
+            <span class="scene3d-val">{{ clothing.scene3dShoeParams.chunkiness | number:'1.2-2' }}</span>
+        </div>
+
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                [class.scene3d-btn-active]="cp.scene3dClothingPaintActive === 'shoes'"
+                (click)="cp.toggleClothingPaint.emit('shoes')">
+            {{ cp.scene3dClothingPaintActive === 'shoes' ? '✎ Painting…' : '✎ Paint' }}
+        </button>
+        <div *ngIf="cp.scene3dClothingPaintActive === 'shoes'" style="display:flex;gap:4px;margin-top:4px">
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='burn'" (click)="clothing.scene3dSetEraseStyle('burn')" title="Feathered scorch border">Burn</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
+        </div>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                (click)="clothing.scene3dRemoveClothing('shoes')">Remove Shoes</button>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                (click)="clothing.scene3dBakeClothing('shoes')">Save as Part</button>
+        <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+        <div class="scene3d-material-row">
+            <label>Diffuse</label>
+            <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('shoes', $event)">
+            </label>
+            <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['shoes']"
+                    (click)="cp.scene3dClearCharPartTexture('shoes')" title="Clear texture">✕</button>
+        </div>
+        <!-- Pattern -->
+        <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+        <div class="scene3d-material-row">
+            <label>Preset</label>
+            <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('shoes', $any($event.target).value); $any($event.target).value=''">
+                <option value="">— pick preset —</option>
+                <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Mode</label>
+            <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['shoes']?.mode" (click)="clothing.scene3dClothingPattern['shoes'].mode=''; clothing.scene3dApplyClothingPattern('shoes')">None</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['shoes']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['shoes'].mode='stripes'; clothing.scene3dApplyClothingPattern('shoes')">Stripes</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['shoes']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['shoes'].mode='dots'; clothing.scene3dApplyClothingPattern('shoes')">Dots</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['shoes']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['shoes'].mode='diamonds'; clothing.scene3dApplyClothingPattern('shoes')">◇</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['shoes']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['shoes'].mode='checker'; clothing.scene3dApplyClothingPattern('shoes')">Check</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['shoes']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['shoes'].mode='grid'; clothing.scene3dApplyClothingPattern('shoes')">Grid</button>
+            </div>
+        </div>
+        <ng-container *ngIf="clothing.scene3dClothingPattern['shoes']?.mode">
+            <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['shoes'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['shoes'].colorHex=$event; clothing.scene3dApplyClothingPattern('shoes')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+            <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['shoes'].freq" (ngModelChange)="clothing.scene3dClothingPattern['shoes'].freq=+$event; clothing.scene3dApplyClothingPattern('shoes')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['shoes'].freq }}</span></div>
+            <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['shoes'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['shoes'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('shoes')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['shoes'].angleDeg }}°</span></div>
+            <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['shoes'].scale" (ngModelChange)="clothing.scene3dClothingPattern['shoes'].scale=+$event; clothing.scene3dApplyClothingPattern('shoes')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['shoes'].scale | number:'1.2-2' }}</span></div>
+        </ng-container>
+    </ng-container>
+</ng-container>
+
+<ng-container *ngIf="cp.charSection === 'socks'">
+    <div *ngIf="!clothing.scene3dSockParams">
+        <button class="scene3d-btn" style="width:100%" (click)="clothing.scene3dInitClothing('socks')">Generate Socks</button>
+    </div>
+    <ng-container *ngIf="clothing.scene3dSockParams">
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dSockPresets.length > 0">
+            <label>Preset</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dSockPresetName"
+                    (ngModelChange)="clothing.scene3dApplyClothingPreset('socks', $event)">
+                <option value="">—</option>
+                <option *ngFor="let p of clothing.scene3dSockPresets" [value]="p">{{ p }}</option>
+            </select>
+        </div>
+
+        <div class="eye-proc-group">Style</div>
+        <div class="scene3d-material-row">
+            <label>Style</label>
+            <select class="scene3d-select" [(ngModel)]="clothing.scene3dSockParams.sockStyle"
+                    (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+                <option value="ankle">Ankle</option>
+                <option value="crew">Crew</option>
+                <option value="knee">Knee High</option>
+                <option value="thigh">Thigh High</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0" max="1.3" step="0.05"
+                   [(ngModel)]="clothing.scene3dSockParams.legHeight"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+            <span class="scene3d-val">{{ clothing.scene3dSockParams.legHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Looseness</label>
+            <input type="range" min="0" max="0.025" step="0.001"
+                   [(ngModel)]="clothing.scene3dSockParams.thickness"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+            <span class="scene3d-val">{{ clothing.scene3dSockParams.thickness | number:'1.3-3' }}</span>
+        </div>
+
+        <div class="eye-proc-group">Colour</div>
+        <div class="scene3d-material-row">
+            <label>Base</label>
+            <input type="color" [(ngModel)]="clothing.scene3dSockParams.baseColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Trim</label>
+            <input type="color" [(ngModel)]="clothing.scene3dSockParams.trimColor"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gradient</label>
+            <input type="checkbox" [(ngModel)]="clothing.scene3dSockParams.gradient"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+        </div>
+        <div class="scene3d-material-row" *ngIf="clothing.scene3dSockParams.gradient">
+            <label>Trim width</label>
+            <input type="range" min="0" max="0.5" step="0.02"
+                   [(ngModel)]="clothing.scene3dSockParams.trimWidth"
+                   (ngModelChange)="clothing.scene3dClothingParamChanged('socks')">
+            <span class="scene3d-val">{{ clothing.scene3dSockParams.trimWidth | number:'1.2-2' }}</span>
+        </div>
+
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                [class.scene3d-btn-active]="cp.scene3dClothingPaintActive === 'socks'"
+                (click)="cp.toggleClothingPaint.emit('socks')">
+            {{ cp.scene3dClothingPaintActive === 'socks' ? '✎ Painting…' : '✎ Paint' }}
+        </button>
+        <div *ngIf="cp.scene3dClothingPaintActive === 'socks'" style="display:flex;gap:4px;margin-top:4px">
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='burn'" (click)="clothing.scene3dSetEraseStyle('burn')" title="Feathered scorch border">Burn</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
+            <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
+        </div>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
+                (click)="clothing.scene3dRemoveClothing('socks')">Remove Socks</button>
+        <button class="scene3d-btn" style="width:100%;margin-top:4px"
+                (click)="clothing.scene3dBakeClothing('socks')">Save as Part</button>
+        <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+        <div class="scene3d-material-row">
+            <label>Diffuse</label>
+            <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+                Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('socks', $event)">
+            </label>
+            <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['socks']"
+                    (click)="cp.scene3dClearCharPartTexture('socks')" title="Clear texture">✕</button>
+        </div>
+        <!-- Pattern -->
+        <div class="eye-proc-group" style="margin-top:12px">Pattern</div>
+        <div class="scene3d-material-row">
+            <label>Preset</label>
+            <select class="scene3d-select" (change)="clothing.scene3dApplyPatternPreset('socks', $any($event.target).value); $any($event.target).value=''">
+                <option value="">— pick preset —</option>
+                <option *ngFor="let pr of clothing.scene3dPatternPresets" [value]="pr">{{ pr }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Mode</label>
+            <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="!clothing.scene3dClothingPattern['socks']?.mode" (click)="clothing.scene3dClothingPattern['socks'].mode=''; clothing.scene3dApplyClothingPattern('socks')">None</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['socks']?.mode==='stripes'" (click)="clothing.scene3dClothingPattern['socks'].mode='stripes'; clothing.scene3dApplyClothingPattern('socks')">Stripes</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['socks']?.mode==='dots'" (click)="clothing.scene3dClothingPattern['socks'].mode='dots'; clothing.scene3dApplyClothingPattern('socks')">Dots</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['socks']?.mode==='diamonds'" (click)="clothing.scene3dClothingPattern['socks'].mode='diamonds'; clothing.scene3dApplyClothingPattern('socks')">◇</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['socks']?.mode==='checker'" (click)="clothing.scene3dClothingPattern['socks'].mode='checker'; clothing.scene3dApplyClothingPattern('socks')">Check</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="clothing.scene3dClothingPattern['socks']?.mode==='grid'" (click)="clothing.scene3dClothingPattern['socks'].mode='grid'; clothing.scene3dApplyClothingPattern('socks')">Grid</button>
+            </div>
+        </div>
+        <ng-container *ngIf="clothing.scene3dClothingPattern['socks']?.mode">
+            <div class="scene3d-material-row"><label>Color</label><input type="color" [ngModel]="clothing.scene3dClothingPattern['socks'].colorHex" (ngModelChange)="clothing.scene3dClothingPattern['socks'].colorHex=$event; clothing.scene3dApplyClothingPattern('socks')" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer"></div>
+            <div class="scene3d-material-row"><label>Freq</label><input type="range" min="1" max="30" step="1" [ngModel]="clothing.scene3dClothingPattern['socks'].freq" (ngModelChange)="clothing.scene3dClothingPattern['socks'].freq=+$event; clothing.scene3dApplyClothingPattern('socks')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['socks'].freq }}</span></div>
+            <div class="scene3d-material-row"><label>Angle</label><input type="range" min="0" max="180" step="1" [ngModel]="clothing.scene3dClothingPattern['socks'].angleDeg" (ngModelChange)="clothing.scene3dClothingPattern['socks'].angleDeg=+$event; clothing.scene3dApplyClothingPattern('socks')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['socks'].angleDeg }}°</span></div>
+            <div class="scene3d-material-row"><label>Scale</label><input type="range" min="0.05" max="0.95" step="0.01" [ngModel]="clothing.scene3dClothingPattern['socks'].scale" (ngModelChange)="clothing.scene3dClothingPattern['socks'].scale=+$event; clothing.scene3dApplyClothingPattern('socks')"><span class="scene3d-val">{{ clothing.scene3dClothingPattern['socks'].scale | number:'1.2-2' }}</span></div>
+        </ng-container>
+    </ng-container>
+</ng-container>

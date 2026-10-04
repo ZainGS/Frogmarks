@@ -1,0 +1,213 @@
+<div *ngIf="active">
+    <div class="tool-label">Live Text</div>
+    <div class="lt-panel" style="padding: 4px 8px; font-size: 12px;">
+        <!-- Font / Size / Bold / Italic -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+            <select [(ngModel)]="liveTextFont"
+                    (ngModelChange)="onLiveTextStyleChange('font', $event)"
+                    style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+                <option *ngFor="let f of availableFonts" [ngValue]="f">{{ f }}</option>
+            </select>
+            <input type="number" min="12" max="400" step="1" [(ngModel)]="liveTextFontSize"
+                   (ngModelChange)="onLiveTextStyleChange('fontSize', +$event)"
+                   style="width: 48px; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <button class="lt-seg-btn" [class.lt-active]="liveTextBold"
+                    (click)="liveTextBold = !liveTextBold; onLiveTextStyleChange('bold', liveTextBold)"
+                    [style.background]="liveTextBold ? '#9B59B6' : '#333'"
+                    style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-weight: bold; font-size: 11px;">B</button>
+            <button class="lt-seg-btn" [class.lt-active]="liveTextItalic"
+                    (click)="liveTextItalic = !liveTextItalic; onLiveTextStyleChange('italic', liveTextItalic)"
+                    [style.background]="liveTextItalic ? '#9B59B6' : '#333'"
+                    style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-style: italic; font-size: 11px;">I</button>
+        </div>
+        <!-- Writing Mode -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Writing</label>
+            <div style="display: flex; gap: 2px;">
+                <button class="lt-seg-btn" [class.lt-active]="liveTextWritingMode === 'horizontal-tb'"
+                        (click)="liveTextWritingMode = 'horizontal-tb'; onLiveTextStyleChange('writingMode', 'horizontal-tb')"
+                        [style.background]="liveTextWritingMode === 'horizontal-tb' ? '#9B59B6' : '#333'"
+                        style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;"
+                        title="Horizontal text (left-to-right)">H</button>
+                <button class="lt-seg-btn" [class.lt-active]="liveTextWritingMode === 'vertical-rl'"
+                        (click)="liveTextWritingMode = 'vertical-rl'; onLiveTextStyleChange('writingMode', 'vertical-rl')"
+                        [style.background]="liveTextWritingMode === 'vertical-rl' ? '#9B59B6' : '#333'"
+                        style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;"
+                        title="Vertical text (top-to-bottom, right-to-left columns)">V</button>
+            </div>
+        </div>
+        <!-- Alignment -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Align</label>
+            <div style="display: flex; gap: 2px;">
+                <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'left'"
+                        (click)="onLiveTextAlignChange('left')"
+                        [style.background]="liveTextAlign === 'left' ? '#9B59B6' : '#333'"
+                        style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Left align">L</button>
+                <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'center'"
+                        (click)="onLiveTextAlignChange('center')"
+                        [style.background]="liveTextAlign === 'center' ? '#9B59B6' : '#333'"
+                        style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Center align">C</button>
+                <button class="lt-seg-btn" [class.lt-active]="liveTextAlign === 'right'"
+                        (click)="onLiveTextAlignChange('right')"
+                        [style.background]="liveTextAlign === 'right' ? '#9B59B6' : '#333'"
+                        style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; cursor: pointer; font-size: 11px;" title="Right align">R</button>
+            </div>
+        </div>
+        <!-- Text Color -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Color</label>
+            <input type="color" [(ngModel)]="liveTextColor"
+                   (ngModelChange)="onLiveTextStyleChange('color', $event)"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+        </div>
+        <!-- Background Color -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Bg</label>
+            <input type="color" [(ngModel)]="liveTextBgColor" (ngModelChange)="onLiveTextBgChange()"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="liveTextBgAlpha" (ngModelChange)="onLiveTextBgChange()"
+                   style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+            <span style="font-size: 10px; color: #aaa; min-width: 28px; text-align: right;">{{ liveTextBgAlpha * 100 | number:'1.0-0' }}%</span>
+        </div>
+        <!-- Padding -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Padding</label>
+            <input type="range" min="0" max="48" step="1" [(ngModel)]="liveTextPadding"
+                   (ngModelChange)="onLiveTextStyleChange('padding', +$event)"
+                   style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+            <span style="font-size: 10px; color: #aaa; min-width: 20px; text-align: right;">{{ liveTextPadding }}</span>
+        </div>
+        <!-- Arc -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;" title="Bend text along an arc. 0 = flat, positive = arch up (∩), negative = arch down (∪).">Arc</label>
+            <input type="range" min="-180" max="180" step="1" [(ngModel)]="liveTextArcAngle"
+                   (ngModelChange)="onLiveTextStyleChange('arcAngle', +$event)"
+                   style="flex: 1; accent-color: #9B59B6; min-width: 0;">
+            <span style="font-size: 10px; color: #aaa; min-width: 28px; text-align: right;">{{ liveTextArcAngle }}°</span>
+        </div>
+
+        <!-- Effects Section (visible when HTML-in-Canvas is available) -->
+        <ng-container *ngIf="hasHtmlInCanvas">
+            <hr style="border-color: #444; margin: 6px 0;">
+            <div class="tool-label" style="font-size: 11px; margin-bottom: 4px;">Effects</div>
+            <!-- Effect chain -->
+            <div style="margin-bottom: 4px;">
+                <div *ngFor="let entry of liveTextEffectChain; let i = index"
+                     class="fx-chain-entry">
+                    <div style="display: flex; align-items: center; gap: 3px; margin-bottom: 3px;">
+                        <span style="color: #777; font-size: 10px; width: 14px;">{{ i + 1 }}</span>
+                        <select [ngModel]="entry.type"
+                                (ngModelChange)="onLiveTextEffectTypeChange(entry, $event)"
+                                style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 1px 3px; font-size: 10px;">
+                            <option *ngFor="let opt of textEffectTypeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+                        </select>
+                        <button (click)="moveLiveTextEffect(entry.id, -1)" style="background: #333; border: 1px solid #555; color: #aaa; padding: 0 4px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Move up">↑</button>
+                        <button (click)="moveLiveTextEffect(entry.id, 1)" style="background: #333; border: 1px solid #555; color: #aaa; padding: 0 4px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Move down">↓</button>
+                        <button (click)="removeLiveTextEffect(entry.id)" style="background: #333; border: 1px solid #555; color: #f77; padding: 0 5px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Remove">×</button>
+                    </div>
+                    <div style="padding-left: 18px;">
+                        <ng-container *ngIf="entry.type === 'chromatic-aberration'">
+                            <div class="fx-param-row"><label>Strength</label><input type="range" min="0" max="0.03" step="0.001" [ngModel]="entry.params['strength']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'strength', $event)"><span>{{ entry.params['strength'] | number:'1.3-3' }}</span></div>
+                            <div class="fx-param-row"><label>Angle</label><input type="range" min="0" max="6.28" step="0.1" [ngModel]="entry.params['angle']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'angle', $event)"><span>{{ entry.params['angle'] | number:'1.1-1' }}</span></div>
+                        </ng-container>
+                        <ng-container *ngIf="entry.type === 'glow'">
+                            <div class="fx-param-row"><label>Radius</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['radius']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'radius', +$event)"><span>{{ entry.params['radius'] }}</span></div>
+                            <div class="fx-param-row"><label>Intensity</label><input type="range" min="0.5" max="5" step="0.1" [ngModel]="entry.params['intensity']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'intensity', +$event)"><span>{{ entry.params['intensity'] | number:'1.1-1' }}</span></div>
+                            <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onLiveTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))"></div>
+                        </ng-container>
+                        <ng-container *ngIf="entry.type === 'wave'">
+                            <div class="fx-param-row"><label>Amplitude</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['amplitude']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'amplitude', +$event)"><span>{{ entry.params['amplitude'] }}</span></div>
+                            <div class="fx-param-row"><label>Frequency</label><input type="range" min="1" max="30" step="1" [ngModel]="entry.params['frequency']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'frequency', +$event)"><span>{{ entry.params['frequency'] }}</span></div>
+                            <div class="fx-param-row"><label>Speed</label><input type="range" min="0" max="5" step="0.1" [ngModel]="entry.params['speed']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'speed', +$event)"><span>{{ entry.params['speed'] | number:'1.1-1' }}</span></div>
+                        </ng-container>
+                        <ng-container *ngIf="entry.type === 'glitch'">
+                            <div class="fx-param-row"><label>Intensity</label><input type="range" min="0" max="1" step="0.05" [ngModel]="entry.params['intensity']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'intensity', +$event)"><span>{{ entry.params['intensity'] | number:'1.2-2' }}</span></div>
+                            <div class="fx-param-row"><label>Block</label><input type="range" min="2" max="32" step="1" [ngModel]="entry.params['blockSize']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'blockSize', +$event)"><span>{{ entry.params['blockSize'] }}</span></div>
+                        </ng-container>
+                        <ng-container *ngIf="entry.type === 'outline'">
+                            <div class="fx-param-row"><label>Thickness</label><input type="range" min="1" max="10" step="1" [ngModel]="entry.params['thickness']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'thickness', +$event)"><span>{{ entry.params['thickness'] }}</span></div>
+                            <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(entry.params['color'])" (ngModelChange)="onLiveTextEffectParamChange(entry, 'color', fxHexToColor($event, entry.params['color']?.[3] ?? 1))"></div>
+                            <div class="fx-param-row"><label>Offset X</label><input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[0] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'offset', [+$event, entry.params['offset']?.[1] ?? 0])"><span>{{ (entry.params['offset']?.[0] ?? 0) | number:'1.1-1' }}</span></div>
+                            <div class="fx-param-row"><label>Offset Y</label><input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[1] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'offset', [entry.params['offset']?.[0] ?? 0, +$event])"><span>{{ (entry.params['offset']?.[1] ?? 0) | number:'1.1-1' }}</span></div>
+                            <div class="fx-param-row"><label>Gap</label><input type="range" min="0" max="5" step="0.5" [ngModel]="entry.params['gap'] ?? 0" (ngModelChange)="onLiveTextEffectParamChange(entry, 'gap', +$event)"><span>{{ entry.params['gap'] ?? 0 }}</span></div>
+                        </ng-container>
+                        <ng-container *ngIf="entry.type === 'feather'">
+                            <div class="fx-param-row"><label>Mode</label>
+                                <button (click)="onLiveTextEffectParamChange(entry, 'mode', 'linear')" [style.background]="entry.params['mode'] === 'linear' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Linear</button>
+                                <button (click)="onLiveTextEffectParamChange(entry, 'mode', 'radial')" [style.background]="entry.params['mode'] === 'radial' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Radial</button>
+                            </div>
+                            <div class="fx-param-row" *ngIf="entry.params['mode'] === 'linear'"><label>Angle</label><input type="range" min="0" max="360" step="1" [ngModel]="entry.params['angle']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'angle', +$event)"><span>{{ entry.params['angle'] }}°</span></div>
+                            <div class="fx-param-row"><label>Start</label><input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['start']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'start', +$event)"><span>{{ entry.params['start'] | number:'1.2-2' }}</span></div>
+                            <div class="fx-param-row"><label>End</label><input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['end']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'end', +$event)"><span>{{ entry.params['end'] | number:'1.2-2' }}</span></div>
+                        </ng-container>
+                    </div>
+                </div>
+            </div>
+            <button (click)="addLiveTextEffect()"
+                    style="width: 100%; background: #333; border: 1px solid #555; border-radius: 3px; color: #aaa; padding: 3px; cursor: pointer; font-size: 10px; margin-bottom: 6px;">+ Add Effect</button>
+
+            <!-- Custom Shader -->
+            <hr style="border-color: #444; margin: 6px 0;">
+            <div class="tool-label" style="font-size: 11px; margin-bottom: 4px;">Custom Shader</div>
+            <!-- Params (1–4, shown on demand) — declared before the code editor -->
+            <div class="fx-param-row">
+                <label>Variable A</label>
+                <input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamA" (ngModelChange)="onCustomShaderParamChange()">
+                <span>{{ customShaderParamA | number:'1.1-1' }}</span>
+                <button *ngIf="customShaderParamCount === 1" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+            </div>
+            <ng-container *ngIf="customShaderParamCount >= 2">
+                <div class="fx-param-row">
+                    <label>Variable B</label>
+                    <input type="range" min="-100" max="100" step="0.1" [(ngModel)]="customShaderParamB" (ngModelChange)="onCustomShaderParamChange()">
+                    <span>{{ customShaderParamB | number:'1.1-1' }}</span>
+                    <button *ngIf="customShaderParamCount === 2" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+                    <button *ngIf="customShaderParamCount === 2" (click)="customShaderParamB = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                </div>
+            </ng-container>
+            <ng-container *ngIf="customShaderParamCount >= 3">
+                <div class="fx-param-row">
+                    <label>Variable C</label>
+                    <input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamC" (ngModelChange)="onCustomShaderParamChange()">
+                    <span>{{ customShaderParamC | number:'1.2-2' }}</span>
+                    <button *ngIf="customShaderParamCount === 3" (click)="customShaderParamCount = customShaderParamCount + 1" style="margin-left:4px;background:#333;border:1px solid #555;color:#aaa;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Add variable">+</button>
+                    <button *ngIf="customShaderParamCount === 3" (click)="customShaderParamC = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                </div>
+            </ng-container>
+            <ng-container *ngIf="customShaderParamCount >= 4">
+                <div class="fx-param-row">
+                    <label>Variable D</label>
+                    <input type="range" min="-100" max="100" step="0.01" [(ngModel)]="customShaderParamD" (ngModelChange)="onCustomShaderParamChange()">
+                    <span>{{ customShaderParamD | number:'1.2-2' }}</span>
+                    <button (click)="customShaderParamD = 0; onCustomShaderParamChange(); customShaderParamCount = customShaderParamCount - 1" style="margin-left:2px;background:#333;border:1px solid #555;color:#f77;padding:0 5px;cursor:pointer;font-size:10px;border-radius:2px;" title="Remove">×</button>
+                </div>
+            </ng-container>
+            <textarea [(ngModel)]="customShaderCode"
+                      placeholder="// WGSL effect body..."
+                      style="width: 100%; height: 80px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #555; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 10px; padding: 4px; resize: vertical; box-sizing: border-box; margin-top: 6px;"></textarea>
+            <div style="display: flex; gap: 3px; margin: 4px 0;">
+                <button (click)="validateCustomShader()" style="flex: 1; background: #333; border: 1px solid #555; border-radius: 3px; color: #aaa; padding: 3px; cursor: pointer; font-size: 10px;">Validate</button>
+                <button class="lt-apply-btn" (click)="applyCustomShader()" style="flex: 1; background: #9B59B6; border: none; border-radius: 3px; color: #fff; padding: 3px; cursor: pointer; font-size: 10px;">Apply</button>
+                <button class="lt-danger-btn" (click)="removeCustomShader()" style="background: #333; border: 1px solid #555; border-radius: 3px; color: #f77; padding: 3px 6px; cursor: pointer; font-size: 10px;">×</button>
+            </div>
+            <div *ngIf="customShaderStatus"
+                 class="shader-status"
+                 [class.success]="customShaderStatusType === 'success'"
+                 [class.error]="customShaderStatusType === 'error'"
+                 style="font-size: 10px; padding: 3px 4px; border-radius: 3px; margin-bottom: 4px; white-space: pre-wrap;">{{ customShaderStatus }}</div>
+            <div style="display: flex; align-items: center; gap: 6px; margin: 4px 0;">
+                <input type="checkbox" [(ngModel)]="customShaderAdvanced">
+                <label style="color: #888; font-size: 10px;">Advanced mode (raw WGSL)</label>
+            </div>
+        </ng-container>
+
+        <!-- Action buttons -->
+        <hr style="border-color: #444; margin: 6px 0;">
+        <div style="display: flex; gap: 4px;">
+            <button class="lt-flatten-btn" (click)="flattenLiveText()"
+                    style="flex: 1; background: #e67e22; border: none; border-radius: 4px; color: #fff; padding: 5px 8px; cursor: pointer; font-size: 11px;"
+                    title="Flatten the live text node onto the active raster layer (destructive).">Flatten to Layer</button>
+        </div>
+    </div>
+</div>

@@ -4,6 +4,7 @@ import { Observable, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, switchMap, take, skip } from 'rxjs/operators';
 import { AuthService } from '../services/auth/auth.service';
 import { SyncStatusService } from '../services/auth/sync-status.service';
+import { ConfigurationService } from '../services/api/configuration.service';
 
 
 @Injectable({
@@ -16,9 +17,20 @@ export class AuthInterceptor implements HttpInterceptor {
   constructor(
     private authService: AuthService,
     private syncStatusService: SyncStatusService,
+    private configService: ConfigurationService,
   ) { }
 
+  /** Requests to our own API (absolute apiUri or a relative /api path) — never third-party hosts such as blob storage,
+   *  where a custom header would force a CORS preflight they may reject. */
+  private _isApi(url: string): boolean {
+    const api = (this.configService.systemConfiguration.apiUri ?? '').replace(/\/+$/, '');
+    return (!!api && url.startsWith(api)) || url.startsWith('/api') || url.startsWith('api/');
+  }
+
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    // CSRF guard: the server rejects cookie-authenticated, state-changing API calls without this header (a cross-site page
+    // can't send it without a CORS preflight, which only our frontend origin passes).
+    if (this._isApi(req.url)) req = req.clone({ setHeaders: { 'X-Requested-With': 'XMLHttpRequest' } });
 
     // Skip token handling for auth/email endpoints
     if (req.url.includes("signin") || req.url.includes("email")) {

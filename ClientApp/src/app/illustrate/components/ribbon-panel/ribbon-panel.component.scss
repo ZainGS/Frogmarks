@@ -1,0 +1,42 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-ribbon-point-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+
+    input[type="number"] {
+        background: #333;
+        border: 1px solid #555;
+        color: #ddd;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 11px;
+        width: 52px;
+        &:focus { outline: 1px solid #9B59B6; }
+    }
+}
+
+.scene3d-ribbon-pt-idx {
+    font-size: 10px;
+    color: #888;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.scene3d-del-pt {
+    padding: 1px 6px !important;
+    font-size: 13px !important;
+    line-height: 1;
+}
+
+.scene3d-path-mode-hint {
+    font-size: 10px;
+    color: #888;
+    font-style: italic;
+    padding: 1px 0;
+}

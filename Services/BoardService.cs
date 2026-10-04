@@ -4,10 +4,7 @@ using Frogmarks.Data;
 using Frogmarks.Models;
 using Frogmarks.Models.Board;
 using Frogmarks.Models.Team;
-using Frogmarks.SignalR.Hubs;
-using Frogmarks.SignalR.Optimizers;
 using Frogmarks.Utilities;
-using Frogmarks.WebSockets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
@@ -26,16 +23,17 @@ namespace Frogmarks.Services
     {
         private readonly IApplicationDbContext _context;
         private readonly IMapper _mapper;
-        private readonly BatchService _batchService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IBlobStorageProvider _blobStorage;
         private readonly string _containerName;
 
-        public BoardService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage, IConfiguration configuration)
+        private readonly IResourceAccessService _access;
+
+        public BoardService(IApplicationDbContext context, IMapper mapper, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage, IConfiguration configuration, IResourceAccessService access)
         {
+            _access = access;
             _context = context;
             _mapper = mapper;
-            _batchService = batchService;
             _httpContextAccessor = httpContextAccessor;
             _blobStorage = blobStorage;
             _containerName = configuration["BlobStorage:BoardThumbnailContainer"] ?? "board-thumbnails-dev";
@@ -45,7 +43,7 @@ namespace Frogmarks.Services
         {
             try
             {
-                var boards = await _context.Boards.ToListAsync();
+                var boards = await (await _access.AccessibleBoards(_context.Boards)).ToListAsync();   // was every board
                 return new ResultModel<IEnumerable<Board>>(ResultType.Success, resultObject: boards);
             }
             catch (Exception ex)
@@ -57,6 +55,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<BoardDto>> GetBoardById(long id)
         {
+            if (!(await _access.CanAccessBoardAsync(id))) return new ResultModel<BoardDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var board = await _context.Boards
@@ -120,6 +119,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<BoardDto>> GetBoardByUid(Guid uid)
         {
+            if (!(await _access.CanAccessBoardAsync(uid))) return new ResultModel<BoardDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 //var board = await _context.Boards.AsNoTracking().FirstOrDefaultAsync(b => b.UUID == uid);
@@ -209,6 +209,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Board>> UpdateBoard(BoardDto boardDto)
         {
+            if (!(await _access.CanAccessBoardAsync(boardDto.Id))) return new ResultModel<Board>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var existingBoard = await _context.Boards.FindAsync(boardDto.Id);
@@ -218,11 +219,14 @@ namespace Frogmarks.Services
                 }
 
                 // Map the changes from boardDto to the existingBoard
+                // Ownership / sharing fields are not editable through this endpoint (audit Phase 1.2: mass assignment)
+                var keepTeamId = existingBoard.TeamId;
+                var keepPermissionsId = existingBoard.PermissionsId;
                 _mapper.Map(boardDto, existingBoard);
+                existingBoard.TeamId = keepTeamId;
+                existingBoard.PermissionsId = keepPermissionsId;
                 await _context.SaveChangesAsync();
 
-                // Alert Batch Service of updated board item
-                _batchService.Batch(BatchTypes.Board, boardDto.Id);
 
                 return new ResultModel<Board>(ResultType.Success, resultObject: existingBoard);
             }
@@ -235,6 +239,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> SaveBoardSceneGraph(long boardId, string sceneGraphData)
         {
+            if (!(await _access.CanAccessBoardAsync(boardId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var board = await _context.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
             if (board == null) return new ResultModel<string>(ResultType.NotFound, "Board not found.");
 
@@ -247,6 +252,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> LoadBoardSceneGraph(long boardId)
         {
+            if (!(await _access.CanAccessBoardAsync(boardId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var board = await _context.Boards
                 .Where(b => b.Id == boardId)
                 .Select(b => b.SceneGraphData)
@@ -259,6 +265,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Board>> FavoritedBoard(BoardDto boardDto)
         {
+            if (!(await _access.CanAccessBoardAsync(boardDto.Id))) return new ResultModel<Board>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var existingBoard = await _context.Boards.FindAsync(boardDto.Id);
@@ -268,12 +275,22 @@ namespace Frogmarks.Services
                 }
 
                 // Map the changes from boardDto to the existingBoard
+                // Ownership / sharing fields are not editable through this endpoint (audit Phase 1.2: mass assignment)
+                var keepTeamId = existingBoard.TeamId;
+                var keepPermissionsId = existingBoard.PermissionsId;
                 _mapper.Map(boardDto, existingBoard);
+                existingBoard.TeamId = keepTeamId;
+                existingBoard.PermissionsId = keepPermissionsId;
 
                 var userId = GetCurrentUserId();
 
                 //
-                var teamUser = await _context.TeamUsers.SingleOrDefaultAsync(tu => tu.ApplicationUserId == userId);
+                // One membership per team: SingleOrDefault threw as soon as the user was in two teams (audit Phase 2.5).
+                // Favorite on the membership of the team the client is showing, else the item's team, else any.
+                var memberships = await _context.TeamUsers.Where(tu => tu.ApplicationUserId == userId).ToListAsync();
+                var teamUser = memberships.FirstOrDefault(tu => tu.TeamId == boardDto.TeamId)
+                    ?? memberships.FirstOrDefault(tu => tu.TeamId == existingBoard.TeamId)
+                    ?? memberships.FirstOrDefault();
 
                 if (boardDto.IsFavorite)
                 {
@@ -307,6 +324,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Board>> DeleteBoard(long id)
         {
+            if (!(await _access.CanAccessBoardAsync(id))) return new ResultModel<Board>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var board = await _context.Boards.FindAsync(id);
@@ -338,8 +356,7 @@ namespace Frogmarks.Services
                     return new ResultModel<IEnumerable<BoardDto>>(ResultType.Unauthorized, "User not found");
                 }
 
-                var query = _context.Boards
-                    .AsNoTracking()
+                var query = (await _access.AccessibleBoards(_context.Boards.AsNoTracking()))   // was everyone's boards
                     .Where(b => teamId <= 0 || b.TeamId == teamId);
 
                 query = query.Where(b => b.IsArchived == isArchived);
@@ -535,8 +552,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadThumbnail(string boardUid, IFormFile thumbnail, bool? isCustom = null)
         {
+            if (!(Guid.TryParse(boardUid, out var boardGuid) && await _access.CanAccessBoardAsync(boardGuid))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(boardUid))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 if (thumbnail == null || thumbnail.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
@@ -608,6 +628,7 @@ namespace Frogmarks.Services
             long? targetTeamId,
             bool copyThumbnail)
         {
+            if (!(await _access.CanAccessBoardAsync(sourceBoardId) && (targetTeamId == null || await _access.IsMemberOfTeamAsync(targetTeamId.Value)))) return new ResultModel<BoardDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var source = await _context.Boards
                 .FirstOrDefaultAsync(b => b.Id == sourceBoardId);
 
@@ -665,6 +686,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<BoardDto>> RenameBoard(long boardId, string newName)
         {
+            if (!(await _access.CanAccessBoardAsync(boardId))) return new ResultModel<BoardDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var board = await _context.Boards.FindAsync(boardId);
             if (board == null)
                 return new ResultModel<BoardDto>(ResultType.NotFound, "Board not found");

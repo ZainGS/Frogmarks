@@ -118,7 +118,7 @@ export class RasterAnimationService {
   // ── Animation mode ──────────────────────────────────────────
 
   setAnimationEnabled(enabled: boolean): void {
-    this.sm?.setAnimationEnabled?.(enabled);
+    this.sm?.setAnimationEnabled(enabled);
     this._animationEnabled$.next(enabled);
     if (enabled) {
       this._subscribeEvents();
@@ -135,33 +135,33 @@ export class RasterAnimationService {
   // ── Frame navigation ────────────────────────────────────────
 
   setCurrentFrame(frame: number): void {
-    this.sm?.setCurrentFrame?.(frame);
+    this.sm?.setCurrentFrame(frame);
     this._currentFrame$.next(frame);
   }
 
   getCurrentFrame(): number {
-    return this.sm?.getCurrentFrame?.() ?? this._currentFrame$.value;
+    return this.sm?.getCurrentFrame() ?? this._currentFrame$.value;
   }
 
   nextFrame(): void {
-    this.sm?.nextFrame?.();
+    this.sm?.nextFrame();
     this._currentFrame$.next(this.getCurrentFrame());
   }
 
   prevFrame(): void {
-    this.sm?.prevFrame?.();
+    this.sm?.prevFrame();
     this._currentFrame$.next(this.getCurrentFrame());
   }
 
   // ── Playback ────────────────────────────────────────────────
 
   togglePlayPause(): void {
-    this.sm?.togglePlayPause?.();
+    this.sm?.togglePlayPause();
     this._isPlaying$.next(!this._isPlaying$.value);
   }
 
   stopPlayback(): void {
-    this.sm?.stopPlayback?.();
+    this.sm?.stopPlayback();
     this._isPlaying$.next(false);
     this._currentFrame$.next(1);
   }
@@ -169,12 +169,12 @@ export class RasterAnimationService {
   // ── FPS & frame count ───────────────────────────────────────
 
   setFps(fps: number): void {
-    this.sm?.setFps?.(fps);
+    this.sm?.setFps(fps);
     this._fps$.next(fps);
   }
 
   setFrameCount(count: number): void {
-    this.sm?.setFrameCount?.(count);
+    this.sm?.setFrameCount(count);
     this._frameCount$.next(count);
     if (this._playRangeEnd$.value > count) {
       this._playRangeEnd$.next(count);
@@ -182,26 +182,26 @@ export class RasterAnimationService {
   }
 
   addFrames(count: number): void {
-    this.sm?.addFrames?.(count);
-    const newTotal = (this.sm?.getFrameCount?.() as number) ?? this._frameCount$.value + count;
+    this.sm?.addFrames(count);
+    const newTotal = (this.sm?.getFrameCount() as number) ?? this._frameCount$.value + count;
     this._frameCount$.next(newTotal);
   }
 
   setLoopMode(mode: LoopMode): void {
-    this.sm?.setLoopMode?.(mode);
+    this.sm?.setLoopMode(mode);
     this._loopMode$.next(mode);
   }
 
   setPlayRange(start: number, end: number): void {
     this._playRangeStart$.next(start);
     this._playRangeEnd$.next(end);
-    (this.sm as any)?.setPlayRange?.(start, end);
+    this.sm?.setPlayRange(start, end);
   }
 
   // ── Onion skin ──────────────────────────────────────────────
 
   setOnionSkin(config: OnionSkinConfig): void {
-    this.sm?.setOnionSkin?.(config);
+    this.sm?.setOnionSkin(config);
     this._onionSkin$.next({ ...config });
   }
 
@@ -220,12 +220,12 @@ export class RasterAnimationService {
     if (animated && !this._animationEnabled$.value) {
       this.setAnimationEnabled(true);
     }
-    this.sm?.setLayerAnimated?.(layerId, animated);
+    this.sm?.setLayerAnimated(layerId, animated);
     this.refreshTimeline();
   }
 
   isLayerAnimated(layerId: string): boolean {
-    return this.sm?.isLayerAnimated?.(layerId) ?? false;
+    return this.sm?.isLayerAnimated(layerId) ?? false;
   }
 
   // ── Cel management ──────────────────────────────────────────
@@ -247,9 +247,9 @@ export class RasterAnimationService {
     const isAnim = this.isLayerAnimated(layerId);
     if (!isAnim) {
       console.warn(`[AnimService] addCelAtFrame: layer ${layerId} not animated, marking animated now`);
-      this.sm?.setLayerAnimated?.(layerId, true);
+      this.sm?.setLayerAnimated(layerId, true);
     }
-    const celId = this.sm?.addCelAtFrame?.(layerId, frame) ?? null;
+    const celId = this.sm?.addCelAtFrame(layerId, frame) ?? null;
     if (!celId) {
       console.warn(`[AnimService] addCelAtFrame returned null for layer=${layerId} frame=${frame}`);
     }
@@ -258,20 +258,20 @@ export class RasterAnimationService {
   }
 
   deleteCel(layerId: string, celId: string): void {
-    this.sm?.deleteCel?.(layerId, celId);
+    this.sm?.deleteCel(layerId, celId);
     this.refreshTimeline();
   }
 
   insertFrame(at: number): void {
-    this.sm?.insertFrame?.(at);
-    const engineCount = (this.sm?.getFrameCount?.() as number);
+    this.sm?.insertFrame(at);
+    const engineCount = (this.sm?.getFrameCount() as number);
     if (engineCount != null) this._frameCount$.next(engineCount);
     this.refreshTimeline();
   }
 
   deleteFrame(at: number): void {
-    this.sm?.deleteFrame?.(at);
-    const engineCount = (this.sm?.getFrameCount?.() as number);
+    this.sm?.deleteFrame(at);
+    const engineCount = (this.sm?.getFrameCount() as number);
     if (engineCount != null) this._frameCount$.next(engineCount);
     this.refreshTimeline();
   }
@@ -279,43 +279,54 @@ export class RasterAnimationService {
   // ── Cel operations (duplicate / move / swap / type / duration) ──
 
   duplicateCel(layerId: string, celId: string, targetFrame: number): string | null {
-    const newCelId = (this.sm as any)?.duplicateCel?.(layerId, celId, targetFrame) ?? null;
+    const newCelId = this.sm?.duplicateCel(layerId, celId, targetFrame) ?? null;
     this.refreshTimeline();
     return newCelId;
   }
 
   moveCel(layerId: string, celId: string, targetFrame: number): void {
-    (this.sm as any)?.moveCel?.(layerId, celId, targetFrame);
+    this.sm?.moveCel(layerId, celId, targetFrame);
     this.refreshTimeline();
   }
 
   swapCels(layerId: string, celIdA: string, celIdB: string): void {
-    (this.sm as any)?.swapCels?.(layerId, celIdA, celIdB);
+    this.sm?.swapCels(layerId, celIdA, celIdB);
     this.refreshTimeline();
   }
 
   setCelDuration(layerId: string, celId: string, duration: number): void {
-    (this.sm as any)?.setCelDuration?.(layerId, celId, duration);
+    this.sm?.setCelDuration(layerId, celId, duration);
     this.refreshTimeline();
   }
 
   setCelType(layerId: string, celId: string, celType: CelType): void {
-    (this.sm as any)?.setCelType?.(layerId, celId, celType);
+    this.sm?.setCelType(layerId, celId, celType);
     this.refreshTimeline();
   }
 
   getCels(layerId: string): CelInfo[] {
-    return (this.sm as any)?.getCels?.(layerId) ?? [];
+    // Engine cels are { startFrame, celType }; map to the host CelInfo shape (frame / isKey)
+    return (this.sm?.getCels(layerId) ?? []).map(c => RasterAnimationService._toCelInfo(c));
+  }
+
+  private static _toCelInfo(c: any): CelInfo {
+    return {
+      id: c.id,
+      frame: c.startFrame ?? c.frame ?? 1,
+      duration: c.duration ?? 1,
+      isKey: c.celType === 'key' || c.isKey === true,
+      celType: c.celType ?? (c.isKey ? 'key' : 'inbetween'),
+    };
   }
 
   // ── Flood fill ──────────────────────────────────────────────
 
   async floodFill(x: number, y: number, color: string, options?: FloodFillOptions): Promise<boolean> {
-    return await (this.sm as any)?.floodFill?.(x, y, color, options) ?? false;
+    return await this.sm?.floodFill(x, y, color, options) ?? false;
   }
 
   async fillSelection(color: string): Promise<void> {
-    await (this.sm as any)?.fillSelection?.(color);
+    await this.sm?.fillSelection(color);
   }
 
   // ── Timeline data ───────────────────────────────────────────
@@ -331,19 +342,13 @@ export class RasterAnimationService {
     if (this._suppressRefresh) return;
     const sm = this.sm;
     if (!sm) { console.warn('[AnimService] refreshTimeline: no ShapeManager instance'); return; }
-    const layers: any[] = (sm.getRasterLayers?.() ?? []).filter(
+    const layers: any[] = (sm.getRasterLayers() ?? []).filter(
       (l: any) => l.type !== '3d-scene' && l.type !== '3d-mesh' && l.type !== '3DMesh' && l.name !== 'Mesh3D'
     );
     const timelineLayers: TimelineLayerInfo[] = layers.map((l: any) => {
-      const animated = sm.isLayerAnimated?.(l.id) ?? false;
-      const rawCels: any[] = (sm as any).getCels?.(l.id) ?? [];
-      const cels: CelInfo[] = rawCels.map((c: any) => ({
-        id: c.id,
-        frame: c.startFrame ?? c.frame ?? 1,
-        duration: c.duration ?? 1,
-        isKey: c.celType === 'key' || c.isKey === true,
-        celType: c.celType ?? (c.isKey ? 'key' : 'inbetween'),
-      }));
+      const animated = sm.isLayerAnimated(l.id) ?? false;
+      const rawCels: any[] = sm.getCels(l.id) ?? [];
+      const cels: CelInfo[] = rawCels.map(c => RasterAnimationService._toCelInfo(c));
       return { id: l.id, name: l.name ?? 'Layer', animated, cels };
     });
     const json = JSON.stringify(timelineLayers);
@@ -368,10 +373,11 @@ export class RasterAnimationService {
         this.zone.run(() => {
           switch (event.type) {
             case 'playback-state-changed':
-              this._isPlaying$.next((sm as any).isPlaying?.() ?? false);
+              // (sm.isPlaying() never existed — this always reported 'not playing')
+              this._isPlaying$.next(sm.getTimelineState()?.playbackState === 'playing');
               break;
             case 'timeline-changed':
-              this._frameCount$.next(sm.getFrameCount?.() ?? 24);
+              this._frameCount$.next(sm.getFrameCount() ?? 24);
               this.refreshTimeline();
               break;
             case 'cel-added':
@@ -380,7 +386,7 @@ export class RasterAnimationService {
               this.refreshTimeline();
               break;
             case 'onion-skin-changed':
-              const cfg = sm.getOnionSkin?.();
+              const cfg = sm.getOnionSkin();
               if (cfg) this._onionSkin$.next(cfg);
               break;
           }

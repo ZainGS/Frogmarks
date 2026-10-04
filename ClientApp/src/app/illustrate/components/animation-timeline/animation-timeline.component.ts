@@ -18,6 +18,14 @@ import {
   CelInfo,
   CelType,
 } from '../../../shared/services/raster/raster-animation.service';
+import ShapeManager from '@zaings/salsa/shape-manager';
+import { EditorStateService } from '../../services/editor-state.service';
+
+/** Types taken from the engine's own signatures so they track Salsa automatically. */
+type CameraTrackKey = Parameters<ShapeManager['removeCameraKeyframe3D']>[0];
+type KeyframeEasing = Parameters<ShapeManager['setMeshKeyframe3D']>[4];
+/** Camera rows only ever carry camera track keys; this names that narrowing in one place. */
+const camKey = (k: string): CameraTrackKey => k as CameraTrackKey;
 
 @Component({
   selector: 'app-animation-timeline',
@@ -110,7 +118,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   @Input() mesh3dAllTracks: { meshId: string; name: string; tracks: any; isCamera?: boolean }[] = [];
 
   /** Salsa ShapeManager — passed through to the export dialog. */
-  @Input() shapeManager: any;
+  @Input() shapeManager: ShapeManager;
 
   /** Emitted after any keyframe is added, deleted, moved, or cleared — parent should refresh track data. */
   @Output() keyframesChanged = new EventEmitter<void>();
@@ -279,17 +287,17 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
     this.contextMenuVisible = false; // easing menu replaces the cel context menu
   }
 
-  setKfEasing(easing: string): void {
+  setKfEasing(easing: KeyframeEasing): void {
     if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
     const track: any[] = entry?.tracks?.[this.kfContextTrackKey] ?? [];
     const kf = track.find((k: any) => k.frame === this.kfContextFrame);
     if (!kf) { this.showEasingMenu = false; return; }
     if (this.kfContextIsCamera) {
-      sm.setCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame, kf.value, easing);
+      sm.setCameraKeyframe3D(camKey(this.kfContextTrackKey), this.kfContextFrame, kf.value, easing);
     } else {
-      sm.setMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame, kf.value, easing);
+      sm.setMeshKeyframe3D(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame, kf.value, easing);
     }
     this.kfContextCurrentEasing = easing;
     this.showEasingMenu = false;
@@ -298,11 +306,11 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   deleteKeyframe(): void {
     if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     if (this.kfContextIsCamera) {
-      sm.removeCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame);
+      sm.removeCameraKeyframe3D(camKey(this.kfContextTrackKey), this.kfContextFrame);
     } else {
-      sm.removeMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
+      sm.removeMeshKeyframe3D(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
     }
     this.showEasingMenu = false;
     this.keyframesChanged.emit();
@@ -310,17 +318,17 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   clearAllKeyframes(): void {
     if (!this.shapeManager || !this.kfContextMeshId) { this.showEasingMenu = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     if (this.kfContextIsCamera) {
       const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
       for (const def of this.camera3dTrackDefs) {
         const track: any[] = [...(entry?.tracks?.[def.key] ?? [])];
         for (const kf of track) {
-          sm.removeCameraKeyframe3D?.(def.key, kf.frame);
+          sm.removeCameraKeyframe3D(camKey(def.key), kf.frame);
         }
       }
     } else {
-      sm.clearMeshKeyframeTracks3D?.(this.kfContextMeshId);
+      sm.clearMeshKeyframeTracks3D(this.kfContextMeshId);
     }
     this.showEasingMenu = false;
     this.keyframesChanged.emit();
@@ -342,21 +350,21 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   confirmKfFrameAction(): void {
     if (!this.shapeManager || !this.kfContextMeshId) { this.showKfFramePrompt = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     const entry = this.mesh3dAllTracks.find(e => e.meshId === this.kfContextMeshId);
     const track: any[] = entry?.tracks?.[this.kfContextTrackKey] ?? [];
     const kf = track.find((k: any) => k.frame === this.kfContextFrame);
     if (!kf) { this.showKfFramePrompt = false; return; }
     const target = this.kfFramePromptTarget;
     if (this.kfContextIsCamera) {
-      sm.setCameraKeyframe3D?.(this.kfContextTrackKey, target, kf.value, kf.easing);
+      sm.setCameraKeyframe3D(camKey(this.kfContextTrackKey), target, kf.value, kf.easing);
       if (this.kfFramePromptMode === 'move') {
-        sm.removeCameraKeyframe3D?.(this.kfContextTrackKey, this.kfContextFrame);
+        sm.removeCameraKeyframe3D(camKey(this.kfContextTrackKey), this.kfContextFrame);
       }
     } else {
-      sm.setMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, target, kf.value, kf.easing);
+      sm.setMeshKeyframe3D(this.kfContextMeshId, this.kfContextTrackKey, target, kf.value, kf.easing);
       if (this.kfFramePromptMode === 'move') {
-        sm.removeMeshKeyframe3D?.(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
+        sm.removeMeshKeyframe3D(this.kfContextMeshId, this.kfContextTrackKey, this.kfContextFrame);
       }
     }
     this.showKfFramePrompt = false;
@@ -384,14 +392,14 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   clearTrackKeyframes(): void {
     if (!this.shapeManager || !this.trackMenuMeshId) { this.showTrackMenu = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     const entry = this.mesh3dAllTracks.find(e => e.meshId === this.trackMenuMeshId);
     const track: any[] = [...(entry?.tracks?.[this.trackMenuTrackKey] ?? [])];
     for (const kf of track) {
       if (this.trackMenuIsCamera) {
-        sm.removeCameraKeyframe3D?.(this.trackMenuTrackKey, kf.frame);
+        sm.removeCameraKeyframe3D(camKey(this.trackMenuTrackKey), kf.frame);
       } else {
-        sm.removeMeshKeyframe3D?.(this.trackMenuMeshId, this.trackMenuTrackKey, kf.frame);
+        sm.removeMeshKeyframe3D(this.trackMenuMeshId, this.trackMenuTrackKey, kf.frame);
       }
     }
     this.showTrackMenu = false;
@@ -414,7 +422,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   deleteSelectedKeyframes(): void {
     if (!this.shapeManager) return;
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     for (const key of [...this.selectedKfKeys]) {
       const parts = key.split(':');
       const meshId = parts[0];
@@ -422,9 +430,9 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       const frame = +parts[2];
       const entry = this.mesh3dAllTracks.find(e => e.meshId === meshId);
       if (entry?.isCamera) {
-        sm.removeCameraKeyframe3D?.(trackKey, frame);
+        sm.removeCameraKeyframe3D(camKey(trackKey), frame);
       } else {
-        sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+        sm.removeMeshKeyframe3D(meshId, trackKey, frame);
       }
     }
     this.selectedKfKeys.clear();
@@ -438,7 +446,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   confirmKfBulkMove(): void {
     if (!this.shapeManager) { this.showKfBulkMovePrompt = false; return; }
-    const sm = this.shapeManager as any;
+    const sm = this.shapeManager;
     const keys = [...this.selectedKfKeys];
     const minFrame = Math.min(...keys.map(k => +k.split(':')[2]));
     const delta = this.kfBulkMoveTarget - minFrame;
@@ -453,11 +461,11 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       const kf = track.find((k: any) => k.frame === frame);
       if (!kf) continue;
       if (entry?.isCamera) {
-        sm.setCameraKeyframe3D?.(trackKey, newFrame, kf.value, kf.easing);
-        sm.removeCameraKeyframe3D?.(trackKey, frame);
+        sm.setCameraKeyframe3D(camKey(trackKey), newFrame, kf.value, kf.easing);
+        sm.removeCameraKeyframe3D(camKey(trackKey), frame);
       } else {
-        sm.setMeshKeyframe3D?.(meshId, trackKey, newFrame, kf.value, kf.easing);
-        sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+        sm.setMeshKeyframe3D(meshId, trackKey, newFrame, kf.value, kf.easing);
+        sm.removeMeshKeyframe3D(meshId, trackKey, frame);
       }
     }
     this.selectedKfKeys.clear();
@@ -504,18 +512,18 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       if (this.kfDragging && this.kfDragGhostFrame !== this.kfDragFromFrame) {
-        const sm = this.shapeManager as any;
+        const sm = this.shapeManager;
         const entry = this.mesh3dAllTracks.find(en => en.meshId === meshId);
         const track: any[] = entry?.tracks?.[trackKey] ?? [];
         const kf = track.find((k: any) => k.frame === frame);
         if (kf && sm) {
           const targetFrame = this.kfDragGhostFrame;
           if (isCamera) {
-            sm.setCameraKeyframe3D?.(trackKey, targetFrame, kf.value, kf.easing);
-            if (!this.kfDragIsCopy) sm.removeCameraKeyframe3D?.(trackKey, frame);
+            sm.setCameraKeyframe3D(camKey(trackKey), targetFrame, kf.value, kf.easing);
+            if (!this.kfDragIsCopy) sm.removeCameraKeyframe3D(camKey(trackKey), frame);
           } else {
-            sm.setMeshKeyframe3D?.(meshId, trackKey, targetFrame, kf.value, kf.easing);
-            if (!this.kfDragIsCopy) sm.removeMeshKeyframe3D?.(meshId, trackKey, frame);
+            sm.setMeshKeyframe3D(meshId, trackKey, targetFrame, kf.value, kf.easing);
+            if (!this.kfDragIsCopy) sm.removeMeshKeyframe3D(meshId, trackKey, frame);
           }
           this.keyframesChanged.emit();
         }
@@ -549,7 +557,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   private subs: Subscription[] = [];
 
-  constructor(public animService: RasterAnimationService) {}
+  constructor(public animService: RasterAnimationService, private editorState: EditorStateService) {}
 
   ngOnInit(): void {
     this.subs.push(
@@ -1002,6 +1010,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
+    if (this.editorState.playing) return;   // Play mode owns the keyboard (editor hotkeys off)
     // Don't capture when typing in inputs
     const tag = (event.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;

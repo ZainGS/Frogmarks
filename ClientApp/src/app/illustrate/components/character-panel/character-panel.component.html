@@ -1,0 +1,206 @@
+<div class="tool-label">EDIT CHARACTER</div>
+
+<!-- ── Back header ── -->
+<div *ngIf="charSection !== 'menu'" class="char-nav-header">
+    <button class="char-back-btn" (click)="charSection = 'menu'">← Back</button>
+    <span class="char-nav-title">{{ charSection | titlecase }}</span>
+</div>
+
+<!-- ── Category menu ── -->
+<ng-container *ngIf="charSection === 'menu'">
+    <div class="scene3d-material-row" style="margin-bottom:10px">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="look.charRenderStyle" (ngModelChange)="look.scene3dSetCharRenderStyle($event)">
+            <option value="default">Default (PBR)</option>
+            <option value="gouraud">Gouraud (PS1)</option>
+            <option value="cel">Cel / Toon</option>
+            <option value="cel-hd">Cel-HD</option>
+            <option value="sketch">Sketch</option>
+            <option value="ink">Ink / Manga</option>
+        </select>
+        <button class="scene3d-btn scene3d-btn-sm" (click)="look.scene3dSetRenderStyleAll(look.charRenderStyle)" title="Apply this style to every mesh in the scene">All</button>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Give this character the scene's Color Depth + Dither when Retro > Apply to is 'Opted-in only'.">Retro colour</label>
+        <input type="checkbox" [ngModel]="look.charRetroColor" (ngModelChange)="look.scene3dSetCharRetroColor($event)">
+        <span *ngIf="look.charRetroColor && scene3dRetroColorScope === 'all'" class="scene3d-hint" style="margin:0">scope is Everything</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="look.charRenderStyle === 'sketch'">
+        <label title="Scene-wide. 1 = off-white paper with a colour wash · 0 = full colour with pencil hatching · 0.75 = the classic look">Paper</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="scene3dSketchPaper" (ngModelChange)="sketchPaperEdited.emit($event)">
+        <span class="scene3d-val">{{ scene3dSketchPaper | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="look.charRenderStyle === 'cel' || look.charRenderStyle === 'cel-hd'">
+        <label title="Coloured anime shadows (surface colour x tint). Only visible in Cel / Cel-HD.">Toon shadows</label>
+        <input type="checkbox" [(ngModel)]="look.scene3dCharToonShadows" (ngModelChange)="look.scene3dSetCharToonShadows($event)">
+    </div>
+    <ng-container *ngIf="look.scene3dCharToonShadows">
+        <div class="scene3d-material-row">
+            <label title="Scene-wide look - affects every toon-shadowed object">Bands</label>
+            <input type="range" min="1" max="4" step="1" [(ngModel)]="look.scene3dToonBands" (ngModelChange)="look.scene3dToonShadowsChanged()">
+            <span class="scene3d-val">{{ look.scene3dToonBands }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Scene-wide. 0 = razor terminator">Edge softness</label>
+            <input type="range" min="0" max="0.5" step="0.01" [(ngModel)]="look.scene3dToonSoftness" (ngModelChange)="look.scene3dToonShadowsChanged()">
+            <span class="scene3d-val">{{ look.scene3dToonSoftness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Scene-wide. How bright the shadow tone is">Shadow value</label>
+            <input type="range" min="0" max="1" step="0.02" [(ngModel)]="look.scene3dToonShadowValue" (ngModelChange)="look.scene3dToonShadowsChanged()">
+            <span class="scene3d-val">{{ look.scene3dToonShadowValue | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Scene-wide. Extra saturation in the shadows">Saturation</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="look.scene3dToonSaturation" (ngModelChange)="look.scene3dToonShadowsChanged()">
+            <span class="scene3d-val">{{ look.scene3dToonSaturation | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Scene-wide. Lavender turns warm colours red-purple and cool ones deep blue">Shadow tint</label>
+            <input type="color" [(ngModel)]="look.scene3dToonTintHex" (ngModelChange)="look.scene3dToonShadowsChanged()">
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row">
+        <label>Rim light</label>
+        <input type="checkbox" [(ngModel)]="look.scene3dCharRimLight" (ngModelChange)="look.scene3dSetCharRimLight($event)">
+    </div>
+    <ng-container *ngIf="look.scene3dCharRimLight">
+        <div class="scene3d-material-row">
+            <label title="Scene-wide. 0 = the original built-in rim; above 0 = the tunable rim below">Strength</label>
+            <input type="range" min="0" max="2" step="0.05" [(ngModel)]="look.scene3dRimStrength" (ngModelChange)="look.scene3dRimLookChanged()">
+            <span class="scene3d-val">{{ look.scene3dRimStrength | number:'1.2-2' }}</span>
+        </div>
+        <ng-container *ngIf="look.scene3dRimStrength > 0">
+            <div class="scene3d-material-row">
+                <label title="Scene-wide. How far the rim reaches in from the edge">Width</label>
+                <input type="range" min="0" max="1" step="0.02" [(ngModel)]="look.scene3dRimWidth" (ngModelChange)="look.scene3dRimLookChanged()">
+                <span class="scene3d-val">{{ look.scene3dRimWidth | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Scene-wide. 0 = soft falloff, 1 = crisp toon edge">Hardness</label>
+                <input type="range" min="0" max="1" step="0.05" [(ngModel)]="look.scene3dRimHardness" (ngModelChange)="look.scene3dRimLookChanged()">
+                <span class="scene3d-val">{{ look.scene3dRimHardness | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Scene-wide">Color</label>
+                <input type="color" [(ngModel)]="look.scene3dRimColorHex" (ngModelChange)="look.scene3dRimLookChanged()">
+            </div>
+        </ng-container>
+    </ng-container>
+    <div class="scene3d-material-row" *ngIf="look.scene3dBodyParams">
+        <label title="Smooth anime face shading: the face shades as one flat plane, no dark facet wedges across the nose and cheeks. 0 = the classic faceted shading (saved characters), 1 = full (new characters). Regenerates the body.">Anime face</label>
+        <input type="range" min="0" max="1" step="0.05" [ngModel]="look.scene3dBodyParams.faceNormals ?? 0" (ngModelChange)="look.scene3dFaceNormalsChanged($event)">
+        <span class="scene3d-val">{{ (look.scene3dBodyParams.faceNormals ?? 0) | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="No specular on the skin and clothes: matte cel shading instead of glossy plastic highlights (Cel / Cel-HD). Hair keeps its sheen.">Matte skin + cloth</label>
+        <input type="checkbox" [(ngModel)]="look.scene3dCharMatte" (ngModelChange)="look.scene3dSetCharMatte($event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Scene-wide. While Play runs, characters without their own outline get a thin ink line. Old documents start with it off.">Outline in Play</label>
+        <input type="checkbox" [(ngModel)]="look.scene3dPlayOutlines" (ngModelChange)="look.scene3dSetPlayOutlines($event)">
+    </div>
+    <div style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:4px;margin-bottom:10px">
+        <button class="scene3d-btn" style="flex:1" (click)="scene3dExportCharacterPreset()" title="Download character params as JSON">Export preset</button>
+        <label class="scene3d-btn" style="flex:1;text-align:center;cursor:pointer" title="Load character params from JSON">
+            Import preset<input type="file" accept=".json,application/json" style="display:none" (change)="scene3dImportCharacterPreset($event)">
+        </label>
+    </div>
+    <div class="char-menu">
+        <button class="char-menu-btn" (click)="charSection = 'hair'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="10" r="5"/><path d="M7 7c0-2.76 2.24-5 5-5s5 2.24 5 5c-1-.5-2-.5-3 0s-2 .5-3 0-2-.5-3 0-1 0-1 0z" fill="currentColor" opacity="0.3" stroke="none"/></svg>
+            Hair
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'eyes'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+            Eyes
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'face'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M7 9.5c1-.8 2.2-.8 3 0M14 9.5c1-.8 2.2-.8 3 0"/><path d="M9 15.5c1.6 1.3 4.4 1.3 6 0"/></svg>
+            Face
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'body'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><path d="M8 11c0-2.21 1.79-4 4-4s4 1.79 4 4v7H8v-7z"/></svg>
+            Body
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'top'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l3-4 2 2c1 .75 2 1 4 1s3-.25 4-1l2-2 3 4-2 2H17v8H7v-8H5L3 9z"/></svg>
+            Top
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'bottom'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14l-1.5 8-5.5 4-5.5-4L5 6z"/><line x1="12" y1="6" x2="12" y2="12"/></svg>
+            Bottom
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'socks'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h4v11l5 4a2 2 0 0 1-1.2 3.6H8.2A2 2 0 0 1 7 18l1-4V3z"/></svg>
+            Socks
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'shoes'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-1H3v1z"/><path d="M5 16V9l4-5h6l2 3-3 1-1 3H5z"/></svg>
+            Shoes
+        </button>
+        <button class="char-menu-btn" (click)="charSection = 'charms'; charms.scene3dRefreshAttachments()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="2"/><path d="M9 9v6"/><path d="M9 15l-3 3"/><path d="M9 15l3 3"/><circle cx="6" cy="19" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+            Charms
+        </button>
+    </div>
+    <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px">
+        <div class="scene3d-material-row">
+            <label style="font-size:11px">Squash &amp; stretch</label>
+            <input type="checkbox" [(ngModel)]="look.scene3dSquashStretchEnabled" (ngModelChange)="look.scene3dApplySquashStretch()">
+        </div>
+        <div class="scene3d-material-row" *ngIf="look.scene3dSquashStretchEnabled">
+            <label style="font-size:11px">Intensity</label>
+            <input type="range" min="0" max="1" step="0.05"
+                   [(ngModel)]="look.scene3dSquashStretchIntensity" (ngModelChange)="look.scene3dApplySquashStretch()">
+            <span class="scene3d-val">{{ look.scene3dSquashStretchIntensity | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" style="margin-top:6px">
+            <label style="font-size:11px">Legs</label>
+            <div style="display:flex;gap:3px">
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="look.scene3dLegIdleMode === 'fk'"
+                        (click)="look.scene3dSetLegIdleMode('fk')"
+                        title="FK weight-shift — subtle, ~free cost">FK</button>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="look.scene3dLegIdleMode === 'ik'"
+                        (click)="look.scene3dSetLegIdleMode('ik')"
+                        title="IK contrapposto — feet planted, pelvis sways. Best for hero / close-up characters.">IK</button>
+                <button class="scene3d-btn scene3d-btn-sm"
+                        [class.scene3d-btn-active]="look.scene3dLegIdleMode === 'none'"
+                        (click)="look.scene3dSetLegIdleMode('none')"
+                        title="Legs static">Off</button>
+            </div>
+        </div>
+    </div>
+    <button class="scene3d-btn" style="width:100%;margin-top:8px;font-size:11px;color:#888"
+            (click)="scene3dInstallDefaultAnimations()"
+            title="Add built-in idle clips (Breathe, Shift Weight, Look Around) and poses (Relaxed, A-pose, Wave…) — safe to run on older characters, skips any already present">
+        ↺ Restore default clips &amp; poses
+    </button>
+</ng-container>
+
+<!-- ── Body ── -->
+<app-char-body-section *ngIf="charSection === 'body'"></app-char-body-section>
+
+<!-- ── Face (face kit: brows / mouth / nose / shading + expression preview) ── -->
+<app-char-face-section *ngIf="charSection === 'face'"></app-char-face-section>
+
+<!-- ── Eyes ── -->
+<app-char-eyes-section *ngIf="charSection === 'eyes'"></app-char-eyes-section>
+
+<!-- ── Hair ── -->
+<app-char-hair-section *ngIf="charSection === 'hair'"></app-char-hair-section>
+
+<!-- ── Top ── -->
+<app-char-clothing-section *ngIf="charSection === 'top' || charSection === 'bottom' || charSection === 'shoes' || charSection === 'socks'"></app-char-clothing-section>
+
+<!-- ── Bottom ── -->
+
+<!-- ── Shoes ── -->
+
+<!-- ── Socks ── -->
+
+<!-- ── Charms ── -->
+<app-char-charms-section *ngIf="charSection === 'charms'"></app-char-charms-section>

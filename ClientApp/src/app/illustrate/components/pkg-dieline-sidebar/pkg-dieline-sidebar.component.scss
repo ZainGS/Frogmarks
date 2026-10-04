@@ -1,0 +1,4 @@
+// The wrapper div's inline layout, now on the host element.
+:host { position:fixed;top:0;right:0;bottom:0;width:280px;background:#1a1a1a;border-left:1px solid rgba(255,255,255,0.1);box-shadow:-8px 0 32px rgba(0,0,0,0.55);display:flex;flex-direction:column;z-index:10052;font-size:12px;color:rgba(255,255,255,0.85);user-select:none; }
+
+.pkg-pane-mode-active { background: rgba(74,158,255,0.2) !important; border-color: #4a9eff !important; color: #a8d4ff !important; font-weight: 600; }

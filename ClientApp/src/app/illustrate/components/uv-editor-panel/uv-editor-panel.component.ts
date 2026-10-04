@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import ShapeManager from '@zaings/salsa/shape-manager';
 
 @Component({
   selector: 'app-uv-editor-panel',
@@ -6,7 +7,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleCha
   styleUrls: ['./uv-editor-panel.component.scss'],
 })
 export class UvEditorPanelComponent implements OnChanges, OnDestroy {
-  @Input() shapeManager: any = null;
+  @Input() shapeManager: ShapeManager = null;
   @Input() meshId: string | null = null;
   @Input() session: any = null;
   @Input() uvRenderer: any = null;
@@ -16,7 +17,7 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   @Output() showUVPaneChange = new EventEmitter<boolean>();
   @Output() stampToolChange  = new EventEmitter<{active: boolean; size: number; rotationRad: number}>();
 
-  private get sm(): any { return this.shapeManager; }
+  private get sm(): ShapeManager { return this.shapeManager; }
 
   // ── Display ────────────────────────────────────────────────────
   showWireframe = true;
@@ -47,11 +48,11 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
     }
     // Auto-start painting the moment the renderer is ready — no button needed
     if (changes['uvRenderer'] && this.uvRenderer && this.meshId && this.shapeManager) {
-      this.sm?.enterUVPaintMode3D?.(this.meshId, this.showUVPane ? this.uvRenderer : null);
+      this.sm?.enterUVPaintMode3D(this.meshId, this.showUVPane ? this.uvRenderer : null);
     }
     // Refresh GARP target whenever the painted mesh changes
     if (changes['meshId'] || changes['shapeManager']) {
-      this.garpTarget = (this.meshId && this.sm) ? this.sm.garpPaintTargetOf3D?.(this.meshId) ?? null : null;
+      this.garpTarget = (this.meshId && this.sm) ? this.sm.garpPaintTargetOf3D(this.meshId) ?? null : null;
       if (!this.garpTarget) this.garpSkinName = '';
       // Reset stamp tool on mesh change — new mesh always starts in brush mode
       if (changes['meshId'] && this.activeTool === 'stamp') {
@@ -62,7 +63,7 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.sm?.exitUVPaintMode3D?.();
+    this.sm?.exitUVPaintMode3D();
   }
 
   // ── Display toggles ────────────────────────────────────────────
@@ -82,7 +83,7 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   // ── Unwrap ─────────────────────────────────────────────────────
 
   unwrap(): void {
-    this.sm?.autoUnwrap3D?.(this.meshId);
+    this.sm?.autoUnwrap3D(this.meshId);
     this._redraw();
   }
 
@@ -92,14 +93,14 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
     this.showUVPane = !this.showUVPane;
     this.showUVPaneChange.emit(this.showUVPane);
     // Re-enter with/without renderer so Salsa adjusts immediately
-    this.sm?.exitUVPaintMode3D?.();
-    this.sm?.enterUVPaintMode3D?.(this.meshId, this.showUVPane ? this.uvRenderer : null);
+    this.sm?.exitUVPaintMode3D();
+    this.sm?.enterUVPaintMode3D(this.meshId, this.showUVPane ? this.uvRenderer : null);
   }
 
   // ── Export ─────────────────────────────────────────────────────
 
   exportLayout(): void {
-    const canvas: HTMLCanvasElement | null = this.sm?.exportUVLayout3D?.(this.meshId, this.exportSize, this.exportSize) ?? null;
+    const canvas: HTMLCanvasElement | null = this.sm?.exportUVLayout3D(this.meshId, this.exportSize, this.exportSize) ?? null;
     if (!canvas) return;
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
@@ -113,14 +114,14 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
     if (!this.garpTarget || !this.meshId || this.garpSaving) return;
     const name = this.garpSkinName.trim();
     if (!name) return;
-    const pool = this.sm?.garp?.listPools?.()?.find((p: any) => p.id === this.garpTarget!.poolId);
+    const pool = this.sm?.garp?.listPools()?.find((p: any) => p.id === this.garpTarget!.poolId);
     const existingNames: string[] = (Array.isArray(pool?.skins) ? pool.skins : []).map((s: any) => s.name as string);
     if (existingNames.includes(name)) {
       if (!confirm(`A skin named "${name}" already exists. Overwrite?`)) return;
     }
     this.garpSaving = true;
     try {
-      const errs: string[] = await this.sm?.saveMeshAsGarpSkin3D?.(this.meshId, name) ?? [];
+      const errs: string[] = await this.sm?.saveMeshAsGarpSkin3D(this.meshId, name) ?? [];
       if (errs.length) console.warn('[GARP] saveMeshAsGarpSkin3D warnings:', errs);
       this.garpTarget = null;
       this.garpSkinName = '';
@@ -131,7 +132,7 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   }
 
   garpCancel(): void {
-    this.sm?.cancelGarpPaint3D?.();
+    this.sm?.cancelGarpPaint3D();
     this.garpTarget = null;
     this.garpSkinName = '';
     this.close();
@@ -143,9 +144,9 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
     if (this.activeTool === tool) return;
     this.activeTool = tool;
     if (tool === 'stamp') {
-      this.sm?.exitUVPaintMode3D?.();
+      this.sm?.exitUVPaintMode3D();
     } else {
-      this.sm?.enterUVPaintMode3D?.(this.meshId, this.showUVPane ? this.uvRenderer : null);
+      this.sm?.enterUVPaintMode3D(this.meshId, this.showUVPane ? this.uvRenderer : null);
     }
     this._emitStamp();
   }

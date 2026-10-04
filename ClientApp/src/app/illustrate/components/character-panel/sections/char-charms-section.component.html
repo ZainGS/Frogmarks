@@ -1,0 +1,506 @@
+<div class="eye-proc-group">Add Charm</div>
+<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+    <select class="scene3d-select" style="flex:1" [ngModel]="charms.scene3dNewAttachmentType" (ngModelChange)="charms.scene3dNewAttachmentTypeChanged($event)">
+        <ng-container *ngIf="charms.scene3dAttachmentTypes.length; else fallbackTypes">
+            <option *ngFor="let t of charms.scene3dAttachmentTypes" [value]="t">{{ t | titlecase }}</option>
+        </ng-container>
+        <ng-template #fallbackTypes>
+            <option value="chain">Chain</option>
+            <option value="pocket">Pocket</option>
+            <option value="pendant">Pendant</option>
+            <option value="bracelet">Bracelet</option>
+            <option value="watch">Watch</option>
+            <option value="choker">Choker</option>
+            <option value="clip">Clip</option>
+            <option value="flower">Flower</option>
+            <option value="loop">Loop</option>
+            <option value="beltloop">Belt Loop</option>
+            <option value="button">Button</option>
+        </ng-template>
+    </select>
+    <button class="scene3d-btn" (click)="charms.scene3dAddAttachment()">+ Add</button>
+    <button class="scene3d-btn" [class.scene3d-btn-active]="charms.scene3dPlacingCharmType"
+            (click)="charms.scene3dTogglePlacePick()" title="Click the model to drop a charm at that spot">📍</button>
+    <button class="scene3d-btn" [class.scene3d-btn-active]="charms.scene3dDrawingChain"
+            (click)="charms.scene3dToggleChainPick()" title="Click two points on the model to string a chain between them">⛓</button>
+</div>
+<div *ngIf="charms.scene3dPlacingCharmType"
+     style="background:#1a2a1a;border:1px solid #2d4a2d;border-radius:4px;padding:6px 8px;margin-bottom:8px;font-size:11px;color:#8bc;display:flex;align-items:center;gap:6px">
+    <span style="flex:1">Click the model to drop a {{ charms.scene3dPlacingCharmType }}. Esc or ⛓ to finish.</span>
+    <button class="scene3d-btn" style="padding:2px 8px" (click)="charms.scene3dEndPlacePick()">Done</button>
+</div>
+<div *ngIf="charms.scene3dDrawingChain"
+     style="background:#1a1a2a;border:1px solid #2d2d4a;border-radius:4px;padding:6px 8px;margin-bottom:8px;font-size:11px;color:#aac;display:flex;align-items:center;gap:6px">
+    <span style="flex:1">{{ charms.scene3dChainPickProgress === 'second' ? '⛓ Click end point' : '⛓ Click start point' }}</span>
+    <button class="scene3d-btn" style="padding:2px 8px" (click)="charms.scene3dEndPlacePick()">Done</button>
+</div>
+<div *ngIf="charms.scene3dNewAttachmentType === 'loop'" style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <span style="font-size:11px;color:#888;flex:1">Add loops:</span>
+    <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(5)" title="Add 5 evenly-spaced D-ring loops around the waistband">+ 5</button>
+    <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(8)" title="Add 8 evenly-spaced D-ring loops around the waistband">+ 8</button>
+</div>
+<div *ngIf="charms.scene3dNewAttachmentType === 'beltloop'" style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <span style="font-size:11px;color:#888;flex:1">Add belt loops:</span>
+    <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(5)" title="Add 5 evenly-spaced cloth belt loops around the waistband">+ 5</button>
+    <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(8)" title="Add 8 evenly-spaced cloth belt loops around the waistband">+ 8</button>
+</div>
+<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+    <span style="font-size:11px;color:#888;flex:1">All metal charms:</span>
+    <button class="scene3d-btn" [class.scene3d-btn-active]="charms.scene3dCharSparkle"
+            (click)="charms.scene3dToggleCharSparkle()"
+            title="Toggle sparkle on all metal charms">
+        {{ charms.scene3dCharSparkle ? (charms.scene3dCharSparkleMode === 'star' ? '✦ Star' : '◦ Glint') : '○ Sparkle' }}
+    </button>
+</div>
+<div *ngIf="charms.scene3dCharSparkle" style="display:flex;gap:2px;margin-top:2px">
+    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='glint'" (click)="charms.scene3dSetCharSparkleMode('glint')">◦ Glint</button>
+    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='star'" (click)="charms.scene3dSetCharSparkleMode('star')">✦ Star</button>
+</div>
+
+<!-- Charms grouped by type — each type is a collapsible accordion -->
+<ng-container *ngFor="let group of charms.scene3dAttachmentsByType">
+    <div class="scene3d-charm-group-header" (click)="charms.scene3dAccordionOpen[group.type] = !charms.scene3dAccordionOpen[group.type]">
+        <span style="text-transform:capitalize;font-weight:600">{{ group.type }}</span>
+        <span style="color:#666;font-size:11px;margin-left:6px">{{ group.items.length }}</span>
+        <span style="margin-left:auto;font-size:11px;color:#666">{{ charms.scene3dAccordionOpen[group.type] ? '▾' : '▸' }}</span>
+        <button class="scene3d-btn" style="color:#f08080;padding:1px 6px;font-size:10px;margin-left:6px"
+                (click)="$event.stopPropagation(); charms.scene3dRemoveAttachmentsByType(group.type)"
+                title="Remove all {{ group.type }} charms">✕ all</button>
+    </div>
+    <ng-container *ngIf="charms.scene3dAccordionOpen[group.type]">
+    <div *ngFor="let a of group.items; let i = index" style="border:1px solid #2a2a2a;border-radius:6px;margin-bottom:4px">
+        <!-- Collapsible charm header -->
+        <div style="display:flex;align-items:center;padding:5px 8px;cursor:pointer;gap:5px"
+             (click)="charms.scene3dCharmOpen[a.id]=!charms.scene3dCharmOpen[a.id]">
+            <span style="font-size:10px;color:#555">#{{ i + 1 }}</span>
+            <span style="font-size:11px;color:#888;text-transform:capitalize">{{ a.placement.joint }}</span>
+            <span style="margin-left:auto;font-size:10px;color:#555">{{ charms.scene3dCharmOpen[a.id] ? '▾' : '▸' }}</span>
+            <button class="scene3d-btn" style="color:#f08080;padding:1px 6px;font-size:11px"
+                    (click)="$event.stopPropagation(); charms.scene3dRemoveAttachment(a.id)">✕</button>
+        </div>
+        <!-- Expanded body -->
+        <ng-container *ngIf="charms.scene3dCharmOpen[a.id]">
+        <div style="padding:0 8px 8px">
+
+    <div class="eye-proc-group" style="margin-top:0;margin-bottom:4px">Placement</div>
+    <div class="scene3d-material-row">
+        <label>Joint</label>
+        <select class="scene3d-select" style="flex:1" [ngModel]="a.placement.joint" (ngModelChange)="charms.scene3dSetAttachmentPlacement(a.id,'joint',$event)">
+            <option value="hips">Hips</option>
+            <option value="spine">Spine</option>
+            <option value="chest">Chest</option>
+            <option value="neck">Neck</option>
+            <option value="head">Head</option>
+            <option value="clavicle_L">Clavicle L</option>
+            <option value="clavicle_R">Clavicle R</option>
+            <option value="shoulder_L">Shoulder L</option>
+            <option value="shoulder_R">Shoulder R</option>
+            <option value="upperarm_L">Upper Arm L</option>
+            <option value="upperarm_R">Upper Arm R</option>
+            <option value="lowerarm_L">Lower Arm L</option>
+            <option value="lowerarm_R">Lower Arm R</option>
+            <option value="hand_L">Hand L</option>
+            <option value="hand_R">Hand R</option>
+            <option value="upperleg_L">Upper Leg L</option>
+            <option value="upperleg_R">Upper Leg R</option>
+            <option value="lowerleg_L">Lower Leg L</option>
+            <option value="lowerleg_R">Lower Leg R</option>
+            <option value="foot_L">Foot L</option>
+            <option value="foot_R">Foot R</option>
+        </select>
+    </div>
+    <!-- Offset + scale — hidden for wrap types that shrink-fit the limb -->
+    <ng-container *ngIf="a.type !== 'bracelet' && a.type !== 'watch' && a.type !== 'choker'">
+        <div class="scene3d-material-row">
+            <label>Offset X</label>
+            <input type="range" min="-0.3" max="0.3" step="0.005" [ngModel]="a.placement.offset[0]" (ngModelChange)="charms.scene3dSetAttachmentPlacement(a.id,'offsetX',$event)">
+            <span class="scene3d-val">{{ a.placement.offset[0] | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Offset Y</label>
+            <input type="range" min="-0.3" max="0.3" step="0.005" [ngModel]="a.placement.offset[1]" (ngModelChange)="charms.scene3dSetAttachmentPlacement(a.id,'offsetY',$event)">
+            <span class="scene3d-val">{{ a.placement.offset[1] | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Offset Z</label>
+            <input type="range" min="-0.3" max="0.3" step="0.005" [ngModel]="a.placement.offset[2]" (ngModelChange)="charms.scene3dSetAttachmentPlacement(a.id,'offsetZ',$event)">
+            <span class="scene3d-val">{{ a.placement.offset[2] | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Scale</label>
+            <input type="range" min="0.5" max="2" step="0.05" [ngModel]="a.placement.scale" (ngModelChange)="charms.scene3dSetAttachmentPlacement(a.id,'scale',$event)">
+            <span class="scene3d-val">{{ a.placement.scale | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Colour (all types) -->
+    <div class="scene3d-material-row" style="margin-top:6px">
+        <label>Colour</label>
+        <input type="color" [ngModel]="a.params.color ?? '#888888'" (ngModelChange)="a.params.color=$event; charms.scene3dAttachmentParamChanged(a.id, a.params)" style="width:48px;height:28px;padding:2px;border:none;background:none;cursor:pointer">
+    </div>
+
+    <!-- Metal finish — shown for all types except pocket and flower -->
+    <ng-container *ngIf="a.type !== 'pocket' && a.type !== 'flower'">
+        <div class="scene3d-material-row">
+            <label>Finish</label>
+            <div style="display:flex;gap:3px;flex:1">
+                <button class="scene3d-btn" style="flex:1;font-size:10px"
+                        [class.scene3d-btn-active]="(a.params.metalness ?? 1) >= 0.9 && (a.params.roughness ?? 0.28) <= 0.15"
+                        (click)="a.params.metalness=1; a.params.roughness=0.1; charms.scene3dAttachmentParamChanged(a.id, a.params)">Chrome</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px"
+                        [class.scene3d-btn-active]="(a.params.metalness ?? 1) >= 0.9 && (a.params.roughness ?? 0.28) > 0.15 && (a.params.roughness ?? 0.28) <= 0.4"
+                        (click)="a.params.metalness=1; a.params.roughness=0.28; charms.scene3dAttachmentParamChanged(a.id, a.params)">Brushed</button>
+                <button class="scene3d-btn" style="flex:1;font-size:10px"
+                        [class.scene3d-btn-active]="(a.params.metalness ?? 1) < 0.1"
+                        (click)="a.params.metalness=0; a.params.roughness=0.8; charms.scene3dAttachmentParamChanged(a.id, a.params)">Matte</button>
+            </div>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Metalness</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.metalness ?? 1" (ngModelChange)="a.params.metalness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.metalness ?? 1) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Roughness</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.roughness ?? 0.28" (ngModelChange)="a.params.roughness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.roughness ?? 0.28) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Sparkle</label>
+            <button class="scene3d-btn" style="flex:1"
+                    [class.scene3d-btn-active]="a.params.sparkle"
+                    (click)="a.params.sparkle = a.params.sparkle === 'star' ? false : a.params.sparkle === 'glint' ? 'star' : 'glint'; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                {{ a.params.sparkle === 'star' ? '✦ Star' : a.params.sparkle ? '◦ Glint' : '○ Off' }}
+            </button>
+        </div>
+    </ng-container>
+
+    <!-- Chain -->
+    <ng-container *ngIf="a.type === 'chain'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Chain</div>
+        <div class="scene3d-material-row" *ngIf="!a.params.toLoop">
+            <label>Mode</label>
+            <div style="display:flex;gap:4px;flex:1">
+                <button class="scene3d-btn" style="flex:1"
+                        [class.scene3d-btn-active]="(a.params.chainMode ?? 'dangle') === 'dangle'"
+                        (click)="a.params.chainMode='dangle'; charms.scene3dAttachmentParamChanged(a.id, a.params)">Dangle</button>
+                <button class="scene3d-btn" style="flex:1"
+                        [class.scene3d-btn-active]="a.params.chainMode === 'swag'"
+                        (click)="a.params.chainMode='swag'; charms.scene3dAttachmentParamChanged(a.id, a.params)">Swag</button>
+            </div>
+        </div>
+        <!-- Loop connections: Start and End anchors -->
+        <div class="scene3d-material-row" *ngIf="charms.scene3dLoops.length">
+            <label>Start</label>
+            <select class="scene3d-select" style="flex:1"
+                    [ngModel]="a.params.fromLoop ?? ''"
+                    (ngModelChange)="a.params.fromLoop=$event||undefined; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <option value="">— anchor joint</option>
+                <option *ngFor="let l of charms.scene3dLoops; let i = index" [value]="l.id">Loop {{ i+1 }} ({{ l.placement.joint }})</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="charms.scene3dLoops.length">
+            <label>End</label>
+            <select class="scene3d-select" style="flex:1"
+                    [ngModel]="a.params.toLoop ?? ''"
+                    (ngModelChange)="a.params.toLoop=$event||undefined; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <option value="">— free end</option>
+                <option *ngFor="let l of charms.scene3dLoops; let i = index" [value]="l.id">Loop {{ i+1 }} ({{ l.placement.joint }})</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="(a.params.chainMode ?? 'dangle') === 'dangle' && !a.params.toLoop">
+            <label>Links</label>
+            <input type="range" min="4" max="24" step="1" [ngModel]="a.params.linkCount ?? 10" (ngModelChange)="a.params.linkCount=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ a.params.linkCount ?? 10 }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.0015" max="0.005" step="0.0001" [ngModel]="a.params.thickness ?? 0.0035" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.0035) | number:'1.4-4' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>{{ a.params.chainMode === 'swag' ? 'Droop' : 'Span' }}</label>
+            <input type="range" min="0" max="0.12" step="0.005" [ngModel]="a.params.span ?? 0.05" (ngModelChange)="a.params.span=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.span ?? 0.05) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Sag</label>
+            <input type="range" min="0" max="0.12" step="0.005" [ngModel]="a.params.sag ?? 0.04" (ngModelChange)="a.params.sag=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.sag ?? 0.04) | number:'1.2-2' }}</span>
+        </div>
+        <!-- Swag: far-end joint, offset, sway (hidden when toLoop supplies the far end) -->
+        <ng-container *ngIf="a.params.chainMode === 'swag' && !a.params.toLoop">
+            <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Far End</div>
+            <div class="scene3d-material-row">
+                <label>End Joint</label>
+                <select class="scene3d-select" style="flex:1"
+                        [ngModel]="a.params.endJoint ?? ''"
+                        (ngModelChange)="a.params.endJoint=$event||undefined; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                    <option value="">— same joint</option>
+                    <option value="hips">Hips</option>
+                    <option value="spine">Spine</option>
+                    <option value="chest">Chest</option>
+                    <option value="neck">Neck</option>
+                    <option value="head">Head</option>
+                    <option value="clavicle_L">Clavicle L</option>
+                    <option value="clavicle_R">Clavicle R</option>
+                    <option value="shoulder_L">Shoulder L</option>
+                    <option value="shoulder_R">Shoulder R</option>
+                    <option value="upperarm_L">Upper Arm L</option>
+                    <option value="upperarm_R">Upper Arm R</option>
+                    <option value="lowerarm_L">Lower Arm L</option>
+                    <option value="lowerarm_R">Lower Arm R</option>
+                    <option value="hand_L">Hand L</option>
+                    <option value="hand_R">Hand R</option>
+                    <option value="upperleg_L">Upper Leg L</option>
+                    <option value="upperleg_R">Upper Leg R</option>
+                    <option value="lowerleg_L">Lower Leg L</option>
+                    <option value="lowerleg_R">Lower Leg R</option>
+                    <option value="foot_L">Foot L</option>
+                    <option value="foot_R">Foot R</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row">
+                <label>End X</label>
+                <input type="range" min="-0.3" max="0.3" step="0.005"
+                       [ngModel]="a.params.endOffset?.[0] ?? -0.05"
+                       (ngModelChange)="a.params.endOffset = a.params.endOffset ?? [-0.05,-0.12,0.04]; a.params.endOffset[0]=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <span class="scene3d-val">{{ (a.params.endOffset?.[0] ?? -0.05) | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>End Y</label>
+                <input type="range" min="-0.3" max="0.3" step="0.005"
+                       [ngModel]="a.params.endOffset?.[1] ?? -0.12"
+                       (ngModelChange)="a.params.endOffset = a.params.endOffset ?? [-0.05,-0.12,0.04]; a.params.endOffset[1]=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <span class="scene3d-val">{{ (a.params.endOffset?.[1] ?? -0.12) | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>End Z</label>
+                <input type="range" min="-0.3" max="0.3" step="0.005"
+                       [ngModel]="a.params.endOffset?.[2] ?? 0.04"
+                       (ngModelChange)="a.params.endOffset = a.params.endOffset ?? [-0.05,-0.12,0.04]; a.params.endOffset[2]=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <span class="scene3d-val">{{ (a.params.endOffset?.[2] ?? 0.04) | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Sway</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [ngModel]="a.params.swagSoftness ?? 0"
+                       (ngModelChange)="a.params.swagSoftness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+                <span class="scene3d-val">{{ (a.params.swagSoftness ?? 0) | number:'1.2-2' }}</span>
+            </div>
+        </ng-container>
+    </ng-container>
+
+    <!-- Pocket -->
+    <ng-container *ngIf="a.type === 'pocket'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Pocket</div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.05" max="0.4" step="0.01" [ngModel]="a.params.width ?? 0.18" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.18) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0.05" max="0.4" step="0.01" [ngModel]="a.params.height ?? 0.2" (ngModelChange)="a.params.height=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.height ?? 0.2) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Flap</label>
+            <input type="range" min="0" max="1" step="0.05" [ngModel]="a.params.flap ?? 0.5" (ngModelChange)="a.params.flap=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.flap ?? 0.5) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.003" max="0.02" step="0.001" [ngModel]="a.params.thickness ?? 0.008" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.008) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Pendant -->
+    <ng-container *ngIf="a.type === 'pendant'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Pendant</div>
+        <div class="scene3d-material-row">
+            <label>Drop</label>
+            <input type="range" min="0.02" max="0.5" step="0.01" [ngModel]="a.params.dropLength ?? 0.12" (ngModelChange)="a.params.dropLength=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.dropLength ?? 0.12) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.01" max="0.15" step="0.005" [ngModel]="a.params.width ?? 0.04" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.04) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.002" max="0.02" step="0.001" [ngModel]="a.params.thickness ?? 0.006" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.006) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Bracelet -->
+    <ng-container *ngIf="a.type === 'bracelet'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Bracelet</div>
+        <div class="scene3d-material-row">
+            <label>Position</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.position ?? 0.85" (ngModelChange)="a.params.position=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.position ?? 0.85) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Band width</label>
+            <input type="range" min="0.001" max="0.04" step="0.001" [ngModel]="a.params.thickness ?? 0.015" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.015) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Watch -->
+    <ng-container *ngIf="a.type === 'watch'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Watch</div>
+        <div class="scene3d-material-row">
+            <label>Position</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.position ?? 0.8" (ngModelChange)="a.params.position=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.position ?? 0.8) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Band width</label>
+            <input type="range" min="0.001" max="0.04" step="0.001" [ngModel]="a.params.thickness ?? 0.015" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.015) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Face W</label>
+            <input type="range" min="0.01" max="0.06" step="0.002" [ngModel]="a.params.width ?? 0.03" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.03) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Face H</label>
+            <input type="range" min="0.01" max="0.06" step="0.002" [ngModel]="a.params.height ?? 0.035" (ngModelChange)="a.params.height=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.height ?? 0.035) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Choker -->
+    <ng-container *ngIf="a.type === 'choker'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Choker</div>
+        <div class="scene3d-material-row">
+            <label>Position</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.position ?? 0.3" (ngModelChange)="a.params.position=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.position ?? 0.3) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Band width</label>
+            <input type="range" min="0.001" max="0.04" step="0.001" [ngModel]="a.params.thickness ?? 0.012" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.012) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Clip -->
+    <ng-container *ngIf="a.type === 'clip'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Hair Clip</div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.01" max="0.08" step="0.002" [ngModel]="a.params.width ?? 0.04" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.04) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0.005" max="0.04" step="0.001" [ngModel]="a.params.height ?? 0.015" (ngModelChange)="a.params.height=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.height ?? 0.015) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.002" max="0.015" step="0.001" [ngModel]="a.params.thickness ?? 0.005" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.005) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Flower -->
+    <ng-container *ngIf="a.type === 'flower'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Hair Flower</div>
+        <div class="scene3d-material-row">
+            <label>Petal reach</label>
+            <input type="range" min="0.01" max="0.08" step="0.002" [ngModel]="a.params.width ?? 0.03" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.03) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Loop / D-ring -->
+    <ng-container *ngIf="a.type === 'loop'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">D-ring</div>
+        <div class="scene3d-material-row">
+            <label>Ring radius</label>
+            <input type="range" min="0.005" max="0.05" step="0.001" [ngModel]="a.params.width ?? 0.015" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.015) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Strap width</label>
+            <input type="range" min="0.003" max="0.02" step="0.001" [ngModel]="a.params.thickness ?? 0.008" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.008) | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Belt loop (cloth jeans style) -->
+    <ng-container *ngIf="a.type === 'beltloop'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Belt Loop</div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0.01" max="0.05" step="0.002" [ngModel]="a.params.height ?? 0.025" (ngModelChange)="a.params.height=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.height ?? 0.025) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.005" max="0.025" step="0.001" [ngModel]="a.params.width ?? 0.012" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.012) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.001" max="0.006" step="0.0005" [ngModel]="a.params.thickness ?? 0.002" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.002) | number:'1.4-4' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Color</label>
+            <input type="color" [ngModel]="a.params.color ?? '#404763'" (ngModelChange)="a.params.color=$event; charms.scene3dAttachmentParamChanged(a.id, a.params)" title="Match to pants color">
+            <span style="font-size:10px;color:#666;margin-left:4px">match pants</span>
+        </div>
+    </ng-container>
+
+    <!-- Button charm -->
+    <ng-container *ngIf="a.type === 'button'">
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Button</div>
+        <div class="scene3d-material-row">
+            <label>Diameter</label>
+            <input type="range" min="0.004" max="0.020" step="0.001" [ngModel]="a.params.width ?? 0.010" (ngModelChange)="a.params.width=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.width ?? 0.010) | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Thickness</label>
+            <input type="range" min="0.001" max="0.006" step="0.0005" [ngModel]="a.params.thickness ?? 0.003" (ngModelChange)="a.params.thickness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.thickness ?? 0.003) | number:'1.4-4' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Color</label>
+            <input type="color" [ngModel]="a.params.color ?? '#c8b89a'" (ngModelChange)="a.params.color=$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+        </div>
+        <div class="eye-proc-group" style="margin-top:6px;margin-bottom:4px">Finish</div>
+        <div class="scene3d-material-row" style="margin-bottom:6px">
+            <button class="scene3d-btn scene3d-btn-sm" (click)="a.params.metalness=1;a.params.roughness=0.10;charms.scene3dAttachmentParamChanged(a.id,a.params)">Chrome</button>
+            <button class="scene3d-btn scene3d-btn-sm" (click)="a.params.metalness=1;a.params.roughness=0.28;charms.scene3dAttachmentParamChanged(a.id,a.params)">Brushed</button>
+            <button class="scene3d-btn scene3d-btn-sm" (click)="a.params.metalness=0;a.params.roughness=0.80;charms.scene3dAttachmentParamChanged(a.id,a.params)">Matte</button>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Metalness</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.metalness ?? 0" (ngModelChange)="a.params.metalness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.metalness ?? 0) | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Roughness</label>
+            <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.roughness ?? 0.80" (ngModelChange)="a.params.roughness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
+            <span class="scene3d-val">{{ (a.params.roughness ?? 0.80) | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+        </div><!-- end expanded body padding -->
+        </ng-container><!-- end charm collapse -->
+    </div><!-- end charm card -->
+    </ng-container><!-- end accordion body -->
+</ng-container><!-- end type group -->
+
+<div *ngIf="charms.scene3dAttachments.length === 0" style="color:#666;font-size:12px;text-align:center;padding:16px 0">
+    No charms yet — pick a type and click Add.
+</div>

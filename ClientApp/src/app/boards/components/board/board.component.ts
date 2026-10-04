@@ -4,6 +4,9 @@ import { ResultType } from '../../../shared/models/error-result.model';
 import { BoardService } from '../../../shared/services/boards/board.service';
 import { Board } from '../../models/board.model';
 import ShapeManager from "@zaings/salsa/shape-manager";
+
+/** Engine polygon preset names, derived from the engine signature. */
+type PolygonPreset = Parameters<ShapeManager['createPresetPolygon']>[4];
 import WorldManager from "@zaings/salsa/world-manager";
 //import startWebGPURendering from "@zaings/salsa";
 import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from "@zaings/salsa";
@@ -117,24 +120,24 @@ export class BoardComponent implements OnInit {
   arrowheadOptions = ARROWHEAD_OPTIONS;
 
   onArrowheadChange(): void {
-    this.shapeManager.setDefaultArrowheads?.(this.arrowheadStart, this.arrowheadEnd);
+    this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
   }
 
   // Polygon tool
   defaultPolygonSides = 6;
-  polygonPresets: string[] = [];
+  polygonPresets: PolygonPreset[] = [];
 
   onPolygonSidesChange(sides: number): void {
     this.defaultPolygonSides = +sides;
-    (this.shapeManager as any).defaultPolygonSides = this.defaultPolygonSides;
+    this.shapeManager.defaultPolygonSides = this.defaultPolygonSides;
   }
 
-  placePresetPolygon(preset: string): void {
-    this.shapeManager.createPresetPolygon?.(0, 0, 0.5, 0.5, preset as any, { r: 0, g: 0, b: 0, a: 1 }, 1);
+  placePresetPolygon(preset: PolygonPreset): void {
+    this.shapeManager.createPresetPolygon(0, 0, 0.5, 0.5, preset, { r: 0, g: 0, b: 0, a: 1 }, 1);
   }
 
   loadPolygonPresets(): void {
-    this.polygonPresets = (ShapeManager as any).PolygonPresets || [];
+    this.polygonPresets = ShapeManager.PolygonPresets || [];
   }
 
   private selectionChangedSubscription: { unsubscribe: () => void };
@@ -156,7 +159,7 @@ export class BoardComponent implements OnInit {
     event.preventDefault();
     event.stopPropagation();
 
-    if(this.contextMenu.visible == true) {
+    if(this.contextMenu.visible === true) {
       this.closeContextMenu();
       return;
     }
@@ -744,7 +747,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       filter((id): id is string => !!id),
       distinctUntilChanged()
     ).subscribe((boardUid) => {
-      this.initForBoard(boardUid);
+      void this.initForBoard(boardUid);
     });
   }
 
@@ -776,7 +779,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
             this.markLoaded('sceneApplied');
             sceneAppliedOnce.unsubscribe();
             if(!this.board.isCustomThumbnail) {
-              this.saveThumbnail();
+              void this.saveThumbnail();
             }
           });
 
@@ -792,7 +795,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
             this.selectedNode = this.getNodeById(selectedId);
           }
 
-          if(selectedIds.length == 1) {
+          if(selectedIds.length === 1) {
             var nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
             this.shapeColor = '#'+nodeColor;
             this.shapeHexInputDraft = nodeColor; // keep in sync
@@ -822,7 +825,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
             this.markLoaded('sceneApplied');
             sceneAppliedOnce.unsubscribe();
             if(!this.board.isCustomThumbnail) {
-              this.saveThumbnail();
+              void this.saveThumbnail();
             }
           });
 
@@ -1019,7 +1022,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
             this.shapeManager.deleteSelectedShapes();
             break;
         case "f": // F -> toggle fullscreen
-          this.toggleFullscreen();
+          void this.toggleFullscreen();
           break;
         case "x": // x -> toggle UI chrome
           this.toggleUI();
@@ -1188,10 +1191,10 @@ onNodeFillColorSelected(layerId: string, color: string) {
   }
 
   setActiveTool(activeTool: string, event?: MouseEvent) {
-    if(activeTool != this.controlPanelActiveTool)
+    if(activeTool !== this.controlPanelActiveTool)
     {
       this.controlPanelActiveTool = activeTool;
-      if(this.controlPanelActiveTool != "") {
+      if(this.controlPanelActiveTool !== "") {
         this.cursorSelected = false;
         this.panHandSelected = false;
         this.shapeManager.disablePanningTool();
@@ -1204,16 +1207,16 @@ onNodeFillColorSelected(layerId: string, color: string) {
       //this.shapeManager.disableScribbleDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'connector')
+    if(this.controlPanelActiveTool === 'connector')
     {
-      this.shapeManager.setDefaultArrowheads?.(this.arrowheadStart, this.arrowheadEnd);
+      this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
       this.shapeManager.enableLineDrawing();
     }
     else {
       this.shapeManager.disableLineDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'text')
+    if(this.controlPanelActiveTool === 'text')
     {
       this.shapeManager.enableTextDrawing();
     }
@@ -1221,7 +1224,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       this.shapeManager.disableTextDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'drawing:pen')
+    if(this.controlPanelActiveTool === 'drawing:pen')
     {
       this.shapeManager.enableScribbleDrawing();
     }
@@ -1229,7 +1232,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       this.shapeManager.disableScribbleDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'drawing:highlighter')
+    if(this.controlPanelActiveTool === 'drawing:highlighter')
     {
       this.shapeManager.enableHighlightDrawing();
     }
@@ -1237,7 +1240,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       this.shapeManager.disableHighlightDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'drawing:eraser')
+    if(this.controlPanelActiveTool === 'drawing:eraser')
     {
       this.shapeManager.enableEraserTool();
     }
@@ -1245,7 +1248,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       this.shapeManager.disableEraserTool();
     }
 
-    if(this.controlPanelActiveTool == 'drawing:pattern')
+    if(this.controlPanelActiveTool === 'drawing:pattern')
     {
       this.shapeManager.enablePatternDrawing();
     }
@@ -1260,14 +1263,14 @@ onNodeFillColorSelected(layerId: string, color: string) {
     }
     
     // Shapes
-    if(this.controlPanelActiveTool == 'shape:square') {
+    if(this.controlPanelActiveTool === 'shape:square') {
       this.setPreviewShapeSelected(ShapeType.Rectangle, event);
-    } else if(this.controlPanelActiveTool == 'shape:circle') {
+    } else if(this.controlPanelActiveTool === 'shape:circle') {
       this.setPreviewShapeSelected(ShapeType.Circle, event);
-    } else if(this.controlPanelActiveTool == 'shape:triangle') {
+    } else if(this.controlPanelActiveTool === 'shape:triangle') {
       this.setPreviewShapeSelected(ShapeType.Triangle, event);
-    } else if(this.controlPanelActiveTool == 'shape:polygon') {
-      (this.shapeManager as any).defaultPolygonSides = this.defaultPolygonSides;
+    } else if(this.controlPanelActiveTool === 'shape:polygon') {
+      this.shapeManager.defaultPolygonSides = this.defaultPolygonSides;
       this.setPreviewShapeSelected(ShapeType.Polygon, event);
     } else {
       this.setPreviewShapeSelected(null, event);
@@ -1275,16 +1278,16 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
     // Freeform polygon drawing
     this.controlPanelActiveTool === 'polygon:freeform'
-      ? this.shapeManager.enablePolygonDrawing?.()
-      : this.shapeManager.disablePolygonDrawing?.();
+      ? this.shapeManager.enablePolygonDrawing()
+      : this.shapeManager.disablePolygonDrawing();
 
-    if(this.controlPanelActiveTool == 'sdftext') {
+    if(this.controlPanelActiveTool === 'sdftext') {
       this.shapeManager.enableSDFTextDrawing();
     } else {
       this.shapeManager.disableSDFTextDrawing();
     }
 
-    if(this.controlPanelActiveTool == 'stamp')
+    if(this.controlPanelActiveTool === 'stamp')
     {
       this.shapeManager.enableStampDrawing();
     }
@@ -1317,7 +1320,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
         this.shapeManager.createStickyNote(0, 0, "Type anything!", { r: 1, g: 1, b: 0.56, a: 1 }, "Zain S.");
         break;
       case 'polygon':
-        this.shapeManager.createRegularPolygon?.(0, 0, 0.3, this.defaultPolygonSides, { r: 0, g: 0, b: 0, a: 1 }, 1);
+        this.shapeManager.createRegularPolygon(0, 0, 0.3, this.defaultPolygonSides, { r: 0, g: 0, b: 0, a: 1 }, 1);
         break;
       default:
         break;
@@ -1348,7 +1351,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
   }
 
   openColorPicker() {
-    this.showPenColorPicker == false ? this.showPenColorPicker = true : this.showPenColorPicker = false;
+    this.showPenColorPicker === false ? this.showPenColorPicker = true : this.showPenColorPicker = false;
   } 
 
   // In the future, you can setup your WebSocket comms here.
@@ -1363,7 +1366,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
   loadBoardSceneGraph() {
     this.boardService.loadBoardSceneGraph(this.board.id).subscribe(res => {
-      this.shapeManager.setSceneGraphJSON(res);
+      void this.shapeManager.setSceneGraphJSON(res);
     });
   }
 
@@ -1379,7 +1382,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
     const now = Date.now();
 
     if (currentSceneGraphJSON !== this.lastSavedThumbnailJSON) {
-        this.saveThumbnail();
+        void this.saveThumbnail();
         this.lastSavedThumbnailJSON = currentSceneGraphJSON; // Update snapshot
         this.lastThumbnailTime = now;
     }
@@ -1390,7 +1393,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
   //   if (!canvas) return;
 
   //   // Wait until a fully rendered frame is on-screen
-  //   await (this.shapeManager as any)['webgpuRenderer'].waitForFrameSettled();
+  //   await this.shapeManager['webgpuRenderer'].waitForFrameSettled();
   //   // or expose a wrapper on ShapeManager if you prefer
 
   //   const thumbnailBlob = await this.getThumbnailBlob(canvas);
@@ -1445,7 +1448,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
   }
 
   returnToDashboard() {
-    this.router.navigate(['/dashboard']);
+    void this.router.navigate(['/dashboard']);
   }
 
   resetSceneState() {
@@ -1600,7 +1603,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
     this.boardService.createBoard(newBoard).subscribe((res: any) => {
       if (res.resultType === ResultType.Success) {
-        this.router.navigate(['/board', res.resultObject.uuid]);
+        void this.router.navigate(['/board', res.resultObject.uuid]);
         this.saveThumbnailIfChanged();
       } else {
         this.notifyService.error('There was an error creating a new board :(');
@@ -1628,7 +1631,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
       next: (res: any) => {
         if (res.resultType === ResultType.Success) {
           const newUuid = res.resultObject.uuid;
-          this.router.navigate(['/board', newUuid]);
+          void this.router.navigate(['/board', newUuid]);
         } else {
           this.notifyService.error('There was an error duplicating the board :(');
         }

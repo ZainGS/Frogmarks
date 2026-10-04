@@ -1,0 +1,65 @@
+<details class="scene3d-details">
+    <summary>HTML Texture</summary>
+    <div class="scene3d-toggle-row" *ngIf="scene3dHtmlEnabled">
+        <label style="color:#6c6">Active</label>
+        <button class="scene3d-btn scene3d-btn-danger" (click)="scene3dRemoveHtmlTexture()" style="margin-left:auto">Remove</button>
+    </div>
+    <!-- Ribbon: auto-size from geometry; expose quality instead of raw pixels -->
+    <ng-container *ngIf="scene3dIsRibbon">
+        <div class="scene3d-material-row">
+            <label>Quality</label>
+            <div class="segment-row">
+                <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 64"  (click)="scene3dSetHtmlTexQuality(64)"  title="Low — 64px tall">Low</button>
+                <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 128" (click)="scene3dSetHtmlTexQuality(128)" title="Medium — 128px tall (default)">Med</button>
+                <button class="segment-btn" [class.active]="scene3dHtmlTexQuality === 256" (click)="scene3dSetHtmlTexQuality(256)" title="High — 256px tall">High</button>
+            </div>
+        </div>
+        <div class="scene3d-keyframe-hint" *ngIf="scene3dHtmlEnabled">
+            Texture: {{ scene3dHtmlTexWidth }} × {{ scene3dHtmlTexHeight }} px
+        </div>
+    </ng-container>
+    <!-- Non-ribbon: manual size control -->
+    <ng-container *ngIf="!scene3dIsRibbon">
+        <div class="scene3d-material-row">
+            <label>Width px</label>
+            <input type="number" step="64" min="64" max="4096" class="scene3d-input-small" [(ngModel)]="scene3dHtmlTexWidth">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height px</label>
+            <input type="number" step="32" min="32" max="2048" class="scene3d-input-small" [(ngModel)]="scene3dHtmlTexHeight">
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row">
+        <label>Background</label>
+        <input type="color" [(ngModel)]="scene3dHtmlTexBg"
+               [disabled]="scene3dHtmlTexBgTransparent"
+               (input)="scene3dHtmlEnabled && scene3dApplyHtmlTexture()"
+               style="width:36px; height:22px; padding:1px; border:none; background:none; cursor:pointer">
+        <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#aaa;cursor:pointer">
+            <input type="checkbox" [(ngModel)]="scene3dHtmlTexBgTransparent"
+                   (change)="scene3dHtmlEnabled && scene3dApplyHtmlTexture()"
+                   style="accent-color:#9B59B6">
+            transparent
+        </label>
+    </div>
+    <div class="scene3d-material-row" *ngIf="scene3dIsRibbon">
+        <label title="GPU-tiles the texture N times along the ribbon length — use a single copy of the text and increase this for higher effective DPI">UV Tiles</label>
+        <input type="number" min="1" max="64" step="1" class="scene3d-input-small"
+               [ngModel]="scene3dRibbonUvTileCount"
+               (ngModelChange)="ribbonUvTileCountChange.emit(+$event)">
+    </div>
+    <textarea class="scene3d-html-editor"
+              [(ngModel)]="scene3dHtmlContent"
+              (input)="scene3dOnHtmlContentChange()"
+              [placeholder]="scene3dHtmlPlaceholder"
+              rows="5"></textarea>
+    <div style="padding: 4px 0 2px; display:flex; gap:6px">
+        <button class="scene3d-btn" style="flex:1" (click)="scene3dApplyHtmlTexture()">
+            {{ scene3dHtmlEnabled ? '↻ Update' : '✓ Apply HTML' }}
+        </button>
+    </div>
+    <div class="scene3d-keyframe-hint" *ngIf="!scene3dHtmlEnabled">
+        Tip: repeat the text with spacing for seamless scrolling.
+        Use <code>white-space:nowrap</code> to prevent wrapping.
+    </div>
+</details>

@@ -1,0 +1,378 @@
+<button class="scene3d-btn scene3d-add-mesh-btn"
+        (click)="menuOpenChange.emit(!menuOpen)">+ Add Mesh ▾</button>
+<div *ngIf="menuOpen" class="scene3d-add-mesh-dropdown">
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dAddMesh('box'); menuOpenChange.emit(false)">Box</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dAddMesh('sphere'); menuOpenChange.emit(false)">Sphere</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dAddMesh('plane'); menuOpenChange.emit(false)">Plane</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowCylinderForm=!add.scene3dShowCylinderForm; add.scene3dShowPolygonForm=false; add.scene3dShowCircleForm=false; add.scene3dShowRevolveForm=false; add.scene3dShowTubeForm=false; add.scene3dShowMetaballForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Cylinder, cone, or tapered frustum">Cylinder…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dAddMesh('torus'); menuOpenChange.emit(false)">Torus</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dAddMesh('sprite'); menuOpenChange.emit(false)" title="Flat textured quad — apply a texture to show an image">Sprite</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowPolygonForm=!add.scene3dShowPolygonForm; add.scene3dShowCircleForm=false; add.scene3dShowCylinderForm=false; add.scene3dShowRevolveForm=false; add.scene3dShowTubeForm=false; add.scene3dShowMetaballForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Editable polygon from 2D silhouette">Polygon…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowCircleForm=!add.scene3dShowCircleForm; add.scene3dShowPolygonForm=false; add.scene3dShowCylinderForm=false; add.scene3dShowRevolveForm=false; add.scene3dShowTubeForm=false; add.scene3dShowMetaballForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Circle / n-gon with optional height">Circle…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowRevolveForm=!add.scene3dShowRevolveForm; add.scene3dShowCylinderForm=false; add.scene3dShowPolygonForm=false; add.scene3dShowCircleForm=false; add.scene3dShowTubeForm=false; add.scene3dShowMetaballForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Revolve a profile around the Y axis — vases, bottles, columns">Revolve…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowTubeForm=!add.scene3dShowTubeForm; add.scene3dShowCylinderForm=false; add.scene3dShowPolygonForm=false; add.scene3dShowCircleForm=false; add.scene3dShowRevolveForm=false; add.scene3dShowMetaballForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Tube along a path — pipes, horns, branches, cables">Tube…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowMetaballForm=!add.scene3dShowMetaballForm; add.scene3dShowTubeForm=false; add.scene3dShowCylinderForm=false; add.scene3dShowPolygonForm=false; add.scene3dShowCircleForm=false; add.scene3dShowRevolveForm=false; add.scene3dShowCreatureForm=false; menuOpenChange.emit(false)"
+         title="Smooth-fused SDF blobs — organic shapes, slime, coral, clouds">Metaballs…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dShowCreatureForm=!add.scene3dShowCreatureForm; add.scene3dShowMetaballForm=false; add.scene3dShowTubeForm=false; add.scene3dShowCylinderForm=false; add.scene3dShowPolygonForm=false; add.scene3dShowCircleForm=false; add.scene3dShowRevolveForm=false; menuOpenChange.emit(false)"
+         title="Parametric animal — dog, cat, horse, lizard, bird">Creature…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('group'); menuOpenChange.emit(false)">Group</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('ribbon'); menuOpenChange.emit(false)"
+         title="Ribbon — flat strip for banners/scrolling text">Ribbon</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('cloth'); menuOpenChange.emit(false)"
+         title="Cloth — GPU-simulated fabric mesh">Cloth…</div>
+    <div class="scene3d-add-mesh-item" (click)="add.scene3dOpenCharacterForm(); menuOpenChange.emit(false)"
+         title="Generate a rigged procedural character body">Character…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('building'); menuOpenChange.emit(false)"
+         title="Generate a procedural building">Building…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('foliage'); menuOpenChange.emit(false)"
+         title="Generate a freestanding plant or hedge">Foliage…</div>
+    <div *ngFor="let ct of scene3dCreatorTypesList"
+         class="scene3d-add-mesh-item"
+         (click)="action.emit({ creator: ct.typeId }); menuOpenChange.emit(false)"
+         title="Add a procedural {{ ct.label }}">{{ ct.label }}…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('block'); menuOpenChange.emit(false)"
+         title="Create a neighborhood block (many buildings as one instanced unit)">Block…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('package'); menuOpenChange.emit(false)"
+         title="Add a foldable 3D box package">Package…</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('camera'); menuOpenChange.emit(false)"
+         title="Add a cinematic camera node — place, look-through, and set cuts in the timeline">Camera</div>
+    <div class="scene3d-add-mesh-item" (click)="action.emit('cdKit'); menuOpenChange.emit(false)"
+         title="Add a CD jewel-case kit — front insert, tray card, disc, and booklet">CD Kit</div>
+</div>
+
+<!-- Polygon quick-form -->
+<div *ngIf="add.scene3dShowPolygonForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Polygon Mesh</div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Sides</span>
+        <input type="number" class="scene3d-qf-num" min="3" max="64" step="1"
+               [(ngModel)]="add.scene3dPolygonSides">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Radius</span>
+        <input type="number" class="scene3d-qf-num" min="0.01" step="0.1"
+               [(ngModel)]="add.scene3dPolygonRadius">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Height</span>
+        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+               [(ngModel)]="add.scene3dPolygonHeight"
+               title="0 = flat cap only">
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddPolygon()">Add Polygon</button>
+</div>
+
+<!-- Circle quick-form -->
+<div *ngIf="add.scene3dShowCircleForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Circle Mesh</div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Radius</span>
+        <input type="number" class="scene3d-qf-num" min="0.01" step="0.1"
+               [(ngModel)]="add.scene3dCircleRadius">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Segments</span>
+        <input type="number" class="scene3d-qf-num" min="3" max="128" step="1"
+               [(ngModel)]="add.scene3dCircleSegments">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Height</span>
+        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+               [(ngModel)]="add.scene3dCircleHeight"
+               title="0 = flat cap only">
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddCircle()">Add Circle</button>
+</div>
+
+<!-- Cylinder / cone quick-form -->
+<div *ngIf="add.scene3dShowCylinderForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Cylinder</div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Radius</span>
+        <input type="number" class="scene3d-qf-num" min="0.01" step="0.05"
+               [(ngModel)]="add.scene3dCylinderRadius">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Height</span>
+        <input type="number" class="scene3d-qf-num" min="0.01" step="0.1"
+               [(ngModel)]="add.scene3dCylinderHeight">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Top radius</span>
+        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+               [(ngModel)]="add.scene3dCylinderRadiusTop"
+               title="0 = cone tip · same as bottom = cylinder">
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Segments</span>
+        <input type="number" class="scene3d-qf-num" min="3" max="64" step="1"
+               [(ngModel)]="add.scene3dCylinderSegments">
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:4px">
+        <button class="scene3d-qf-btn" style="flex:1;font-size:10px;padding:4px" (click)="add.scene3dCylinderRadiusTop=0">↑ Cone</button>
+        <button class="scene3d-qf-btn" style="flex:1;font-size:10px;padding:4px" (click)="add.scene3dCylinderRadiusTop=add.scene3dCylinderRadius">⬛ Cylinder</button>
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddCylinder()">Add</button>
+</div>
+
+<!-- Revolve / lathe quick-form -->
+<div *ngIf="add.scene3dShowRevolveForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Revolve (Lathe)</div>
+    <div class="scene3d-qf-hint">Profile points [radius, y]. Radius 0 = tip.</div>
+    <div *ngFor="let pt of add.scene3dRevolveProfile; let i = index" class="scene3d-qf-row scene3d-qf-row-tight">
+        <span class="scene3d-qf-label">P{{ i+1 }}</span>
+        <span class="scene3d-qf-sublabel">r</span>
+        <input type="number" class="scene3d-qf-num" min="0" step="0.05"
+               [ngModel]="pt[0]" (ngModelChange)="add.scene3dRevolveProfile[i][0]=$event">
+        <span class="scene3d-qf-sublabel">y</span>
+        <input type="number" class="scene3d-qf-num" step="0.05"
+               [ngModel]="pt[1]" (ngModelChange)="add.scene3dRevolveProfile[i][1]=$event">
+        <button class="scene3d-qf-icon-btn" (click)="add.scene3dRevolveRemovePoint(i)"
+                [disabled]="add.scene3dRevolveProfile.length <= 2">✕</button>
+    </div>
+    <button class="scene3d-qf-btn" style="margin-bottom:6px" (click)="add.scene3dRevolveAddPoint()">+ Point</button>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Segments</span>
+        <input type="number" class="scene3d-qf-num" min="4" max="64" step="4"
+               [(ngModel)]="add.scene3dRevolveSegments">
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddRevolve()">Add Revolve</button>
+</div>
+
+<!-- Tube / loft quick-form -->
+<div *ngIf="add.scene3dShowTubeForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Tube / Loft</div>
+    <div class="scene3d-qf-hint">Path spine [x, y, z] + radius per point.</div>
+    <div *ngFor="let pt of add.scene3dTubePath; let i = index" class="scene3d-qf-row scene3d-qf-row-tight">
+        <span class="scene3d-qf-label" style="flex-shrink:0">P{{ i+1 }}</span>
+        <input type="number" class="scene3d-qf-num" step="0.1" placeholder="x"
+               [ngModel]="pt[0]" (ngModelChange)="add.scene3dTubePath[i][0]=$event">
+        <input type="number" class="scene3d-qf-num" step="0.1" placeholder="y"
+               [ngModel]="pt[1]" (ngModelChange)="add.scene3dTubePath[i][1]=$event">
+        <input type="number" class="scene3d-qf-num" step="0.1" placeholder="z"
+               [ngModel]="pt[2]" (ngModelChange)="add.scene3dTubePath[i][2]=$event">
+        <input type="number" class="scene3d-qf-num" min="0.01" step="0.05" placeholder="r"
+               title="Radius at this point"
+               [ngModel]="add.scene3dTubeRadii[i]" (ngModelChange)="add.scene3dTubeRadii[i]=$event">
+        <button class="scene3d-qf-icon-btn" (click)="add.scene3dTubeRemovePoint(i)"
+                [disabled]="add.scene3dTubePath.length <= 2">✕</button>
+    </div>
+    <button class="scene3d-qf-btn" style="margin-bottom:6px" (click)="add.scene3dTubeAddPoint()">+ Point</button>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Segments</span>
+        <input type="number" class="scene3d-qf-num" min="4" max="32" step="4"
+               [(ngModel)]="add.scene3dTubeSegments">
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddTube()">Add Tube</button>
+</div>
+
+<!-- Metaballs quick-form -->
+<div *ngIf="add.scene3dShowMetaballForm" class="scene3d-quick-form scene3d-qf-wide" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Metaballs</div>
+    <div class="scene3d-qf-hint">SDF blobs that smooth-fuse. Keep resolution low while editing.</div>
+    <div class="scene3d-metaball-list">
+        <div *ngFor="let blob of add.scene3dMetaballBlobs; let i = index" class="scene3d-metaball-blob">
+            <div class="scene3d-qf-row">
+                <span class="scene3d-qf-label">B{{ i+1 }}</span>
+                <select class="scene3d-qf-select" [(ngModel)]="blob.shape">
+                    <option value="sphere">Sphere</option>
+                    <option value="capsule">Capsule</option>
+                    <option value="ellipsoid">Ellipsoid</option>
+                    <option value="box">Box</option>
+                    <option value="torus">Torus</option>
+                </select>
+                <button class="scene3d-qf-icon-btn" (click)="add.scene3dMetaballRemoveBlob(i)"
+                        [disabled]="add.scene3dMetaballBlobs.length <= 1">✕</button>
+            </div>
+            <div class="scene3d-qf-row scene3d-qf-row-tight">
+                <span class="scene3d-qf-sublabel">ax</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.ax">
+                <span class="scene3d-qf-sublabel">ay</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.ay">
+                <span class="scene3d-qf-sublabel">az</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.az">
+            </div>
+            <div *ngIf="blob.shape === 'capsule'" class="scene3d-qf-row scene3d-qf-row-tight">
+                <span class="scene3d-qf-sublabel">bx</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.bx">
+                <span class="scene3d-qf-sublabel">by</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.by">
+                <span class="scene3d-qf-sublabel">bz</span>
+                <input type="number" class="scene3d-qf-num" step="0.1" [(ngModel)]="blob.bz">
+            </div>
+            <div class="scene3d-qf-row scene3d-qf-row-tight">
+                <span class="scene3d-qf-sublabel">r</span>
+                <input type="number" class="scene3d-qf-num" min="0.01" step="0.05" [(ngModel)]="blob.radius">
+                <span class="scene3d-qf-sublabel">blend</span>
+                <input type="number" class="scene3d-qf-num" min="0" max="1" step="0.05" [(ngModel)]="blob.blend">
+                <label class="scene3d-qf-check">
+                    <input type="checkbox" [(ngModel)]="blob.subtract"> cut
+                </label>
+            </div>
+        </div>
+    </div>
+    <button class="scene3d-qf-btn" style="margin-bottom:6px" (click)="add.scene3dMetaballAddBlob()">+ Blob</button>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Resolution</span>
+        <input type="range" min="8" max="64" step="8" style="flex:1"
+               [(ngModel)]="add.scene3dMetaballResolution">
+        <span style="font-size:10px;color:#aaa;min-width:24px;text-align:right">{{ add.scene3dMetaballResolution }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Decimate</span>
+        <input type="range" min="0.15" max="1.0" step="0.05" style="flex:1"
+               [(ngModel)]="add.scene3dMetaballDecimate">
+        <span class="scene3d-qf-val">{{ add.scene3dMetaballDecimate >= 1.0 ? 'Off' : ((add.scene3dMetaballDecimate * 100) | number:'1.0-0') + '%' }}</span>
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddMetaball()">Add Metaballs</button>
+</div>
+
+<!-- Creature quick-form -->
+<div *ngIf="add.scene3dShowCreatureForm" class="scene3d-quick-form scene3d-qf-wide" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Creature</div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Species</span>
+        <select class="scene3d-qf-select" [(ngModel)]="add.scene3dCreatureSpecies">
+            <option value="dog">Dog</option>
+            <option value="cat">Cat</option>
+            <option value="horse">Horse</option>
+            <option value="lizard">Lizard</option>
+            <option value="bird">Bird</option>
+            <option value="generic">Generic</option>
+        </select>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Body length</span>
+        <input type="range" min="0.3" max="2.5" step="0.1" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.bodyLength">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.bodyLength | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Body radius</span>
+        <input type="range" min="0.1" max="0.8" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.bodyRadius">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.bodyRadius | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Legs</span>
+        <button class="scene3d-qf-btn" style="width:auto;flex:none;padding:3px 10px;margin-top:0"
+                [class.scene3d-qf-btn-active]="add.scene3dCreatureParams.legCount===2"
+                (click)="add.scene3dCreatureParams.legCount=2">2</button>
+        <button class="scene3d-qf-btn" style="width:auto;flex:none;padding:3px 10px;margin-top:0"
+                [class.scene3d-qf-btn-active]="add.scene3dCreatureParams.legCount===4"
+                (click)="add.scene3dCreatureParams.legCount=4">4</button>
+        <span class="scene3d-qf-label" style="margin-left:6px">Leg len</span>
+        <input type="range" min="0.1" max="1.2" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.legLength">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.legLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Neck</span>
+        <input type="range" min="0" max="0.8" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.neckLength">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.neckLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Head</span>
+        <input type="range" min="0.1" max="0.8" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.headSize">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.headSize | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Tail len</span>
+        <input type="range" min="0" max="1.0" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.tailLength">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.tailLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Tail curl</span>
+        <input type="range" min="0" max="1.0" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.tailCurl">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.tailCurl | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Ear size</span>
+        <input type="range" min="0" max="0.6" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.earSize">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.earSize | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Blend</span>
+        <input type="range" min="0.05" max="0.8" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.blend">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.blend | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Roughness</span>
+        <input type="range" min="0" max="0.8" step="0.05" style="flex:1" [(ngModel)]="add.scene3dCreatureParams.roughness">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureParams.roughness | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row" style="gap:12px">
+        <label class="scene3d-qf-check">
+            <input type="checkbox" [(ngModel)]="add.scene3dCreatureParams.eyes"> Eyes
+        </label>
+        <label class="scene3d-qf-check">
+            <input type="checkbox" [(ngModel)]="add.scene3dCreatureParams.rigged"> Rigged
+        </label>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Seed</span>
+        <input type="number" class="scene3d-qf-num" style="flex:1" [(ngModel)]="add.scene3dCreatureSeed">
+        <button class="scene3d-qf-btn" style="width:auto;flex:none;padding:3px 8px;margin-top:0"
+                (click)="add.scene3dRandomizeCreature()">🎲</button>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Resolution</span>
+        <input type="range" min="8" max="64" step="8" style="flex:1" [(ngModel)]="add.scene3dCreatureResolution">
+        <span class="scene3d-qf-val">{{ add.scene3dCreatureResolution }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Decimate</span>
+        <input type="range" min="0.15" max="1.0" step="0.05" style="flex:1"
+               [(ngModel)]="add.scene3dCreatureParams.decimate">
+        <span class="scene3d-qf-val">{{ (add.scene3dCreatureParams.decimate * 100) | number:'1.0-0' }}%</span>
+    </div>
+    <button class="scene3d-qf-btn" (click)="add.scene3dAddCreature()">Add Creature</button>
+</div>
+
+<!-- Character quick-form -->
+<div *ngIf="add.scene3dShowCharacterForm" class="scene3d-quick-form" (click)="$event.stopPropagation()">
+    <div class="scene3d-quick-form-title">Base Body</div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Height</span>
+        <input type="range" min="0.1" max="1" step="0.05" [(ngModel)]="add.scene3dCharHeight" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharHeight | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Leg length</span>
+        <input type="range" min="0.75" max="1.25" step="0.05" [(ngModel)]="add.scene3dCharLegLength" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharLegLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Limb thick</span>
+        <input type="range" min="0.6" max="1.6" step="0.05" [(ngModel)]="add.scene3dCharLimbThick" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharLimbThick | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Torso width</span>
+        <input type="range" min="0.6" max="1.6" step="0.05" [(ngModel)]="add.scene3dCharTorsoThick" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharTorsoThick | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Torso length</span>
+        <input type="range" min="0.6" max="1.4" step="0.05" [(ngModel)]="add.scene3dCharTorsoLength" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharTorsoLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Head size</span>
+        <input type="range" min="0.7" max="1.6" step="0.05" [(ngModel)]="add.scene3dCharHeadSize" (ngModelChange)="add.scene3dPreviewCharacter()" style="flex:1">
+        <span style="font-size:10px;color:#aaa;min-width:28px;text-align:right">{{ add.scene3dCharHeadSize | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-qf-row" *ngIf="add.scene3dCharBiasOptions.length > 0" style="margin-top:6px">
+        <span class="scene3d-qf-label">Bias from</span>
+        <select class="scene3d-select" style="flex:1;font-size:10px" [(ngModel)]="add.scene3dCharBiasBodyId">
+            <option [ngValue]="null">None (random)</option>
+            <option *ngFor="let opt of add.scene3dCharBiasOptions" [ngValue]="opt.id">{{ opt.label }}</option>
+        </select>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:6px">
+        <button class="scene3d-qf-btn" style="flex:1" (click)="add.scene3dGenerateCharacter()">Generate body</button>
+        <button class="scene3d-qf-btn" style="flex:none;background:#2a2a2a" (click)="add.scene3dCancelCharacter()">Cancel</button>
+    </div>
+</div>

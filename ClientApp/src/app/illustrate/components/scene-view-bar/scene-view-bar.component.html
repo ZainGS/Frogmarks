@@ -1,0 +1,131 @@
+<!-- Camera mode: 3-way segmented -->
+<div class="scene-view-seg">
+    <button class="scene-view-btn"
+            [class.active]="scene3dViewCameraMode === 'ortho2D'"
+            (click)="setCameraMode.emit('ortho2D')"
+            title="2D Ortho — locked illustration camera, orthographic">2D Ortho</button>
+    <button class="scene-view-btn"
+            [class.active]="scene3dViewCameraMode === 'perspective2D'"
+            (click)="setCameraMode.emit('perspective2D')"
+            title="2D Persp — locked illustration camera, perspective">2D Persp</button>
+    <button class="scene-view-btn"
+            [class.active]="scene3dViewCameraMode === 'free3D'"
+            (click)="setCameraMode.emit('free3D')"
+            title="3D Free — orbit (Alt+drag), pan (Shift+drag), dolly (scroll)">3D Free</button>
+</div>
+<!-- Target: Illustration ↔ Scene -->
+<div class="scene-view-seg">
+    <button class="scene-view-btn"
+            [class.active]="scene3dViewTarget === 'illustration'"
+            (click)="setTarget.emit('illustration')"
+            title="Illustration: produces a fixed X×Y image. Raster/vector layers preserved.">Illus</button>
+    <button class="scene-view-btn"
+            [class.active]="scene3dViewTarget === 'scene'"
+            (click)="setTarget.emit('scene')"
+            title="Scene: interactive 3D world. Layers preserved.">Scene</button>
+</div>
+<!-- Artboard frame (illustration × free3D) -->
+<button class="scene-view-btn scene-view-icon-btn"
+        *ngIf="scene3dViewTarget === 'illustration' && scene3dViewCameraMode === 'free3D'"
+        [class.active]="scene3dViewArtboardFrame"
+        (click)="setArtboardFrame.emit(!scene3dViewArtboardFrame)"
+        title="Show artboard render safe-frame outline in 3D view">⬜</button>
+<!-- Fly editor camera (free3D only) -->
+<button class="scene-view-btn scene-view-icon-btn"
+        *ngIf="scene3dViewCameraMode === 'free3D'"
+        [class.active]="scene3dViewFly"
+        (click)="setFly.emit(!scene3dViewFly)"
+        title="WASD flythrough: W/S forward, A/D strafe, E/Q up/down, Shift boost. Aim by orbit-drag.">🛩</button>
+<!-- 1P/3P toggle + Play button (scene target only) -->
+<ng-container *ngIf="scene3dViewTarget === 'scene'">
+    <div class="scene-view-seg" title="Camera perspective when playing">
+        <button class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'first'"
+                (click)="playCameraModeChange.emit('first')" title="First-person — camera sits at the character's eyes">1P</button>
+        <button class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'third'"
+                (click)="playCameraModeChange.emit('third')" title="Third-person — camera pulls back and follows the character">3P</button>
+    </div>
+    <!-- Play settings (Salsa polish round 3 T5): first-person eye height + auto default character -->
+    <div style="position:relative;display:inline-flex">
+        <button class="scene-view-btn scene-view-icon-btn" [class.active]="scene3dPlaySettingsOpen"
+                (click)="scene3dTogglePlaySettings()" title="Play settings">&#9881;</button>
+        <div *ngIf="scene3dPlaySettingsOpen"
+             style="position:absolute;top:100%;right:0;margin-top:4px;z-index:60;width:230px;background:#1e1e1e;border:1px solid #444;border-radius:4px;padding:8px;box-shadow:0 4px 14px rgba(0,0,0,0.5)">
+            <div class="scene3d-material-row">
+                <label title="First-person eye height in metres (city scale in City mode)">Player height</label>
+                <input type="range" min="0.5" max="2.5" step="0.05"
+                       [ngModel]="scene3dPlayEyeHeightM ?? scene3dPlayEyeHeightAutoM"
+                       (ngModelChange)="scene3dSetPlayEyeHeight(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayEyeHeightM === null ? 'auto' : ((scene3dPlayEyeHeightM | number:'1.2-2') + 'm') }}</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin:-2px 0 6px">
+                <button class="scene3d-btn scene3d-btn-sm" [disabled]="scene3dPlayEyeHeightM === null"
+                        (click)="scene3dSetPlayEyeHeight(null)" title="Back to automatic (1.6, or 0.9 × your Player character's height)">Auto</button>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Default movement speed (metres per second)">Walk speed</label>
+                <input type="range" min="0.5" max="3" step="0.05"
+                       [ngModel]="scene3dPlayWalkSpeed" (ngModelChange)="scene3dSetPlayWalkSpeed(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayWalkSpeed | number:'1.2-2' }} m/s</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Speed while running (Shift toggles run), metres per second">Run speed</label>
+                <input type="range" min="2" max="12" step="0.1"
+                       [ngModel]="scene3dPlayMoveSpeed" (ngModelChange)="scene3dSetPlayMoveSpeed(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayMoveSpeed | number:'1.1-1' }} m/s</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin:-2px 0 6px">
+                <button class="scene3d-btn scene3d-btn-sm" [disabled]="scene3dPlayMoveSpeed === 5.2 && scene3dPlayWalkSpeed === 1.6"
+                        (click)="scene3dSetPlayMoveSpeed(null); scene3dSetPlayWalkSpeed(null)" title="Back to the default speeds (walk 1.6, run 5.2 m/s)">Default speeds</button>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Third-person camera distance behind the character (metres)">Camera distance</label>
+                <input type="range" min="1.5" max="12" step="0.1"
+                       [ngModel]="scene3dPlayCamDist ?? 4.4" (ngModelChange)="scene3dSetPlayCamDist(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayCamDist === null ? 'auto' : ((scene3dPlayCamDist | number:'1.1-1') + 'm') }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Third-person field of view">Camera FOV</label>
+                <input type="range" min="40" max="100" step="1"
+                       [ngModel]="scene3dPlayFov" (ngModelChange)="scene3dSetPlayFov(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayFov }}&deg;</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:4px;margin:-2px 0 6px">
+                <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dSetPlayCamDist(null); scene3dSetPlayFov(null)" title="Back to the default camera (auto distance, 72 degrees)">Default camera</button>
+            </div>
+            <div class="scene3d-hint" style="margin:0 0 6px">Walk by default. Shift toggles run, hold Ctrl (or press C) to sneak, Space jumps. Gamepad: left stick moves, right stick orbits, B sneaks.</div>
+            <div class="scene3d-toggle-row">
+                <label title="Each jump picks one of several default jumps (tuck, reach, layup, stride, hop) for variety. Your own Jump clip always plays as authored.">Jump variety</label>
+                <input type="checkbox" [ngModel]="scene3dPlayJumpVariety" (ngModelChange)="scene3dSetPlayJumpVariety($event)">
+            </div>
+            <div class="scene3d-toggle-row">
+                <label title="Stylised dust puffs when the character lands (bigger for a long fall), little puffs under the feet while running, and splashes on a wet street. Coloured by the ground and the time of day.">Landing dust</label>
+                <input type="checkbox" [ngModel]="scene3dPlayLandingDust" (ngModelChange)="scene3dSetPlayLandingDust($event)">
+            </div>
+            <div class="scene3d-toggle-row">
+                <label title="Standing still, the default character now and then looks around, stretches, checks the time, taps a foot or pushes up their glasses. Your own Idle clip always plays as authored.">Idle variety</label>
+                <input type="checkbox" [ngModel]="scene3dPlayIdleVariety" (ngModelChange)="scene3dSetPlayIdleVariety($event)">
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Secondary motion on the default walk / run: follow-through on starts and stops, stride-to-stride variation, head drift. 0 = the clips exactly.">Motion looseness</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [ngModel]="scene3dPlayLooseness" (ngModelChange)="scene3dSetPlayLooseness(+$event)">
+                <span class="scene3d-val">{{ scene3dPlayLooseness | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="How the default character walks. Natural = heel-to-toe and light. Stomp = a heavy, flat-footed tread (e.g. wading through swamp water). Your own Walk clip always plays as authored.">Walk style</label>
+                <select [ngModel]="scene3dPlayWalkStyle" (ngModelChange)="scene3dSetPlayWalkStyle($event)">
+                    <option value="natural">Natural</option>
+                    <option value="stomp">Stomp</option>
+                </select>
+            </div>
+            <div class="scene3d-toggle-row">
+                <label title="In third-person with no Player set, spawn an animated default character (never saved)">Auto default character</label>
+                <input type="checkbox" [ngModel]="scene3dPlayAutoChar" (ngModelChange)="scene3dSetPlayAutoChar($event)">
+            </div>
+        </div>
+    </div>
+    <button class="scene-view-btn scene-view-play-btn"
+            [class.playing]="scene3dViewIsPlaying"
+            (click)="togglePlay.emit()"
+            [title]="scene3dViewIsPlaying ? 'Stop — restores editor view' : 'Play scene — walk (WASD + Space, click canvas for mouse-look)'">{{ scene3dViewIsPlaying ? '⏹' : '▶' }}</button>
+</ng-container>

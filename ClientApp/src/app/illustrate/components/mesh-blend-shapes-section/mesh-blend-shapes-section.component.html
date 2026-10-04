@@ -1,0 +1,18 @@
+<details class="scene3d-details" *ngIf="scene3dBlendShapes.length > 0">
+    <summary>Blend Shapes</summary>
+    <div *ngFor="let shape of scene3dBlendShapes; let i = index" class="scene3d-material-row">
+        <label class="scene3d-blend-name" [title]="shape.name">{{ shape.name }}</label>
+        <input type="range" min="0" max="1" step="0.001"
+               [(ngModel)]="shape.weight"
+               (input)="scene3dSetBlendWeight(i, shape.weight)"
+               class="scene3d-range">
+        <input type="number" min="0" max="1" step="0.01"
+               class="scene3d-short-input"
+               [(ngModel)]="shape.weight"
+               (change)="shape.weight = +$any($event.target).value; scene3dSetBlendWeight(i, shape.weight)">
+        <button class="scene3d-blend-kf-btn"
+                [class.has-kf]="scene3dBlendShapeHasKeyframe(shape.name)"
+                (click)="scene3dToggleBlendShapeKeyframe(shape.name, shape.weight)"
+                [title]="(scene3dBlendShapeHasKeyframe(shape.name) ? 'Remove' : 'Set') + ' keyframe for ' + shape.name + ' at current frame'">◆</button>
+    </div>
+</details>

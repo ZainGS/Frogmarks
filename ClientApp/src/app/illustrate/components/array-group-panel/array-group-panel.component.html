@@ -1,0 +1,153 @@
+<!-- Mode strip -->
+<div class="scene3d-row scene3d-array-mode-row">
+    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'linear'" (click)="scene3dSetArrayMode('linear')">Linear</button>
+    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'grid'"   (click)="scene3dSetArrayMode('grid')">Grid</button>
+    <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayMode === 'radial'" (click)="scene3dSetArrayMode('radial')">Radial</button>
+</div>
+
+<!-- Linear params -->
+<ng-container *ngIf="scene3dArrayMode === 'linear'">
+    <div class="scene3d-material-row">
+        <label>Count</label>
+        <input type="number" min="1" max="32" class="scene3d-short-input"
+               [ngModel]="scene3dArrayCountX" (ngModelChange)="scene3dUpdateArrayCountX($event)">
+    </div>
+    <div class="scene3d-material-row" [class.scene3d-row-muted]="scene3dArrayObjectOffsetId">
+        <label>Spacing</label>
+        <input type="number" min="0.01" step="0.1" class="scene3d-short-input"
+               [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)"
+               [disabled]="!!scene3dArrayObjectOffsetId">
+    </div>
+    <div class="scene3d-material-row" [class.scene3d-row-muted]="scene3dArrayObjectOffsetId">
+        <label>Axis</label>
+        <div class="scene3d-axis-btns">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')" [disabled]="!!scene3dArrayObjectOffsetId">X</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')" [disabled]="!!scene3dArrayObjectOffsetId">Y</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')" [disabled]="!!scene3dArrayObjectOffsetId">Z</button>
+        </div>
+    </div>
+    <!-- Object offset: drives per-step transform instead of spacing -->
+    <div class="scene3d-material-row">
+        <label title="Offset mesh ID — each copy inherits the relative transform of this mesh">Offset</label>
+        <input type="text" class="scene3d-offset-input" placeholder="mesh ID…"
+               [(ngModel)]="scene3dArrayObjectOffsetId"
+               (change)="scene3dSetObjectOffset(scene3dArrayObjectOffsetId)">
+        <button *ngIf="scene3dArrayObjectOffsetId" class="scene3d-btn scene3d-btn-sm" (click)="scene3dClearObjectOffset()" title="Clear offset">✕</button>
+    </div>
+    <!-- Gap Fill + Weld Threshold (for Bake Merged) -->
+    <div class="scene3d-material-row">
+        <label class="scene3d-checkbox-row" title="Bridge geometry between adjacent copies before merged bake">
+            <input type="checkbox" [ngModel]="scene3dArrayGapFill" (ngModelChange)="scene3dSetArrayGapFill($event)">
+            Gap Fill
+        </label>
+    </div>
+    <div class="scene3d-material-row" *ngIf="scene3dArrayGapFill">
+        <label>Weld</label>
+        <input type="number" step="0.001" min="0.0001" class="scene3d-short-input"
+               [ngModel]="scene3dArrayWeldThreshold" (ngModelChange)="scene3dSetArrayWeldThreshold($event)"
+               title="Vertex weld distance (world units)">
+    </div>
+</ng-container>
+
+<!-- Grid params -->
+<ng-container *ngIf="scene3dArrayMode === 'grid'">
+    <div class="scene3d-material-row"><label>Count X</label>
+        <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayCountX" (ngModelChange)="scene3dUpdateArrayCountX($event)">
+    </div>
+    <div class="scene3d-material-row"><label>Count Y</label>
+        <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayCountY" (ngModelChange)="scene3dUpdateArrayCountY($event)">
+    </div>
+    <div class="scene3d-material-row"><label>Spacing X</label>
+        <input type="number" min="0.01" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArraySpacingX" (ngModelChange)="scene3dUpdateArraySpacingX($event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Axis X</label>
+        <div class="scene3d-axis-btns">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'x'" (click)="scene3dSetArrayAxisX('x')">X</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'y'" (click)="scene3dSetArrayAxisX('y')">Y</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisX === 'z'" (click)="scene3dSetArrayAxisX('z')">Z</button>
+        </div>
+    </div>
+    <div class="scene3d-material-row"><label>Spacing Y</label>
+        <input type="number" min="0.01" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArraySpacingY" (ngModelChange)="scene3dUpdateArraySpacingY($event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Axis Y</label>
+        <div class="scene3d-axis-btns">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'x'" (click)="scene3dSetArrayAxisY('x')">X</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'y'" (click)="scene3dSetArrayAxisY('y')">Y</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayAxisY === 'z'" (click)="scene3dSetArrayAxisY('z')">Z</button>
+        </div>
+    </div>
+</ng-container>
+
+<!-- Radial params -->
+<ng-container *ngIf="scene3dArrayMode === 'radial'">
+    <div class="scene3d-material-row"><label>Count</label>
+        <input type="number" min="1" max="32" class="scene3d-short-input" [ngModel]="scene3dArrayRadialCount" (ngModelChange)="scene3dUpdateArrayRadialCount($event)">
+    </div>
+    <div class="scene3d-material-row"><label>Radius</label>
+        <input type="number" min="0.1" step="0.1" class="scene3d-short-input" [ngModel]="scene3dArrayRadius" (ngModelChange)="scene3dUpdateArrayRadius($event)">
+    </div>
+    <div class="scene3d-material-row"><label>Arc °</label>
+        <input type="number" min="1" max="360" step="1" class="scene3d-short-input" [ngModel]="scene3dArrayArc" (ngModelChange)="scene3dUpdateArrayArc($event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Axis</label>
+        <div class="scene3d-axis-btns">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'x'" (click)="scene3dSetArrayRadialAxis('x')">X</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'y'" (click)="scene3dSetArrayRadialAxis('y')">Y</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dArrayRadialAxis === 'z'" (click)="scene3dSetArrayRadialAxis('z')">Z</button>
+        </div>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Orient</label>
+        <div class="scene3d-axis-btns">
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && toggleGizmoOrientation.emit()">World</button>
+            <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && toggleGizmoOrientation.emit()">Local</button>
+        </div>
+    </div>
+</ng-container>
+
+<!-- Edit Source / Bake / Bake Merged -->
+<div class="scene3d-array-actions">
+    <button class="scene3d-btn" (click)="editSource.emit()">Edit Source</button>
+    <button class="scene3d-btn scene3d-btn-danger" (click)="scene3dBakeArray()">Bake</button>
+</div>
+<div class="scene3d-array-actions" *ngIf="scene3dArrayMode === 'linear'">
+    <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="scene3dBakeArrayMerged()" title="Weld all copies into one unified mesh">Bake Merged</button>
+</div>
+
+<!-- Instance Overrides -->
+<div class="scene3d-override-header" (click)="scene3dOverridesPanelOpen = !scene3dOverridesPanelOpen">
+    <span>{{ scene3dOverridesPanelOpen ? '▾' : '▸' }} Instance Overrides</span>
+    <span *ngIf="scene3dInstanceOverrides.length > 0" class="scene3d-override-badge">{{scene3dInstanceOverrides.length}}</span>
+</div>
+<ng-container *ngIf="scene3dOverridesPanelOpen">
+    <div *ngFor="let ov of scene3dInstanceOverrides" class="scene3d-override-row">
+        <div class="scene3d-override-row-header">
+            <span class="scene3d-override-idx">#{{ov.index}}</span>
+            <label class="scene3d-override-vis-label">
+                <input type="checkbox" [(ngModel)]="ov.visible" (ngModelChange)="scene3dApplyInstanceOverride(ov.index)"> vis
+            </label>
+            <button class="scene3d-btn scene3d-btn-sm scene3d-btn-danger" (click)="scene3dClearInstanceOverride(ov.index)" title="Remove override">✕</button>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Rot°</label>
+            <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotX" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation X">
+            <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotY" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation Y">
+            <input type="number" step="1" class="scene3d-short-input" [(ngModel)]="ov.rotZ" (change)="scene3dApplyInstanceOverride(ov.index)" title="Rotation Z">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Scale</label>
+            <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleX" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale X">
+            <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleY" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale Y">
+            <input type="number" step="0.1" min="0.01" class="scene3d-short-input" [(ngModel)]="ov.scaleZ" (change)="scene3dApplyInstanceOverride(ov.index)" title="Scale Z">
+        </div>
+    </div>
+    <div class="scene3d-override-add-row">
+        <label class="scene3d-override-add-label">Index</label>
+        <input type="number" min="0" step="1" class="scene3d-short-input" [(ngModel)]="scene3dNewOverrideIdx">
+        <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dAddInstanceOverride()">+ Add</button>
+    </div>
+</ng-container>

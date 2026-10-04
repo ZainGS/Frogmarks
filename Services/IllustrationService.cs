@@ -4,10 +4,7 @@ using Frogmarks.Data;
 using Frogmarks.Models;
 using Frogmarks.Models.Illustration;
 using Frogmarks.Models.Team;
-using Frogmarks.SignalR.Hubs;
-using Frogmarks.SignalR.Optimizers;
 using Frogmarks.Utilities;
-using Frogmarks.WebSockets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
@@ -27,7 +24,6 @@ namespace Frogmarks.Services
     {
         private readonly IApplicationDbContext _context;
         private readonly IMapper _mapper;
-        private readonly BatchService _batchService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IBlobStorageProvider _blobStorage;
         private readonly string _containerName;
@@ -35,11 +31,13 @@ namespace Frogmarks.Services
         private readonly string _scene3dContainerName;
         private readonly string _publishedContainerName;
 
-        public IllustrationService(IApplicationDbContext context, IMapper mapper, BatchService batchService, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage, IConfiguration configuration)
+        private readonly IResourceAccessService _access;
+
+        public IllustrationService(IApplicationDbContext context, IMapper mapper, IHttpContextAccessor httpContextAccessor, IBlobStorageProvider blobStorage, IConfiguration configuration, IResourceAccessService access)
         {
+            _access = access;
             _context = context;
             _mapper = mapper;
-            _batchService = batchService;
             _httpContextAccessor = httpContextAccessor;
             _blobStorage = blobStorage;
             _containerName          = configuration["BlobStorage:IllustrationThumbnailContainer"]  ?? "illustration-thumbnails-dev";
@@ -52,7 +50,7 @@ namespace Frogmarks.Services
         {
             try
             {
-                var illustrations = await _context.Illustrations.ToListAsync();
+                var illustrations = await (await _access.AccessibleIllustrations(_context.Illustrations)).ToListAsync();   // was every illustration
                 return new ResultModel<IEnumerable<Illustration>>(ResultType.Success, resultObject: illustrations);
             }
             catch (Exception ex)
@@ -64,6 +62,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationDto>> GetIllustrationById(long id)
         {
+            if (!(await _access.CanAccessIllustrationAsync(id))) return new ResultModel<IllustrationDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var illustration = await _context.Illustrations
@@ -127,6 +126,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationDto>> GetIllustrationByUid(Guid uid)
         {
+            if (!(await _access.CanAccessIllustrationAsync(uid))) return new ResultModel<IllustrationDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var dto = await _context.Illustrations.AsNoTracking()
@@ -172,6 +172,14 @@ namespace Frogmarks.Services
 
         /// Increments BlobStorageBytes by <paramref name="delta"/>.
         /// Returns false if the increment would exceed the user's quota.
+        /// <summary>Whose storage quota an illustration's blobs count against: its creator (owner); the caller for old rows
+        /// without one. Uploads by team members / collaborators used to be charged (and deletes credited) to the caller.</summary>
+        private async Task<string?> GetStorageOwnerIdAsync(long illustrationId)
+        {
+            var ownerId = await _context.Illustrations.AsNoTracking().Where(i => i.Id == illustrationId).Select(i => i.CreatedById).FirstOrDefaultAsync();
+            return ownerId ?? GetCurrentUserId();
+        }
+
         private async Task<bool> TryIncrementStorageAsync(string userId, long delta, bool isUserPro)
         {
             if (delta <= 0) return true;
@@ -227,6 +235,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Illustration>> UpdateIllustration(IllustrationDto illustrationDto)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationDto.Id))) return new ResultModel<Illustration>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var existingIllustration = await _context.Illustrations.FindAsync(illustrationDto.Id);
@@ -236,11 +245,16 @@ namespace Frogmarks.Services
                 }
 
                 // Map the changes from illustrationDto to the existingIllustration
+                // Ownership / sharing fields are not editable through this endpoint (audit Phase 1.2: mass assignment)
+                var keepTeamId = existingIllustration.TeamId;
+                var keepPermissionsId = existingIllustration.PermissionsId;
+                var keepIsPublic = existingIllustration.IsPublic;
                 _mapper.Map(illustrationDto, existingIllustration);
+                existingIllustration.TeamId = keepTeamId;
+                existingIllustration.PermissionsId = keepPermissionsId;
+                existingIllustration.IsPublic = keepIsPublic;
                 await _context.SaveChangesAsync();
 
-                // Alert Batch Service of updated illustration item
-                _batchService.Batch(BatchTypes.Illustration, illustrationDto.Id);
 
                 return new ResultModel<Illustration>(ResultType.Success, resultObject: existingIllustration);
             }
@@ -253,6 +267,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> SaveIllustrationCanvas(long illustrationId, string canvasData)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var illustration = await _context.Illustrations.FirstOrDefaultAsync(i => i.Id == illustrationId);
             if (illustration == null) return new ResultModel<string>(ResultType.NotFound, "Illustration not found.");
 
@@ -265,6 +280,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> LoadIllustrationCanvas(long illustrationId)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var illustration = await _context.Illustrations
                 .Where(i => i.Id == illustrationId)
                 .Select(i => i.CanvasData)
@@ -277,6 +293,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Illustration>> FavoritedIllustration(IllustrationDto illustrationDto)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationDto.Id))) return new ResultModel<Illustration>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var existingIllustration = await _context.Illustrations.FindAsync(illustrationDto.Id);
@@ -286,11 +303,23 @@ namespace Frogmarks.Services
                 }
 
                 // Map the changes from illustrationDto to the existingIllustration
+                // Ownership / sharing fields are not editable through this endpoint (audit Phase 1.2: mass assignment)
+                var keepTeamId = existingIllustration.TeamId;
+                var keepPermissionsId = existingIllustration.PermissionsId;
+                var keepIsPublic = existingIllustration.IsPublic;
                 _mapper.Map(illustrationDto, existingIllustration);
+                existingIllustration.TeamId = keepTeamId;
+                existingIllustration.PermissionsId = keepPermissionsId;
+                existingIllustration.IsPublic = keepIsPublic;
 
                 var userId = GetCurrentUserId();
 
-                var teamUser = await _context.TeamUsers.SingleOrDefaultAsync(tu => tu.ApplicationUserId == userId);
+                // One membership per team: SingleOrDefault threw as soon as the user was in two teams (audit Phase 2.5).
+                // Favorite on the membership of the team the client is showing, else the item's team, else any.
+                var memberships = await _context.TeamUsers.Where(tu => tu.ApplicationUserId == userId).ToListAsync();
+                var teamUser = memberships.FirstOrDefault(tu => tu.TeamId == illustrationDto.TeamId)
+                    ?? memberships.FirstOrDefault(tu => tu.TeamId == existingIllustration.TeamId)
+                    ?? memberships.FirstOrDefault();
 
                 if (illustrationDto.IsFavorite)
                 {
@@ -317,6 +346,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Illustration>> DeleteIllustration(long id)
         {
+            if (!(await _access.CanAccessIllustrationAsync(id))) return new ResultModel<Illustration>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var illustration = await _context.Illustrations
@@ -326,7 +356,7 @@ namespace Frogmarks.Services
                 if (illustration == null)
                     return new ResultModel<Illustration>(ResultType.NotFound, "Illustration not found");
 
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(id);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
 
                 // Delete layer and cel blobs, accumulate freed bytes
                 long freedBytes = 0;
@@ -375,8 +405,7 @@ namespace Frogmarks.Services
                     return new ResultModel<IEnumerable<IllustrationDto>>(ResultType.Unauthorized, "User not found");
                 }
 
-                var query = _context.Illustrations
-                    .AsNoTracking()
+                var query = (await _access.AccessibleIllustrations(_context.Illustrations.AsNoTracking()))   // was everyone's illustrations
                     .Where(i => teamId <= 0 || i.TeamId == teamId);
 
                 query = query.Where(i => i.IsArchived == isArchived);
@@ -567,8 +596,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadThumbnail(string illustrationUid, IFormFile thumbnail, bool? isCustom = null)
         {
+            if (!(Guid.TryParse(illustrationUid, out var illustrationGuid) && await _access.CanAccessIllustrationAsync(illustrationGuid))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(illustrationUid))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 if (thumbnail == null || thumbnail.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
@@ -616,6 +648,7 @@ namespace Frogmarks.Services
             long? targetTeamId,
             bool copyThumbnail)
         {
+            if (!(await _access.CanAccessIllustrationAsync(sourceIllustrationId) && (targetTeamId == null || await _access.IsMemberOfTeamAsync(targetTeamId.Value)))) return new ResultModel<IllustrationDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var source = await _context.Illustrations
                 .Include(i => i.Layers)
                     .ThenInclude(l => l.Cels)
@@ -778,6 +811,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationDto>> RenameIllustration(long illustrationId, string newName)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<IllustrationDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             var illustration = await _context.Illustrations.FindAsync(illustrationId);
             if (illustration == null)
                 return new ResultModel<IllustrationDto>(ResultType.NotFound, "Illustration not found");
@@ -800,6 +834,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationStateDto>> SaveIllustrationState(long illustrationId, IllustrationStateDto stateDto)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<IllustrationStateDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var illustration = await _context.Illustrations
@@ -809,6 +844,16 @@ namespace Frogmarks.Services
 
                 if (illustration == null)
                     return new ResultModel<IllustrationStateDto>(ResultType.NotFound, "Illustration not found.");
+
+                // Optimistic concurrency (audit Phase 2.5): the save deletes layers / cels missing from the payload, so a
+                // stale tab used to silently wipe newer work. The revision lives in ExtendedStateJson (no migration).
+                long currentRevision = 0;
+                if (!string.IsNullOrEmpty(illustration.ExtendedStateJson))
+                    try { currentRevision = JsonSerializer.Deserialize<ExtendedState>(illustration.ExtendedStateJson)?.Revision ?? 0; } catch { }
+                if (stateDto.BaseRevision.HasValue && stateDto.BaseRevision.Value != currentRevision)
+                    return new ResultModel<IllustrationStateDto>(ResultType.AlreadyExist,
+                        "This illustration was saved from another tab or device since it was loaded here.",
+                        new IllustrationStateDto { Revision = currentRevision });
 
                 // Update illustration-level fields
                 illustration.SceneVersion = stateDto.Version;
@@ -853,9 +898,11 @@ namespace Frogmarks.Services
                     DotColor = stateDto.DotColor,
                     PaperGrain = stateDto.PaperGrain,
                     Scene3dGlobalSettings = stateDto.Scene3dGlobalSettings,
+                    ExtraFields = stateDto.ExtraFields,
                     MeshIds = stateDto.MeshIds,
                     MeshBlobSizes = prevExt?.MeshBlobSizes,
                     TexLibBlobSize = prevExt?.TexLibBlobSize ?? 0,
+                    Revision = currentRevision + 1,
                 };
                 illustration.ExtendedStateJson = JsonSerializer.Serialize(extended);
 
@@ -948,7 +995,11 @@ namespace Frogmarks.Services
                 }
 
                 await _context.SaveChangesAsync();
-                return new ResultModel<IllustrationStateDto>(ResultType.Success, resultObject: stateDto);
+                // Only what the client needs back (this used to echo the whole state, scene graph included)
+                return new ResultModel<IllustrationStateDto>(ResultType.Success, resultObject: new IllustrationStateDto
+                {
+                    Version = stateDto.Version, SavedAt = illustration.SavedAt, Revision = currentRevision + 1,
+                });
             }
             catch (Exception ex)
             {
@@ -958,6 +1009,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationStateDto>> LoadIllustrationState(long illustrationId)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<IllustrationStateDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 // Load scalar fields without the large CanvasData (V1 legacy) column
@@ -1120,12 +1172,14 @@ namespace Frogmarks.Services
                     BgColor = ext?.BgColor,
                     DotColor = ext?.DotColor,
                     PaperGrain = ext?.PaperGrain,
-                    Scene3dGlobalSettings = ext?.Scene3dGlobalSettings,
+                    Scene3dGlobalSettings = CamelCaseLegacyKeys(ext?.Scene3dGlobalSettings),
+                    ExtraFields = ext?.ExtraFields,
                     MeshIds = ext?.MeshIds,
                     MeshSasUrls = meshSasUrls,
                     TexLibSasUrl = texLibSasUrl,
                     Scene3dNodesGzip = scene3dNodesGzipLegacy,
                     TextureLibrary3dGzip = texLibGzipLegacy,
+                    Revision = ext?.Revision ?? 0,
                 };
 
                 return new ResultModel<IllustrationStateDto>(ResultType.Success, resultObject: state);
@@ -1138,12 +1192,25 @@ namespace Frogmarks.Services
 
         public async Task<long?> GetStateSavedAt(long illustrationId)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return null;   // owner / team / collaborator only (audit Phase 1.2)
             var savedAt = await _context.Illustrations
                 .AsNoTracking()
                 .Where(i => i.Id == illustrationId)
                 .Select(i => (long?)i.SavedAt)
                 .FirstOrDefaultAsync();
             return savedAt;
+        }
+
+        /// <summary>Saves made before the settings were stored raw used the typed DTO, serialized with PascalCase names
+        /// ("CameraMode"); the client reads camelCase. Convert such an object's keys once on load.</summary>
+        private static JsonElement? CamelCaseLegacyKeys(JsonElement? settings)
+        {
+            if (settings is not { ValueKind: JsonValueKind.Object } obj) return settings;
+            if (!obj.EnumerateObject().Any(p => p.Name.Length > 0 && char.IsUpper(p.Name[0]))) return settings;
+            var converted = new Dictionary<string, JsonElement>();
+            foreach (var p in obj.EnumerateObject())
+                converted[char.ToLowerInvariant(p.Name[0]) + p.Name[1..]] = p.Value.Clone();
+            return JsonSerializer.SerializeToElement(converted);
         }
 
         // Matches the shape of ExtendedStateJson. Legacy inline gzip fields kept for backward-compat reads.
@@ -1154,14 +1221,18 @@ namespace Frogmarks.Services
             public string? BgColor { get; set; }
             public string? DotColor { get; set; }
             public PaperGrainDto? PaperGrain { get; set; }
-            public Scene3dGlobalSettingsDto? Scene3dGlobalSettings { get; set; }
+            public JsonElement? Scene3dGlobalSettings { get; set; }
             public List<string>? MeshIds { get; set; }  // per-mesh blob IDs (v3+)
+            // Client fields the DTO doesn't model (groups, frame-link buckets, packaging, …), stored flat in the JSON
+            [System.Text.Json.Serialization.JsonExtensionData]
+            public Dictionary<string, JsonElement>? ExtraFields { get; set; }
             // Legacy inline fields — only present in pre-blob-storage saves
             public string? Scene3dNodesGzip { get; set; }
             public string? TextureLibrary3dGzip { get; set; }
             // Quota tracking: persisted so upload endpoints can compute delta without a separate column
             public Dictionary<string, long>? MeshBlobSizes { get; set; }
             public long TexLibBlobSize { get; set; }
+            public long Revision { get; set; }   // optimistic-concurrency counter (see SaveIllustrationState)
         }
 
         private async Task UploadBase64BlobAsync(string container, string blobName, string base64Data)
@@ -1195,8 +1266,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadMeshBlob(long illustrationId, string meshId, IFormFile meshData)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(meshId))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 if (meshData == null || meshData.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
@@ -1205,7 +1279,7 @@ namespace Frogmarks.Services
                     return new ResultModel<string>(ResultType.NotFound, "Illustration not found.");
 
                 // Quota check with delta tracking stored in ExtendedStateJson
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(illustrationId);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
                 var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
                 var newBytes = meshData.Length;
 
@@ -1244,6 +1318,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadTextureLibraryBlob(long illustrationId, IFormFile texLibData)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 if (texLibData == null || texLibData.Length == 0)
@@ -1253,7 +1328,7 @@ namespace Frogmarks.Services
                 if (illustration == null)
                     return new ResultModel<string>(ResultType.NotFound, "Illustration not found.");
 
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(illustrationId);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
                 var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
                 var newBytes = texLibData.Length;
 
@@ -1290,8 +1365,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Dictionary<string, string>>> GetMeshReadUrls(long illustrationId, List<string> meshIds)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<Dictionary<string, string>>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (meshIds.Any(id => !BlobNames.IsSafeSegment(id)))
+                    return new ResultModel<Dictionary<string, string>>(ResultType.BadRequest, "Invalid id.");
                 var tasks = meshIds.Select(meshId =>
                     _blobStorage.GetReadUrlAsync(_scene3dContainerName, $"{illustrationId}/mesh/{meshId}.gz")
                         .ContinueWith(t => (meshId, url: t.Result)));
@@ -1307,8 +1385,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadCelPixelData(long illustrationId, string celId, IFormFile pixelData, int? width, int? height, string? format)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(celId) || !BlobNames.IsValidPixelFormat(format))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 if (pixelData == null || pixelData.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
@@ -1317,7 +1398,7 @@ namespace Frogmarks.Services
                     return new ResultModel<string>(ResultType.NotFound, "Illustration not found.");
 
                 // Quota check: delta = new size − old stored size
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(illustrationId);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
                 var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
                 var cel = await _context.IllustrationCels
                     .FirstOrDefaultAsync(c => c.CelId == celId && c.Layer!.IllustrationId == illustrationId);
@@ -1368,8 +1449,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UploadLayerPixelData(long illustrationId, string layerId, IFormFile pixelData, int? width, int? height, string? format)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(layerId) || !BlobNames.IsValidPixelFormat(format))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 if (pixelData == null || pixelData.Length == 0)
                     return new ResultModel<string>(ResultType.Failure, "Invalid file upload.");
 
@@ -1378,7 +1462,7 @@ namespace Frogmarks.Services
                     return new ResultModel<string>(ResultType.NotFound, "Illustration not found.");
 
                 // Quota check: delta = new size − old stored size
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(illustrationId);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
                 var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
                 var layer = await _context.IllustrationLayers
                     .FirstOrDefaultAsync(l => l.LayerId == layerId && l.IllustrationId == illustrationId);
@@ -1424,8 +1508,11 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> DeleteCel(long illustrationId, string celId)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
+                if (!BlobNames.IsSafeSegment(celId))
+                    return new ResultModel<string>(ResultType.BadRequest, "Invalid id.");
                 var cel = await _context.IllustrationCels
                     .FirstOrDefaultAsync(c => c.CelId == celId && c.Layer!.IllustrationId == illustrationId);
 
@@ -1433,7 +1520,7 @@ namespace Frogmarks.Services
                     return new ResultModel<string>(ResultType.NotFound, "Cel not found.");
 
                 var freedBytes = cel.BlobSizeBytes;
-                var userId = GetCurrentUserId();
+                var userId = await GetStorageOwnerIdAsync(illustrationId);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
 
                 try
                 {
@@ -1457,6 +1544,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<Dictionary<string, CelStatusItemDto>>> GetCelStatus(long illustrationId, List<string> celIds)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<Dictionary<string, CelStatusItemDto>>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var cels = await _context.IllustrationCels
@@ -1490,6 +1578,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<IllustrationDto>> PublishIllustration(long illustrationId, IFormFile bundle, string? publishedTitle)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<IllustrationDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 if (bundle == null || bundle.Length == 0)
@@ -1534,6 +1623,7 @@ namespace Frogmarks.Services
 
         public async Task<ResultModel<string>> UnpublishIllustration(long illustrationId)
         {
+            if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<string>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
             try
             {
                 var userId = GetCurrentUserId();

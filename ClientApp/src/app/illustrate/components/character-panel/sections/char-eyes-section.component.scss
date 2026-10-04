@@ -1,0 +1,82 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../../styles/panel-controls';
+:host { display: block; }
+
+// ── Eye expression list (Edit Character subpanel) ────────────────
+
+.eye-expr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.eye-expr-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.eye-expr-name {
+    flex: 1;
+    font-size: 11px;
+    color: #ccc;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.active {
+        color: #d4aaef;
+        background: rgba(155, 89, 182, 0.22);
+    }
+
+    &:hover { background: #2a2a2a; }
+}
+
+// ── Procedural eye params panel ──────────────────────────────────
+
+.eye-proc-params {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    padding: 6px 8px 8px;
+    margin-bottom: 6px;
+}
+
+// ── Live gaze pad ────────────────────────────────────────────────
+
+.gaze-pad {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #444;
+    border-radius: 4px;
+    cursor: crosshair;
+    touch-action: none;
+    overflow: hidden;
+}
+
+.gaze-reticle {
+    position: absolute;
+    inset: 0;
+    &::before, &::after {
+        content: '';
+        position: absolute;
+        background: rgba(255,255,255,0.08);
+    }
+    &::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+    &::after  { top: 50%; left: 0; right: 0; height: 1px; }
+}
+
+.gaze-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9B59B6;
+    border: 1px solid #d4aaef;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}

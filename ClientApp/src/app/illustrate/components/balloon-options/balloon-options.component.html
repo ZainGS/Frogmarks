@@ -1,0 +1,304 @@
+<div *ngIf="active" class="bp-panel">
+    <div class="tool-label">Speech Balloon</div>
+    <div style="padding: 4px 8px; font-size: 12px;">
+        <!-- Style -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Style</label>
+            <select [(ngModel)]="balloonStyle"
+                    (ngModelChange)="onBalloonStyleChange($event)"
+                    style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+                <option *ngFor="let s of balloonStyleOptions" [ngValue]="s.value">{{ s.label }}</option>
+            </select>
+        </div>
+        <!-- Writing Mode -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Writing</label>
+            <div style="display: flex; gap: 2px;">
+                <button (click)="onBalloonWritingModeChange('horizontal-tb')"
+                        class="bp-seg-btn"
+                        [class.bp-seg-active]="balloonWritingMode === 'horizontal-tb'"
+                        title="Horizontal text (left-to-right). Standard for Western comics.">H</button>
+                <button (click)="onBalloonWritingModeChange('vertical-rl')"
+                        class="bp-seg-btn"
+                        [class.bp-seg-active]="balloonWritingMode === 'vertical-rl'"
+                        title="Vertical text (top-to-bottom, right-to-left columns). Standard for manga.">V</button>
+            </div>
+        </div>
+        <!-- Tail Side -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Tail</label>
+            <div style="display: flex; gap: 2px;">
+                <button *ngFor="let side of ['top', 'right', 'bottom', 'left']"
+                        class="bp-seg-btn"
+                        [class.bp-seg-active]="balloonTailSide === side"
+                        (click)="onBalloonTailSideChange($any(side))"
+                        [title]="'Tail points from the ' + side + ' edge.'">{{ side === 'top' ? '↑' : side === 'right' ? '→' : side === 'bottom' ? '↓' : '←' }}</button>
+            </div>
+        </div>
+        <!-- Tail Position -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;"
+                   title="Position of the tail along the edge (0 = start, 1 = end).">Position</label>
+            <input type="range" min="0" max="1" step="0.01" style="flex: 1;"
+                   [(ngModel)]="balloonTailPosition"
+                   (ngModelChange)="onBalloonTailPositionChange($event)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 11px;">{{ balloonTailPosition | number:'1.2-2' }}</span>
+        </div>
+        <!-- Tail Length -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;"
+                   title="Length of the tail pointer.">Length</label>
+            <input type="range" min="0.02" max="0.5" step="0.01" style="flex: 1;"
+                   [(ngModel)]="balloonTailLength"
+                   (ngModelChange)="onBalloonTailLengthChange($event)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 11px;">{{ balloonTailLength | number:'1.2-2' }}</span>
+        </div>
+        <!-- Show Tail -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Show tail</label>
+            <input type="checkbox" [(ngModel)]="balloonShowTail"
+                   (ngModelChange)="onBalloonShowTailChange($event)"
+                   title="Show or hide the balloon's pointer tail.">
+        </div>
+        <hr style="border-color: #444; margin: 4px 0;">
+        <!-- Font -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Font</label>
+            <select [(ngModel)]="balloonFontFamily"
+                    (ngModelChange)="onBalloonFontFamilyChange($event)"
+                    style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+                <option *ngFor="let f of availableFonts" [ngValue]="f">{{ f }}</option>
+            </select>
+        </div>
+        <!-- Font Size -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Size</label>
+            <input type="number" min="8" max="400" step="1"
+                   [(ngModel)]="balloonFontSize"
+                   (ngModelChange)="onBalloonFontSizeChange($event)"
+                   style="width: 60px; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <span style="color: #aaa; font-size: 11px;">px</span>
+        </div>
+        <!-- Max Width -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;"
+                   title="Maximum width before text wraps.">Max W</label>
+            <input type="range" min="0.5" max="5" step="0.1" style="flex: 1;"
+                   [(ngModel)]="balloonMaxWidth"
+                   (ngModelChange)="onBalloonMaxWidthChange($event)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 11px;">{{ balloonMaxWidth | number:'1.1-1' }}</span>
+        </div>
+        <hr style="border-color: #444; margin: 4px 0;">
+        <!-- Colors -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Text</label>
+            <input type="color" [ngModel]="balloonTextColor" (ngModelChange)="onBalloonTextColorChange($event)"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Fill</label>
+            <input type="color" [ngModel]="balloonFillColor" (ngModelChange)="onBalloonFillColorChange($event)"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Stroke</label>
+            <input type="color" [ngModel]="balloonStrokeColor" (ngModelChange)="onBalloonStrokeColorChange($event)"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+        </div>
+        <!-- Stroke Width -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 54px; color: #aaa;">Stroke W</label>
+            <input type="range" min="0" max="8" step="0.5" style="flex: 1;"
+                   [(ngModel)]="balloonStrokeWidth"
+                   (ngModelChange)="onBalloonStrokeWidthChange($event)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 11px;">{{ balloonStrokeWidth }}px</span>
+        </div>
+
+        <!-- ═══ Text Effects Section ════════════════════ -->
+        <hr style="border-color: #444; margin: 6px 0;">
+        <div class="tool-label" style="font-size: 11px; margin-bottom: 4px;">Text Effects (Stamp)</div>
+
+        <!-- Text Input -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 40px; color: #aaa; font-size: 11px;">Text</label>
+            <input type="text" [(ngModel)]="textEffectText"
+                   style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;"
+                   placeholder="KABOOM!">
+        </div>
+
+        <!-- Font / Size row -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+            <select [(ngModel)]="textEffectFont"
+                    style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+                <option *ngFor="let f of availableFonts" [ngValue]="f">{{ f }}</option>
+            </select>
+            <input type="number" min="12" max="400" step="1" [(ngModel)]="textEffectFontSize"
+                   style="width: 48px; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <button (click)="textEffectBold = !textEffectBold"
+                    [style.background]="textEffectBold ? '#9B59B6' : '#333'"
+                    style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-weight: bold; font-size: 11px;"
+                    title="Bold">B</button>
+            <button (click)="textEffectItalic = !textEffectItalic"
+                    [style.background]="textEffectItalic ? '#9B59B6' : '#333'"
+                    style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-style: italic; font-size: 11px;"
+                    title="Italic">I</button>
+        </div>
+
+        <!-- Color -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 40px; color: #aaa; font-size: 11px;">Color</label>
+            <input type="color" [(ngModel)]="textEffectColor"
+                   style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+        </div>
+
+        <!-- Effect Chain -->
+        <div style="margin-bottom: 4px;">
+            <div *ngFor="let entry of textEffectChain; let i = index"
+                 class="fx-chain-entry">
+                <div style="display: flex; align-items: center; gap: 3px; margin-bottom: 3px;">
+                    <span style="color: #777; font-size: 10px; width: 14px;">{{ i + 1 }}</span>
+                    <select [ngModel]="entry.type"
+                            (ngModelChange)="onTextEffectTypeChange(entry, $event)"
+                            style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 1px 3px; font-size: 10px;">
+                        <option *ngFor="let opt of textEffectTypeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+                    </select>
+                    <button (click)="moveTextEffect(entry.id, -1)" style="background: #333; border: 1px solid #555; color: #aaa; padding: 0 4px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Move up">↑</button>
+                    <button (click)="moveTextEffect(entry.id, 1)" style="background: #333; border: 1px solid #555; color: #aaa; padding: 0 4px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Move down">↓</button>
+                    <button (click)="removeTextEffect(entry.id)" style="background: #333; border: 1px solid #555; color: #f77; padding: 0 5px; cursor: pointer; font-size: 10px; border-radius: 2px;" title="Remove">×</button>
+                </div>
+                <!-- Per-effect params -->
+                <div style="padding-left: 18px;">
+                    <!-- Chromatic Aberration -->
+                    <ng-container *ngIf="entry.type === 'chromatic-aberration'">
+                        <div class="fx-param-row">
+                            <label>Strength</label>
+                            <input type="range" min="0" max="0.03" step="0.001" [ngModel]="entry.params['strength']" (ngModelChange)="onTextEffectParamChange(entry, 'strength', $event)">
+                            <span>{{ entry.params['strength'] | number:'1.3-3' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Angle</label>
+                            <input type="range" min="0" max="6.28" step="0.1" [ngModel]="entry.params['angle']" (ngModelChange)="onTextEffectParamChange(entry, 'angle', $event)">
+                            <span>{{ entry.params['angle'] | number:'1.1-1' }}</span>
+                        </div>
+                    </ng-container>
+                    <!-- Glow -->
+                    <ng-container *ngIf="entry.type === 'glow'">
+                        <div class="fx-param-row">
+                            <label>Radius</label>
+                            <input type="range" min="1" max="20" step="1" [ngModel]="entry.params['radius']" (ngModelChange)="onTextEffectParamChange(entry, 'radius', +$event)">
+                            <span>{{ entry.params['radius'] }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Intensity</label>
+                            <input type="range" min="0.5" max="5" step="0.1" [ngModel]="entry.params['intensity']" (ngModelChange)="onTextEffectParamChange(entry, 'intensity', +$event)">
+                            <span>{{ entry.params['intensity'] | number:'1.1-1' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Color</label>
+                            <input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))">
+                        </div>
+                    </ng-container>
+                    <!-- Wave -->
+                    <ng-container *ngIf="entry.type === 'wave'">
+                        <div class="fx-param-row">
+                            <label>Amplitude</label>
+                            <input type="range" min="1" max="20" step="1" [ngModel]="entry.params['amplitude']" (ngModelChange)="onTextEffectParamChange(entry, 'amplitude', +$event)">
+                            <span>{{ entry.params['amplitude'] }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Frequency</label>
+                            <input type="range" min="1" max="30" step="1" [ngModel]="entry.params['frequency']" (ngModelChange)="onTextEffectParamChange(entry, 'frequency', +$event)">
+                            <span>{{ entry.params['frequency'] }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Speed</label>
+                            <input type="range" min="0" max="5" step="0.1" [ngModel]="entry.params['speed']" (ngModelChange)="onTextEffectParamChange(entry, 'speed', +$event)">
+                            <span>{{ entry.params['speed'] | number:'1.1-1' }}</span>
+                        </div>
+                    </ng-container>
+                    <!-- Glitch -->
+                    <ng-container *ngIf="entry.type === 'glitch'">
+                        <div class="fx-param-row">
+                            <label>Intensity</label>
+                            <input type="range" min="0" max="1" step="0.05" [ngModel]="entry.params['intensity']" (ngModelChange)="onTextEffectParamChange(entry, 'intensity', +$event)">
+                            <span>{{ entry.params['intensity'] | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Block</label>
+                            <input type="range" min="2" max="32" step="1" [ngModel]="entry.params['blockSize']" (ngModelChange)="onTextEffectParamChange(entry, 'blockSize', +$event)">
+                            <span>{{ entry.params['blockSize'] }}</span>
+                        </div>
+                    </ng-container>
+                    <!-- Outline -->
+                    <ng-container *ngIf="entry.type === 'outline'">
+                        <div class="fx-param-row">
+                            <label>Thickness</label>
+                            <input type="range" min="1" max="10" step="1" [ngModel]="entry.params['thickness']" (ngModelChange)="onTextEffectParamChange(entry, 'thickness', +$event)">
+                            <span>{{ entry.params['thickness'] }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Color</label>
+                            <input type="color" [ngModel]="fxColorToHex(entry.params['color'])" (ngModelChange)="onTextEffectParamChange(entry, 'color', fxHexToColor($event, entry.params['color']?.[3] ?? 1))">
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Offset X</label>
+                            <input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[0] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'offset', [+$event, entry.params['offset']?.[1] ?? 0])">
+                            <span>{{ (entry.params['offset']?.[0] ?? 0) | number:'1.1-1' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Offset Y</label>
+                            <input type="range" min="-10" max="10" step="0.5" [ngModel]="entry.params['offset']?.[1] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'offset', [entry.params['offset']?.[0] ?? 0, +$event])">
+                            <span>{{ (entry.params['offset']?.[1] ?? 0) | number:'1.1-1' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Gap</label>
+                            <input type="range" min="0" max="5" step="0.5" [ngModel]="entry.params['gap'] ?? 0" (ngModelChange)="onTextEffectParamChange(entry, 'gap', +$event)">
+                            <span>{{ entry.params['gap'] ?? 0 }}</span>
+                        </div>
+                    </ng-container>
+                    <!-- Feather -->
+                    <ng-container *ngIf="entry.type === 'feather'">
+                        <div class="fx-param-row">
+                            <label>Mode</label>
+                            <button (click)="onTextEffectParamChange(entry, 'mode', 'linear')" [style.background]="entry.params['mode'] === 'linear' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Linear</button>
+                            <button (click)="onTextEffectParamChange(entry, 'mode', 'radial')" [style.background]="entry.params['mode'] === 'radial' ? '#9B59B6' : '#333'" style="border: 1px solid #555; color: #e0e0e0; padding: 1px 7px; cursor: pointer; font-size: 10px; border-radius: 2px;">Radial</button>
+                        </div>
+                        <div class="fx-param-row" *ngIf="entry.params['mode'] === 'linear'">
+                            <label>Angle</label>
+                            <input type="range" min="0" max="360" step="1" [ngModel]="entry.params['angle']" (ngModelChange)="onTextEffectParamChange(entry, 'angle', +$event)">
+                            <span>{{ entry.params['angle'] }}°</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>Start</label>
+                            <input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['start']" (ngModelChange)="onTextEffectParamChange(entry, 'start', +$event)">
+                            <span>{{ entry.params['start'] | number:'1.2-2' }}</span>
+                        </div>
+                        <div class="fx-param-row">
+                            <label>End</label>
+                            <input type="range" min="0" max="1" step="0.01" [ngModel]="entry.params['end']" (ngModelChange)="onTextEffectParamChange(entry, 'end', +$event)">
+                            <span>{{ entry.params['end'] | number:'1.2-2' }}</span>
+                        </div>
+                    </ng-container>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add effect button -->
+        <button (click)="addTextEffect()"
+                style="width: 100%; background: #333; border: 1px solid #555; border-radius: 3px; color: #aaa; padding: 3px; cursor: pointer; font-size: 10px; margin-bottom: 6px;"
+                title="Add another effect to the chain">+ Add Effect</button>
+
+        <!-- Action buttons -->
+        <div style="display: flex; gap: 4px;">
+            <button (click)="stampTextEffect()"
+                    style="flex: 1; background: #9B59B6; border: none; border-radius: 4px; color: #fff; padding: 5px 8px; cursor: pointer; font-size: 11px;"
+                    title="Stamp the effected text onto the active raster layer.">Stamp to Layer</button>
+            <button (click)="toggleTextEffectAnimation()"
+                    [style.background]="textEffectAnimating ? '#e74c3c' : '#555'"
+                    style="border: none; border-radius: 4px; color: #fff; padding: 5px 8px; cursor: pointer; font-size: 11px;"
+                    [title]="textEffectAnimating ? 'Stop animation preview' : 'Animate wave/glitch effects'">
+                {{ textEffectAnimating ? '■' : '▶' }}
+            </button>
+        </div>
+    </div>
+</div>

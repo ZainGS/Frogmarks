@@ -227,27 +227,6 @@
   flex-wrap: wrap;
 }
 
-.cb-sim-btn {
-  flex: 1;
-  background: rgba(138,180,248,0.15);
-  border: 1px solid rgba(138,180,248,0.3);
-  border-radius: 6px;
-  color: #8ab4f8;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px;
-  cursor: pointer;
-  &:hover:not(:disabled) { background: rgba(138,180,248,0.25); }
-  &:disabled { opacity: 0.4; cursor: default; }
-}
-
-.cb-spinner {
-  font-size: 11px;
-  color: rgba(255,255,255,0.4);
-  font-style: italic;
-  margin-top: 4px;
-}
-
 .cb-error {
   font-size: 11px;
   color: #ef5350;

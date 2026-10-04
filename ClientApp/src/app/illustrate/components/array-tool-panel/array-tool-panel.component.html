@@ -1,0 +1,48 @@
+<div class="tool-label">ARRAY TOOL</div>
+<div style="padding: 4px 8px;">
+
+    <div class="scene3d-array-strip-label" style="margin-bottom:6px;">Mode</div>
+    <div class="scene3d-row scene3d-array-mode-row" style="padding: 0 0 8px 0;">
+        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolMode === 'line'"   (click)="arrayTool.scene3dSetArrayToolMode('line')">Line</button>
+        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolMode === 'grid'"   (click)="arrayTool.scene3dSetArrayToolMode('grid')">Grid</button>
+        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolMode === 'radial'" (click)="arrayTool.scene3dSetArrayToolMode('radial')">Radial</button>
+    </div>
+
+    <div class="scene3d-material-row">
+        <label>Count</label>
+        <input class="scene3d-array-strip-count" type="number" min="1" max="32"
+               [ngModel]="arrayTool.scene3dArrayToolCount"
+               (ngModelChange)="arrayTool.scene3dSetArrayToolCount($event)">
+    </div>
+
+    <ng-container *ngIf="arrayTool.scene3dArrayToolMode === 'radial'">
+        <div class="scene3d-material-row">
+            <label>Radius</label>
+            <input class="scene3d-array-strip-count" type="number" min="0.1" step="0.1" placeholder="auto"
+                   [ngModel]="arrayTool.scene3dArrayToolRadius"
+                   (ngModelChange)="arrayTool.scene3dSetArrayToolRadius($event != null && $event !== '' ? +$event : null)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Arc°</label>
+            <input class="scene3d-array-strip-count" type="number" min="1" max="360" step="1"
+                   [ngModel]="arrayTool.scene3dArrayToolArc"
+                   (ngModelChange)="arrayTool.scene3dSetArrayToolArc(+$event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Axis</label>
+            <div class="scene3d-axis-btns">
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolAxis === 'x'" (click)="arrayTool.scene3dSetArrayToolAxis('x')">X</button>
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolAxis === 'y'" (click)="arrayTool.scene3dSetArrayToolAxis('y')">Y</button>
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="arrayTool.scene3dArrayToolAxis === 'z'" (click)="arrayTool.scene3dSetArrayToolAxis('z')">Z</button>
+            </div>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Orient</label>
+            <div class="scene3d-axis-btns">
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'world'" (click)="scene3dGizmoOrientation !== 'world' && toggleGizmoOrientation.emit()">W</button>
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="scene3dGizmoOrientation === 'local'" (click)="scene3dGizmoOrientation !== 'local' && toggleGizmoOrientation.emit()">L</button>
+            </div>
+        </div>
+    </ng-container>
+
+</div>

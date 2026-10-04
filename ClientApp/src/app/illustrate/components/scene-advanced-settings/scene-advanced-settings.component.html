@@ -1,0 +1,151 @@
+<details class="scene3d-details">
+    <summary>Advanced</summary>
+    <div class="scene3d-toggle-row">
+        <label>Frustum Culling</label>
+        <input type="checkbox" [checked]="s3.scene3dFrustumCulling" (change)="s3.scene3dSetFrustumCulling($any($event.target).checked)">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Grid Visibility</summary>
+    <div class="scene3d-toggle-row">
+        <label style="display:flex;align-items:center;gap:4px">Show Grid <span class="scene3d-info-icon" (mouseenter)="showTip.emit({ event: $event, text: infoTips.gridVisibility })" (mouseleave)="hideTip.emit()">i</span></label>
+        <input type="checkbox" [(ngModel)]="s3.scene3dGridVisible" (ngModelChange)="s3.applyScene3dGrid()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Opacity</label>
+        <input type="range" min="0" max="100" step="1" style="flex:1"
+               [value]="mathRound(s3.scene3dGridOpacity * 100)"
+               (input)="s3.onScene3dGridOpacityChange($any($event.target).value)">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dGridOpacity * 100) }}%</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Color</label>
+        <input type="color" [value]="s3.scene3dGridColorHex"
+               (input)="s3.onScene3dGridColorChange($any($event.target).value)"
+               style="width:32px;height:22px;padding:0;border:1px solid #555;border-radius:3px;cursor:pointer">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Grid Snap</summary>
+    <div class="scene3d-material-row">
+        <label>Mode</label>
+        <span class="scene3d-info-icon" (mouseenter)="showTip.emit({ event: $event, text: infoTips.snapMode })" (mouseleave)="hideTip.emit()">i</span>
+        <select class="scene3d-select"
+                [(ngModel)]="s3.scene3dSnapMode"
+                (ngModelChange)="s3.scene3dSetSnapMode($event)">
+            <option value="none">None</option>
+            <option value="grid">Grid</option>
+            <option value="vertex">Vertex</option>
+        </select>
+    </div>
+    <div *ngIf="s3.scene3dSnapMode === 'grid'" class="scene3d-material-row">
+        <label>Cell size</label>
+        <span class="scene3d-info-icon" (mouseenter)="showTip.emit({ event: $event, text: infoTips.snapGridSize })" (mouseleave)="hideTip.emit()">i</span>
+        <input type="number" step="0.1" min="0.01" class="scene3d-input-small"
+               [(ngModel)]="s3.scene3dSnapGridSize" (input)="s3.scene3dUpdateSnapSettings()">
+        <span class="scene3d-val">units</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Rotate step</label>
+        <span class="scene3d-info-icon" (mouseenter)="showTip.emit({ event: $event, text: infoTips.snapRotate })" (mouseleave)="hideTip.emit()">i</span>
+        <input type="number" step="1" min="1" max="180" class="scene3d-input-small"
+               [(ngModel)]="s3.scene3dSnapAngleDeg" (input)="s3.scene3dUpdateSnapSettings()">
+        <span class="scene3d-val">°</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Scale step</label>
+        <span class="scene3d-info-icon" (mouseenter)="showTip.emit({ event: $event, text: infoTips.snapScaleStep })" (mouseleave)="hideTip.emit()">i</span>
+        <input type="number" step="0.05" min="0.01" class="scene3d-input-small"
+               [(ngModel)]="s3.scene3dSnapScaleStep" (input)="s3.scene3dUpdateSnapSettings()">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Export</summary>
+    <div *ngIf="s3.scene3dExportStats" class="scene3d-export-stats">
+        &#10003; {{ s3.scene3dExportStats }}
+    </div>
+    <button class="scene3d-btn scene3d-export-btn" (click)="s3.scene3dExportGlb()">
+        &#8595; Export GLB
+    </button>
+    <div class="scene3d-hint" style="margin-top:6px">
+        Exports all meshes, skeletons, animation clips, and blend shapes. Textures export as color only (no image data).
+    </div>
+</details>
+
+<!-- Sky Presets -->
+<details class="scene3d-details" *ngIf="s3.scene3dSkyPresets.length > 0">
+    <summary>Sky</summary>
+    <div class="scene3d-row" style="flex-wrap:wrap; gap:4px; padding:6px 0">
+        <button *ngFor="let preset of s3.scene3dSkyPresets"
+                class="scene3d-btn"
+                [class.active]="s3.scene3dActiveSkyPreset === preset"
+                (click)="s3.scene3dApplySkyPreset(preset)"
+                style="text-transform:capitalize">{{ preset }}</button>
+        <button class="scene3d-btn" *ngIf="s3.scene3dActiveSkyPreset"
+                (click)="s3.scene3dClearSky()"
+                title="Clear sky preset (lighting unchanged)">✕ Clear</button>
+    </div>
+    <div class="scene3d-hint">One-tap atmosphere. Sets sky, ambient, and bakes IBL.</div>
+    <div class="scene3d-qf-row" style="margin-top:6px">
+        <span class="scene3d-qf-label">Diffuse</span>
+        <input type="range" min="0" max="2" step="0.05" class="scene3d-qf-slider"
+               [value]="s3.scene3dDiffuseIBL"
+               (input)="s3.scene3dSetDiffuseIBL(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dDiffuseIBL | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row">
+        <span class="scene3d-qf-label">Specular</span>
+        <input type="range" min="0" max="2" step="0.05" class="scene3d-qf-slider"
+               [value]="s3.scene3dSpecularIBL"
+               (input)="s3.scene3dSetSpecularIBL(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSpecularIBL | number:'1.1-1' }}</span>
+    </div>
+</details>
+
+<!-- SSR -->
+<details class="scene3d-details" *ngIf="has3DScene">
+    <summary>Reflections (SSR)</summary>
+    <div class="scene3d-qf-row" style="margin-top:4px">
+        <span class="scene3d-qf-label" style="flex:1">Screen-space</span>
+        <input type="checkbox" [(ngModel)]="s3.scene3dSSREnabled" (change)="s3.scene3dToggleSSR()" title="Reflect on-screen objects in metallic surfaces">
+    </div>
+    <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
+        <span class="scene3d-qf-label">Intensity</span>
+        <input type="range" min="0" max="1" step="0.05" class="scene3d-qf-slider"
+               [value]="s3.scene3dSSRIntensity"
+               (input)="s3.scene3dSetSSRIntensity(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSSRIntensity | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
+        <span class="scene3d-qf-label">Softness</span>
+        <input type="range" min="0" max="6" step="0.5" class="scene3d-qf-slider"
+               [value]="s3.scene3dSSRFillBlur"
+               (input)="s3.scene3dSetSSRFillBlur(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSSRFillBlur | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
+        <span class="scene3d-qf-label">Edge feather</span>
+        <input type="range" min="0" max="8" step="0.5" class="scene3d-qf-slider"
+               [value]="s3.scene3dSSRThickness"
+               (input)="s3.scene3dSetSSRThickness(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSSRThickness | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
+        <span class="scene3d-qf-label">Reach</span>
+        <input type="range" min="4" max="32" step="0.5" class="scene3d-qf-slider"
+               [value]="s3.scene3dSSRReach"
+               (input)="s3.scene3dSetSSRReach(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSSRReach | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
+        <span class="scene3d-qf-label">Shadow</span>
+        <input type="range" min="0" max="1" step="0.05" class="scene3d-qf-slider"
+               [value]="s3.scene3dSSRShadow"
+               (input)="s3.scene3dSetSSRShadow(+$any($event.target).value)">
+        <span class="scene3d-qf-val">{{ s3.scene3dSSRShadow | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-hint">Reflects nearby objects in metallic surfaces. Requires a sky preset. Off-screen objects fall back to sky.</div>
+</details>

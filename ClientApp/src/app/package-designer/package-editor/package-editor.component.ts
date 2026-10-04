@@ -21,7 +21,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('guideCanvas',  { static: true }) guideCanvasRef!: ElementRef<HTMLCanvasElement>;
 
-  private _sm: any = null;
+  private _sm: ShapeManager = null;
   private _docId = '';
   private _pkgId: string | null = null;
   private _dielineLayerId: string | null = null;
@@ -64,7 +64,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this._routeSub = this.route.paramMap.subscribe(params => {
       const id = params.get('id');
-      if (id) this._init(id);
+      if (id) void this._init(id);
     });
   }
 
@@ -75,7 +75,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     if (this._dimDebounce)  clearTimeout(this._dimDebounce);
     if (this._foldTweenRaf != null) cancelAnimationFrame(this._foldTweenRaf);
     // Disarm 3D painting + orbit; box, fold state and layer link persist.
-    if (this._pkgId && this._sm?.packaging) this._sm.packaging.exitEditor?.(this._pkgId);
+    if (this._pkgId && this._sm?.packaging) this._sm.packaging.exitEditor(this._pkgId);
     this.autoSaveService.disable();
   }
 
@@ -96,7 +96,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     }
 
     this._sm = ShapeManager.getInstance();
-    await this._sm.whenWebGPUReady?.();
+    await this._sm.whenWebGPUReady();
 
     const pkg = this._sm.packaging;
     if (!pkg) {
@@ -147,15 +147,15 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     }
 
     // Select the dieline layer so flat raster tools draw onto the box surface.
-    if (this._dielineLayerId) this._sm.selectRasterLayer?.(this._dielineLayerId);
+    if (this._dielineLayerId) this._sm.selectRasterLayer(this._dielineLayerId);
 
     // ── Auto-save ───────────────────────────────────────────────
     this.autoSaveService.enable(this._docId, this.projectName);
 
     // ── Flat stroke-end → syncLiveTextures3D ────────────────────
     // 3D-surface strokes sync automatically; flat raster strokes need an explicit call.
-    this._strokeSub = this._sm.onRasterStrokeEnd?.(() => {
-      this._sm.syncLiveTextures3D?.();
+    this._strokeSub = this._sm.onRasterStrokeEnd(() => {
+      this._sm.syncLiveTextures3D();
     });
 
     this.isLoading = false;
@@ -171,7 +171,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
       const state = this._sm.packaging.setDimensions(this._pkgId, params);
       if (state?.canvasWidth && state?.canvasHeight &&
           (state.canvasWidth !== this._lastDocW || state.canvasHeight !== this._lastDocH)) {
-        this._sm.setDocumentSize?.(state.canvasWidth, state.canvasHeight);
+        this._sm.setDocumentSize(state.canvasWidth, state.canvasHeight);
         this._lastDocW = state.canvasWidth;
         this._lastDocH = state.canvasHeight;
       }
@@ -203,7 +203,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   private _syncFoldTween(): void {
     if (this._foldTweenRaf != null) cancelAnimationFrame(this._foldTweenRaf);
     const tick = () => {
-      const state = this._sm.packaging?.get?.(this._pkgId!);
+      const state = this._sm.packaging?.get(this._pkgId!);
       if (state != null) this.foldAmount = state.foldAmount;
       const settled = Math.abs(this.foldAmount - Math.round(this.foldAmount)) < 0.002;
       this._foldTweenRaf = settled ? undefined : requestAnimationFrame(tick);
@@ -215,14 +215,14 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
   private _drawGuides(guides?: any[]): void {
     if (!this._pkgId || !this._sm.packaging) return;
-    const g = guides ?? this._sm.packaging.getGuides?.(this._pkgId);
+    const g = guides ?? this._sm.packaging.getGuides(this._pkgId);
     if (!g?.length) return;
 
     const canvas = this.guideCanvasRef?.nativeElement;
     if (!canvas) return;
 
     // Guide coordinates are in dieline document space — size the canvas to match.
-    const pkgState = this._sm.packaging.get?.(this._pkgId);
+    const pkgState = this._sm.packaging.get(this._pkgId);
     const docW = pkgState?.canvasWidth  || canvas.clientWidth;
     const docH = pkgState?.canvasHeight || canvas.clientHeight;
     canvas.width  = docW;
@@ -270,7 +270,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
   async exportDielinePng(): Promise<void> {
     if (!this._pkgId || !this._sm.packaging) return;
-    const blob = await this._sm.packaging.exportDielinePng?.(this._pkgId);
+    const blob = await this._sm.packaging.exportDielinePng(this._pkgId);
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -283,7 +283,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   // ── Navigation ───────────────────────────────────────────────
 
   goBack(): void {
-    this.router.navigate(['/']);
+    void this.router.navigate(['/']);
   }
 
   // ── Save state ───────────────────────────────────────────────

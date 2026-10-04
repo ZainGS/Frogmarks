@@ -1,5 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import ShapeManager from '@zaings/salsa/shape-manager';
+
+/** Placement blend mode, derived from the engine's updateEphemeraPlacement signature. */
+type EphemeraBlendMode = NonNullable<Parameters<ShapeManager['updateEphemeraPlacement']>[2]['blendMode']>;
 
 export interface EphemeraCategory {
   id: string;
@@ -63,11 +67,11 @@ export interface EphemeraPlacement {
   styleUrls: ['./ephemera-panel.component.scss'],
 })
 export class EphemeraPanel implements OnInit, OnChanges {
-  @Input() shapeManager: any = null;
+  @Input() shapeManager: ShapeManager = null;
   @Input() vectorLayerId = '';
   @Output() closeRequest = new EventEmitter<void>();
 
-  private get sm(): any { return this.shapeManager; }
+  private get sm(): ShapeManager { return this.shapeManager; }
 
   // ── Browse ───────────────────────────────────────────────────
   categories: EphemeraCategory[] = [];
@@ -96,14 +100,14 @@ export class EphemeraPanel implements OnInit, OnChanges {
   placeHeight = 100;
   placeRotation = 0;
   placeOpacity = 1;
-  placeBlendMode = 'source-over';
+  placeBlendMode: EphemeraBlendMode = 'source-over';
 
   // ── Existing placements ──────────────────────────────────────
   placements: EphemeraPlacement[] = [];
   editingPlacementId: string | null = null;
   editParams: Record<string, any> = {};
   editParamSchemaList: EphemeraParamSchemaEntry[] = [];
-  editBlendMode = 'source-over';
+  editBlendMode: EphemeraBlendMode = 'source-over';
 
   // ── Edit glow ────────────────────────────────────────────────
   editGlowEnabled = false;
@@ -139,7 +143,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
   // ── Category / generator ─────────────────────────────────────
 
   refreshCategories(): void {
-    this.categories = this.sm?.getEphemeraCategories?.() ?? [];
+    this.categories = this.sm?.getEphemeraCategories() ?? [];
     if (this.categories.length > 0 && !this.activeCategoryId) {
       this.selectCategory(this.categories[0].id);
     }
@@ -147,7 +151,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
 
   selectCategory(id: string): void {
     this.activeCategoryId = id;
-    this.generators = this.sm?.getEphemeraGeneratorsByCategory?.(id) ?? [];
+    this.generators = this.sm?.getEphemeraGeneratorsByCategory(id) ?? [];
     if (this.generators.length > 0) {
       this.selectGenerator(this.generators[0].typeId);
     } else {
@@ -160,13 +164,13 @@ export class EphemeraPanel implements OnInit, OnChanges {
 
   selectGenerator(typeId: string): void {
     this.activeGeneratorTypeId = typeId;
-    const gen = this.sm?.getEphemeraGenerator?.(typeId);
-    this.paramSchemaList = gen?.getParamSchema?.() ?? [];
+    const gen = this.sm?.getEphemeraGenerator(typeId);
+    this.paramSchemaList = (gen?.getParamSchema?.() ?? []) as any;
     this.params = {};
     for (const s of this.paramSchemaList) {
       this.params[s.key] = s.default;
     }
-    const size = this.sm?.getDefaultPlacementSize?.(typeId);
+    const size = this.sm?.getDefaultPlacementSize(typeId);
     if (size) {
       this.placeWidth = size.width;
       this.placeHeight = size.height;
@@ -176,7 +180,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
 
   updatePreview(): void {
     if (!this.activeGeneratorTypeId) { this.previewSvg = ''; return; }
-    const svg: string = this.sm?.generateEphemera?.(this.activeGeneratorTypeId, this.params) ?? '';
+    const svg: string = this.sm?.generateEphemera(this.activeGeneratorTypeId, this.params) ?? '';
     this.previewSvg = svg ? this.sanitizer.bypassSecurityTrustHtml(svg) : '';
   }
 
@@ -256,7 +260,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
 
   placeCurrent(): void {
     if (!this.vectorLayerId || !this.activeGeneratorTypeId) return;
-    this.sm?.addEphemeraPlacement?.(
+    const placed = this.sm?.addEphemeraPlacement(
       this.vectorLayerId,
       this.activeGeneratorTypeId,
       { ...this.params },
@@ -264,8 +268,11 @@ export class EphemeraPanel implements OnInit, OnChanges {
       this.placeWidth, this.placeHeight,
       this.placeRotation,
       this.placeOpacity,
-      { blendMode: this.placeBlendMode },
     );
+    // addEphemeraPlacement has no blend-mode argument (a former 10th arg was silently ignored) — apply it after
+    if (placed && this.placeBlendMode) {
+      this.sm?.updateEphemeraPlacement(this.vectorLayerId, placed.id, { blendMode: this.placeBlendMode });
+    }
     this.refreshPlacements();
   }
 
@@ -273,13 +280,14 @@ export class EphemeraPanel implements OnInit, OnChanges {
 
   refreshPlacements(): void {
     if (!this.vectorLayerId || !this.sm) { this.placements = []; return; }
-    this.placements = this.sm?.getEphemeraPlacementsForLayer?.(this.vectorLayerId) ?? [];
+    this.placements = (this.sm?.getEphemeraPlacementsForLayer(this.vectorLayerId) ?? []) as any;
   }
 
   startEdit(p: EphemeraPlacement): void {
     this.editingPlacementId = p.id;
     this.editParams = { ...p.params };
-    this.editBlendMode = p.blendMode ?? 'source-over';
+    // Host EphemeraPlacement types blendMode as string (TODO: align host interfaces with the engine's)
+    this.editBlendMode = (p.blendMode ?? 'source-over') as EphemeraBlendMode;
     this.editGlowEnabled = !!p.glow;
     this.editGlowRadius = p.glow?.radius ?? 6;
     this.editGlowColor = p.glow?.color ?? '#ffffff';
@@ -289,8 +297,8 @@ export class EphemeraPanel implements OnInit, OnChanges {
     this.editFeatherStart = p.feather?.start ?? 0.6;
     this.editFeatherEnd = p.feather?.end ?? 1.0;
     this.editFeatherAngle = p.feather?.angle ?? 0;
-    const gen = this.sm?.getEphemeraGenerator?.(p.typeId);
-    this.editParamSchemaList = gen?.getParamSchema?.() ?? [];
+    const gen = this.sm?.getEphemeraGenerator(p.typeId);
+    this.editParamSchemaList = (gen?.getParamSchema?.() ?? []) as any;
   }
 
   commitEdit(): void {
@@ -301,7 +309,7 @@ export class EphemeraPanel implements OnInit, OnChanges {
     const feather = this.editFeatherEnabled
       ? { mode: this.editFeatherMode, start: this.editFeatherStart, end: this.editFeatherEnd, ...(this.editFeatherMode === 'linear' ? { angle: this.editFeatherAngle } : {}) }
       : null;
-    this.sm?.updateEphemeraPlacement?.(this.vectorLayerId, this.editingPlacementId, {
+    this.sm?.updateEphemeraPlacement(this.vectorLayerId, this.editingPlacementId, {
       params: { ...this.editParams },
       blendMode: this.editBlendMode,
       glow,
@@ -316,13 +324,13 @@ export class EphemeraPanel implements OnInit, OnChanges {
   deletePlacement(id: string, e: Event): void {
     e.stopPropagation();
     if (!this.vectorLayerId) return;
-    this.sm?.deleteEphemeraPlacement?.(this.vectorLayerId, id);
+    this.sm?.deleteEphemeraPlacement(this.vectorLayerId, id);
     if (this.editingPlacementId === id) this.editingPlacementId = null;
     this.refreshPlacements();
   }
 
   rasterize(): void {
-    this.sm?.rasterizeEphemeraLayer?.(this.vectorLayerId);
+    void this.sm?.rasterizeEphemeraLayer(this.vectorLayerId);
   }
 
   close(): void {

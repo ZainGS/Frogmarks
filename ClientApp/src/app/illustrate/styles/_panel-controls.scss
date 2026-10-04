@@ -1,0 +1,593 @@
+// Shared editor panel controls (buttons, rows, selects, labels).
+// Imported by illustration.component.scss AND by child panels extracted from it, so the
+// extracted panels render identically under Angular's per-component style scoping.
+// Moved verbatim from illustration.component.scss (2026-10-02, refactor-plan Phase 2.0).
+
+    .tool-label {
+        color: #ccc;
+        font-size: 12px;
+        margin-bottom: 10px;
+        text-align: center;
+        font-weight: 600;
+    }
+
+.scene3d-icon-btn {
+    background: none;
+    border: none;
+    color: #b8b8b8;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 1px 3px;
+
+    &:hover { color: #f77; }
+}
+
+.scene3d-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.scene3d-btn {
+    background: #333;
+    border: 1px solid #555;
+    color: #ddd;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover { background: #444; }
+    &.active { background: rgba(#9B59B6, 0.3); border-color: #9B59B6; }
+    &:disabled { opacity: 0.4; cursor: default; }
+}
+
+.scene3d-btn-danger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 8px;
+    color: #f77;
+    border-color: #844;
+
+    &:hover { background: rgba(#f77, 0.15); }
+}
+
+.scene3d-btn-primary {
+    background: rgba(#9B59B6, 0.25);
+    border-color: #9B59B6;
+    color: #d4aaee;
+
+    &:hover { background: rgba(#9B59B6, 0.45); }
+}
+
+.scene3d-select {
+    background: #333;
+    border: 1px solid #555;
+    color: #ddd;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:focus { outline: 1px solid #9B59B6; }
+}
+
+.scene3d-btn-danger {
+    background: rgba(180, 40, 40, 0.4) !important;
+    border-color: #c0392b !important;
+    &:hover { background: rgba(180, 40, 40, 0.7) !important; }
+}
+
+.scene3d-btn-sm {
+    font-size: 10px;
+    padding: 1px 6px;
+}
+
+.scene3d-material-row.scene3d-row-wide label {
+    width: auto;
+    flex: 1;
+}
+
+.scene3d-material-row.scene3d-row-sub {
+    padding-left: 10px;
+}
+
+.scene3d-material-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+
+    label {
+        width: 60px;
+        flex-shrink: 0;
+        font-size: 10px;
+        color: #aaa;
+    }
+
+    input[type="color"] {
+        width: 28px;
+        height: 22px;
+        border: 1px solid #555;
+        border-radius: 3px;
+        background: #333;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    input[type="range"] {
+        flex: 1;
+        min-width: 0;
+        accent-color: #9B59B6;
+    }
+}
+
+.scene3d-val {
+    min-width: 28px;
+    text-align: right;
+    font-size: 9px;
+    color: #aaa;
+}
+
+.scene3d-array-strip-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    white-space: nowrap;
+}
+
+.scene3d-hint {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1.4;
+}
+
+.scene3d-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 6px;
+
+    label {
+        font-size: 10px;
+        color: #aaa;
+    }
+
+    input[type="checkbox"] {
+        transform: scale(0.95);
+        accent-color: #9B59B6;
+    }
+}
+
+.scene3d-btn-active {
+    background: rgba(#9B59B6, 0.35) !important;
+    border-color: #9B59B6 !important;
+    color: #d4aaef !important;
+}
+
+.scene3d-array-mode-row {
+    display: flex;
+    gap: 4px;
+    padding: 4px 0 6px;
+}
+
+.eye-proc-group {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: #888;
+    text-transform: uppercase;
+    padding: 5px 0 2px;
+
+    &:first-child { padding-top: 0; }
+}
+
+.scene3d-array-strip-count {
+    width: 42px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    color: #ccc;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 11px;
+    text-align: center;
+}
+
+.bp-seg-btn {
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #e0e0e0;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+
+    &.bp-seg-active {
+        background: #9B59B6;
+        border-color: #bb5fff;
+        color: #fff;
+    }
+
+    &:hover:not(.bp-seg-active) { background: #444; }
+}
+
+.scene3d-section {
+    border-top: 1px solid #444;
+    margin-top: 8px;
+    padding: 8px 6px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #ccc;
+}
+
+.scene3d-header {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: #e0e0e0;
+}
+
+.scene3d-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.scene3d-seg-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-right: 1px solid #444;
+    color: #aaa;
+    font-size: 11px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+
+    &:last-child { border-right: none; }
+    &:hover { background: rgba(255,255,255,0.06); color: #e0e0e0; }
+    &.active { background: rgba(155, 89, 182, 0.25); color: #c89fe8; }
+}
+
+.scene3d-input-small {
+    background: #333;
+    border: 1px solid #555;
+    color: #ddd;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    width: 64px;
+    &:focus { outline: 1px solid #9B59B6; }
+}
+
+.scene3d-mesh-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scene3d-node-icon {
+    font-size: 11px;
+    color: #888;
+    margin-right: 3px;
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.scene3d-vec3-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+
+    .scene3d-vec3-label {
+        width: 32px;
+        flex-shrink: 0;
+        font-size: 10px;
+        color: #aaa;
+        text-align: right;
+    }
+
+    input[type="number"] {
+        width: 52px;
+        background: #333;
+        border: 1px solid #555;
+        border-radius: 3px;
+        color: #e0e0e0;
+        padding: 2px 4px;
+        font-size: 10px;
+        text-align: center;
+
+        &:focus { outline: 1px solid #9B59B6; }
+    }
+
+    input[type="checkbox"] {
+        accent-color: #9B59B6;
+    }
+}
+
+.scene3d-seg-btn-group {
+    display: flex;
+    flex: 1;
+    gap: 2px;
+}
+
+.scene3d-seg-btn {
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #aaa;
+    font-size: 11px;
+    padding: 3px 0;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover { background: #383838; }
+    &.active { background: #5a3f7a; border-color: #8b6fb0; color: #fff; }
+}
+
+.scene3d-shortcut-hint {
+    font-size: 9px;
+    color: #666;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: monospace;
+}
+
+.scene3d-details {
+    margin-top: 8px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 6px;
+
+    summary {
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        color: #bbb;
+        padding: 2px 0;
+
+        &:hover { color: #e0e0e0; }
+    }
+}
+
+.scene3d-axis-btns {
+    display: flex;
+    gap: 3px;
+}
+
+.scene3d-undo-btns {
+    display: flex;
+    gap: 2px;
+}
+
+.scene3d-undo-icon {
+    font-size: 14px !important;
+    padding: 0 4px !important;
+    &:disabled { opacity: 0.3; }
+}
+
+.scene3d-qf-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+
+.scene3d-qf-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    min-width: 52px;
+    flex-shrink: 0;
+}
+
+.scene3d-short-input {
+    width: 48px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #e0e0e0;
+    padding: 2px 4px;
+    font-size: 10px;
+    text-align: center;
+    flex-shrink: 0;
+    &:focus { outline: 1px solid #9B59B6; border-color: transparent; }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.scene3d-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #aaa;
+    cursor: pointer;
+    user-select: none;
+    input[type="checkbox"] { accent-color: #9B59B6; }
+}
+
+.scene3d-major-header {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #9B59B6;
+    background: rgba(155, 89, 182, 0.08);
+    border-top: 1px solid rgba(155, 89, 182, 0.25);
+    border-bottom: 1px solid rgba(155, 89, 182, 0.15);
+    padding: 5px 8px 4px;
+    margin: 8px -6px 4px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+
+    &::-webkit-details-marker { display: none; }
+    &::marker { display: none; }
+    &:hover { background: rgba(155, 89, 182, 0.14); }
+}
+
+.scene3d-outliner-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0 6px;
+    position: relative;
+}
+
+.scene3d-sub-header {
+    font-weight: 600;
+    font-size: 11px;
+    color: #aaa;
+    margin: 8px 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.scene3d-svg-input {
+    width: 100%;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 10px;
+    font-family: monospace;
+    padding: 4px 6px;
+    resize: vertical;
+    box-sizing: border-box;
+
+    &:focus { outline: 2px solid rgba(155, 89, 182, 0.5); }
+    &::placeholder { color: #666; }
+}
+
+.fx-chain-entry {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px 5px;
+  margin-bottom: 4px;
+}
+
+.fx-param-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+  min-width: 0;
+
+  label {
+    color: #999;
+    font-size: 10px;
+    width: 52px;
+    flex-shrink: 0;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    height: 14px;
+  }
+
+  span {
+    color: #aaa;
+    font-size: 10px;
+    min-width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+}
+
+.segment-row {
+    display: flex;
+    gap: 0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.segment-btn {
+    flex: 1;
+    background: #2a2a2a;
+    color: #aaa;
+    border: none;
+    border-right: 1px solid #555;
+    padding: 4px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+
+    &:last-child { border-right: none; }
+    &:hover { background: #3a3a3a; color: #ddd; }
+    &.active {
+        background: rgba(#9B59B6, 0.35);
+        color: #d4a6f5;
+        font-weight: 600;
+    }
+}
+
+.scene3d-keyframe-hint {
+    font-size: 9px;
+    color: #777;
+    line-height: 1.5;
+    margin-top: 4px;
+    padding: 4px 4px;
+    border-top: 1px dashed #333;
+}
+
+.scene3d-move-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    line-height: 1;
+
+    .scene3d-mesh-item:hover & { opacity: 1; }
+    &:hover { color: #ccc; }
+}
+
+.scene3d-qf-val {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    min-width: 28px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.scene3d-keyframe-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+
+    .scene3d-btn-keyframe { flex: 1; font-size: 11px; }
+}
+
+.scene3d-frame-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: #aaa;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+    transition: color 0.3s, border-color 0.3s;
+
+    &.flash {
+        color: #ffe082;
+        border-color: #ffe082;
+    }
+}

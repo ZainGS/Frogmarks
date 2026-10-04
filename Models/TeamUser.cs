@@ -1,4 +1,5 @@
-﻿using Frogmarks.Models.Board;
+﻿using System.Text.Json.Serialization;
+using Frogmarks.Models.Board;
 using Frogmarks.Models.Team;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -18,6 +19,8 @@ namespace Frogmarks.Models
 
         public string ApplicationUserId { get; set; }
         [ForeignKey("ApplicationUserId")]
+        // Never serialized: it would expose the user record (password hash, tokens) — security audit 2026-10-04, Phase 1.8
+        [JsonIgnore]
         public virtual ApplicationUser ApplicationUser { get; set; }
     }
 }

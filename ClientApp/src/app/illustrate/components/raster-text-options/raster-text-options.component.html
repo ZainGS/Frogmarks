@@ -1,0 +1,57 @@
+<div class="tool-label">Raster Text</div>
+<div style="padding: 4px 8px; font-size: 12px;">
+    <!-- Font -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 40px; color: #aaa;">Font</label>
+        <select [(ngModel)]="rt.rasterTextFont"
+                (ngModelChange)="rt.onRasterTextFontChange($event)"
+                style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <option *ngFor="let f of availableFonts" [ngValue]="f">{{ f }}</option>
+        </select>
+    </div>
+    <!-- Size -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 40px; color: #aaa;">Size</label>
+        <input type="number" min="8" max="200" step="1"
+               [(ngModel)]="rt.rasterTextFontSize"
+               (ngModelChange)="rt.onRasterTextFontSizeChange($event)"
+               style="width: 60px; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+        <span style="color: #aaa;">px</span>
+    </div>
+    <!-- Bold / Italic / Align -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+        <button (click)="rt.toggleRasterTextBold()"
+                [style.background]="rt.rasterTextBold ? '#9B59B6' : '#333'"
+                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; font-weight: bold; cursor: pointer; font-size: 12px;"
+                title="Bold">B</button>
+        <button (click)="rt.toggleRasterTextItalic()"
+                [style.background]="rt.rasterTextItalic ? '#9B59B6' : '#333'"
+                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 8px; font-style: italic; cursor: pointer; font-size: 12px;"
+                title="Italic">I</button>
+        <span style="width: 8px;"></span>
+        <button *ngFor="let a of ['left', 'center', 'right']"
+                (click)="rt.onRasterTextAlignChange($any(a))"
+                [style.background]="rt.rasterTextAlign === a ? '#9B59B6' : '#333'"
+                style="border: 1px solid #555; border-radius: 3px; color: #e0e0e0; padding: 2px 6px; cursor: pointer; font-size: 10px; text-transform: capitalize;"
+                [title]="'Align ' + a">{{ a === 'left' ? '◀' : a === 'center' ? '●' : '▶' }}</button>
+    </div>
+    <!-- Color -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 40px; color: #aaa;">Color</label>
+        <div class="color-palette" style="display: flex; flex-wrap: wrap; gap: 4px;">
+            <div *ngFor="let color of penColorPalette" 
+                class="palette-circle" 
+                [class.selected]="rt.rasterTextColor === color"
+                [style.background-color]="color"
+                (click)="rt.onRasterTextColorChange(color)"
+                style="width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 1px solid #555;"></div>
+        </div>
+    </div>
+    <!-- Commit / Cancel -->
+    <div *ngIf="rt.rasterTextState?.isActive" style="display: flex; gap: 6px; margin-top: 6px;">
+        <button (click)="rt.commitRasterText()"
+                style="flex: 1; background: #9B59B6; border: none; border-radius: 4px; color: #fff; padding: 4px 8px; cursor: pointer; font-size: 11px;">Commit (Enter)</button>
+        <button (click)="rt.cancelRasterText()"
+                style="flex: 1; background: #333; border: 1px solid #555; border-radius: 4px; color: #e0e0e0; padding: 4px 8px; cursor: pointer; font-size: 11px;">Cancel (Esc)</button>
+    </div>
+</div>

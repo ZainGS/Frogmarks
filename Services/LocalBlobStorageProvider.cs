@@ -23,7 +23,11 @@ namespace Frogmarks.Services
 
         private string GetFilePath(string containerName, string blobName)
         {
-            var path = Path.Combine(_rootPath, containerName, blobName.Replace('/', Path.DirectorySeparatorChar));
+            var path = Path.GetFullPath(Path.Combine(_rootPath, containerName, blobName.Replace('/', Path.DirectorySeparatorChar)));
+            // Backstop for path traversal (audit Phase 1.9): the resolved path must stay inside the storage root.
+            var root = Path.GetFullPath(_rootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Blob name resolves outside the storage root.", nameof(blobName));
             return path;
         }
 

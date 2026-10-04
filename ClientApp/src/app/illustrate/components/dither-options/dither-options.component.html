@@ -1,0 +1,177 @@
+<div class="tool-label">⚡ Effects</div>
+
+<!-- Master toggle -->
+<div style="padding: 4px 8px;">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="illDitherEnabled"
+               [checked]="fx.ditherConfig.enabled"
+               (change)="fx.onDitherEnabledChange($any($event.target).checked)">
+        <label class="form-check-label" for="illDitherEnabled" style="color: #ccc; font-size: 11px;">Dither</label>
+    </div>
+</div>
+
+<div *ngIf="fx.ditherConfig.enabled" style="padding: 4px 8px;">
+    <!-- Algorithm -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Algorithm</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                [ngModel]="fx.ditherConfig.algorithm"
+                (ngModelChange)="fx.onDitherAlgorithmChange($event)">
+            <option *ngFor="let opt of fx.ditherAlgorithmOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Color Levels -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Levels</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                [ngModel]="fx.ditherConfig.colorLevels"
+                (ngModelChange)="fx.onDitherColorLevelsChange($event)">
+            <option *ngFor="let opt of colorLevelOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Strength -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Strength</label>
+        <input type="range" min="0" max="100" step="1" style="flex: 1;"
+               [ngModel]="fx.ditherStrengthPercent"
+               (input)="fx.onDitherStrengthChange($any($event.target).value)">
+        <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherStrengthPercent }}%</span>
+    </div>
+
+    <!-- Scale -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Scale</label>
+        <input type="range" min="0.25" max="8" step="0.25" style="flex: 1;"
+               [(ngModel)]="fx.ditherConfig.patternScale"
+               (input)="fx.onDitherPatternScaleChange($any($event.target).value)">
+        <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherConfig.patternScale }}</span>
+    </div>
+
+    <!-- Per-channel -->
+    <div style="margin-bottom: 6px;">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="illDitherPerChannel"
+                   [checked]="fx.ditherConfig.perChannel"
+                   (change)="fx.onDitherPerChannelChange($any($event.target).checked)">
+            <label class="form-check-label" for="illDitherPerChannel" style="color: #ccc; font-size: 10px;">Per-Channel</label>
+        </div>
+    </div>
+
+    <!-- ── Colors ── -->
+    <div style="border-top: 1px solid #444; margin: 6px 0; padding-top: 6px;">
+        <label style="font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Colors</label>
+    </div>
+
+    <!-- Color Mode -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Mode</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                [ngModel]="fx.ditherConfig.colorMode"
+                (ngModelChange)="fx.onDitherColorModeChange($event)">
+            <option *ngFor="let opt of colorModeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Duotone-specific controls -->
+    <div *ngIf="fx.ditherConfig.colorMode === 'duotone'">
+        <!-- Foreground color -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Foreground</label>
+            <input type="color" [value]="fx.ditherFgHex"
+                   (input)="fx.onDitherForegroundColorChange($any($event.target).value)"
+                   style="width: 24px; height: 24px; padding: 0; border: 1px solid #555; border-radius: 3px; cursor: pointer;">
+            <span style="color: #aaa; font-size: 10px;">{{ fx.ditherFgHex }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding-left: 66px;">
+            <label style="color:#aaa; font-size: 9px; width: 24px;">α</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [ngModel]="fx.ditherFgAlphaPercent"
+                   (input)="fx.onDitherFgAlphaChange($any($event.target).value)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherFgAlphaPercent }}%</span>
+        </div>
+
+        <!-- Background color -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Background</label>
+            <input type="color" [value]="fx.ditherBgHex"
+                   (input)="fx.onDitherBackgroundColorChange($any($event.target).value)"
+                   style="width: 24px; height: 24px; padding: 0; border: 1px solid #555; border-radius: 3px; cursor: pointer;">
+            <span style="color: #aaa; font-size: 10px;">{{ fx.ditherBgHex }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding-left: 66px;">
+            <label style="color:#aaa; font-size: 9px; width: 24px;">α</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [ngModel]="fx.ditherBgAlphaPercent"
+                   (input)="fx.onDitherBgAlphaChange($any($event.target).value)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherBgAlphaPercent }}%</span>
+        </div>
+
+        <!-- Swap -->
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <button class="btn btn-sm btn-outline-secondary" style="font-size: 10px; padding: 1px 8px;"
+                    (click)="fx.onDitherSwapColors()">⇄ Swap</button>
+        </div>
+
+        <!-- Bias -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Bias</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.ditherConfig.duotoneBias * 100)"
+                   (input)="fx.onDitherDuotoneBiasChange($any($event.target).value)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ mathRound(fx.ditherConfig.duotoneBias * 100) }}%</span>
+        </div>
+
+        <!-- Tint opacity -->
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Tint</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [ngModel]="fx.ditherTintPercent"
+                   (input)="fx.onDitherTintOpacityChange($any($event.target).value)">
+            <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherTintPercent }}%</span>
+        </div>
+    </div>
+
+    <!-- Bayer settings -->
+    <div *ngIf="fx.ditherConfig.algorithm === 'bayer'">
+        <div class="tool-label" style="font-size: 10px;">Bayer</div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 0 8px;">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Matrix</label>
+            <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                    [ngModel]="fx.ditherConfig.bayerLevel"
+                    (ngModelChange)="fx.onDitherBayerLevelChange($event)">
+                <option *ngFor="let opt of bayerLevelOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Halftone settings -->
+    <div *ngIf="fx.ditherConfig.algorithm.startsWith('halftone_')">
+        <div class="tool-label" style="font-size: 10px;">Halftone</div>
+        <div style="padding: 0 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Shape</label>
+                <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                        [ngModel]="fx.ditherConfig.algorithm"
+                        (ngModelChange)="fx.onDitherHalftoneShapeChange($event)">
+                    <option *ngFor="let opt of halftoneShapeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Angle</label>
+                <input type="range" min="0" max="360" step="1" style="flex: 1;"
+                       [(ngModel)]="fx.ditherConfig.halftoneAngle"
+                       (input)="fx.onDitherHalftoneAngleChange($any($event.target).value)">
+                <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherConfig.halftoneAngle }}°</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                <label style="width: 50px; color:#aaa; font-size: 10px;">Freq</label>
+                <input type="range" min="2" max="200" step="1" style="flex: 1;"
+                       [(ngModel)]="fx.ditherConfig.halftoneFrequency"
+                       (input)="fx.onDitherHalftoneFrequencyChange($any($event.target).value)">
+                <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherConfig.halftoneFrequency }}</span>
+            </div>
+        </div>
+    </div>
+</div>

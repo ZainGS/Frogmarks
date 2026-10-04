@@ -1,20 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy } from '@angular/core';
+import { Component, inject, Input, NgZone, Output, EventEmitter, OnInit, OnChanges, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
-
-export interface GpDrawSettings {
-  gpId: string | null;
-  layerId: string | null;
-  tool: 'draw' | 'erase';
-  color: { r: number; g: number; b: number; a: number };
-  width: number;
-  strokeOpacity: number;
-  filled: boolean;
-  fillColor: { r: number; g: number; b: number; a: number };
-  parentJoint: string;
-  closed: boolean;
-  eraserRadius: number;
-  frame: number;
-}
+import ShapeManager from '@zaings/salsa/shape-manager';
 
 interface GpObject { id: string; name: string; skeletonId?: string; }
 interface GpLayer  { id: string; name: string; visible: boolean; opacity: number; }
@@ -26,12 +12,12 @@ interface GpDrawPlane { meshId: string; triangleIndex: number; offset: number; }
   styleUrls:  ['./grease-pencil-panel.component.scss'],
 })
 export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy {
-  @Input() shapeManager: any = null;
+  private ngZone = inject(NgZone);
+  @Input() shapeManager: ShapeManager = null;
   @Output() closeRequest       = new EventEmitter<void>();
-  @Output() drawSettingsChange = new EventEmitter<GpDrawSettings>();
 
-  private get sm(): any { return this.shapeManager; }
-  private _sub: Subscription | null = null;
+  private get sm(): ShapeManager { return this.shapeManager; }
+  private _sub: { unsubscribe(): void } | null = null;
   private _drawPlanePollId: any = null;
   private _activeModeKey: string | null = null;
 
@@ -90,7 +76,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     if (this.shapeManager) {
       this._subscribe();
       this.refreshAll();
-      this.sm?.enterGpFaceSelectMode3D?.();
+      this.sm?.enterGpFaceSelectMode3D();
       this._startDrawPlanePoll();
     }
   }
@@ -101,7 +87,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       this._stopDrawPlanePoll();
       this._subscribe();
       this.refreshAll();
-      this.sm?.enterGpFaceSelectMode3D?.();
+      this.sm?.enterGpFaceSelectMode3D();
       this._startDrawPlanePoll();
     }
   }
@@ -109,9 +95,9 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   ngOnDestroy(): void {
     this._unsubscribe();
     this._stopDrawPlanePoll();
-    this.sm?.exitGpDrawMode3D?.();
-    this.sm?.exitGpFaceSelectMode3D?.();
-    this.sm?.clearGpDrawPlane3D?.();
+    this.sm?.exitGpDrawMode3D();
+    this.sm?.exitGpFaceSelectMode3D();
+    this.sm?.clearGpDrawPlane3D();
   }
 
   private _subscribe(): void {
@@ -124,7 +110,16 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _unsubscribe(): void { this._sub?.unsubscribe(); this._sub = null; }
 
   private _startDrawPlanePoll(): void {
-    this._drawPlanePollId = setInterval(() => this.refreshDrawPlane(), 250);
+    // Polled outside Angular's zone (audit Phase 5.4: an in-zone 250 ms interval re-checked the whole editor 4× a
+    // second); change detection runs only when the draw plane actually changed.
+    this.ngZone.runOutsideAngular(() => {
+      this._drawPlanePollId = setInterval(() => {
+        const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D() ?? null;
+        const changed = !!plane !== !!this.gpDrawPlane || (plane && this.gpDrawPlane
+          && (plane.offset !== this.gpDrawPlane.offset || JSON.stringify(plane) !== JSON.stringify(this.gpDrawPlane)));
+        if (changed) this.ngZone.run(() => this.refreshDrawPlane());
+      }, 250);
+    });
   }
 
   private _stopDrawPlanePoll(): void {
@@ -140,30 +135,30 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   refreshDrawPlane(): void {
-    const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D?.() ?? null;
+    const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D() ?? null;
     this.gpDrawPlane = plane;
     if (plane) this.planeOffset = plane.offset;
   }
 
   clearDrawPlane(): void {
-    this.sm?.clearGpDrawPlane3D?.();
+    this.sm?.clearGpDrawPlane3D();
     this.gpDrawPlane = null;
     // After clearing, re-enter face-select so user can pick a new face
     if (!this.isDrawActive) {
-      this.sm?.enterGpFaceSelectMode3D?.();
+      this.sm?.enterGpFaceSelectMode3D();
     }
   }
 
   onPlaneOffsetChange(): void {
-    this.sm?.setGpDrawPlaneOffset3D?.(this.planeOffset);
+    this.sm?.setGpDrawPlaneOffset3D(this.planeOffset);
   }
 
   private _refreshSkeletons(): void {
-    this.skeletonList = this.sm?.getAllSkeletons3D?.() ?? [];
+    this.skeletonList = this.sm?.getAllSkeletons3D() ?? [];
   }
 
   private _refreshGpObjects(): void {
-    const raw: any[] = this.sm?.getAllGpObjects3D?.() ?? [];
+    const raw: any[] = this.sm?.getAllGpObjects3D() ?? [];
     this.gpObjects = raw.map((g: any) => ({ id: g.id, name: g.name, skeletonId: g.skeletonId }));
 
     if (this.activeGpId) {
@@ -175,12 +170,11 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     }
 
     this._refreshLayers();
-    this._emitSettings();
   }
 
   private _refreshLayers(): void {
     if (!this.activeGpId) { this.gpLayers = []; this.activeLayerId = null; return; }
-    const raw: any[] = this.sm?.getGpLayers3D?.(this.activeGpId) ?? [];
+    const raw: any[] = this.sm?.getGpLayers3D(this.activeGpId) ?? [];
     this.gpLayers = raw.map((l: any) => ({
       id: l.id, name: l.name,
       visible: l.visible ?? true,
@@ -198,7 +192,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _refreshJoints(): void {
     const activeGp = this.gpObjects.find(g => g.id === this.activeGpId);
     if (activeGp?.skeletonId) {
-      const raw: any[] = this.sm?.getSkeletonJoints3D?.(activeGp.skeletonId) ?? [];
+      const raw: any[] = this.sm?.getSkeletonJoints3D(activeGp.skeletonId) ?? [];
       this.jointList = raw.map((j: any) => ({ name: j.name ?? '' }));
     } else {
       this.jointList = [];
@@ -210,7 +204,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   createGpObject(): void {
     if (!this.newGpName.trim()) return;
     const skelId = this.newGpSkeletonId || undefined;
-    this.sm?.createGpObject3D?.(this.newGpName.trim(), skelId);
+    this.sm?.createGpObject3D(this.newGpName.trim(), skelId);
     this.newGpName = 'GP Object';
   }
 
@@ -219,12 +213,11 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     this.activeGpId = id;
     this.activeLayerId = null;
     this._refreshLayers();
-    this._emitSettings();
   }
 
   removeGpObject(id: string, event: Event): void {
     event.stopPropagation();
-    this.sm?.removeGpObject3D?.(id);
+    this.sm?.removeGpObject3D(id);
     if (this.activeGpId === id) {
       this._exitDrawIfActive();
       this.activeGpId = null;
@@ -241,7 +234,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   confirmRenameGp(): void {
     if (!this.renamingGpId) return;
-    this.sm?.renameGpObject3D?.(this.renamingGpId, this.renameGpValue);
+    this.sm?.renameGpObject3D(this.renamingGpId, this.renameGpValue);
     this.renamingGpId = null;
   }
 
@@ -249,27 +242,26 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   setRenderOrder(): void {
     if (!this.activeGpId) return;
-    this.sm?.setGpRenderOrder3D?.(this.activeGpId, this.renderOrder);
+    this.sm?.setGpRenderOrder3D(this.activeGpId, this.renderOrder);
   }
 
   // ── Layer ops ─────────────────────────────────────────────────────
 
   addLayer(): void {
     if (!this.activeGpId || !this.newLayerName.trim()) return;
-    this.sm?.addGpLayer3D?.(this.activeGpId, this.newLayerName.trim());
+    this.sm?.addGpLayer3D(this.activeGpId, this.newLayerName.trim());
     this.newLayerName = 'Layer';
   }
 
   selectLayer(id: string): void {
     this._exitDrawIfActive();
     this.activeLayerId = id;
-    this._emitSettings();
   }
 
   removeLayer(id: string, event: Event): void {
     event.stopPropagation();
     if (!this.activeGpId) return;
-    this.sm?.removeGpLayer3D?.(this.activeGpId, id);
+    this.sm?.removeGpLayer3D(this.activeGpId, id);
     if (this.activeLayerId === id) {
       this._exitDrawIfActive();
       this.activeLayerId = null;
@@ -280,13 +272,13 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     event.stopPropagation();
     if (!this.activeGpId) return;
     const next = !layer.visible;
-    this.sm?.setGpLayerVisible3D?.(this.activeGpId, layer.id, next);
+    this.sm?.setGpLayerVisible3D(this.activeGpId, layer.id, next);
     layer.visible = next;
   }
 
   onLayerOpacityChange(layer: GpLayer): void {
     if (!this.activeGpId) return;
-    this.sm?.setGpLayerOpacity3D?.(this.activeGpId, layer.id, layer.opacity);
+    this.sm?.setGpLayerOpacity3D(this.activeGpId, layer.id, layer.opacity);
   }
 
   startRenameLayer(id: string, current: string, event: Event): void {
@@ -297,7 +289,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   confirmRenameLayer(): void {
     if (!this.renamingLayerId || !this.activeGpId) return;
-    this.sm?.renameGpLayer3D?.(this.activeGpId, this.renamingLayerId, this.renameLayerValue);
+    this.sm?.renameGpLayer3D(this.activeGpId, this.renamingLayerId, this.renameLayerValue);
     this.renamingLayerId = null;
   }
 
@@ -307,12 +299,12 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   setKeyframe(): void {
     if (!this.activeGpId || !this.activeLayerId) return;
-    this.sm?.setGpKeyframe3D?.(this.activeGpId, this.activeLayerId, this.gpFrame);
+    this.sm?.setGpKeyframe3D(this.activeGpId, this.activeLayerId, this.gpFrame);
   }
 
   clearKeyframe(): void {
     if (!this.activeGpId || !this.activeLayerId) return;
-    this.sm?.clearGpKeyframe3D?.(this.activeGpId, this.activeLayerId, this.gpFrame);
+    this.sm?.clearGpKeyframe3D(this.activeGpId, this.activeLayerId, this.gpFrame);
   }
 
   // ── Draw mode lifecycle ───────────────────────────────────────────
@@ -327,7 +319,6 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     if (this.canDraw && this.activeGpId && this.activeLayerId) {
       this._enterDrawMode();
     }
-    this._emitSettings();
   }
 
   private _enterDrawMode(): void {
@@ -335,31 +326,30 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
     const modeKey = `${this.activeGpId}/${this.activeLayerId}/${this.gpTool}`;
     const opts = this._buildGpOpts();
     if (this.isDrawActive && modeKey !== this._activeModeKey) {
-      this.sm?.exitGpDrawMode3D?.();
+      this.sm?.exitGpDrawMode3D();
     }
     if (!this.isDrawActive || modeKey !== this._activeModeKey) {
-      this.sm?.exitGpFaceSelectMode3D?.();
-      this.sm?.enterGpDrawMode3D?.(this.activeGpId, this.activeLayerId, opts);
+      this.sm?.exitGpFaceSelectMode3D();
+      this.sm?.enterGpDrawMode3D(this.activeGpId, this.activeLayerId, opts);
       this._activeModeKey = modeKey;
       this.isDrawActive = true;
     } else {
-      this.sm?.setGpDrawSettings3D?.(opts);
+      this.sm?.setGpDrawSettings3D(opts);
     }
   }
 
   private _exitDrawIfActive(): void {
     if (!this.isDrawActive) return;
-    this.sm?.exitGpDrawMode3D?.();
-    this.sm?.enterGpFaceSelectMode3D?.();
+    this.sm?.exitGpDrawMode3D();
+    this.sm?.enterGpFaceSelectMode3D();
     this.isDrawActive = false;
     this._activeModeKey = null;
   }
 
   onStrokeSettingChange(): void {
     if (this.isDrawActive) {
-      this.sm?.setGpDrawSettings3D?.(this._buildGpOpts());
+      this.sm?.setGpDrawSettings3D(this._buildGpOpts());
     }
-    this._emitSettings();
   }
 
   private _buildGpOpts(): object {
@@ -373,25 +363,6 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       parentJoint:   this.parentJoint || undefined,
       eraseRadius:   this.eraserRadius,
     };
-  }
-
-  // ── Settings (informational emit to parent) ───────────────────────
-
-  private _emitSettings(): void {
-    this.drawSettingsChange.emit({
-      gpId:          this.activeGpId,
-      layerId:       this.activeLayerId,
-      tool:          this.gpTool,
-      color:         this._hexToRgba(this.strokeColorHex, this.strokeOpacity),
-      width:         this.strokeWidth,
-      strokeOpacity: this.strokeOpacity,
-      filled:        this.filled,
-      fillColor:     this._hexToRgba(this.fillColorHex, this.fillOpacity),
-      parentJoint:   this.parentJoint,
-      closed:        this.closed,
-      eraserRadius:  this.eraserRadius,
-      frame:         this.gpFrame,
-    });
   }
 
   private _hexToRgba(hex: string, a: number): { r: number; g: number; b: number; a: number } {

@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import ShapeManager from '@zaings/salsa/shape-manager';
 
 export interface ParticleEmitterRecord {
   id: string;
@@ -88,7 +89,7 @@ function makeRecord(id: string, preset?: string): ParticleEmitterRecord {
   styleUrls: ['./particle-emitters.component.scss'],
 })
 export class ParticleEmittersComponent implements OnChanges, OnDestroy {
-  @Input() shapeManager: any = null;
+  @Input() shapeManager: ShapeManager = null;
   @Input() selectedId: string | null = null;
 
   emitters: ParticleEmitterRecord[] = [];
@@ -127,7 +128,7 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
     this.showPresetPicker = false;
     const sm = this.shapeManager;
     if (!sm?.addParticleEmitter3D) return;
-    const id: string = sm.addParticleEmitter3D(0, 0, 0, {}, preset ?? undefined);
+    const id: string = sm.addParticleEmitter3D(0, 0, 0, {}, (preset ?? undefined) as any);
     if (!id) return;
     const rec = makeRecord(id, preset);
     this.emitters.push(rec);
@@ -137,18 +138,18 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
 
   deleteEmitter(id: string, event: Event): void {
     event.stopPropagation();
-    this.shapeManager?.removeParticleEmitter3D?.(id);
+    this.shapeManager?.removeParticleEmitter3D(id);
     this.emitters = this.emitters.filter(e => e.id !== id);
     if (this.editingId === id) this.editingId = null;
   }
 
   toggleVisibility(rec: ParticleEmitterRecord, event: Event): void {
     event.stopPropagation();
-    const node = this.shapeManager?.getParticleEmitter3D?.(rec.id);
+    const node = this.shapeManager?.getParticleEmitter3D(rec.id);
     if (node) {
       rec.visible = !rec.visible;
       node.visible = rec.visible;
-      this.shapeManager?.scheduleRender?.();
+      this.shapeManager?.scheduleRender();
     }
   }
 
@@ -162,7 +163,7 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
     rec.isRenaming = false;
     if (rec.nameDraft.trim()) {
       rec.name = rec.nameDraft.trim();
-      const node = this.shapeManager?.getParticleEmitter3D?.(rec.id);
+      const node = this.shapeManager?.getParticleEmitter3D(rec.id);
       if (node) node.name = rec.name;
     }
   }
@@ -192,7 +193,7 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
   }
 
   onPositionChange(rec: ParticleEmitterRecord): void {
-    const node = this.shapeManager?.getParticleEmitter3D?.(rec.id);
+    const node = this.shapeManager?.getParticleEmitter3D(rec.id);
     node?.setXYZ?.(rec.posX, rec.posY, rec.posZ);
   }
 
@@ -239,18 +240,18 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
   toggleBloom(): void {
     this.bloomEnabled = !this.bloomEnabled;
     if (this.bloomEnabled) {
-      this.shapeManager?.enableBloom3D?.(this.bloomThreshold, this.bloomIntensity);
+      this.shapeManager?.enableBloom3D(this.bloomThreshold, this.bloomIntensity);
     } else {
-      this.shapeManager?.disableBloom3D?.();
+      this.shapeManager?.disableBloom3D();
     }
   }
 
   onBloomThresholdChange(): void {
-    if (this.bloomEnabled) this.shapeManager?.setBloomThreshold3D?.(this.bloomThreshold);
+    if (this.bloomEnabled) this.shapeManager?.setBloomThreshold3D(this.bloomThreshold);
   }
 
   onBloomIntensityChange(): void {
-    if (this.bloomEnabled) this.shapeManager?.setBloomIntensity3D?.(this.bloomIntensity);
+    if (this.bloomEnabled) this.shapeManager?.setBloomIntensity3D(this.bloomIntensity);
   }
 
   // ── Action bar ───────────────────────────────────────────────────
@@ -259,8 +260,9 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
     this.showResetMenu = false;
     const seed = PRESET_SEEDS[preset];
     if (!seed) return;
+    const id = rec.id;
     Object.assign(rec, seed);
-    rec.id = rec.id; // keep id
+    rec.id = id; // keep id (a seed is a Partial record, so it must never replace the id)
     this._flush(rec);
   }
 
@@ -283,7 +285,7 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
   }
 
   deleteEditingEmitter(rec: ParticleEmitterRecord): void {
-    this.shapeManager?.removeParticleEmitter3D?.(rec.id);
+    this.shapeManager?.removeParticleEmitter3D(rec.id);
     this.emitters = this.emitters.filter(e => e.id !== rec.id);
     this.editingId = null;
   }
@@ -291,7 +293,7 @@ export class ParticleEmittersComponent implements OnChanges, OnDestroy {
   // ── Private ──────────────────────────────────────────────────────
 
   private _flush(rec: ParticleEmitterRecord): void {
-    this.shapeManager?.setParticleEmitterConfig3D?.(rec.id, this._buildConfig(rec));
+    this.shapeManager?.setParticleEmitterConfig3D(rec.id, this._buildConfig(rec));
   }
 
   private _buildConfig(rec: ParticleEmitterRecord): Record<string, unknown> {

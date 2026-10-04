@@ -1,0 +1,43 @@
+<div class="tool-label">Magic Wand</div>
+<!-- Tolerance -->
+<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+    <label style="width: 65px; color:#aaa; font-size: 11px;"
+           title="Color similarity threshold. 0 = exact match, 32 = standard, 64+ = rough sketches.">Tolerance</label>
+    <input type="range" min="0" max="255" step="1" style="flex: 1;"
+           [(ngModel)]="fw.wandTolerance"
+           (ngModelChange)="fw.onWandToleranceChange($event)">
+    <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 11px;">{{ fw.wandTolerance }}</span>
+</div>
+<!-- Contiguous -->
+<div style="margin-bottom: 6px;">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="wandContiguous"
+               [checked]="fw.wandContiguous"
+               (change)="fw.onWandContiguousChange($any($event.target).checked)"
+               title="ON: connected region only. OFF: all similar pixels on the layer.">
+        <label class="form-check-label" for="wandContiguous" style="color: #ccc; font-size: 11px;">Contiguous</label>
+    </div>
+</div>
+<!-- Mode -->
+<div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+    <label style="width: 40px; color:#aaa; font-size: 11px;">Mode</label>
+    <div style="display: flex; gap: 2px;">
+        <button class="mode-btn" [class.active]="fw.wandMode === 'new'" (click)="fw.onWandModeChange('new')"
+                title="Replace any existing selection.">New</button>
+        <button class="mode-btn" [class.active]="fw.wandMode === 'add'" (click)="fw.onWandModeChange('add')"
+                title="Expand the selection (Shift+click).">+Add</button>
+        <button class="mode-btn" [class.active]="fw.wandMode === 'subtract'" (click)="fw.onWandModeChange('subtract')"
+                title="Remove from the selection (Alt+click).">−Sub</button>
+    </div>
+</div>
+<!-- Reference Layer -->
+<div style="display: flex; align-items: center; gap: 6px;">
+    <label style="width: 65px; color:#aaa; font-size: 11px;"
+           title="Use another layer's colors to determine the selection boundary.">Reference</label>
+    <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+            [(ngModel)]="fw.wandReferenceLayerId"
+            (ngModelChange)="fw.onWandReferenceLayerChange($event)">
+        <option value="">None</option>
+        <option *ngFor="let layer of rasterLayers" [ngValue]="layer.id">{{ layer.name || 'Layer' }}</option>
+    </select>
+</div>

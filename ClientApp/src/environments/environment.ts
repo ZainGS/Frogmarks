@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false,
-  apiUrl: 'https://localhost:44362/'
+  // API / client URLs per host live in src/core/app.config.ts (read by ConfigurationService), not here.
 };
 
 /*

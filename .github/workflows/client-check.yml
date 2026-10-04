@@ -1,0 +1,94 @@
+# Frogmarks client CI: `npm run check` in ClientApp on every push and pull request that touches the client
+# (source sanity, tsc -p tsconfig.app.json --noEmit, ESLint + angular-eslint, the ShapeManager-cast and
+# template-member guards), unit tests, then a production `ng build`. Details: ClientApp/salsa-tracker.md and salsa/docs/dev/checks-and-ci.md.
+#
+# Salsa types: ClientApp depends on "@zaings/salsa": "file:../../../salsa" and types it from Salsa's BUILT dist
+# (dist/*.d.ts), which is not committed. So this workflow checks out BOTH repos in the layout that relative path
+# expects and builds Salsa first:
+#
+#   $GITHUB_WORKSPACE/salsa                        <- ZainGS/salsa (ref: main, or the salsa_ref input)
+#   $GITHUB_WORKSPACE/fm/Frogmarks                 <- this repo
+#   $GITHUB_WORKSPACE/fm/Frogmarks/ClientApp       -> ../../../salsa == $GITHUB_WORKSPACE/salsa
+#
+# A Salsa API rename that Frogmarks still calls therefore fails this job at the typecheck step (checked against Salsa
+# main, i.e. what the next local build would give you).
+#
+# PRIVATE Salsa repo: the default GITHUB_TOKEN can only read THIS repo. Create a fine-grained PAT with read-only
+# "Contents" access to ZainGS/salsa and store it in this repo as the secret SALSA_READ_TOKEN. (If Salsa is public no
+# secret is needed; the fallback github.token works.)
+name: Client check
+
+on:
+  push:
+    paths:
+      - 'ClientApp/**'
+      - '.github/workflows/client-check.yml'
+  pull_request:
+    paths:
+      - 'ClientApp/**'
+      - '.github/workflows/client-check.yml'
+  workflow_dispatch:
+    inputs:
+      salsa_ref:
+        description: 'Salsa branch / tag / SHA to type against'
+        required: false
+        default: 'main'
+
+concurrency:
+  group: client-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Frogmarks
+        uses: actions/checkout@v4
+        with:
+          path: fm/Frogmarks
+
+      - name: Checkout Salsa
+        uses: actions/checkout@v4
+        with:
+          repository: ZainGS/salsa
+          ref: ${{ github.event.inputs.salsa_ref || 'main' }}
+          path: salsa
+          token: ${{ secrets.SALSA_READ_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0   # matches the local nvm-windows version
+          cache: npm
+          cache-dependency-path: |
+            salsa/package-lock.json
+            fm/Frogmarks/ClientApp/package-lock.json
+
+      # Salsa's build = vite build && tsc && write-dts-stubs: produces dist/*.d.ts that Frogmarks types against.
+      # (Running the build is fine in CI; locally the user owns when Salsa is built.)
+      - name: Build Salsa (for its .d.ts)
+        working-directory: salsa
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install client
+        working-directory: fm/Frogmarks/ClientApp
+        run: npm ci
+
+      - name: Check (sanity, typecheck, lint, guards)
+        working-directory: fm/Frogmarks/ClientApp
+        run: npm run check
+
+      # Unit tests (audit 2026-10-04, Phase 3.3): persistence save paths (save block, single-flight, flush, captured
+      # document), the OPFS metadata write queue, the keymap dispatcher and the CSRF header — headless Chrome.
+      - name: Unit tests
+        working-directory: fm/Frogmarks/ClientApp
+        run: npm run test:ci
+
+      # Production build (audit 2026-10-04, Phase 3.2): AOT template compilation + bundle budgets — tsc alone misses
+      # template / AOT errors. Kept out of `npm run check` (slow, ~1.5 min). The `prebuild` hook re-runs the
+      # ShapeManager guard first.
+      - name: Production build
+        working-directory: fm/Frogmarks/ClientApp
+        run: npm run build -- --configuration production

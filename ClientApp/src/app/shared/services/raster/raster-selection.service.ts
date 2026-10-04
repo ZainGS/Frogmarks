@@ -33,14 +33,14 @@ export class RasterSelectionService {
   get isEnabled(): boolean { return this._enabled$.value; }
 
   // ── ShapeManager access ───────────────────────────────────────
-  private get sm(): any | null {
+  private get sm(): ShapeManager | null {
     return ShapeManager?.getInstance?.() ?? null;
   }
 
   // ── Enable / Disable ─────────────────────────────────────────
 
   enable(): void {
-    this.sm?.enableRasterSelection?.(this._tool$.value);
+    this.sm?.enableRasterSelection(this._tool$.value);
     this._enabled$.next(true);
     this.refreshInfo();
   }
@@ -50,7 +50,7 @@ export class RasterSelectionService {
     if (this.info.isTransforming) {
       this.commitTransform();
     }
-    this.sm?.disableRasterSelection?.();
+    this.sm?.disableRasterSelection();
     this._enabled$.next(false);
     this.refreshInfo();
   }
@@ -61,60 +61,60 @@ export class RasterSelectionService {
     this._tool$.next(tool);
     // If already enabled, switch tool live
     if (this._enabled$.value) {
-      this.sm?.enableRasterSelection?.(tool);
+      this.sm?.enableRasterSelection(tool);
     }
     // Also update the service's internal tool state for overlay rendering
-    this.sm?.rasterSelectionService?.setTool?.(tool);
+    this.sm?.rasterSelectionService?.setTool(tool);
   }
 
   setFeather(px: number): void {
     const clamped = Math.max(0, Math.min(50, px));
     this._feather$.next(clamped);
-    this.sm?.setRasterSelectionFeather?.(clamped);
+    this.sm?.setRasterSelectionFeather(clamped);
   }
 
   // ── Selection creation (programmatic) ─────────────────────────
 
   selectAll(): void {
-    this.sm?.rasterSelectAll?.();
+    this.sm?.rasterSelectAll();
     this.refreshInfo();
   }
 
   deselectAll(): void {
-    this.sm?.rasterDeselectAll?.();
+    this.sm?.rasterDeselectAll();
     this.refreshInfo();
   }
 
   invertSelection(): void {
-    this.sm?.rasterInvertSelection?.();
+    this.sm?.rasterInvertSelection();
     this.refreshInfo();
   }
 
   // ── Pixel operations ──────────────────────────────────────────
 
   async cut(): Promise<void> {
-    await this.sm?.rasterCutSelection?.();
+    await this.sm?.rasterCutSelection();
     this.refreshInfo();
   }
 
   async copy(): Promise<void> {
-    await this.sm?.rasterCopySelection?.();
+    await this.sm?.rasterCopySelection();
   }
 
   paste(): void {
-    this.sm?.rasterPaste?.();
+    this.sm?.rasterPaste();
     this.refreshInfo();
   }
 
   deleteSelection(): void {
-    this.sm?.rasterDeleteSelection?.();
+    this.sm?.rasterDeleteSelection();
     this.refreshInfo();
   }
 
   // ── Transform ─────────────────────────────────────────────────
 
   beginTransform(): void {
-    this.sm?.rasterBeginTransform?.();
+    this.sm?.rasterBeginTransform();
     this.refreshInfo();
   }
 
@@ -123,24 +123,24 @@ export class RasterSelectionService {
     scaleX = 1, scaleY = 1,
     rotation = 0
   ): void {
-    this.sm?.rasterUpdateTransform?.(dx, dy, scaleX, scaleY, rotation);
+    this.sm?.rasterUpdateTransform(dx, dy, scaleX, scaleY, rotation);
     this.refreshInfo();
   }
 
   commitTransform(): void {
-    this.sm?.rasterCommitTransform?.();
+    this.sm?.rasterCommitTransform();
     this.refreshInfo();
   }
 
   cancelTransform(): void {
-    this.sm?.rasterCancelTransform?.();
+    this.sm?.rasterCancelTransform();
     this.refreshInfo();
   }
 
   // ── Query ─────────────────────────────────────────────────────
 
   refreshInfo(): void {
-    const raw = this.sm?.getRasterSelectionInfo?.();
+    const raw = this.sm?.getRasterSelectionInfo();
     const info: SelectionInfo = raw ?? EMPTY_INFO;
     this._info$.next(info);
   }

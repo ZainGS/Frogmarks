@@ -1,0 +1,75 @@
+<div class="tool-label">{{ creator.activeCreatorTypeId | uppercase }}</div>
+
+<ng-container *ngFor="let group of creator.creatorGroups()">
+    <div class="scene3d-array-strip-label" *ngIf="group">{{ group }}</div>
+    <ng-container *ngFor="let s of creator.schemaForGroup(group)">
+
+        <!-- select -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'select'">
+            <label>{{ s.label }}</label>
+            <select class="scene3d-select" [(ngModel)]="creator.creatorParams[s.key]"
+                    (ngModelChange)="creator.onCreatorParamChange(s.key, $event, 'select')">
+                <option *ngFor="let o of s.options" [value]="o.value">{{ o.label }}</option>
+            </select>
+        </div>
+
+        <!-- range -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'range'">
+            <label>{{ s.label }}</label>
+            <input type="range" [min]="s.min" [max]="s.max" [step]="s.step"
+                   [(ngModel)]="creator.creatorParams[s.key]"
+                   (ngModelChange)="creator.onCreatorParamChange(s.key, $event, 'range')">
+            <span class="scene3d-val">{{ creator.creatorParams[s.key] }}</span>
+        </div>
+
+        <!-- seed -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'seed'">
+            <label>{{ s.label }}</label>
+            <input type="number" class="scene3d-number-input" [min]="s.min ?? 0" [step]="1"
+                   [(ngModel)]="creator.creatorParams[s.key]"
+                   (change)="creator.onCreatorParamChange(s.key, creator.creatorParams[s.key], 'seed')">
+            <button class="scene3d-icon-btn" (click)="creator.creatorSeedReroll(s.key)" title="Randomize seed">🎲</button>
+        </div>
+
+        <!-- toggle -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'toggle'">
+            <label>{{ s.label }}</label>
+            <input type="checkbox" [(ngModel)]="creator.creatorParams[s.key]"
+                   (ngModelChange)="creator.onCreatorParamChange(s.key, $event, 'toggle')">
+        </div>
+
+        <!-- color -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'color'">
+            <label>{{ s.label }}</label>
+            <input type="color" [(ngModel)]="creator.creatorParams[s.key]"
+                   (ngModelChange)="creator.onCreatorParamChange(s.key, $event, 'color')">
+            <span class="scene3d-val">{{ creator.creatorParams[s.key] }}</span>
+        </div>
+
+        <!-- number -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'number'">
+            <label>{{ s.label }}</label>
+            <input type="number" class="scene3d-number-input"
+                   [min]="s.min" [max]="s.max" [step]="s.step ?? 1"
+                   [(ngModel)]="creator.creatorParams[s.key]"
+                   (change)="creator.onCreatorParamChange(s.key, creator.creatorParams[s.key], 'number')">
+        </div>
+
+        <!-- text -->
+        <div class="scene3d-material-row" *ngIf="s.type === 'text'">
+            <label>{{ s.label }}</label>
+            <input type="text" class="scene3d-text-input" style="flex:1"
+                   [(ngModel)]="creator.creatorParams[s.key]"
+                   (change)="creator.onCreatorParamChange(s.key, creator.creatorParams[s.key], 'text')">
+        </div>
+
+    </ng-container>
+</ng-container>
+
+<div style="margin-top:12px;display:flex;gap:6px">
+    <button class="scene3d-btn" style="flex:1" (click)="creator.scene3dCloseCreatorPanel()">Done</button>
+    <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="creator.scene3dDeleteCreator()">Delete</button>
+</div>
+<div style="margin-top:6px;display:flex">
+    <button class="scene3d-btn scene3d-btn-primary" style="flex:1" (click)="creator.scene3dCreatorPromoteToLibrary()">Save to Library</button>
+</div>

@@ -1,0 +1,95 @@
+<details class="scene3d-details" [open]="scene3dOutlineEnabled">
+    <summary>Outline</summary>
+    <div class="scene3d-toggle-row">
+        <label>Enabled</label>
+        <input type="checkbox" [(ngModel)]="scene3dOutlineEnabled" (change)="scene3dOutlineToggle()">
+    </div>
+    <ng-container *ngIf="scene3dOutlineEnabled">
+        <div class="scene3d-material-row" *ngIf="scene3dSelectedIsSprite">
+            <label title="Follow image hugs the picture; Square frames the quad; Solid card fills the see-through parts with the outline colour">Shape</label>
+            <select class="scene3d-select" [(ngModel)]="scene3dOutlineSpriteShape" (ngModelChange)="scene3dOutlineChanged()">
+                <option value="image">Follow image</option>
+                <option value="square">Square</option>
+                <option value="card">Solid card</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label [title]="scene3dSelectedIsSprite && scene3dOutlineSpriteShape === 'card' ? 'Fills the card and draws its edge' : ''">{{ scene3dSelectedIsSprite && scene3dOutlineSpriteShape === 'card' ? 'Card / line' : 'Color' }}</label>
+            <input type="color" [(ngModel)]="scene3dOutlineColorHex" (ngModelChange)="scene3dOutlineChanged()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Opacity</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="scene3dOutlineAlpha" (ngModelChange)="scene3dOutlineChanged()">
+            <span class="scene3d-val">{{ scene3dOutlineAlpha | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Pattern</label>
+            <select class="scene3d-select" [(ngModel)]="scene3dOutlinePatternMode" (ngModelChange)="scene3dOutlineChanged()">
+                <option [ngValue]="0">None</option>
+                <option [ngValue]="1">Stripes</option>
+                <option [ngValue]="2">Dots</option>
+                <option [ngValue]="3">Checker</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="scene3dOutlinePatternMode !== 0">
+            <label>2nd color</label>
+            <input type="color" [(ngModel)]="scene3dOutlinePatternColorHex" (ngModelChange)="scene3dOutlineChanged()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.001" max="0.2" step="0.001" [(ngModel)]="scene3dOutlineWidth" (ngModelChange)="scene3dOutlineChanged()">
+            <span class="scene3d-val">{{ scene3dOutlineWidth | number:'1.3-3' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="scene3dOutlinePatternMode !== 0">
+            <label>Density</label>
+            <input type="range" min="2" max="80" step="1" [(ngModel)]="scene3dOutlineFreq" (ngModelChange)="scene3dOutlineChanged()">
+            <span class="scene3d-val">{{ scene3dOutlineFreq }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="scene3dOutlinePatternMode !== 0">
+            <label>Scroll</label>
+            <input type="range" min="0" max="4" step="0.1" [(ngModel)]="scene3dOutlineSpeed" (ngModelChange)="scene3dOutlineChanged()" title="0 = static">
+            <span class="scene3d-val">{{ scene3dOutlineSpeed | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Glow</label>
+            <input type="range" min="0.5" max="3" step="0.1" [(ngModel)]="scene3dOutlineGlow" (ngModelChange)="scene3dOutlineChanged()">
+            <span class="scene3d-val">{{ scene3dOutlineGlow | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Line boil: thickness varies along the line (hand-drawn look). 0 = even line">Wobble</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="scene3dOutlineWobble" (ngModelChange)="scene3dOutlineChanged()">
+            <span class="scene3d-val">{{ scene3dOutlineWobble | number:'1.2-2' }}</span>
+        </div>
+        <ng-container *ngIf="scene3dOutlineWobble > 0">
+            <div class="scene3d-material-row">
+                <label title="Redraws per second. 8-12 = classic animation boil; 0 = uneven but still">Boil fps</label>
+                <input type="range" min="0" max="24" step="1" [(ngModel)]="scene3dOutlineBoilFps" (ngModelChange)="scene3dOutlineChanged()">
+                <span class="scene3d-val">{{ scene3dOutlineBoilFps }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Wobbles per model unit">Wobble freq</label>
+                <input type="range" min="1" max="40" step="1" [(ngModel)]="scene3dOutlineWobbleFreq" (ngModelChange)="scene3dOutlineChanged()">
+                <span class="scene3d-val">{{ scene3dOutlineWobbleFreq }}</span>
+            </div>
+        </ng-container>
+        <div class="scene3d-toggle-row">
+            <label title="Draw over everything so overlapping outlines fuse into one silhouette — on-top, ignores depth">Merge (on top)</label>
+            <input type="checkbox" [(ngModel)]="scene3dOutlineMerge" (change)="scene3dOutlineChanged()">
+        </div>
+
+        <div class="scene3d-array-strip-label" style="margin-top:6px"
+             title="Extra outlines stacked outside the main one, inner → outer. Each width is that ring's own thickness; pattern/glow/merge come from the main outline.">Rings</div>
+        <div *ngFor="let r of scene3dOutlineRings; let i = index" class="scene3d-material-row">
+            <input type="color" [(ngModel)]="r.colorHex" (ngModelChange)="scene3dOutlineRingsChanged()" title="Ring colour">
+            <input type="range" min="0" max="1" step="0.05" style="max-width:48px"
+                   [(ngModel)]="r.alpha" (ngModelChange)="scene3dOutlineRingsChanged()" title="Opacity">
+            <input type="range" min="0.001" max="0.2" step="0.001"
+                   [(ngModel)]="r.width" (ngModelChange)="scene3dOutlineRingsChanged()" title="Ring width">
+            <span class="scene3d-val">{{ r.width | number:'1.3-3' }}</span>
+            <button class="scene3d-icon-btn" (click)="scene3dOutlineRemoveRing(i)" title="Remove ring">✕</button>
+        </div>
+        <div class="scene3d-material-row">
+            <button class="scene3d-btn scene3d-btn-sm" style="flex:1" (click)="scene3dOutlineAddRing()">+ Add ring</button>
+        </div>
+    </ng-container>
+</details>

@@ -1,0 +1,32 @@
+<details class="scene3d-details">
+    <summary>Texture</summary>
+    <div class="scene3d-texture-row">
+        <label class="scene3d-texture-label">Diffuse</label>
+        <span class="scene3d-texture-state">{{ scene3dDiffuseTextureSet ? 'Set' : 'None' }}</span>
+        <button class="scene3d-btn scene3d-btn-sm" (click)="diffuseFileInput.click()">Upload</button>
+        <button class="scene3d-btn scene3d-btn-sm" [disabled]="!scene3dDiffuseTextureSet" (click)="scene3dClearDiffuseTexture()">Clear</button>
+        <input #diffuseFileInput type="file" accept="image/*" style="display:none" (change)="scene3dUploadDiffuseTexture($event)">
+    </div>
+    <div class="scene3d-texture-row">
+        <label class="scene3d-texture-label">Normal Map</label>
+        <span class="scene3d-texture-state">{{ scene3dNormalMapSet ? 'Set' : 'None' }}</span>
+        <button class="scene3d-btn scene3d-btn-sm" (click)="normalMapFileInput.click()">Upload</button>
+        <button class="scene3d-btn scene3d-btn-sm" [disabled]="!scene3dNormalMapSet" (click)="scene3dClearNormalMap()">Clear</button>
+        <input #normalMapFileInput type="file" accept="image/*" style="display:none" (change)="scene3dUploadNormalMap($event)">
+    </div>
+    <div *ngIf="scene3dNormalMapSet" class="scene3d-normal-badge">Per-pixel lighting active</div>
+    <div class="scene3d-material-row" *ngIf="scene3dDiffuseTextureSet">
+        <label>Tiling</label>
+        <input type="number" step="0.5" min="0.01" class="scene3d-short-input" [(ngModel)]="scene3dTexTileX" (change)="scene3dTexTilingChanged()" title="Horizontal repeat (tiles per world unit when Triplanar is on)">
+        <input type="number" step="0.5" min="0.01" class="scene3d-short-input" [(ngModel)]="scene3dTexTileY" (change)="scene3dTexTilingChanged()" title="Vertical repeat">
+    </div>
+    <div class="scene3d-material-row" *ngIf="scene3dDiffuseTextureSet">
+        <label>Offset</label>
+        <input type="number" step="0.05" class="scene3d-short-input" [(ngModel)]="scene3dTexOffX" (change)="scene3dTexTilingChanged()" title="Horizontal pan">
+        <input type="number" step="0.05" class="scene3d-short-input" [(ngModel)]="scene3dTexOffY" (change)="scene3dTexTilingChanged()" title="Vertical pan">
+    </div>
+    <div class="scene3d-toggle-row" *ngIf="scene3dDiffuseTextureSet">
+        <label title="Sample the texture by world position instead of UVs — constant texel density on every face, no squashing on scaled meshes">Triplanar</label>
+        <input type="checkbox" [(ngModel)]="scene3dTriplanar" (change)="scene3dTriplanarChanged()">
+    </div>
+</details>

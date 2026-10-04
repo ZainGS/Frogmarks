@@ -1,0 +1,181 @@
+<ng-container *ngIf="look.scene3dBodyParams">
+    <div class="eye-proc-group">Skin Shading</div>
+    <div class="scene3d-toggle-row">
+        <label title="Half-Lambert wrapped lighting — lifts the dark side of the face">Soft lighting</label>
+        <input type="checkbox" [(ngModel)]="look.scene3dSoftLightOn" (change)="look.scene3dSoftLightToggle()">
+    </div>
+    <div class="scene3d-material-row" *ngIf="look.scene3dSoftLightOn">
+        <label title="Global — affects every soft-lit character">Softness</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [(ngModel)]="look.scene3dSoftLightStrength"
+               (ngModelChange)="look.scene3dSoftLightStrengthChanged()">
+        <span class="scene3d-val">{{ look.scene3dSoftLightStrength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Skin style</label>
+        <select class="scene3d-select" [(ngModel)]="look.scene3dSkinMode" (ngModelChange)="look.scene3dSkinModeChanged()">
+            <option value="classic">Classic (smooth)</option>
+            <option value="ramp">Ramp (banded)</option>
+        </select>
+    </div>
+    <ng-container *ngIf="look.scene3dSkinMode === 'ramp'">
+        <div class="scene3d-material-row">
+            <label title="Global ramp look — affects every ramped character">Bands</label>
+            <input type="range" min="1" max="4" step="1"
+                   [(ngModel)]="look.scene3dRampBands" (ngModelChange)="look.scene3dRampSettingsChanged()">
+            <span class="scene3d-val">{{ look.scene3dRampBands }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Terminator width — low = razor cel edge, high = painterly">Softness</label>
+            <input type="range" min="0" max="0.3" step="0.01"
+                   [(ngModel)]="look.scene3dRampSoftness" (ngModelChange)="look.scene3dRampSettingsChanged()">
+            <span class="scene3d-val">{{ look.scene3dRampSoftness | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="How dark the darkest band gets — higher keeps shadow a tone, not black">Shadow depth</label>
+            <input type="range" min="0" max="0.8" step="0.05"
+                   [(ngModel)]="look.scene3dRampShadowFloor" (ngModelChange)="look.scene3dRampSettingsChanged()">
+            <span class="scene3d-val">{{ look.scene3dRampShadowFloor | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label title="Warm shadow colour — white = neutral">Shadow tint</label>
+            <input type="color" [(ngModel)]="look.scene3dRampShadowTintHex" (ngModelChange)="look.scene3dRampSettingsChanged()">
+        </div>
+    </ng-container>
+
+    <div class="eye-proc-group">Joints</div>
+    <div class="scene3d-material-row">
+        <label title="Blends skin weights at the armpit/elbow seams so they stop folding when posed. Saved characters are 0; new ones start at 0.5.">Smoothness</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [ngModel]="look.scene3dBodyParams.seamBlend ?? 0"
+               (ngModelChange)="look.scene3dBodyParams.seamBlend = $event; look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ (look.scene3dBodyParams.seamBlend ?? 0) | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Dual quaternion keeps volume at bent elbows/knees (no pinch); Linear is the original. Body, clothes and hair switch together.">Blending</label>
+        <select class="scene3d-select" [(ngModel)]="look.scene3dSkinningMethod" (ngModelChange)="look.scene3dSkinningMethodChanged()">
+            <option value="linear">Linear</option>
+            <option value="dualQuat">Dual quaternion</option>
+        </select>
+    </div>
+
+    <div class="eye-proc-group">Size</div>
+    <div class="scene3d-material-row">
+        <label title="Scales the WHOLE character (body, clothes, hair, face, glasses) as one, from the feet. No regeneration; saved with the scene. Play's camera, collision and stride follow.">Scale</label>
+        <input type="range" min="0.25" max="4" step="0.05"
+               [ngModel]="look.scene3dCharScale" (ngModelChange)="look.scene3dCharScaleChanged($event)">
+        <input type="number" class="scene3d-array-strip-count" style="width:56px" min="0.01" step="0.05"
+               [ngModel]="look.scene3dCharScale" (change)="look.scene3dCharScaleChanged(+$any($event.target).value)">
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Standing height in metres (a city's scale in a city, else 1 unit = 1 m). Type a height to scale the character to it.">Height (m)</label>
+        <input type="number" class="scene3d-array-strip-count" style="width:64px" min="0.05" step="0.05"
+               [ngModel]="look.scene3dCharHeightM" (change)="look.scene3dCharHeightChanged(+$any($event.target).value)">
+        <button class="scene3d-btn scene3d-btn-sm" [disabled]="look.scene3dCharSceneMpu == null" (click)="look.scene3dFitCharToCity()"
+                title="Scale to real human size (1.7 m) in the city">Fit to city</button>
+    </div>
+
+    <div class="eye-proc-group">Proportions</div>
+    <div class="scene3d-material-row">
+        <label>Height</label>
+        <input type="range" min="0.1" max="1" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.height"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.height | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Leg length</label>
+        <input type="range" min="0.75" max="1.25" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.legLength"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.legLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Limb thick</label>
+        <input type="range" min="0.6" max="1.6" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.limbThick"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.limbThick | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Torso width</label>
+        <input type="range" min="0.6" max="1.6" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.torsoThick"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.torsoThick | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Torso length</label>
+        <input type="range" min="0.6" max="1.4" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.torsoLength"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.torsoLength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Head size</label>
+        <input type="range" min="0.7" max="1.6" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.headSize"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.headSize | number:'1.2-2' }}</span>
+    </div>
+    <div class="eye-proc-group">Shape</div>
+    <div class="scene3d-material-row">
+        <label>Bust</label>
+        <input type="range" min="0" max="2" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.bust"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.bust | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Waist</label>
+        <input type="range" min="0.5" max="1.5" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.waist"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.waist | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Hip Width</label>
+        <input type="range" min="0.75" max="1.25" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.hipWidth"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.hipWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Hip Front</label>
+        <input type="range" min="0.75" max="1.25" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.hipFront"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.hipFront | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Shoulders</label>
+        <input type="range" min="0.5" max="2" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.shoulderWidth"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.shoulderWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Butt size</label>
+        <input type="range" min="0" max="1.6" step="0.05"
+               [(ngModel)]="look.scene3dBodyParams.buttSize"
+               (ngModelChange)="look.scene3dBodyParamChanged()">
+        <span class="scene3d-val">{{ look.scene3dBodyParams.buttSize | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Skin tone</label>
+        <input type="color"
+               [(ngModel)]="look.scene3dSkinTone"
+               (ngModelChange)="look.scene3dSkinToneChanged()">
+    </div>
+</ng-container>
+<button *ngIf="!look.scene3dBodyParams" class="scene3d-btn" style="width:100%"
+        (click)="cp.scene3dInitBodyParams()">Load Body Params</button>
+<div class="eye-proc-group" style="margin-top:12px">Texture</div>
+<div class="scene3d-material-row">
+    <label>Diffuse</label>
+    <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+        Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('body', $event)">
+    </label>
+    <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['body']"
+            (click)="cp.scene3dClearCharPartTexture('body')" title="Clear texture">✕</button>
+</div>

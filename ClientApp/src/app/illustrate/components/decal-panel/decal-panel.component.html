@@ -1,0 +1,88 @@
+<div class="tool-label">DECAL</div>
+
+<!-- Source tabs (only shown when tool is active / picking a source) -->
+<ng-container *ngIf="decal.scene3dDecalToolActive">
+    <div class="scene3d-row" style="gap:4px;padding-bottom:6px">
+        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="decal.decalSourceTab === 'ephemera'"
+                (click)="decal.decalSourceTab = 'ephemera'">Ephemera</button>
+        <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="decal.decalSourceTab === 'image'"
+                (click)="decal.decalSourceTab = 'image'">Image</button>
+    </div>
+
+    <!-- Ephemera source -->
+    <ng-container *ngIf="decal.decalSourceTab === 'ephemera'">
+        <div class="scene3d-material-row">
+            <label>Category</label>
+            <select class="scene3d-select" [(ngModel)]="decal.decalActiveCategoryId"
+                    (ngModelChange)="decal.selectDecalCategory($event)">
+                <option *ngFor="let c of decal.decalEphemeraCategories" [value]="c.id">{{ c.displayName }}</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Type</label>
+            <select class="scene3d-select" [(ngModel)]="decal.decalActiveTypeId"
+                    (ngModelChange)="decal.selectDecalGenerator($event)">
+                <option *ngFor="let g of decal.decalEphemeraGenerators" [value]="g.typeId">{{ g.displayName }}</option>
+            </select>
+        </div>
+        <ng-container *ngFor="let s of decal.decalEphemeraSchema">
+            <div class="scene3d-material-row" *ngIf="s.type === 'range'">
+                <label>{{ s.label }}</label>
+                <input type="range" [min]="s.min" [max]="s.max" [step]="s.step"
+                       [(ngModel)]="decal.decalEphemeraParams[s.key]"
+                       (ngModelChange)="decal.onDecalEphemeraParamChange(s.key, $event, 'range')">
+                <span class="scene3d-val">{{ decal.decalEphemeraParams[s.key] }}</span>
+            </div>
+            <div class="scene3d-material-row" *ngIf="s.type === 'select'">
+                <label>{{ s.label }}</label>
+                <select class="scene3d-select" [(ngModel)]="decal.decalEphemeraParams[s.key]"
+                        (ngModelChange)="decal.onDecalEphemeraParamChange(s.key, $event, 'select')">
+                    <option *ngFor="let o of s.options" [value]="o.value">{{ o.label }}</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row" *ngIf="s.type === 'color'">
+                <label>{{ s.label }}</label>
+                <input type="color" [(ngModel)]="decal.decalEphemeraParams[s.key]"
+                       (ngModelChange)="decal.onDecalEphemeraParamChange(s.key, $event, 'color')">
+            </div>
+        </ng-container>
+    </ng-container>
+
+    <!-- Image source -->
+    <ng-container *ngIf="decal.decalSourceTab === 'image'">
+        <div class="scene3d-material-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+            <label>Upload image</label>
+            <input type="file" accept="image/*" (change)="decal.onDecalImageUpload($event)" style="font-size:11px">
+        </div>
+        <div class="scene3d-material-row" *ngIf="decal.decalImageDataUrl">
+            <img [src]="decal.decalImageDataUrl" style="max-width:100%;max-height:80px;border-radius:3px">
+        </div>
+    </ng-container>
+
+    <div class="scene3d-array-strip-label" style="margin-top:6px">Placement</div>
+</ng-container>
+
+<!-- Size + rotation — shown both while placing and when a decal is selected -->
+<div class="scene3d-material-row">
+    <label>Size (m)</label>
+    <input type="range" min="0.3" max="6" step="0.1"
+           [(ngModel)]="decal.decalSize"
+           (ngModelChange)="decal.scene3dUpdateDecalSize()">
+    <span class="scene3d-val">{{ decal.decalSize | number:'1.2-2' }}</span>
+</div>
+<div class="scene3d-material-row">
+    <label>Rotation</label>
+    <input type="range" min="-3.14" max="3.14" step="0.05"
+           [(ngModel)]="decal.decalRotation"
+           (ngModelChange)="decal.scene3dUpdateDecalRotation()">
+    <span class="scene3d-val">{{ (decal.decalRotation * 180 / 3.14159) | number:'1.0-0' }}°</span>
+</div>
+
+<!-- Delete — only when a decal is selected -->
+<div style="margin-top:12px" *ngIf="scene3dSelectedIsDecal">
+    <button class="scene3d-btn" style="width:100%" (click)="decal.scene3dDeleteDecal()">Delete Decal</button>
+</div>
+
+<div *ngIf="decal.scene3dDecalToolActive" style="margin-top:8px;font-size:11px;opacity:0.55;line-height:1.4">
+    Click a surface to place. Press Esc to exit.
+</div>

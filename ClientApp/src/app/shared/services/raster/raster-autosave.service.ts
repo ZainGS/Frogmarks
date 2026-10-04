@@ -22,7 +22,7 @@ export const AUTO_SAVE_INTERVALS: AutoSaveInterval[] = [
 export interface DocumentInfo {
   docId: string;
   name: string;
-  savedAt: number;   // epoch ms
+  savedAt: string | number;   // engine returns an ISO string; older callers used epoch ms
   canvasWidth: number;
   canvasHeight: number;
   layerCount: number;
@@ -58,11 +58,11 @@ export class RasterAutoSaveService {
   private _saveCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private ngZone: NgZone) {
-    this._checkAvailability();
+    void this._checkAvailability();
   }
 
   // ── ShapeManager access ─────────────────────────────────────
-  private get sm(): any | null {
+  private get sm(): ShapeManager | null {
     return ShapeManager?.getInstance?.() ?? null;
   }
 
@@ -70,7 +70,7 @@ export class RasterAutoSaveService {
 
   private async _checkAvailability(): Promise<void> {
     try {
-      const available = this.sm?.isAutoSaveAvailable?.() ?? false;
+      const available = this.sm?.isAutoSaveAvailable() ?? false;
       if (available) {
         this._available$.next(true);
         return;
@@ -98,14 +98,14 @@ export class RasterAutoSaveService {
     this._enabled = true;
 
     // Wire Salsa engine auto-save if available
-    this.sm?.enableAutoSave?.(docId, name, {
+    this.sm?.enableAutoSave(docId, name, {
       intervalMs: this._intervalMs,
       strokeDebounceMs: this._strokeDebounceMs,
       pixelFormat: 'png',
     });
 
     // Subscribe to Salsa save events for UI indicator
-    this.sm?.onSaveEvent?.(
+    this.sm?.onSaveEvent(
       () => this.ngZone.run(() => this._state$.next('saving')),
       (success: boolean) => this.ngZone.run(() => {
         if (success) {
@@ -125,7 +125,7 @@ export class RasterAutoSaveService {
 
     if (this._state$.value === 'unavailable') {
       // Re-check
-      this._checkAvailability();
+      void this._checkAvailability();
     }
     if (this._state$.value !== 'unavailable') {
       this._state$.next('idle');
@@ -134,7 +134,7 @@ export class RasterAutoSaveService {
 
   disable(): void {
     this._enabled = false;
-    this.sm?.disableAutoSave?.();
+    this.sm?.disableAutoSave();
     this._stopFallbackTimer();
     this._clearSaveCheck();
   }
@@ -145,7 +145,7 @@ export class RasterAutoSaveService {
     if (!this._docId) return false;
     this._state$.next('saving');
     try {
-      const success = await this.sm?.saveDocument?.() ?? false;
+      const success = await this.sm?.saveDocument() ?? false;
       if (success) {
         this._state$.next('saved');
         this._lastSaved$.next(Date.now());
@@ -164,7 +164,7 @@ export class RasterAutoSaveService {
   // ── Document management ────────────────────────────────────
 
   async loadDocument(docId: string): Promise<{ success: boolean; layers: any[] }> {
-    const result = await this.sm?.loadDocument?.(docId);
+    const result = await this.sm?.loadDocument(docId);
     // Handle both old (boolean) and new ({ success, layers }) return shapes
     if (result && typeof result === 'object' && 'success' in result) {
       return result as { success: boolean; layers: any[] };
@@ -173,32 +173,32 @@ export class RasterAutoSaveService {
   }
 
   async listDocuments(): Promise<DocumentInfo[]> {
-    return await this.sm?.listSavedDocuments?.() ?? [];
+    return await this.sm?.listSavedDocuments() ?? [];
   }
 
   async deleteDocument(docId: string): Promise<void> {
-    await this.sm?.deleteSavedDocument?.(docId);
+    await this.sm?.deleteSavedDocument(docId);
   }
 
   setDocumentName(name: string): void {
     this._docName$.next(name);
-    this.sm?.setDocumentName?.(name);
+    this.sm?.setDocumentName(name);
   }
 
   getDocumentName(): string {
-    return this.sm?.getDocumentName?.() ?? this._docName$.value;
+    return this.sm?.getDocumentName() ?? this._docName$.value;
   }
 
   // ── Stroke notification ────────────────────────────────────
 
   notifyStrokeEnd(): void {
     if (!this._enabled) return;
-    this.sm?.notifyStrokeEnd?.();
+    this.sm?.notifyStrokeEnd();
 
     // Fallback debounced save
     if (this._strokeTimer) clearTimeout(this._strokeTimer);
     this._strokeTimer = setTimeout(() => {
-      if (this._enabled) this.saveNow();
+      if (this._enabled) void this.saveNow();
     }, this._strokeDebounceMs);
   }
 
@@ -220,7 +220,7 @@ export class RasterAutoSaveService {
     this.ngZone.runOutsideAngular(() => {
       this._intervalTimer = setInterval(() => {
         if (this._enabled) {
-          this.ngZone.run(() => this.saveNow());
+          void this.ngZone.run(() => this.saveNow());
         }
       }, this._intervalMs);
     });

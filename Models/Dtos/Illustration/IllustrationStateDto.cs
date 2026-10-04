@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Frogmarks.Models.Dtos.Illustration
 {
     public class StorageQuotaDto
@@ -11,6 +14,11 @@ namespace Frogmarks.Models.Dtos.Illustration
     {
         public int Version { get; set; } = 2;
         public long SavedAt { get; set; }           // epoch ms — used for OPFS vs backend freshness
+        /// <summary>Server revision of the saved state (returned on load / save). Audit Phase 2.5.</summary>
+        public long Revision { get; set; }
+        /// <summary>Save request: the revision the client last loaded / saved. A different current revision means someone
+        /// else saved in between → 409 instead of overwriting their work. Omitted = no check (older clients).</summary>
+        public long? BaseRevision { get; set; }
         public string? SceneGraph { get; set; }
         public AnimationStateDto? Animation { get; set; }
         public List<LayerStateDto> Layers { get; set; } = new();
@@ -19,7 +27,9 @@ namespace Frogmarks.Models.Dtos.Illustration
         public string? BgColor { get; set; }
         public string? DotColor { get; set; }
         public PaperGrainDto? PaperGrain { get; set; }
-        public Scene3dGlobalSettingsDto? Scene3dGlobalSettings { get; set; }
+        // Raw JSON (audit Phase 2.1): the client sends ~80 3D settings (fog, SSAO, bloom, colour grade, film, snap, grid,
+        // camera cuts, can designs, …) and the old typed DTO kept 25 — the rest were silently dropped on cloud save.
+        public JsonElement? Scene3dGlobalSettings { get; set; }
         public string? Scene3dNodesGzip { get; set; }           // gzip+base64 — legacy (pre-per-mesh) reads only
         public string? TextureLibrary3dGzip { get; set; }       // gzip+base64 — legacy reads only
 
@@ -28,6 +38,11 @@ namespace Frogmarks.Models.Dtos.Illustration
         // Load response only — not persisted
         public Dictionary<string, string>? MeshSasUrls { get; set; }   // meshId → read SAS URL
         public string? TexLibSasUrl { get; set; }               // read SAS URL for texture-library.gz
+
+        /// <summary>Every other top-level field the client sends (scene3dGroups, scene3dFrameLinkBuckets, packaging, and
+        /// anything added later) — kept and returned verbatim instead of dropped (audit Phase 2.1).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class AnimationStateDto
@@ -135,32 +150,4 @@ namespace Frogmarks.Models.Dtos.Illustration
         public double Strength { get; set; } = 0.3;
     }
 
-    public class Scene3dGlobalSettingsDto
-    {
-        public string? CameraMode { get; set; }
-        public string? IllustrationProjection { get; set; }
-        public double? Fov { get; set; }
-        public bool? ShadowsEnabled { get; set; }
-        public int? ShadowMapSize { get; set; }
-        public double? ShadowExtent { get; set; }
-        public double? ShadowBias { get; set; }
-        public double? LightDirX { get; set; }
-        public double? LightDirY { get; set; }
-        public double? LightDirZ { get; set; }
-        public double? LightIntensity { get; set; }
-        public double? AmbientR { get; set; }
-        public double? AmbientG { get; set; }
-        public double? AmbientB { get; set; }
-        public double? AmbientIntensity { get; set; }
-        public double? Ps1Jitter { get; set; }
-        public double? Ps1Snap { get; set; }
-        public double? Ps1Affine { get; set; }
-        public int? Ps1ColorDepth { get; set; }
-        public bool? FrustumCulling { get; set; }
-        public bool? AnimSyncWithTimeline { get; set; }
-        public int? AnimStartFrame { get; set; }
-        public int? AnimEndFrame { get; set; }
-        public double? AnimFps { get; set; }
-        public bool? AnimLoop { get; set; }
-    }
 }

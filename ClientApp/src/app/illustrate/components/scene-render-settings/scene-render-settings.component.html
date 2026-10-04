@@ -1,0 +1,525 @@
+<details class="scene3d-details">
+    <summary>PS1 Retro Style</summary>
+    <!-- Presets -->
+    <div class="scene3d-btn-row" style="margin-bottom:8px">
+        <button class="scene3d-btn" (click)="s3.scene3dApplyRetroPreset('wobble')">Wobble</button>
+        <button class="scene3d-btn" (click)="s3.scene3dApplyRetroPreset('pocket')">Pocket</button>
+        <button class="scene3d-btn" (click)="s3.scene3dApplyRetroPreset('off')">Off</button>
+    </div>
+    <!-- Core vertex / color params -->
+    <div class="scene3d-material-row">
+        <label>Vertex Jitter</label>
+        <input type="range" min="0" max="200" step="1" [value]="s3.scene3dPS1Jitter * 100" (input)="s3.scene3dPS1Jitter = +$any($event.target).value / 100; s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dPS1Jitter * 100) }}%</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Snap Grid</label>
+        <input type="range" min="64" max="512" step="8" [(ngModel)]="s3.scene3dPS1Snap" (input)="s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ s3.scene3dPS1Snap }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Affine Warp</label>
+        <input type="range" min="0" max="100" step="1" [value]="s3.scene3dPS1Affine * 100" (input)="s3.scene3dPS1Affine = +$any($event.target).value / 100; s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dPS1Affine * 100) }}%</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Color Depth</label>
+        <input type="range" min="2" max="32" step="1" [(ngModel)]="s3.scene3dPS1ColorDepth" (input)="s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ s3.scene3dPS1ColorDepth }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Which objects get the Color Depth + Dither. Opted-in = only characters/objects with 'Retro colour' ticked (Character > Style).">Apply to</label>
+        <select class="scene3d-select" [ngModel]="s3.scene3dRetroColorScope" (ngModelChange)="s3.scene3dSetRetroColorScope($event)">
+            <option value="all">Everything</option>
+            <option value="optIn">Opted-in only</option>
+        </select>
+    </div>
+    <!-- Lo-res buffer -->
+    <div class="scene3d-ps1-sep"></div>
+    <div class="scene3d-toggle-row">
+        <label>Lo-Res Buffer</label>
+        <input type="checkbox" [(ngModel)]="s3.scene3dPS1LoRes" (ngModelChange)="s3.scene3dApplyPS1()">
+    </div>
+    <div *ngIf="s3.scene3dPS1LoRes" class="scene3d-material-row">
+        <label>Resolution</label>
+        <input type="number" min="64" max="1920" step="1" class="scene3d-short-input"
+               [(ngModel)]="s3.scene3dPS1ResW" (change)="s3.scene3dApplyPS1()">
+        <span class="scene3d-val">×</span>
+        <input type="number" min="64" max="1080" step="1" class="scene3d-short-input"
+               [(ngModel)]="s3.scene3dPS1ResH" (change)="s3.scene3dApplyPS1()">
+    </div>
+    <!-- Dither -->
+    <div class="scene3d-ps1-sep"></div>
+    <div class="scene3d-toggle-row">
+        <label>Dither</label>
+        <input type="checkbox" [(ngModel)]="s3.scene3dPS1Dither" (ngModelChange)="s3.scene3dApplyPS1()">
+    </div>
+    <div *ngIf="s3.scene3dPS1Dither" class="scene3d-material-row">
+        <label>Strength</label>
+        <input type="range" min="0" max="100" step="1"
+               [value]="s3.scene3dPS1DitherStrength * 100"
+               (input)="s3.scene3dPS1DitherStrength = +$any($event.target).value / 100; s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dPS1DitherStrength * 100) }}%</span>
+    </div>
+    <!-- UV Quantize -->
+    <div class="scene3d-toggle-row">
+        <label>UV Quantize</label>
+        <input type="checkbox" [(ngModel)]="s3.scene3dPS1UVQuantize" (ngModelChange)="s3.scene3dApplyPS1()">
+    </div>
+    <div *ngIf="s3.scene3dPS1UVQuantize" class="scene3d-material-row">
+        <label>Steps</label>
+        <input type="range" min="8" max="256" step="8"
+               [(ngModel)]="s3.scene3dPS1UVSteps" (input)="s3.scene3dApplyPS1()">
+        <span class="scene3d-val">{{ s3.scene3dPS1UVSteps }}</span>
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Environment Style</summary>
+    <div class="scene3d-hint" style="margin:0 0 6px">City, blocks and props (buildings, vending, benches, foliage…). Characters keep their own style. New objects start with this.</div>
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [ngModel]="s3.envStyleRender" (ngModelChange)="s3.scene3dSetEnvStyleRender($event)">
+            <option value="">Not set</option>
+            <option value="default">PBR</option>
+            <option value="cel">Cel</option>
+            <option value="cel-hd">Cel HD</option>
+            <option value="sketch">Sketch</option>
+            <option value="ink">Ink</option>
+            <option value="gouraud">Gouraud (PS1)</option>
+        </select>
+    </div>
+    <div class="scene3d-toggle-row" *ngIf="s3.envStyleRender === 'cel' || s3.envStyleRender === 'cel-hd'">
+        <label title="Coloured toon shadows (Cel / Cel HD). The shadow colour is the scene-wide Toon look.">Toon shadows</label>
+        <input type="checkbox" [ngModel]="s3.envStyleToon" (ngModelChange)="s3.scene3dSetEnvStyleFlag('toonShadow', $event)">
+    </div>
+    <div class="scene3d-toggle-row">
+        <label>Rim light</label>
+        <input type="checkbox" [ngModel]="s3.envStyleRim" (ngModelChange)="s3.scene3dSetEnvStyleFlag('rimLight', $event)">
+    </div>
+    <div class="scene3d-toggle-row">
+        <label title="Ink outline around every procedural character (body + clothes + hair as one silhouette). The city stays un-outlined, like Persona.">Character outlines</label>
+        <input type="checkbox" [ngModel]="s3.scene3dCharOutlines" (ngModelChange)="s3.scene3dSetCharOutlines($event)">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Lighting</summary>
+    <div class="scene3d-sub-header">Directional</div>
+    <div class="scene3d-material-row">
+        <label>Azimuth</label>
+        <input type="range" min="-180" max="180" step="1" [(ngModel)]="s3.scene3dLightAzimuth" (input)="s3.scene3dApplyLighting()">
+        <span class="scene3d-val">{{ s3.scene3dLightAzimuth }}°</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Elevation</label>
+        <input type="range" min="-90" max="90" step="1" [(ngModel)]="s3.scene3dLightElevation" (input)="s3.scene3dApplyLighting()">
+        <span class="scene3d-val">{{ s3.scene3dLightElevation }}°</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Intensity</label>
+        <input type="range" min="0" max="200" step="5" [value]="s3.scene3dLightIntensity * 100" (input)="s3.scene3dLightIntensity = +$any($event.target).value / 100; s3.scene3dApplyLighting()">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dLightIntensity * 100) }}%</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Color</label>
+        <input type="color" [value]="s3.scene3dKeyLightColorHex" (input)="s3.scene3dKeyLightColorHex = $any($event.target).value; s3.scene3dApplyLighting()">
+    </div>
+    <div class="scene3d-sub-header">Ambient</div>
+    <div class="scene3d-material-row">
+        <label>Intensity</label>
+        <input type="range" min="0" max="350" step="5" [value]="s3.scene3dAmbientIntensity * 100" (input)="s3.scene3dAmbientIntensity = +$any($event.target).value / 100; s3.scene3dApplyLighting()">
+        <span class="scene3d-val">{{ mathRound(s3.scene3dAmbientIntensity * 100) }}%</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Color</label>
+        <input type="color" [value]="s3.scene3dAmbientColorHex" (input)="s3.scene3dAmbientColorHex = $any($event.target).value; s3.scene3dApplyLighting()">
+    </div>
+    <div class="scene3d-sub-header">Wind</div>
+    <div class="scene3d-material-row">
+        <label>Direction</label>
+        <input type="range" min="0" max="360" step="5" [(ngModel)]="s3.sceneWindDirDeg" (input)="s3.scene3dApplyWind()">
+        <span class="scene3d-val">{{ s3.sceneWindDirDeg }}°</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Strength</label>
+        <input type="range" min="0" max="0.5" step="0.01" [(ngModel)]="s3.sceneWindStrength" (input)="s3.scene3dApplyWind()">
+        <span class="scene3d-val">{{ s3.sceneWindStrength | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Speed</label>
+        <input type="range" min="0" max="4" step="0.1" [(ngModel)]="s3.sceneWindSpeed" (input)="s3.scene3dApplyWind()">
+        <span class="scene3d-val">{{ s3.sceneWindSpeed | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-sub-header">Shadows</div>
+    <div class="scene3d-toggle-row">
+        <label>Cast Shadows</label>
+        <input type="checkbox" [checked]="s3.scene3dShadowsEnabled" (change)="s3.scene3dToggleShadows($any($event.target).checked)">
+    </div>
+    <div *ngIf="s3.scene3dShadowsEnabled">
+        <div class="scene3d-material-row">
+            <label title="Sets the map size, the crisp near cascades and the edge filter together (Low / Medium / High / Ultra). Custom = set by hand.">Quality</label>
+            <select class="scene3d-select" [ngModel]="s3.scene3dShadowQuality" (ngModelChange)="s3.scene3dSetShadowQuality($event)">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+                <option value="custom" disabled>Custom</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Map Size</label>
+            <select class="scene3d-select" [(ngModel)]="s3.scene3dShadowMapSize" (ngModelChange)="s3.scene3dApplyShadowsSettings()" [title]="s3.scene3dShadowMapSize === 4096 ? 'High VRAM usage — use on powerful hardware only.' : ''">
+                <option [ngValue]="512">512</option>
+                <option [ngValue]="1024">1024</option>
+                <option [ngValue]="2048">2048</option>
+                <option [ngValue]="4096">4096</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Extent</label>
+            <input type="range" min="5" max="50" step="1" [(ngModel)]="s3.scene3dShadowExtent" (input)="s3.scene3dApplyShadowsSettings()">
+            <span class="scene3d-val">{{ s3.scene3dShadowExtent }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Bias</label>
+            <input type="range" min="0.0001" max="0.02" step="0.0001" [(ngModel)]="s3.scene3dShadowBias" (input)="s3.scene3dApplyShadowsSettings()">
+            <span class="scene3d-val">{{ s3.scene3dShadowBias | number:'1.4-4' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Strength</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dShadowStrength" (input)="s3.scene3dApplyShadowsSettings()">
+            <span class="scene3d-val">{{ s3.scene3dShadowStrength | number:'1.2-2' }}</span>
+        </div>
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Skybox / Background</summary>
+    <div class="scene3d-material-row">
+        <label>Mode</label>
+        <select class="scene3d-select" [(ngModel)]="s3.scene3dBgMode" (ngModelChange)="s3.scene3dApplySceneBg()">
+            <option value="none">None</option>
+            <option value="solid">Solid</option>
+            <option value="gradient">Gradient</option>
+            <option value="wavy">Wavy</option>
+            <option value="checkers">Clover Picnic</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="s3.scene3dBgMode !== 'none'">
+        <label>{{ s3.scene3dBgMode === 'gradient' || s3.scene3dBgMode === 'wavy' || s3.scene3dBgMode === 'checkers' ? 'Color 1' : 'Color' }}</label>
+        <input type="color" [(ngModel)]="s3.scene3dBgColor1" (input)="s3.scene3dApplySceneBg()">
+    </div>
+    <div class="scene3d-material-row" *ngIf="s3.scene3dBgMode === 'gradient' || s3.scene3dBgMode === 'wavy' || s3.scene3dBgMode === 'checkers'">
+        <label>Color 2</label>
+        <input type="color" [(ngModel)]="s3.scene3dBgColor2" (input)="s3.scene3dApplySceneBg()">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Fog</summary>
+    <div class="scene3d-material-row">
+        <label>Mode</label>
+        <select class="scene3d-select" [(ngModel)]="s3.scene3dFogMode" (ngModelChange)="s3.scene3dApplyFog()">
+            <option value="off">Off</option>
+            <option value="linear">Linear</option>
+            <option value="exponential">Exponential</option>
+        </select>
+    </div>
+    <ng-container *ngIf="s3.scene3dFogMode !== 'off'">
+        <div class="scene3d-material-row">
+            <label>Color</label>
+            <input type="color" [(ngModel)]="s3.scene3dFogColor" (input)="s3.scene3dApplyFog()">
+        </div>
+        <div class="scene3d-material-row" *ngIf="s3.scene3dFogMode === 'linear'">
+            <label>Near</label>
+            <input type="range" min="0" max="100" step="0.5" [(ngModel)]="s3.scene3dFogNear" (input)="s3.scene3dApplyFog()">
+            <span class="scene3d-val">{{ s3.scene3dFogNear }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="s3.scene3dFogMode === 'linear'">
+            <label>Far</label>
+            <input type="range" min="1" max="200" step="1" [(ngModel)]="s3.scene3dFogFar" (input)="s3.scene3dApplyFog()">
+            <span class="scene3d-val">{{ s3.scene3dFogFar }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="s3.scene3dFogMode === 'exponential'">
+            <label>Density</label>
+            <input type="range" min="0.001" max="0.5" step="0.001" [(ngModel)]="s3.scene3dFogDensity" (input)="s3.scene3dApplyFog()">
+            <span class="scene3d-val">{{ s3.scene3dFogDensity | number:'1.3-3' }}</span>
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" *ngIf="s3.scene3dFogMode !== 'off'"
+         title="Sharp cutoff: turns off aerial haze and height fog, and stops a city from changing this fog">
+        <label>Hard edge</label>
+        <input type="checkbox" [ngModel]="s3.scene3dFogHardEdge" (ngModelChange)="s3.scene3dSetFogHardEdge($event)">
+    </div>
+    <ng-container *ngIf="s3.scene3dFogMode !== 'off' && s3.scene3dFogHardEdge">
+        <div class="scene3d-material-row scene3d-row-wide scene3d-row-sub"
+             title="Past Far, draw only building silhouettes: props, trees, cars, people and street furniture stop at the fog line (linear fog only)">
+            <label>Buildings only in fog</label>
+            <input type="checkbox" [(ngModel)]="s3.scene3dFogBuildingsOnly" (ngModelChange)="s3.scene3dApplyFogHorizon()">
+        </div>
+        <ng-container *ngIf="s3.scene3dFogBuildingsOnly">
+            <div class="scene3d-material-row scene3d-row-wide scene3d-row-sub"
+                 title="Keep shop signs, awnings, facade trim and rooftop equipment in the silhouettes">
+                <label>Include signs, awnings &amp; rooftop equipment</label>
+                <input type="checkbox" [(ngModel)]="s3.scene3dFogIncludeAttachments" (ngModelChange)="s3.scene3dApplyFogHorizon()">
+            </div>
+            <div class="scene3d-material-row scene3d-row-sub"
+                 title="Width of the band before Far over which the culled objects dissolve (0 = they pop at the fog line)">
+                <label>Fade distance</label>
+                <input type="range" min="0" max="60" step="1" [(ngModel)]="s3.scene3dFogFadeM" (input)="s3.scene3dApplyFogHorizon()">
+                <span class="scene3d-val">{{ s3.scene3dFogFadeM }} m</span>
+            </div>
+            <div class="scene3d-material-row scene3d-row-sub" *ngIf="s3.scene3dFogFadeM > 0"
+                 title="The dissolve pattern: fine per-pixel dither, or bigger stylised cells">
+                <label>Fade style</label>
+                <select class="scene3d-select" [(ngModel)]="s3.scene3dFogFadeStyle" (ngModelChange)="s3.scene3dApplyFogHorizon()">
+                    <option value="dither">Dither</option>
+                    <option value="dither-coarse">Dither (coarse)</option>
+                </select>
+            </div>
+        </ng-container>
+        <div class="scene3d-material-row scene3d-row-wide scene3d-row-sub"
+             title="Draw the ink outlines on the fog-coloured silhouettes too">
+            <label>Silhouette outlines</label>
+            <input type="checkbox" [(ngModel)]="s3.scene3dFogSilhouetteOutlines" (ngModelChange)="s3.scene3dApplyFogHorizon()">
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" *ngIf="s3.scene3dFogMode !== 'off'">
+        <label>Aerial fog</label>
+        <input type="range" min="0" max="1" step="0.05"
+               [ngModel]="s3.scene3dAerialPerspective"
+               (ngModelChange)="s3.scene3dSetAerialPerspective($event)">
+        <span class="scene3d-val">{{ s3.scene3dAerialPerspective | number:'1.2-2' }}</span>
+    </div>
+</details>
+
+<details class="scene3d-details" (toggle)="s3.scene3dSyncGpuCull(); s3.scene3dSyncTaa()">
+    <summary>Rendering</summary>
+    <div class="scene3d-material-row" title="Temporal anti-aliasing / upscaling for the 3D view. Saved for this computer, not in the document. Same setting as City > Performance > Resolution.">
+        <label>Anti-aliasing / Upscaling</label>
+        <select class="scene3d-select" [ngModel]="s3.scene3dTaa" (ngModelChange)="s3.scene3dSetTaa($event)">
+            <option *ngFor="let o of s3.scene3dTaaOptions" [value]="o.key">{{ o.label }}</option>
+        </select>
+    </div>
+    <div style="font-size:10px;color:#888;padding:0 0 4px 8px;white-space:normal;line-height:1.35;">{{ s3.scene3dTaaDesc }}<ng-container *ngIf="s3.scene3dTaaNote"> {{ s3.scene3dTaaNote }}</ng-container></div>
+    <div class="scene3d-material-row">
+        <label>Enhanced visuals</label>
+        <input type="checkbox" [ngModel]="s3.scene3dEnhancedVisuals"
+               (ngModelChange)="s3.scene3dSetEnhancedVisuals($event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Glass quality</label>
+        <input type="checkbox" [ngModel]="s3.scene3dGlassQuality"
+               (ngModelChange)="s3.scene3dSetGlassQuality($event)">
+    </div>
+    <div class="scene3d-material-row" title="Who decides what to draw each frame: the GPU (frees the CPU) or the classic CPU path. Saved for this computer, not in the document. Same setting as City > Performance > GPU culling.">
+        <label>GPU culling</label>
+        <select class="scene3d-select" [ngModel]="s3.scene3dGpuCull" (ngModelChange)="s3.scene3dSetGpuCull($event)">
+            <option *ngFor="let o of s3.scene3dGpuCullOptions" [value]="o.key">{{ o.label }}</option>
+        </select>
+    </div>
+    <div style="font-size:10px;color:#888;padding:0 0 4px 8px;white-space:normal;line-height:1.35;">{{ s3.scene3dGpuCullDesc }}</div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Environment / IBL</summary>
+    <div *ngIf="s3.scene3dIblEnabled" class="scene3d-ibl-active-badge">&#9679; IBL active</div>
+    <div class="scene3d-material-row" style="margin-top:4px">
+        <label>Intensity</label>
+        <input type="range" min="0" max="4" step="0.05" [(ngModel)]="s3.scene3dIblIntensity">
+        <span class="scene3d-val">{{ s3.scene3dIblIntensity | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-row" style="margin-top:6px;gap:6px">
+        <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+            Upload HDR / Equirect
+            <input type="file" accept="image/*" style="display:none" (change)="s3.scene3dUploadEnvironmentMap($event)">
+        </label>
+        <button class="scene3d-btn" [disabled]="!s3.scene3dIblEnabled" (click)="s3.scene3dClearEnvironmentMap()">Clear</button>
+    </div>
+    <div class="scene3d-hint" style="margin-top:4px">Equirectangular image projected to spherical harmonics for diffuse IBL. Cel/ink/sketch styles unaffected.</div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Texture Sampling</summary>
+    <div class="scene3d-toggle-row">
+        <label>Nearest (PS1)</label>
+        <input type="radio" name="texFilter" [checked]="s3.scene3dTextureFilter === 'nearest'" (change)="s3.scene3dSetTextureFilter('nearest')">
+    </div>
+    <div class="scene3d-toggle-row">
+        <label>Bilinear (smooth)</label>
+        <input type="radio" name="texFilter" [checked]="s3.scene3dTextureFilter === 'linear'" (change)="s3.scene3dSetTextureFilter('linear')">
+    </div>
+</details>
+
+<details class="scene3d-details">
+    <summary>Post-Processing</summary>
+
+    <div class="scene3d-pp-group">
+        <div class="scene3d-pp-group-header">
+            <label class="scene3d-checkbox-row">
+                <input type="checkbox" [(ngModel)]="s3.scene3dBloomEnabled" (ngModelChange)="s3.scene3dApplyPostProcessing()">
+                Bloom
+            </label>
+        </div>
+        <ng-container *ngIf="s3.scene3dBloomEnabled">
+            <div class="scene3d-material-row">
+                <label>Threshold</label>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dBloomThreshold" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dBloomThreshold | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Intensity</label>
+                <input type="range" min="0" max="4" step="0.05" [(ngModel)]="s3.scene3dBloomIntensity" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dBloomIntensity | number:'1.2-2' }}</span>
+            </div>
+        </ng-container>
+    </div>
+
+    <div class="scene3d-pp-sep"></div>
+
+    <div class="scene3d-pp-group">
+        <div class="scene3d-pp-group-header">
+            <label class="scene3d-checkbox-row">
+                <input type="checkbox" [(ngModel)]="s3.scene3dColorGradeEnabled" (ngModelChange)="s3.scene3dApplyPostProcessing()">
+                Color Grade
+            </label>
+        </div>
+        <ng-container *ngIf="s3.scene3dColorGradeEnabled">
+            <div class="scene3d-material-row">
+                <label>Brightness</label>
+                <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="s3.scene3dColorGradeBrightness" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dColorGradeBrightness | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Contrast</label>
+                <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="s3.scene3dColorGradeContrast" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dColorGradeContrast | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Saturation</label>
+                <input type="range" min="-1" max="1" step="0.01" [(ngModel)]="s3.scene3dColorGradeSaturation" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dColorGradeSaturation | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Tint</label>
+                <input type="color" [(ngModel)]="s3.scene3dColorGradeTint" (input)="s3.scene3dApplyPostProcessing()">
+            </div>
+        </ng-container>
+    </div>
+
+    <div class="scene3d-pp-sep"></div>
+
+    <div class="scene3d-pp-group">
+        <div class="scene3d-pp-group-header">
+            <label class="scene3d-checkbox-row">
+                <input type="checkbox" [(ngModel)]="s3.scene3dVignetteEnabled" (ngModelChange)="s3.scene3dApplyPostProcessing()">
+                Vignette
+            </label>
+        </div>
+        <ng-container *ngIf="s3.scene3dVignetteEnabled">
+            <div class="scene3d-material-row">
+                <label>Intensity</label>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dVignetteIntensity" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dVignetteIntensity | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dVignetteRadius" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dVignetteRadius | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Softness</label>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dVignetteSoftness" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dVignetteSoftness | number:'1.2-2' }}</span>
+            </div>
+        </ng-container>
+    </div>
+
+    <div class="scene3d-pp-sep"></div>
+
+    <div class="scene3d-pp-group">
+        <div class="scene3d-pp-group-header">
+            <label class="scene3d-checkbox-row" title="Animated grain, colour fringing toward the frame edges, and a warm halation tint on the bloom">
+                <input type="checkbox" [(ngModel)]="s3.scene3dFilmEnabled" (ngModelChange)="s3.scene3dApplyPostProcessing()">
+                Film
+            </label>
+        </div>
+        <ng-container *ngIf="s3.scene3dFilmEnabled">
+            <div class="scene3d-material-row">
+                <label title="Strongest in the mid-tones; blacks and whites stay clean">Grain</label>
+                <input type="range" min="0" max="0.3" step="0.01" [(ngModel)]="s3.scene3dFilmGrain" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dFilmGrain | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="1 = per-pixel, 2-3 = chunky 16mm">Grain size</label>
+                <input type="range" min="1" max="3" step="0.1" [(ngModel)]="s3.scene3dFilmGrainSize" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dFilmGrainSize | number:'1.1-1' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Red/blue split that grows toward the frame edges">Fringing</label>
+                <input type="range" min="0" max="0.01" step="0.0005" [(ngModel)]="s3.scene3dFilmAberration" (input)="s3.scene3dApplyPostProcessing()">
+                <span class="scene3d-val">{{ s3.scene3dFilmAberration | number:'1.4-4' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="Tints the bloom so bright things bleed warm. Needs Bloom on.">Halation</label>
+                <input type="range" min="0" max="1" step="0.05" [(ngModel)]="s3.scene3dFilmHalation" (input)="s3.scene3dApplyPostProcessing()">
+                <input type="color" [(ngModel)]="s3.scene3dFilmHalationTint" (input)="s3.scene3dApplyPostProcessing()" title="Halation tint">
+            </div>
+            <div *ngIf="!s3.scene3dBloomEnabled && s3.scene3dFilmHalation > 0" class="scene3d-hint">Halation only shows with Bloom on.</div>
+        </ng-container>
+    </div>
+
+    <div class="scene3d-pp-sep"></div>
+
+    <!-- Ambient Occlusion (SSAO) -->
+    <div class="scene3d-pp-group">
+        <div class="scene3d-pp-group-header">
+            <label class="scene3d-checkbox-row">
+                <input type="checkbox" [(ngModel)]="s3.scene3dSSAOEnabled" (ngModelChange)="s3.scene3dApplySSAO()">
+                Ambient Occlusion
+            </label>
+        </div>
+        <ng-container *ngIf="s3.scene3dSSAOEnabled">
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input type="range" min="0.1" max="2" step="0.05" [(ngModel)]="s3.scene3dSSAORadius" (input)="s3.scene3dApplySSAO()">
+                <span class="scene3d-val">{{ s3.scene3dSSAORadius | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Intensity</label>
+                <input type="range" min="0" max="3" step="0.05" [(ngModel)]="s3.scene3dSSAOIntensity" (input)="s3.scene3dApplySSAO()">
+                <span class="scene3d-val">{{ s3.scene3dSSAOIntensity | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Power</label>
+                <input type="range" min="0.5" max="6" step="0.1" [(ngModel)]="s3.scene3dSSAOPower" (input)="s3.scene3dApplySSAO()">
+                <span class="scene3d-val">{{ s3.scene3dSSAOPower | number:'1.1-1' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Bias</label>
+                <input type="range" min="0.001" max="0.1" step="0.001" [(ngModel)]="s3.scene3dSSAOBias" (input)="s3.scene3dApplySSAO()">
+                <span class="scene3d-val">{{ s3.scene3dSSAOBias | number:'1.3-3' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Quality</label>
+                <select class="scene3d-select"
+                        [ngModel]="s3.scene3dSSAOResolutionScale"
+                        (ngModelChange)="s3.scene3dSSAOResolutionScale = $event; s3.scene3dApplySSAO()">
+                    <option [ngValue]="0.5">Half (fast)</option>
+                    <option [ngValue]="1.0">Full (crisp)</option>
+                </select>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Samples</label>
+                <input type="range" min="4" max="32" step="4" [(ngModel)]="s3.scene3dSSAOSamples" (input)="s3.scene3dApplySSAO()">
+                <span class="scene3d-val">{{ s3.scene3dSSAOSamples }}</span>
+            </div>
+            <div class="scene3d-toggle-row" style="padding-top:2px">
+                <label>Debug view</label>
+                <input type="checkbox" [checked]="s3.scene3dSSAODebug" (change)="s3.scene3dToggleSSAODebug($any($event.target).checked)">
+            </div>
+        </ng-container>
+    </div>
+
+</details>

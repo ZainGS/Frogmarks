@@ -30,6 +30,7 @@ namespace Frogmarks.Data
             .ForMember(d => d.CreatedBy, o => o.Ignore())
             .ReverseMap()
             // dto -> entity
+            .ForMember(d => d.Collaborators, o => o.Ignore())   // never from the client (audit Phase 1.2: injected collaborator rows)
             .ForMember(d => d.BoardItems, o => o.Ignore())
             .ForMember(d => d.Team, o => o.Ignore())
             .ForMember(d => d.Preferences, o => o.Ignore())
@@ -56,6 +57,7 @@ namespace Frogmarks.Data
             .ForMember(d => d.ModifiedBy, o => o.Ignore())
             .ReverseMap()
             // dto -> entity
+            .ForMember(d => d.Collaborators, o => o.Ignore())   // never from the client (audit Phase 1.2: injected collaborator rows)
             .ForMember(d => d.CanvasData, o => o.MapFrom(s => s.SceneGraphData))
             .ForMember(d => d.Team, o => o.Ignore())
             .ForMember(d => d.Preferences, o => o.Ignore())

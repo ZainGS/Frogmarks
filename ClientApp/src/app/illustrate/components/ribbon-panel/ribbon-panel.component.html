@@ -1,0 +1,137 @@
+<details class="scene3d-details">
+    <summary>Ribbon Path</summary>
+    <div class="scene3d-material-row">
+        <label>Width</label>
+        <input type="range" min="0.01" max="2" step="0.01" [(ngModel)]="ribbon.scene3dRibbonWidth" (input)="ribbon.scene3dUpdateRibbonWidth()">
+        <span class="scene3d-val">{{ ribbon.scene3dRibbonWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Segments</label>
+        <div class="segment-row">
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonSegments === 8"  (click)="ribbon.scene3dSetRibbonSegments(8)">8</button>
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonSegments === 16" (click)="ribbon.scene3dSetRibbonSegments(16)">16</button>
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonSegments === 32" (click)="ribbon.scene3dSetRibbonSegments(32)">32</button>
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonSegments === 64" (click)="ribbon.scene3dSetRibbonSegments(64)">64</button>
+        </div>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Sides</label>
+        <div class="segment-row">
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonDoubleSided === 'double'" (click)="ribbon.scene3dSetRibbonDoubleSided('double')" title="Both sides rendered">Double</button>
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonDoubleSided === 'front'"  (click)="ribbon.scene3dSetRibbonDoubleSided('front')"  title="Front face only">Front only</button>
+            <button class="segment-btn" [class.active]="ribbon.scene3dRibbonDoubleSided === 'back'"   (click)="ribbon.scene3dSetRibbonDoubleSided('back')"   title="Back face only">Back only</button>
+        </div>
+    </div>
+    <div class="scene3d-material-row" *ngIf="ribbon.scene3dRibbonDoubleSided === 'double'">
+        <label style="font-size:10px">Flip rear U</label>
+        <input type="checkbox" [(ngModel)]="ribbon.scene3dRibbonFlipRearU" (change)="ribbon.scene3dSetRibbonFlipRearU(ribbon.scene3dRibbonFlipRearU)" style="accent-color:#9B59B6"
+               title="Mirror U coordinates on the back face so text reads correctly from both sides">
+    </div>
+    <div class="scene3d-material-row" style="align-items:flex-start">
+        <label style="padding-top:4px">Orientation</label>
+        <div style="display:flex;flex-direction:column;gap:3px">
+            <div class="segment-row">
+                <button class="segment-btn" [class.active]="ribbon.scene3dRibbonPathMode === 'normal'"   (click)="ribbon.scene3dSetRibbonPathMode('normal')">Normal</button>
+                <button class="segment-btn" [class.active]="ribbon.scene3dRibbonPathMode === 'world-up'" (click)="ribbon.scene3dSetRibbonPathMode('world-up')">Upright</button>
+            </div>
+            <div class="scene3d-path-mode-hint">
+                <ng-container *ngIf="ribbon.scene3dRibbonPathMode === 'normal'">Ribbon follows the path plane naturally.</ng-container>
+                <ng-container *ngIf="ribbon.scene3dRibbonPathMode === 'world-up'">Ribbon stands vertical, like a wall sign.</ng-container>
+            </div>
+        </div>
+    </div>
+    <!-- Path Presets -->
+    <div class="scene3d-sub-header" style="margin-top:8px">Path Presets</div>
+    <div class="scene3d-material-row">
+        <label>Shape</label>
+        <select class="scene3d-select" [(ngModel)]="ribbon.scene3dPresetType" (ngModelChange)="ribbon.scene3dApplyPreset()">
+            <option value="spiral">Spiral (3D)</option>
+            <option value="circle">Circle</option>
+            <option value="arc">Arc</option>
+            <option value="wave">Wave</option>
+            <option value="scurve">S-Curve</option>
+            <option value="zigzag">Zigzag</option>
+        </select>
+    </div>
+    <!-- Spiral params -->
+    <ng-container *ngIf="ribbon.scene3dPresetType === 'spiral'">
+        <div class="scene3d-material-row">
+            <label>Diameter</label>
+            <input type="range" min="0.05" max="4" step="0.05" [(ngModel)]="ribbon.scene3dPresetDiameter" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetDiameter | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height</label>
+            <input type="range" min="0.05" max="4" step="0.05" [(ngModel)]="ribbon.scene3dPresetHeight" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetHeight | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Turns</label>
+            <input type="range" min="1" max="12" step="0.1" [(ngModel)]="ribbon.scene3dPresetTurns" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetTurns | number:'1.1-1' }}</span>
+        </div>
+    </ng-container>
+    <!-- Circle params -->
+    <ng-container *ngIf="ribbon.scene3dPresetType === 'circle'">
+        <div class="scene3d-material-row">
+            <label>Diameter</label>
+            <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="ribbon.scene3dPresetDiameter" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetDiameter }}</span>
+        </div>
+    </ng-container>
+    <!-- Arc params -->
+    <ng-container *ngIf="ribbon.scene3dPresetType === 'arc'">
+        <div class="scene3d-material-row">
+            <label>Diameter</label>
+            <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="ribbon.scene3dPresetDiameter" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetDiameter }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Angle °</label>
+            <input type="range" min="30" max="350" step="10" [(ngModel)]="ribbon.scene3dPresetAngle" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetAngle }}°</span>
+        </div>
+    </ng-container>
+    <!-- Wave/S-Curve/Zigzag params -->
+    <ng-container *ngIf="ribbon.scene3dPresetType === 'wave' || ribbon.scene3dPresetType === 'scurve' || ribbon.scene3dPresetType === 'zigzag'">
+        <div class="scene3d-material-row">
+            <label>Width</label>
+            <input type="range" min="0.5" max="8" step="0.25" [(ngModel)]="ribbon.scene3dPresetDiameter" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetDiameter }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Amplitude</label>
+            <input type="range" min="0.1" max="2" step="0.1" [(ngModel)]="ribbon.scene3dPresetAmplitude" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetAmplitude | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="ribbon.scene3dPresetType === 'wave' || ribbon.scene3dPresetType === 'zigzag'">
+            <label>Cycles</label>
+            <input type="range" min="1" max="8" step="1" [(ngModel)]="ribbon.scene3dPresetFrequency" (input)="ribbon.scene3dApplyPreset()">
+            <span class="scene3d-val">{{ ribbon.scene3dPresetFrequency }}</span>
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" style="margin-top:4px">
+        <label>Reverse</label>
+        <input type="checkbox" [(ngModel)]="ribbon.scene3dPresetReverse" (change)="ribbon.scene3dApplyPreset()" style="accent-color:#9B59B6">
+    </div>
+
+    <!-- Control Points (collapsible) -->
+    <details class="scene3d-inner-details" style="margin-top:6px">
+        <summary class="scene3d-sub-header" style="cursor:pointer;list-style:none;margin-top:0">▸ Control Points</summary>
+        <label class="scene3d-check-row" style="padding: 4px 0 2px">
+            <input type="checkbox" [checked]="ribbon.scene3dRibbonShowHandles" (change)="ribbon.scene3dSetRibbonShowHandles($any($event.target).checked)" style="accent-color:#9B59B6">
+            Show handles
+        </label>
+        <div *ngFor="let pt of ribbon.scene3dRibbonControlPoints; let i = index" class="scene3d-ribbon-point-row">
+            <span class="scene3d-ribbon-pt-idx">{{ i }}</span>
+            <input type="number" step="0.1" [ngModel]="pt.x" (ngModelChange)="pt.x = +$event; ribbon.scene3dSetRibbonControlPoint(i)" title="X">
+            <input type="number" step="0.1" [ngModel]="pt.y" (ngModelChange)="pt.y = +$event; ribbon.scene3dSetRibbonControlPoint(i)" title="Y">
+            <input type="number" step="0.1" [ngModel]="pt.z" (ngModelChange)="pt.z = +$event; ribbon.scene3dSetRibbonControlPoint(i)" title="Z">
+            <button class="scene3d-btn scene3d-del-pt" (click)="ribbon.scene3dRemoveRibbonControlPoint(i)"
+                    [disabled]="ribbon.scene3dRibbonControlPoints.length <= 2" title="Remove point">×</button>
+        </div>
+        <div style="padding: 4px 0 2px">
+            <button class="scene3d-btn" (click)="ribbon.scene3dAddRibbonControlPoint()">+ Add Point</button>
+        </div>
+    </details>
+</details>

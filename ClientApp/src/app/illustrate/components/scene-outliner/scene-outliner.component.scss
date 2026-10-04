@@ -1,0 +1,87 @@
+// Shared editor controls first (same order as in the editor), then the outliner's own rules.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-mesh-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.scene3d-mesh-item {
+    display: flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); }
+    &.active { background: rgba(#9B59B6, 0.18); border-left: 3px solid #9B59B6; }
+    &.scene3d-multi-selected { background: rgba(#9B59B6, 0.09); outline: 1px solid rgba(#9B59B6, 0.4); outline-offset: -1px; }
+}
+
+.scene3d-array-badge {
+    font-size: 9px;
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+}
+
+.scene3d-mesh-delete {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+
+    .scene3d-mesh-item:hover & { opacity: 1; }
+    &:hover { color: #f77; }
+}
+
+// Outliner enhancements
+.scene3d-node-hidden {
+    .scene3d-mesh-name { opacity: 0.35; }
+}
+
+.scene3d-eye-btn {
+    background: none;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    padding: 0 3px;
+    font-size: 12px;
+    line-height: 1;
+    flex-shrink: 0;
+    &:hover { color: #fff; }
+
+    &.scene3d-eye-hidden { opacity: 0.3; }
+}
+
+.scene3d-rename-input {
+    flex: 1;
+    background: #222;
+    border: 1px solid #9B59B6;
+    color: #f0f0f0;
+    font-size: 12px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    min-width: 0;
+}
+
+.scene3d-cloth-edit-btn {
+    color: #8ab4f8;
+    &:hover { color: #aac8ff; }
+}
+
+.scene3d-player-btn {
+    &.active {
+        opacity: 1 !important;
+        color: #7de8a0;
+    }
+    &.active:hover { color: #a0f0b8; }
+}

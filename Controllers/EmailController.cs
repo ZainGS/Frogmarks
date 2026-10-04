@@ -3,11 +3,13 @@ using Frogmarks.Services.Interfaces;
 using Frogmarks.Utilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Frogmarks.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [EnableRateLimiting("auth")]   // sign-in links + re-auth codes: per-IP limit (audit Phase 1.5)
     public class EmailController : BaseController
     {
         private readonly IEmailService _emailService;

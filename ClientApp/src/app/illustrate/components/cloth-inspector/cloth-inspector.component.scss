@@ -1,0 +1,33 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-wind-zone-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.scene3d-wind-zone-row {
+    display: flex;
+    align-items: center;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+
+    &.active {
+        background: rgba(138,180,248,0.12);
+        outline: 1px solid rgba(138,180,248,0.4);
+        color: rgba(255,255,255,0.85);
+    }
+
+    &:hover:not(.active) { background: rgba(255,255,255,0.08); }
+}
+
+.scene3d-wind-zone-label {
+    flex: 1;
+}

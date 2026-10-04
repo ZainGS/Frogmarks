@@ -309,7 +309,7 @@ export class DocsComponent {
           'Useful for cartoon shadow flats, color fills, and graphic shapes',
         ]},
         { id: 'gp-parenting', label: 'Bone Parenting', items: [
-          'Get joint names from the character skeleton: <code>sm.getSkeleton3D(charData.skeletonId)?.data.joints.map(j => j.name)</code>',
+          'Get joint names from the character skeleton: <code>sm.getSkeletonJoints3D(charData.skeletonId).map(j => j.name)</code>',
           'Populate a dropdown with the joint list and a "none" option',
           'Pass the selected joint name as <code>parentJoint</code> in <code>beginGpStroke3D</code>',
           'The stroke follows the joint with zero CPU cost — all transform math runs in the vertex shader',
@@ -319,7 +319,7 @@ export class DocsComponent {
           'Add a layer: <code>sm.addGpLayer3D(gpId, name)</code> — returns <code>layerId</code>',
           'Remove a layer: <code>sm.removeGpLayer3D(gpId, layerId)</code>',
           'Remove the whole object: <code>sm.removeGpObject3D(gpId)</code>',
-          'Toggle visibility or opacity by mutating <code>gpObj.getLayer(layerId).visible</code> / <code>.opacity</code>, then calling <code>sm.scheduleRender3D()</code>',
+          'Toggle visibility or opacity by mutating <code>gpObj.getLayer(layerId).visible</code> / <code>.opacity</code>, then calling <code>sm.scheduleRender()</code>',
           'GP objects are included in <code>packProject()</code> / <code>unpackProject()</code> — no extra save wiring needed',
         ]},
         { id: 'gp-api', label: 'API Reference', items: [
@@ -545,7 +545,7 @@ export class DocsComponent {
     if (this.embedded) {
       this.closed.emit();
     } else {
-      this.router.navigate(['/dashboard']);
+      void this.router.navigate(['/dashboard']);
     }
   }
 }

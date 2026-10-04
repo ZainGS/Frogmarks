@@ -217,11 +217,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
   };
 
   isBoard(item: DashboardItem): item is Board {
-    return item.type == 'board';
+    return item.type === 'board';
   }
 
   isIllustration(item: DashboardItem): item is Illustration {
-    return item.type == 'illustration';
+    return item.type === 'illustration';
   }
 
   openBoardMenu(event: MouseEvent, item: DashboardItem) {
@@ -407,7 +407,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
   }
 
   private _navigateToIllustration(ill: Illustration): void {
-    this.router.navigate(this._illustrationRoute(ill), { state: { illustration: ill } });
+    void this.router.navigate(this._illustrationRoute(ill), { state: { illustration: ill } });
   }
 
   openItemInNewTab(item: DashboardItem | null) {
@@ -1043,7 +1043,7 @@ onKeydown(e: KeyboardEvent) {
     });
 
     // 1. Load local items immediately — no auth needed
-    this._loadLocalItemsOnly();
+    void this._loadLocalItemsOnly();
 
     // 2. Try to load cloud items in parallel — fails gracefully if not logged in
     // Verify the session is live against a protected endpoint before trusting the cached uid
@@ -1081,7 +1081,7 @@ onKeydown(e: KeyboardEvent) {
     this.totalCreations = this.boards.length + this.designs.length + this.slides.length;
 
     this.themeService.toggleDarkMode(true);
-    this._loadOpfsStats();
+    void this._loadOpfsStats();
     this._loadCloudStorageQuota();
 
     this._sessionExpiredSub = this._authService.sessionExpired$.subscribe(() => {
@@ -1287,7 +1287,7 @@ onKeydown(e: KeyboardEvent) {
 
   private _openCart(blob: Blob): void {
     this.playerCartService.pendingCart = blob;
-    this.router.navigate(['/player']);
+    void this.router.navigate(['/player']);
   }
 
   frogPlayerClicked(): void {
@@ -1478,7 +1478,7 @@ onKeydown(e: KeyboardEvent) {
     this._boardService.createBoard(newBoard).subscribe((res: any) => {
       if (res.resultType === ResultType.Success) {
         // Navigate to the new board, replace 'your-board-route' with actual route
-        this.router.navigate(['/board', res.resultObject.uuid]);
+        void this.router.navigate(['/board', res.resultObject.uuid]);
       } else {
         this._notifyService.error('There was an error creating a new board :(');
       }
@@ -1512,7 +1512,7 @@ onKeydown(e: KeyboardEvent) {
           const local = await this.localIllustrationService.create(generatedName, docAspect);
           const queryParams = result.bounded && result.docW && result.docH
             ? { docW: result.docW, docH: result.docH } : {};
-          this.router.navigate(['/illustration/local', local.uuid], {
+          void this.router.navigate(['/illustration/local', local.uuid], {
             queryParams,
             state: { illustration: local, isNew: true }
           });
@@ -1549,12 +1549,12 @@ onKeydown(e: KeyboardEvent) {
               cloudIllustrationId: ill.id, cloudOwnerUserId: this.uid,
             });
             if (result.bounded && result.docW && result.docH) {
-              this.router.navigate(['/illustration', ill.uuid], {
+              void this.router.navigate(['/illustration', ill.uuid], {
                 queryParams: { docW: result.docW, docH: result.docH },
                 state: { illustration: ill, isNew: true }
               });
             } else {
-              this.router.navigate(['/illustration', ill.uuid], { state: { illustration: ill, isNew: true } });
+              void this.router.navigate(['/illustration', ill.uuid], { state: { illustration: ill, isNew: true } });
             }
           } else {
             this._notifyService.error('There was an error creating a new illustration :(');
@@ -1588,7 +1588,7 @@ onKeydown(e: KeyboardEvent) {
           const local = await this.localIllustrationService.create(generatedName, docAspect);
           const queryParams = result.bounded && result.docW && result.docH
             ? { docW: result.docW, docH: result.docH } : {};
-          this.router.navigate(['/illustration/local', local.uuid], {
+          void this.router.navigate(['/illustration/local', local.uuid], {
             queryParams,
             state: { illustration: local, isNew: true, startAnimation: true },
           });
@@ -1626,7 +1626,7 @@ onKeydown(e: KeyboardEvent) {
             });
             const queryParams = result.bounded && result.docW && result.docH
               ? { docW: result.docW, docH: result.docH } : {};
-            this.router.navigate(['/illustration', ill.uuid], {
+            void this.router.navigate(['/illustration', ill.uuid], {
               queryParams,
               state: { illustration: ill, isNew: true, startAnimation: true },
             });
@@ -1665,7 +1665,7 @@ onKeydown(e: KeyboardEvent) {
       if (modeResult.syncMode === 2) {
         const local = await this.localIllustrationService.create(importName);
         this.frogFileService.pendingImport = result;
-        this.router.navigate(['/illustration/local', local.uuid], { state: { illustration: local } });
+        void this.router.navigate(['/illustration/local', local.uuid], { state: { illustration: local } });
         return;
       }
 
@@ -1687,7 +1687,7 @@ onKeydown(e: KeyboardEvent) {
         next: (res: any) => {
           if (res.resultType === ResultType.Success) {
             this.frogFileService.pendingImport = result;
-            this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject } });
+            void this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject } });
           } else {
             this._notifyService.error('Failed to create illustration for import');
           }
@@ -1726,7 +1726,7 @@ onKeydown(e: KeyboardEvent) {
   listItemDoubleClicked(event: MouseEvent, listItem: DashboardItem) {
     if (!listItem.isArchived) {
       if (this.isBoard(listItem)) {
-        this.router.navigate(['/board', listItem.uuid]);
+        void this.router.navigate(['/board', listItem.uuid]);
       } else if (this.isIllustration(listItem)) {
         this._navigateToIllustration(listItem as Illustration);
       }
@@ -2083,7 +2083,7 @@ onKeydown(e: KeyboardEvent) {
       url = `${baseUrl}/illustration/${item.uuid}`;
     }
 
-    navigator.clipboard.writeText(url);
+    void navigator.clipboard.writeText(url);
     this.closeContextMenu();
     this.notifyService.success('Copied link to clipboard');
   }
@@ -2212,7 +2212,7 @@ onKeydown(e: KeyboardEvent) {
     if (!item || item.isArchived) return;
     this.closeItemOverlay();
     if (this.isBoard(item)) {
-      this.router.navigate(['/board', item.uuid]);
+      void this.router.navigate(['/board', item.uuid]);
     } else if (this.isIllustration(item)) {
       this._navigateToIllustration(item as Illustration);
     }
@@ -2383,7 +2383,7 @@ onKeydown(e: KeyboardEvent) {
             }
           });
           // Check for un-backed-up local projects and offer to sync them
-          this.localIllustrationService.getAll().then(items => {
+          void this.localIllustrationService.getAll().then(items => {
             const localOnly = items.filter(i => i.syncStatus === 'local-only');
             if (localOnly.length > 0) {
               this.backupLocalItems = localOnly;
@@ -2544,7 +2544,7 @@ onKeydown(e: KeyboardEvent) {
     if (!this.currentTeam?.id) {
       this.isLoadingItems = false;
       this._cloudHasMore = false;
-      this._loadLocalItemsOnly();
+      void this._loadLocalItemsOnly();
       return;
     }
 

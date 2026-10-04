@@ -1,0 +1,332 @@
+<div class="eye-expr-list">
+    <ng-container *ngFor="let expr of face.scene3dFaceExpressions">
+        <div class="eye-expr-row">
+            <span class="eye-expr-name"
+                  [class.active]="face.scene3dFaceActiveExprId === expr.id"
+                  (click)="face.scene3dSetActiveFaceExpr(expr.id)"
+                  title="Set as active expression">{{ expr.name }}</span>
+            <button class="scene3d-btn scene3d-btn-sm"
+                    [class.scene3d-btn-active]="face.scene3dEyeModeMap[expr.id] !== 'procedural'"
+                    (click)="face.scene3dSetEyeMode(expr.id, 'draw'); cp.drawEyes.emit(expr.id)"
+                    title="Draw eyes freehand">Draw</button>
+            <button class="scene3d-btn scene3d-btn-sm"
+                    [class.scene3d-btn-active]="face.scene3dEyeModeMap[expr.id] === 'procedural'"
+                    (click)="face.scene3dSetEyeMode(expr.id, 'procedural')"
+                    title="Generate eyes from sliders">Proc</button>
+            <button class="scene3d-btn scene3d-btn-sm"
+                    [class.scene3d-btn-active]="face.scene3dFaceBlinkExprId === expr.id"
+                    (click)="face.scene3dToggleBlinkExpr(expr.id)"
+                    title="Use as blink state">↻</button>
+            <button class="scene3d-btn scene3d-btn-sm"
+                    (click)="face.scene3dDeleteFaceExpr(expr.id)"
+                    title="Delete state">✕</button>
+        </div>
+        <!-- Procedural eye param sliders -->
+        <div *ngIf="face.scene3dEyeModeMap[expr.id] === 'procedural' && face.scene3dEyeParamsMap[expr.id]"
+             class="eye-proc-params">
+            <div class="eye-proc-group">Render</div>
+            <div class="scene3d-material-row">
+                <label>Pixelation</label>
+                <input type="range" min="0" max="400" step="10"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].pixelResolution"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].pixelResolution === 0 ? 'off' : face.scene3dEyeParamsMap[expr.id].pixelResolution }}</span>
+            </div>
+
+            <div class="eye-proc-group">Placement</div>
+            <div class="scene3d-material-row">
+                <label>Spacing</label>
+                <input type="range" min="0.2" max="1.0" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].spacing"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].spacing | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>V pos</label>
+                <input type="range" min="0.1" max="0.9" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].verticalPos"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].verticalPos | number:'1.2-2' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Shape</div>
+            <div class="scene3d-material-row">
+                <label>Width</label>
+                <input type="range" min="0.1" max="0.5" step="0.02"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].width"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].width | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Height</label>
+                <input type="range" min="0.1" max="0.5" step="0.02"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].height"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].height | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Tilt</label>
+                <input type="range" min="-0.5" max="0.5" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].tilt"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].tilt | number:'1.2-2' }}</span>
+            </div>
+            <!-- A CLOSED eye draws only the lash arc (+ outer lashes, deco dots): the eyeball controls are hidden. -->
+            <ng-container *ngIf="!face.scene3dEyeParamsMap[expr.id].closed">
+            <div class="scene3d-material-row">
+                <label>Round</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].roundness"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].roundness | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label title="The upper lid's shadow across the top of the eye (face kit)">Lid shadow</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].lidShadow"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ (face.scene3dEyeParamsMap[expr.id].lidShadow ?? 0) | number:'1.2-2' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Iris</div>
+            <div class="scene3d-material-row">
+                <label>Gradient</label>
+                <input type="checkbox"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].irisGradient"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            <ng-container *ngIf="face.scene3dEyeParamsMap[expr.id].irisGradient">
+                <div class="scene3d-material-row">
+                    <label>Top</label>
+                    <input type="color"
+                           [(ngModel)]="face.scene3dEyeParamsMap[expr.id].irisColorTop"
+                           (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Bottom</label>
+                    <input type="color"
+                           [(ngModel)]="face.scene3dEyeParamsMap[expr.id].irisColorBottom"
+                           (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                </div>
+            </ng-container>
+            <ng-container *ngIf="!face.scene3dEyeParamsMap[expr.id].irisGradient">
+                <div class="scene3d-material-row">
+                    <label>Color</label>
+                    <input type="color"
+                           [(ngModel)]="face.scene3dEyeParamsMap[expr.id].irisColor"
+                           (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                </div>
+            </ng-container>
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input type="range" min="0.1" max="0.9" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].irisRadius"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].irisRadius | number:'1.2-2' }}</span>
+            </div>
+
+            <div class="eye-proc-group">Pupil</div>
+            <div class="scene3d-material-row">
+                <label>Color</label>
+                <input type="color"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].pupilColor"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input type="range" min="0.05" max="0.6" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].pupilRadius"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].pupilRadius | number:'1.2-2' }}</span>
+            </div>
+            </ng-container>
+
+            <div class="eye-proc-group">Lashes</div>
+            <div class="scene3d-material-row">
+                <label>Color</label>
+                <input type="color"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].upperLashColor"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Thickness</label>
+                <input type="range" min="0.01" max="0.1" step="0.005"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].upperLashThickness"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].upperLashThickness | number:'1.2-3' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Outer flick</label>
+                <input type="range" min="0" max="1" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].outerLashLength"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].outerLashLength | number:'1.2-2' }}</span>
+            </div>
+            <ng-container *ngIf="!face.scene3dEyeParamsMap[expr.id].closed">
+            <div class="scene3d-material-row">
+                <label>Lower lash</label>
+                <input type="checkbox"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].lowerLash"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Double lid</label>
+                <input type="checkbox"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].doubleEyelid"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            </ng-container>
+
+            <div class="eye-proc-group">Deco dots</div>
+            <div class="scene3d-material-row">
+                <label>Enable</label>
+                <input type="checkbox"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].underDeco"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+            <ng-container *ngIf="face.scene3dEyeParamsMap[expr.id].underDeco">
+                <div class="scene3d-material-row">
+                    <label>Color</label>
+                    <input type="color"
+                           [(ngModel)]="face.scene3dEyeParamsMap[expr.id].underDecoColor"
+                           (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                </div>
+                <div class="scene3d-material-row">
+                    <label>Count</label>
+                    <input type="range" min="1" max="5" step="1"
+                           [(ngModel)]="face.scene3dEyeParamsMap[expr.id].underDecoCount"
+                           (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                    <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].underDecoCount }}</span>
+                </div>
+            </ng-container>
+
+            <div class="scene3d-material-row" style="margin-top:8px">
+                <label>Closed eye</label>
+                <input type="checkbox"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].closed"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+            </div>
+
+            <ng-container *ngIf="!face.scene3dEyeParamsMap[expr.id].closed">
+            <div class="eye-proc-group">Gaze (baked)</div>
+            <div class="scene3d-material-row">
+                <label>← →</label>
+                <input type="range" min="-1" max="1" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].gazeX"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].gazeX | number:'1.2-2' }}</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>↑ ↓</label>
+                <input type="range" min="-1" max="1" step="0.05"
+                       [(ngModel)]="face.scene3dEyeParamsMap[expr.id].gazeY"
+                       (ngModelChange)="face.scene3dEyeParamChanged(expr.id)">
+                <span class="scene3d-val">{{ face.scene3dEyeParamsMap[expr.id].gazeY | number:'1.2-2' }}</span>
+            </div>
+            </ng-container>
+        </div>
+    </ng-container>
+</div>
+
+<div *ngIf="face.scene3dFaceExpressions.length === 0"
+     style="font-size:10px;color:#666;font-style:italic;padding:6px 0">No states yet</div>
+<button class="scene3d-btn" style="width:100%;margin-top:6px"
+        (click)="face.scene3dAddFaceExpression()">+ New state</button>
+
+<!-- Live gaze pad -->
+<div style="margin-top:14px">
+    <div class="scene3d-array-strip-label" style="margin-bottom:6px">Live Gaze</div>
+    <div class="gaze-pad"
+         #gazePad
+         (pointerdown)="face.scene3dGazePadPointerDown($event, gazePad)"
+         (pointermove)="face.scene3dGazePadPointerMove($event, gazePad)"
+         (pointerup)="face.scene3dGazePadPointerUp()"
+         (pointercancel)="face.scene3dGazePadPointerUp()">
+        <div class="gaze-reticle"></div>
+        <div class="gaze-dot"
+             [style.left.%]="(face.scene3dGazeX + 1) * 50"
+             [style.top.%]="(face.scene3dGazeY + 1) * 50"></div>
+    </div>
+    <button class="scene3d-btn scene3d-btn-sm" style="width:100%;margin-top:4px"
+            (click)="face.scene3dGazeCenter()">Center</button>
+</div>
+
+<!-- Auto-blink -->
+<div style="margin-top:14px">
+    <div class="scene3d-array-strip-label" style="margin-bottom:6px">Auto-blink</div>
+    <div class="scene3d-material-row">
+        <label>Enabled</label>
+        <input type="checkbox" [(ngModel)]="face.scene3dAutoBlinkEnabled" (ngModelChange)="face.scene3dApplyAutoBlink()">
+    </div>
+    <ng-container *ngIf="face.scene3dAutoBlinkEnabled">
+        <div class="scene3d-material-row">
+            <label>Min s</label>
+            <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+                   [(ngModel)]="face.scene3dAutoBlinkMinSec" (ngModelChange)="face.scene3dApplyAutoBlink()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Max s</label>
+            <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+                   [(ngModel)]="face.scene3dAutoBlinkMaxSec" (ngModelChange)="face.scene3dApplyAutoBlink()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Hold ms</label>
+            <input type="number" class="scene3d-array-strip-count" style="width:52px" min="50" step="10"
+                   [(ngModel)]="face.scene3dAutoBlinkHoldMs" (ngModelChange)="face.scene3dApplyAutoBlink()">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Double %</label>
+            <input type="range" min="0" max="50" step="1"
+                   [(ngModel)]="face.scene3dAutoBlinkDoubleProb" (ngModelChange)="face.scene3dApplyAutoBlink()">
+            <span class="scene3d-val">{{ face.scene3dAutoBlinkDoubleProb }}%</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gap min</label>
+            <input type="number" class="scene3d-array-strip-count" style="width:52px" min="50" step="10"
+                   [(ngModel)]="face.scene3dAutoBlinkDoubleGapMin" (ngModelChange)="face.scene3dApplyAutoBlink()">
+            <span class="scene3d-val" style="color:#555">ms</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gap max</label>
+            <input type="number" class="scene3d-array-strip-count" style="width:52px" min="50" step="10"
+                   [(ngModel)]="face.scene3dAutoBlinkDoubleGapMax" (ngModelChange)="face.scene3dApplyAutoBlink()">
+            <span class="scene3d-val" style="color:#555">ms</span>
+        </div>
+    </ng-container>
+</div>
+
+<!-- Manual blink config (for hand-drawn blink expressions) -->
+<div *ngIf="face.scene3dFaceBlinkExprId" style="margin-top:10px">
+    <div class="scene3d-array-strip-label" style="margin-bottom:6px;color:#666">Manual blink</div>
+    <div class="scene3d-material-row">
+        <label>Mode</label>
+        <select class="scene3d-select" [(ngModel)]="face.scene3dFaceBlinkMode" (ngModelChange)="face.scene3dApplyFaceBlinkConfig()">
+            <option value="random">Random</option>
+            <option value="fixed">Fixed</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Min s</label>
+        <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+               [(ngModel)]="face.scene3dFaceBlinkMin" (ngModelChange)="face.scene3dApplyFaceBlinkConfig()">
+    </div>
+    <div class="scene3d-material-row" *ngIf="face.scene3dFaceBlinkMode === 'random'">
+        <label>Max s</label>
+        <input type="number" class="scene3d-array-strip-count" style="width:52px" min="0.5" step="0.5"
+               [(ngModel)]="face.scene3dFaceBlinkMax" (ngModelChange)="face.scene3dApplyFaceBlinkConfig()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Hold ms</label>
+        <input type="number" class="scene3d-array-strip-count" style="width:52px" min="50" step="10"
+               [(ngModel)]="face.scene3dFaceBlinkHold" (ngModelChange)="face.scene3dApplyFaceBlinkConfig()">
+    </div>
+</div>
+<div class="eye-proc-group" style="margin-top:12px">Texture</div>
+<div class="scene3d-material-row">
+    <label>Diffuse</label>
+    <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
+        Upload<input type="file" accept="image/*" style="display:none" (change)="cp.scene3dUploadCharPartTexture('eyes', $event)">
+    </label>
+    <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['eyes']"
+            (click)="cp.scene3dClearCharPartTexture('eyes')" title="Clear texture">✕</button>
+</div>

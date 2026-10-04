@@ -1,17 +1,24 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text;
 using System.Text.Json;
 
 namespace Frogmarks.Controllers
 {
-    [AllowAnonymous]
+    // Signed-in users only, rate-limited per user (security audit 2026-10-04, Phase 1.4: this was an anonymous proxy
+    // to Anthropic on the server's key, with caller-controlled max_tokens).
+    [Authorize]
+    [EnableRateLimiting("authoring")]
     [Route("api/authoring")]
     [ApiController]
     public class AuthoringController : ControllerBase
     {
         private readonly IHttpClientFactory _http;
         private readonly IConfiguration _cfg;
+
+        /// <summary>Server-side cap on output tokens per call (thinking needs at least 16000).</summary>
+        private const int MaxOutputTokens = 32000;
 
         public AuthoringController(IHttpClientFactory http, IConfiguration cfg)
         {
@@ -20,7 +27,6 @@ namespace Frogmarks.Controllers
         }
 
         [HttpPost]
-        [DisableRequestSizeLimit]
         public async Task<IActionResult> Post([FromBody] JsonElement body)
         {
             var apiKey = _cfg["Anthropic:ApiKey"];
@@ -64,6 +70,7 @@ namespace Frogmarks.Controllers
             var maxTokens = body.GetProperty("maxTokens").GetInt32();
             if (thinkingEnabled)
                 maxTokens = Math.Max(maxTokens, 16000);
+            maxTokens = Math.Clamp(maxTokens, 1, MaxOutputTokens);   // the caller no longer sets the spend
 
             var anthropicReq = new Dictionary<string, object?>
             {

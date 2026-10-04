@@ -1,0 +1,105 @@
+<!-- Header -->
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;background:#1e1e1e;">
+    <button (click)="pkg.pkgSetViewMode('3d')"
+            style="background:rgba(74,158,255,0.18);border:1px solid rgba(74,158,255,0.45);color:#a8d4ff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">← 3D</button>
+    <span style="flex:1;font-size:12px;font-weight:600;color:#a8d4ff;letter-spacing:0.3px;">DIELINE</span>
+    <!-- View mode pill -->
+    <div style="display:flex;gap:2px;">
+        <button [class.pkg-pane-mode-active]="pkg.pkgViewMode==='split'" (click)="pkg.pkgSetViewMode('split')"
+                style="padding:3px 7px;border-radius:3px 0 0 3px;font-size:10px;cursor:pointer;border:1px solid #555;background:#2a2a2a;color:#aaa;">Split</button>
+        <button [class.pkg-pane-mode-active]="pkg.pkgViewMode==='2d'" (click)="pkg.pkgSetViewMode('2d')"
+                style="padding:3px 7px;border-radius:0 3px 3px 0;font-size:10px;cursor:pointer;border:1px solid #555;border-left:none;background:#2a2a2a;color:#aaa;">2D</button>
+    </div>
+</div>
+<!-- Body -->
+<div style="flex:1;overflow-y:auto;padding:10px 12px 16px;">
+    <!-- Layer stack (§0e) -->
+    <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+            <span style="flex:1;font-size:10px;font-weight:700;color:rgba(74,158,255,0.9);text-transform:uppercase;letter-spacing:0.5px;">Layers</span>
+            <button (click)="pkg.pkgAddLayer()"
+                    title="Add raster paint layer"
+                    style="background:#2a2a2a;border:1px solid #555;color:#ccc;padding:2px 7px;border-radius:3px;font-size:10px;cursor:pointer;">+ Layer</button>
+            <button (click)="pkg.pkgAddVectorLayer()"
+                    title="Add vector / ephemera layer"
+                    style="background:#2a2a2a;border:1px solid #555;color:#ccc;padding:2px 7px;border-radius:3px;font-size:10px;cursor:pointer;">+ Vector</button>
+        </div>
+        <!-- Rows rendered top→bottom (pkg.pkgLayerStack is already reversed from bottom→top API) -->
+        <div *ngFor="let layer of pkg.pkgLayerStack; let i = index"
+             (click)="pkg.pkgSetActiveLayer(layer.layerId)"
+             [style.background]="layer.active ? 'rgba(74,158,255,0.12)' : 'transparent'"
+             style="display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;cursor:pointer;margin-bottom:2px;">
+            <!-- Active indicator -->
+            <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;"
+                  [style.background]="layer.active ? '#4a9eff' : 'transparent'"></span>
+            <!-- Eye toggle -->
+            <button (click)="$event.stopPropagation(); pkg.pkgSetLayerVisible(layer.layerId, !layer.visible)"
+                    title="Toggle visibility"
+                    style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;flex-shrink:0;line-height:1;"
+                    [style.opacity]="layer.visible ? '1' : '0.3'">●</button>
+            <!-- Kind badge -->
+            <span style="font-size:9px;color:rgba(255,255,255,0.35);flex-shrink:0;">{{ layer.kind === 'vector' ? 'vec' : 'px' }}</span>
+            <!-- Name -->
+            <span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                  [style.color]="layer.visible ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)'">{{ layer.name }}</span>
+            <!-- Opacity -->
+            <input type="range" min="0" max="1" step="0.01"
+                   [value]="layer.opacity"
+                   (input)="pkg.pkgSetLayerOpacity(layer.layerId, +$any($event.target).value, false)"
+                   (change)="pkg.pkgSetLayerOpacity(layer.layerId, +$any($event.target).value, true)"
+                   (click)="$event.stopPropagation()"
+                   style="width:44px;accent-color:#4a9eff;cursor:pointer;">
+            <!-- Remove (disabled on last raster) -->
+            <button (click)="$event.stopPropagation(); pkg.pkgRemoveLayer(layer.layerId)"
+                    title="Remove layer"
+                    [disabled]="layer.kind === 'raster' && pkg.pkgRasterLayerCount <= 1"
+                    style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:13px;padding:0 1px;line-height:1;flex-shrink:0;"
+                    [style.opacity]="layer.kind === 'raster' && pkg.pkgRasterLayerCount <= 1 ? '0.2' : '1'">✕</button>
+        </div>
+        <!-- Place mode hint + stamp kit button when active layer is vector -->
+        <div *ngIf="!pkg.pkgIsActivePaintable"
+             style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:10px;color:rgba(255,200,80,0.8);line-height:1.4;">
+                Vector layer active — place mode
+            </div>
+            <button (click)="openEphemera.emit()"
+                    style="background:#2a2a2a;border:1px solid #555;color:#ccc;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer;text-align:left;">
+                ✦ Stamp Kit
+            </button>
+        </div>
+    </div>
+    <!-- Brush (paint mode only) -->
+    <div *ngIf="pkg.pkgIsActivePaintable"
+         style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <app-brush-options [activeRasterTool]="'brush'"></app-brush-options>
+    </div>
+    <!-- Guides -->
+    <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="font-size:10px;font-weight:700;color:rgba(74,158,255,0.9);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Guides</div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:5px;cursor:pointer;">
+            <input type="checkbox" [checked]="pkg.pkgGuideTypes.has('cut')"   (change)="pkg.pkgToggleGuide('cut',   $any($event.target).checked)" style="accent-color:#4a9eff;"> Cut
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:5px;cursor:pointer;">
+            <input type="checkbox" [checked]="pkg.pkgGuideTypes.has('fold')"  (change)="pkg.pkgToggleGuide('fold',  $any($event.target).checked)" style="accent-color:#4a9eff;"> Fold
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:5px;cursor:pointer;">
+            <input type="checkbox" [checked]="pkg.pkgGuideTypes.has('bleed')" (change)="pkg.pkgToggleGuide('bleed', $any($event.target).checked)" style="accent-color:#4a9eff;"> Bleed
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:5px;cursor:pointer;">
+            <input type="checkbox" [checked]="pkg.pkgGuideTypes.has('panel')" (change)="pkg.pkgToggleGuide('panel', $any($event.target).checked)" style="accent-color:#4a9eff;"> Panel
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;cursor:pointer;">
+            <input type="checkbox" [checked]="pkg.pkgGuideTypes.has('slit')" (change)="pkg.pkgToggleGuide('slit', $any($event.target).checked)" style="accent-color:#4a9eff;"> Slit
+        </label>
+    </div>
+    <!-- Export -->
+    <div>
+        <div style="font-size:10px;font-weight:700;color:rgba(74,158,255,0.9);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Export</div>
+        <button (click)="pkg.pkgExportDieline()"
+                style="width:100%;background:#2a2a2a;border:1px solid #555;color:#ccc;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">↓ Dieline PNG</button>
+    </div>
+    <!-- Hint -->
+    <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.35);line-height:1.5;">
+        left-drag to paint · erase = back to cardboard
+    </div>
+</div>

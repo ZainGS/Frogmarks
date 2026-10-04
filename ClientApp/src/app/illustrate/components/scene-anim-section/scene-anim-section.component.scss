@@ -1,0 +1,9 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-anim-grid {
+    .scene3d-vec3-label {
+        width: 36px;
+    }
+}

@@ -1,0 +1,31 @@
+<details class="scene3d-details" *ngIf="anim.scene3dCameraNodes.length > 0" open>
+    <summary>Cinematic Cameras</summary>
+    <!-- Preview toggle -->
+    <div class="scene3d-row">
+        <button class="scene3d-btn" [class.scene3d-btn-active]="anim.scene3dCutPreviewOn"
+                (click)="anim.scene3dToggleCutPreview()"
+                [title]="anim.scene3dCutPreviewOn ? 'Stop previewing through camera cuts' : 'Preview render through camera cuts'">
+            {{ anim.scene3dCutPreviewOn ? '⏹ Stop Preview' : '▶ Preview Cuts' }}
+        </button>
+        <button class="scene3d-btn" (click)="anim.scene3dExportCinematic()"
+                title="Export frames rendered through the cut sequence">Export…</button>
+    </div>
+    <!-- Camera list -->
+    <div *ngFor="let cam of anim.scene3dCameraNodes" class="scene3d-cam-row">
+        <span class="scene3d-cam-name">📷 {{ cam.name }}</span>
+        <button class="scene3d-cam-btn"
+                [class.active]="anim.scene3dLookThroughId === cam.id"
+                (click)="anim.scene3dToggleLookThrough(cam.id)"
+                title="Look through this camera">👁</button>
+        <button class="scene3d-cam-btn scene3d-cam-del"
+                (click)="anim.scene3dDeleteCamera(cam.id)"
+                title="Delete camera">✕</button>
+    </div>
+    <!-- Cut list -->
+    <div *ngIf="anim.scene3dCameraCuts.length > 0" style="margin-top:6px;font-size:9px;color:#aaa;padding:0 4px">
+        Cuts: {{ anim.scene3dCameraCuts.length }}
+    </div>
+    <button *ngIf="anim.scene3dCameraCuts.length > 0" class="scene3d-btn" style="margin-top:4px"
+            (click)="anim.scene3dClearAllCuts()"
+            title="Remove all camera cuts">Clear All Cuts</button>
+</details>

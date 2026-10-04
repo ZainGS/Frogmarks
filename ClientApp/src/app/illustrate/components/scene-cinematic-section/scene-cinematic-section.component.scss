@@ -1,0 +1,48 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-cam-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px;
+    border-radius: 3px;
+    background: rgba(#1a1a2e, 0.5);
+    margin-bottom: 2px;
+
+    .scene3d-cam-name {
+        flex: 1;
+        font-size: 10px;
+        color: #ccc;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+.scene3d-cam-btn {
+    font-size: 10px;
+    background: none;
+    border: 1px solid rgba(#fff, 0.15);
+    color: #aaa;
+    border-radius: 3px;
+    padding: 1px 5px;
+    cursor: pointer;
+    line-height: 1.2;
+    flex-shrink: 0;
+
+    &:hover { background: rgba(#fff, 0.1); color: #fff; }
+
+    &.active {
+        background: rgba(#9B59B6, 0.35);
+        border-color: #9B59B6;
+        color: #d4aaef;
+    }
+
+    &.scene3d-cam-del:hover {
+        background: rgba(#e53935, 0.3);
+        border-color: #e53935;
+        color: #ff8a80;
+    }
+}

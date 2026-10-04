@@ -11,6 +11,6 @@ export class AppComponent implements OnInit {
   constructor(private skinService: FroguiSkinService) {}
 
   ngOnInit(): void {
-    this.skinService.loadPersistedSkin();
+    void this.skinService.loadPersistedSkin();
   }
 }

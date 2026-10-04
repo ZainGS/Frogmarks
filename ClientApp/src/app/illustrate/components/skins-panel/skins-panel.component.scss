@@ -1,0 +1,3 @@
+// Shared editor controls (buttons, rows, selects) — same rules the editor uses, so this panel renders identically.
+@import '../../styles/panel-controls';
+:host { display: block; }

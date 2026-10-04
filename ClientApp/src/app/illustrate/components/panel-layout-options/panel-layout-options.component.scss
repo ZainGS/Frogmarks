@@ -1,0 +1,17 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.pl-create-btn {
+    width: 100%;
+    background: #9B59B6;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    padding: 6px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    margin-top: 2px;
+
+    &:hover { background: #8e44ad; }
+}

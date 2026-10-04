@@ -1,0 +1,3 @@
+{
+  "// note": "Known problems (2026-10-04) that check-source-sanity.mjs reports but does not fail on (files were being edited concurrently, so not repaired). Fix the file, then delete its entry. See salsa-tracker.md (checks + CI)."
+}

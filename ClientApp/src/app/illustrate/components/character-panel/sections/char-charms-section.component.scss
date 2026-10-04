@@ -1,0 +1,20 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-charm-group-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    user-select: none;
+    transition: background 0.12s;
+
+    &:hover { background: rgba(255, 255, 255, 0.08); }
+}
+

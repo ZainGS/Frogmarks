@@ -88,7 +88,7 @@ export class FrogFileService {
     illustrationName: string,
     canvas: HTMLCanvasElement | null,
   ): Promise<void> {
-    const sm = this.sm as any;
+    const sm = this.sm;
     if (!sm) throw new Error('ShapeManager not available');
 
     console.log('[FrogFile] starting export…');
@@ -102,7 +102,7 @@ export class FrogFileService {
     zip.file(SCENE_FILE, sceneGraph);
 
     // ── 3. Manifest (metadata only, no pixel data) ──
-    const documentSize = sm.getDocumentSize?.() ?? null;
+    const documentSize = sm.getDocumentSize() ?? null;
     const manifest: FrogManifest = {
       version: state.version,
       name: illustrationName || 'Untitled',
@@ -120,7 +120,7 @@ export class FrogFileService {
       if (sm.captureDocumentBoundsToBlob) {
         thumbBlob = await sm.captureDocumentBoundsToBlob('jpeg', 512);
       } else {
-        thumbBlob = await sm.captureThumbnailBlob?.(512);
+        thumbBlob = await sm.captureThumbnailBlob(512);
       }
       if (thumbBlob) zip.file(THUMBNAIL_FILE, thumbBlob);
     } catch (e) {
@@ -265,10 +265,10 @@ export class FrogFileService {
     state: IllustrationStateDto;
     sceneGraph: string;
   }> {
-    const sm = this.sm as any;
-    const sceneGraph: string = sm?.getSceneGraphJSON?.() ?? '{}';
+    const sm = this.sm;
+    const sceneGraph: string = sm?.getSceneGraphJSON() ?? '{}';
 
-    const engineLayers: any[] = sm?.getRasterLayers?.() ?? [];
+    const engineLayers: any[] = sm?.getRasterLayers() ?? [];
     const timelineLayers = await firstValueFrom(this.animationService.timelineLayers$);
     const animEnabled = await firstValueFrom(this.animationService.animationEnabled$);
     const frameCount = await firstValueFrom(this.animationService.frameCount$);
@@ -283,13 +283,13 @@ export class FrogFileService {
       // Read per-layer dither config from engine (if API exists)
       let layerDither: DitherConfigDto | null = null;
       try {
-        const raw = sm?.getLayerDitherConfig?.(el.id);
+        const raw = sm?.getLayerDitherConfig(el.id);
         if (raw && raw.enabled !== undefined) layerDither = raw as DitherConfigDto;
       } catch { /* API may not exist yet */ }
       // Read per-layer frame link animation from engine (if API exists)
       let frameLinkAnim: any = null;
       try {
-        const raw = sm?.getLayerFrameLinkAnimation?.(el.id);
+        const raw = sm?.getLayerFrameLinkAnimation(el.id);
         if (raw && raw.enabled !== undefined) frameLinkAnim = raw;
       } catch { /* API may not exist yet */ }
       return {
@@ -348,11 +348,8 @@ export class FrogFileService {
   // ════════════════════════════════════════════════════════════
 
   private async getCelBlob(layerId: string, celId: string): Promise<Blob | null> {
-    const sm = this.sm as any;
+    const sm = this.sm;
     try {
-      if (sm?.getCelPixelDataBlob) {
-        return await sm.getCelPixelDataBlob(layerId, celId, 'image/webp');
-      }
       if (sm?.exportRasterLayerToBlob) {
         return await sm.exportRasterLayerToBlob(layerId, 'image/webp');
       }
@@ -363,7 +360,7 @@ export class FrogFileService {
   }
 
   private async getLayerBlob(layerId: string): Promise<Blob | null> {
-    const sm = this.sm as any;
+    const sm = this.sm;
     try {
       if (sm?.exportRasterLayerToBlob) {
         return await sm.exportRasterLayerToBlob(layerId, 'image/webp');

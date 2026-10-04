@@ -1,0 +1,70 @@
+<!-- Main picker: hue ring + swatch -->
+<div class="picker-main">
+    <div class="hue-ring" #hueRing
+         (mousedown)="onHueRingMouseDown($event)">
+        <div class="hue-ring-thumb"
+             [style.transform]="'rotate(' + persistentHue + 'deg) translateY(-63px)'">
+        </div>
+        <!-- SB square inside the ring -->
+        <div class="sb-square" #sbSquare
+             [style.background]="'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + persistentHue + ', 100%, 50%))'"
+             (mousedown)="onSbSquareMouseDown($event)">
+            <div class="sb-indicator"
+                 [style.left.%]="persistentSbX"
+                 [style.top.%]="persistentSbY">
+            </div>
+        </div>
+    </div>
+    <!-- Current color swatch -->
+    <div class="persistent-swatch-row">
+        <div class="persistent-swatch" [style.background-color]="color"></div>
+        <input type="text" class="persistent-hex-input"
+               [ngModel]="color"
+               (ngModelChange)="onPersistentHexInput($event)">
+        <input type="number" class="persistent-opacity-input"
+               min="0" max="100" step="1"
+               [value]="persistentOpacity"
+               (change)="onPersistentOpacityChange($event)"
+               title="Opacity">
+        <span class="persistent-opacity-pct">%</span>
+    </div>
+</div>
+<!-- Recent colors — vertical strip on the right -->
+<div class="recent-colors-row">
+    <ng-container *ngFor="let i of [0,1,2,3,4,5,6]">
+        <ng-container *ngIf="recentColors[i] as c; else colorPlaceholder">
+            <div class="recent-color-dot"
+                 [style.background-color]="c"
+                 [class.recent-color-dot--active]="c === color"
+                 (click)="pickRecent.emit(c)"
+                 [title]="c"></div>
+        </ng-container>
+        <ng-template #colorPlaceholder>
+            <div class="recent-color-dot recent-color-dot--placeholder"></div>
+        </ng-template>
+    </ng-container>
+</div>
+<!-- Utility actions column -->
+<div class="picker-actions">
+    <!-- Foreground / secondary swap -->
+    <div class="picker-swap" (click)="swap.emit()" title="Swap primary ↔ secondary color">
+        <div class="swap-bg-square" [style.background]="secondaryColor"></div>
+        <div class="swap-fg-square" [style.background]="color"></div>
+        <span class="swap-icon">↺</span>
+    </div>
+    <!-- Reset to black/white -->
+    <button class="picker-action-btn" (click)="resetColors.emit()" title="Reset to black / white">
+        <span class="reset-icon">
+            <span class="reset-white"></span>
+            <span class="reset-black"></span>
+        </span>
+    </button>
+    <!-- Palette (placeholder) -->
+    <button class="picker-action-btn" title="Palette (coming soon)" disabled>
+        ▦
+    </button>
+    <!-- Eyedropper (placeholder) -->
+    <button class="picker-action-btn" title="Sample from canvas (coming soon)" disabled>
+        ⊕
+    </button>
+</div>

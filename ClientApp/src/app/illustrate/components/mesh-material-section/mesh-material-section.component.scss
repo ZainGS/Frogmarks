@@ -1,0 +1,37 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-submesh-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.scene3d-submesh-slot {
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 6px;
+    background: rgba(255,255,255,0.03);
+}
+
+.scene3d-submesh-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.scene3d-submesh-label-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    color: #e0e0e0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 2px;
+    outline: none;
+
+    &:focus { border-bottom-color: #6C63FF; }
+}

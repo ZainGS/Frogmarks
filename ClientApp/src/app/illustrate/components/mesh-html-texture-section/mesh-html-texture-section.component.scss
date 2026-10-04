@@ -1,0 +1,19 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-html-editor {
+    display: block;
+    width: calc(100% - 16px);
+    margin: 4px 8px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #b0c4de;
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 11px;
+    padding: 6px 8px;
+    resize: vertical;
+    line-height: 1.5;
+    &:focus { outline: 1px solid #9B59B6; border-color: #9B59B6; }
+}

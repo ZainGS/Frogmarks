@@ -1,0 +1,16 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+// The editor's Bootstrap overrides (copied verbatim — they sit before the partial import point in the editor).
+.form-select-sm {
+    font-size: 0.875rem;
+    background-color: #444;
+    border-color: #555;
+    color: white;
+}
+
+.form-select-sm:focus {
+    border-color: #9B59B6;
+    box-shadow: 0 0 0 0.2rem rgba(155, 89, 182, 0.25);
+}

@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Frogmarks.Models
@@ -9,6 +10,8 @@ namespace Frogmarks.Models
         public string? ModifiedById { get; set; }
 
         [ForeignKey("ModifiedById")]
+        // Never serialized: it would expose the user record (password hash, tokens) — security audit 2026-10-04, Phase 1.8
+        [JsonIgnore]
         public virtual ApplicationUser? ModifiedBy { get; set; }
 
         public DateTime Created { get; set; }
@@ -22,6 +25,7 @@ namespace Frogmarks.Models
         public string? CreatedById { get; set; } = null;
 
         [ForeignKey("CreatedById")]
+        [JsonIgnore]
         public virtual ApplicationUser? CreatedBy { get; set; }
     }
 }

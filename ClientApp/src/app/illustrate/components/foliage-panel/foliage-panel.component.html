@@ -1,0 +1,372 @@
+<div class="tool-label">EDIT FOLIAGE</div>
+
+<!-- ── Type ── -->
+<div class="scene3d-array-strip-label">Type</div>
+<div class="scene3d-material-row">
+    <label>Type</label>
+    <select class="scene3d-select" [(ngModel)]="foliageType"
+            (ngModelChange)="scene3dApplyFoliageParam('type', $event)">
+        <option value="bush">Bush</option>
+        <option value="shrub">Shrub</option>
+        <option value="hedge">Hedge</option>
+        <option value="grass-tuft">Grass tuft</option>
+        <option value="tall-grass">Tall grass</option>
+        <option value="daisy">Daisy</option>
+        <option value="rapeseed">Rapeseed</option>
+        <option value="lavender">Lavender</option>
+        <option value="flower-bed">Flower bed</option>
+        <option value="planter">Planter</option>
+        <option value="potted">Potted</option>
+        <option value="small-tree">Small tree</option>
+        <option value="conifer">Conifer</option>
+        <option value="vine">Vine</option>
+        <option value="ivy">Ivy</option>
+        <option value="window-box">Window box</option>
+    </select>
+</div>
+<div class="scene3d-material-row">
+    <label>Seed</label>
+    <input type="number" class="scene3d-number-input" min="1" max="9999" step="1"
+           [(ngModel)]="foliageSeed"
+           (change)="scene3dApplyFoliageParam('seed', foliageSeed)">
+    <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dRandomizeFoliageSeed()" title="Randomize seed">🎲</button>
+</div>
+
+<!-- ── Shape ── -->
+<div class="scene3d-array-strip-label">Shape</div>
+<div class="scene3d-material-row">
+    <label>Size (m)</label>
+    <input type="range" min="0.2" max="12" step="0.1" [(ngModel)]="foliageSize"
+           (ngModelChange)="scene3dApplyFoliageParam('size', $event)">
+    <span class="scene3d-val">{{ foliageSize | number:'1.1-1' }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'hedge' || foliageType === 'flower-bed' || foliageType === 'vine' || foliageType === 'window-box'">
+    <label>Width (m)</label>
+    <input type="range" min="0.5" max="20" step="0.25" [(ngModel)]="foliageWidth"
+           (ngModelChange)="scene3dApplyFoliageParam('width', $event)">
+    <span class="scene3d-val">{{ foliageWidth | number:'1.1-1' }}</span>
+</div>
+<div class="scene3d-material-row">
+    <label>Density</label>
+    <input type="range" min="0" max="1" step="0.05" [(ngModel)]="foliageDensity"
+           (ngModelChange)="scene3dApplyFoliageParam('density', $event)">
+    <span class="scene3d-val">{{ foliageDensity | number:'1.2-2' }}</span>
+</div>
+
+<!-- ── Blade (grass-tuft / tall-grass only) ── -->
+<ng-container *ngIf="foliageType === 'grass-tuft' || foliageType === 'tall-grass'">
+    <div class="scene3d-array-strip-label">Blade</div>
+    <div class="scene3d-material-row">
+        <label>Curve</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="bladeCurve"
+               (ngModelChange)="scene3dApplyFoliageParam('bladeCurve', $event)">
+        <span class="scene3d-val">{{ bladeCurve | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Twist</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="bladeTwist"
+               (ngModelChange)="scene3dApplyFoliageParam('bladeTwist', $event)">
+        <span class="scene3d-val">{{ bladeTwist | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Fold</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="bladeFold"
+               (ngModelChange)="scene3dApplyFoliageParam('bladeFold', $event)">
+        <span class="scene3d-val">{{ bladeFold | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>LOD</label>
+        <select class="scene3d-select" [(ngModel)]="bladeLod"
+                (ngModelChange)="scene3dApplyFoliageParam('bladeLod', +$event)">
+            <option [ngValue]="0">Full</option>
+            <option [ngValue]="1">Medium (55%)</option>
+            <option [ngValue]="2">Low (30%)</option>
+        </select>
+    </div>
+</ng-container>
+
+<!-- ── Flower (daisy / rapeseed / lavender / flower-bed only) ── -->
+<ng-container *ngIf="foliageType === 'daisy' || foliageType === 'rapeseed' || foliageType === 'lavender' || foliageType === 'flower-bed'">
+    <div class="scene3d-array-strip-label">Flower</div>
+    <div class="scene3d-material-row">
+        <label>Bloom start</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="foliageBloomStart"
+               (ngModelChange)="scene3dApplyFoliageParam('bloomStart', $event)">
+        <span class="scene3d-val">{{ foliageBloomStart | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Scale curve</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="foliageBloomScaleCurve"
+               (ngModelChange)="scene3dApplyFoliageParam('bloomScaleCurve', $event)">
+        <span class="scene3d-val">{{ foliageBloomScaleCurve | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Petal pitch</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="foliagePetalPitch"
+               (ngModelChange)="scene3dApplyFoliageParam('petalPitch', $event)">
+        <span class="scene3d-val">{{ foliagePetalPitch | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Petal shape</label>
+        <select class="scene3d-select" [(ngModel)]="foliagePetalShape"
+                (ngModelChange)="scene3dApplyFoliageParam('petalShape', $event)">
+            <option value="rounded">Rounded</option>
+            <option value="pointed">Pointed</option>
+            <option value="notched">Notched</option>
+            <option value="strap">Strap</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Branches</label>
+        <input type="number" class="scene3d-number-input" min="0" max="10" step="1"
+               [(ngModel)]="foliageBranches"
+               (change)="scene3dApplyFoliageParam('branches', foliageBranches)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>LOD</label>
+        <select class="scene3d-select" [(ngModel)]="foliageFlowerLod"
+                (ngModelChange)="scene3dApplyFoliageParam('flowerLod', +$event)">
+            <option [ngValue]="0">Full</option>
+            <option [ngValue]="1">Medium</option>
+            <option [ngValue]="2">Low</option>
+        </select>
+    </div>
+</ng-container>
+
+<!-- ── Climber (ivy / vine only) ── -->
+<ng-container *ngIf="foliageType === 'ivy' || foliageType === 'vine'">
+    <div class="scene3d-array-strip-label">Climber</div>
+    <div class="scene3d-material-row">
+        <label>Mode</label>
+        <select class="scene3d-select" [(ngModel)]="ivyMode"
+                (ngModelChange)="scene3dApplyFoliageParam('ivyMode', $event)">
+            <option value="area">Area (wall region)</option>
+            <option value="path">Path (authored line)</option>
+        </select>
+    </div>
+    <ng-container *ngIf="ivyMode === 'area'">
+        <div class="scene3d-material-row">
+            <label>Width (m)</label>
+            <input type="range" min="0.5" max="20" step="0.25" [(ngModel)]="ivyAreaWidth"
+                   (ngModelChange)="scene3dApplyFoliageParam('areaWidth', $event)">
+            <span class="scene3d-val">{{ ivyAreaWidth | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Height (m)</label>
+            <input type="range" min="0.5" max="20" step="0.25" [(ngModel)]="ivyAreaHeight"
+                   (ngModelChange)="scene3dApplyFoliageParam('areaHeight', $event)">
+            <span class="scene3d-val">{{ ivyAreaHeight | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Coverage</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="ivyCoverage"
+                   (ngModelChange)="scene3dApplyFoliageParam('coverage', $event)">
+            <span class="scene3d-val">{{ ivyCoverage | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Growth bias</label>
+            <input type="range" min="-1" max="1" step="0.05" [(ngModel)]="ivyGrowthBias"
+                   (ngModelChange)="scene3dApplyFoliageParam('growthBias', $event)">
+            <span class="scene3d-val">{{ ivyGrowthBias | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Wander</label>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="ivyWander"
+                   (ngModelChange)="scene3dApplyFoliageParam('wander', $event)">
+            <span class="scene3d-val">{{ ivyWander | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    <div *ngIf="ivyMode === 'path'" style="font-size:11px;color:#888;padding:4px 0 4px 4px">
+        Path editor not yet available — use console: salsaFoliage.set(id, &#123; ivyMode:'path', ivyPath:[…] &#125;)
+    </div>
+    <div class="scene3d-material-row">
+        <label>Leaf density</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="ivyLeafDensity"
+               (ngModelChange)="scene3dApplyFoliageParam('leafDensity', $event)">
+        <span class="scene3d-val">{{ ivyLeafDensity | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>LOD</label>
+        <select class="scene3d-select" [(ngModel)]="ivyRunnerLod"
+                (ngModelChange)="scene3dApplyFoliageParam('runnerLod', +$event)">
+            <option [ngValue]="0">Full</option>
+            <option [ngValue]="1">Medium (55%)</option>
+            <option [ngValue]="2">Low (32%)</option>
+        </select>
+    </div>
+</ng-container>
+
+<!-- ── Woody (bush / shrub / hedge / small-tree only) ── -->
+<ng-container *ngIf="foliageType === 'bush' || foliageType === 'shrub' || foliageType === 'hedge' || foliageType === 'small-tree' || foliageType === 'conifer'">
+    <div class="scene3d-array-strip-label">Woody</div>
+    <div class="scene3d-material-row">
+        <label>Levels</label>
+        <input type="range" min="0" max="4" step="1" [(ngModel)]="branchLevels"
+               (ngModelChange)="scene3dApplyFoliageParam('branchLevels', +$event)">
+        <span class="scene3d-val">{{ branchLevels }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="foliageType !== 'hedge'">
+        <label>Stems</label>
+        <input type="range" min="1" max="10" step="1" [(ngModel)]="foliageStemCount"
+               (ngModelChange)="scene3dApplyFoliageParam('stemCount', +$event)">
+        <span class="scene3d-val">{{ foliageStemCount }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Gnarl</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="branchGnarl"
+               (ngModelChange)="scene3dApplyFoliageParam('branchGnarl', $event)">
+        <span class="scene3d-val">{{ branchGnarl | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="foliageType !== 'hedge'">
+        <label>Canopy shape</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="canopyIrregular"
+               (ngModelChange)="scene3dApplyFoliageParam('canopyIrregular', $event)">
+        <span class="scene3d-val">{{ canopyIrregular | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="foliageType !== 'hedge'">
+        <label>Leaf gaps</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="leafGaps"
+               (ngModelChange)="scene3dApplyFoliageParam('leafGaps', $event)">
+        <span class="scene3d-val">{{ leafGaps | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="foliageType === 'hedge'">
+        <label>Sprigs</label>
+        <input type="number" class="scene3d-number-input" min="0" max="20" step="1"
+               [(ngModel)]="hedgeSprigs"
+               (change)="scene3dApplyFoliageParam('hedgeSprigs', hedgeSprigs)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>LOD</label>
+        <select class="scene3d-select" [(ngModel)]="branchLod"
+                (ngModelChange)="scene3dApplyFoliageParam('branchLod', +$event)">
+            <option [ngValue]="0">Full</option>
+            <option [ngValue]="1">Medium (62%)</option>
+            <option [ngValue]="2">Low (38%)</option>
+        </select>
+    </div>
+</ng-container>
+
+<!-- ── Vessel (potted / planter / window-box only) ── -->
+<ng-container *ngIf="foliageType === 'potted' || foliageType === 'planter' || foliageType === 'window-box'">
+    <div class="scene3d-array-strip-label">Vessel</div>
+    <div class="scene3d-material-row">
+        <label>Spill</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="foliageSpill"
+               (ngModelChange)="scene3dApplyFoliageParam('spill', $event)">
+        <span class="scene3d-val">{{ foliageSpill | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Plants</label>
+        <input type="number" class="scene3d-number-input" min="1" max="10" step="1"
+               [(ngModel)]="foliagePlantCount"
+               (change)="scene3dApplyFoliageParam('plantCount', foliagePlantCount)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>LOD</label>
+        <select class="scene3d-select" [(ngModel)]="foliagePlantLod"
+                (ngModelChange)="scene3dApplyFoliageParam('plantLod', +$event)">
+            <option [ngValue]="0">Full</option>
+            <option [ngValue]="1">Medium (60%)</option>
+            <option [ngValue]="2">Low (35%)</option>
+        </select>
+    </div>
+</ng-container>
+
+<!-- ── Render ── -->
+<div class="scene3d-material-row">
+    <label>Render</label>
+    <select class="scene3d-select" [(ngModel)]="foliageRender"
+            (ngModelChange)="scene3dApplyFoliageParam('render', $event)">
+        <option value="chunky">Chunky (low-poly)</option>
+        <option value="card">Card (cluster leaves)</option>
+    </select>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageRender === 'card'">
+    <label>Cel shade</label>
+    <input type="checkbox" [(ngModel)]="foliageCelShade"
+           (ngModelChange)="scene3dApplyFoliageParam('celShade', $event)"
+           title="Toon/Ghibli look — cel-banded lighting + rim back-light">
+</div>
+
+<!-- ── Flowers / vessel ── -->
+<div class="scene3d-material-row">
+    <label>Blooms</label>
+    <input type="checkbox" [(ngModel)]="foliageBloom"
+           (ngModelChange)="scene3dApplyFoliageParam('bloom', $event)">
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'potted' || foliageType === 'planter'">
+    <label>Pot material</label>
+    <select class="scene3d-select" [(ngModel)]="foliagePotMaterial"
+            (ngModelChange)="scene3dApplyFoliageParam('potMaterial', $event)">
+        <option value="terracotta">Terracotta</option>
+        <option value="ceramic">Ceramic</option>
+        <option value="metal">Metal</option>
+        <option value="wood">Wood</option>
+        <option value="stone">Stone</option>
+    </select>
+</div>
+
+<!-- ── Color ── -->
+<div class="scene3d-array-strip-label">Color</div>
+<div class="scene3d-material-row">
+    <label>Foliage</label>
+    <input type="color" [(ngModel)]="foliageColor"
+           (ngModelChange)="scene3dApplyFoliageParam('foliageColor', $event)">
+    <span class="scene3d-val">{{ foliageColor }}</span>
+</div>
+<div class="scene3d-material-row">
+    <label>Tip</label>
+    <input type="color" [(ngModel)]="foliageTipColor"
+           (ngModelChange)="scene3dApplyFoliageParam('tipColor', $event)">
+    <span class="scene3d-val">{{ foliageTipColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageBloom">
+    <label>Bloom</label>
+    <input type="color" [(ngModel)]="foliageBloomColor"
+           (ngModelChange)="scene3dApplyFoliageParam('bloomColor', $event)">
+    <span class="scene3d-val">{{ foliageBloomColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'potted' || foliageType === 'planter'">
+    <label>Pot</label>
+    <input type="color" [(ngModel)]="foliagePotColor"
+           (ngModelChange)="scene3dApplyFoliageParam('potColor', $event)">
+    <span class="scene3d-val">{{ foliagePotColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'potted' || foliageType === 'planter' || foliageType === 'window-box'">
+    <label>Soil</label>
+    <input type="color" [(ngModel)]="foliageSoilColor"
+           (ngModelChange)="scene3dApplyFoliageParam('soilColor', $event)">
+    <span class="scene3d-val">{{ foliageSoilColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'small-tree'">
+    <label>Trunk</label>
+    <input type="color" [(ngModel)]="foliageTrunkColor"
+           (ngModelChange)="scene3dApplyFoliageParam('trunkColor', $event)">
+    <span class="scene3d-val">{{ foliageTrunkColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'ivy' || foliageType === 'vine'">
+    <label>Stem</label>
+    <input type="color" [(ngModel)]="ivyStemColor"
+           (ngModelChange)="scene3dApplyFoliageParam('stemColor', $event)">
+    <span class="scene3d-val">{{ ivyStemColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'daisy' || foliageType === 'rapeseed' || foliageType === 'lavender' || foliageType === 'flower-bed'">
+    <label>Petal</label>
+    <input type="color" [(ngModel)]="foliagePetalColor"
+           (ngModelChange)="scene3dApplyFoliageParam('petalColor', $event)">
+    <span class="scene3d-val">{{ foliagePetalColor }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="foliageType === 'daisy' || foliageType === 'rapeseed' || foliageType === 'lavender' || foliageType === 'flower-bed'">
+    <label>Center</label>
+    <input type="color" [(ngModel)]="foliageCenterColor"
+           (ngModelChange)="scene3dApplyFoliageParam('centerColor', $event)">
+    <span class="scene3d-val">{{ foliageCenterColor }}</span>
+</div>
+
+<!-- ── Actions ── -->
+<div style="margin-top:12px;display:flex;gap:6px">
+    <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="delete.emit()" title="Remove this plant">Delete</button>
+</div>
+<div style="margin-top:6px;display:flex">
+    <button class="scene3d-btn scene3d-btn-primary" style="flex:1" (click)="scene3dFoliagePromoteToLibrary()">Save to Library</button>
+</div>

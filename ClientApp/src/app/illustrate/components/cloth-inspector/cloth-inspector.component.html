@@ -1,0 +1,146 @@
+<div class="scene3d-material-row" *ngIf="clothInfoGrid">
+    <label>Grid</label>
+    <span class="scene3d-val">{{ clothInfoGrid.cols }} × {{ clothInfoGrid.rows }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="clothInfoGrid">
+    <label>Cell size</label>
+    <span class="scene3d-val">{{ clothInfoGrid.cellSize }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="clothInfoVertexCount != null">
+    <label>Vertices</label>
+    <span class="scene3d-val">{{ clothInfoVertexCount }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="clothInfoTriCount != null">
+    <label>Triangles</label>
+    <span class="scene3d-val">{{ clothInfoTriCount }}</span>
+</div>
+<div class="scene3d-material-row" *ngIf="clothInfoSim">
+    <label>Simulated</label>
+    <span class="scene3d-val">
+        {{ clothInfoSim.isSimulated ? (clothInfoSim.simulationMode | titlecase) : 'No' }}
+    </span>
+</div>
+<div class="scene3d-outliner-actions" style="margin-top:8px;gap:6px">
+    <button class="scene3d-btn" (click)="editCloth.emit()">✎ Edit Cloth…</button>
+    <button class="scene3d-btn" (click)="scene3dReSimulateCloth()">▶ Re-Simulate</button>
+</div>
+
+<div class="scene3d-major-header" style="margin-top:12px">Live Physics</div>
+<div class="scene3d-toggle-row">
+    <label>Enable</label>
+    <input type="checkbox" [checked]="clothLiveEnabled" (change)="setLiveCloth($any($event.target).checked)">
+</div>
+
+<ng-container *ngIf="clothLiveEnabled">
+    <div class="scene3d-major-header" style="margin-top:10px">Wind Animation</div>
+    <div class="scene3d-toggle-row">
+        <label>Enable</label>
+        <input type="checkbox" [checked]="clothWindEnabled" (change)="clothWindEnabled=$any($event.target).checked; applyWindAnimation()">
+    </div>
+    <ng-container *ngIf="clothWindEnabled">
+        <div class="scene3d-material-row">
+            <label>Direction</label>
+            <select class="scene3d-select" [(ngModel)]="clothWindAxis" (ngModelChange)="applyWindAnimation()">
+                <option value="x">X (Sideways)</option>
+                <option value="y">Y (Updraft)</option>
+                <option value="z">Z (Depth)</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Peak Force</label>
+            <input type="range" min="0" max="20" step="0.1" [(ngModel)]="clothWindAmplitude" (input)="applyWindAnimation()">
+            <span class="scene3d-val">{{ clothWindAmplitude | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Gust Speed</label>
+            <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="clothWindFramesPerCycle" (change)="applyWindAnimation()">
+            <span class="scene3d-val" style="font-size:10px">fr</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Phase</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="clothWindPhase" (input)="applyWindAnimation()">
+            <span class="scene3d-val">{{ clothWindPhase | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Wind Zones -->
+    <div class="scene3d-major-header" style="margin-top:12px">Wind Zones</div>
+    <div class="scene3d-wind-zone-list" *ngIf="windZones.length">
+        <div class="scene3d-wind-zone-row"
+             *ngFor="let z of windZones; let i = index"
+             [class.active]="windZoneSelectedIdx === i"
+             (click)="selectWindZone(i)">
+            <span class="scene3d-wind-zone-label">
+                Zone {{ i + 1 }} <span style="opacity:0.45">({{ z.shape }})</span>
+            </span>
+            <button class="scene3d-icon-btn" (click)="removeWindZone(i); $event.stopPropagation()" title="Remove zone">✕</button>
+        </div>
+    </div>
+    <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap">
+        <button class="scene3d-btn" (click)="addWindZone()">+ Add Zone</button>
+        <button class="scene3d-btn" *ngIf="windZones.length > 1" (click)="clearAllWindZones()">Clear All</button>
+    </div>
+
+    <ng-container *ngIf="windZoneSelectedIdx !== null">
+        <div class="scene3d-material-row" style="margin-top:6px">
+            <label>Shape</label>
+            <select class="scene3d-select" [(ngModel)]="windZoneShape" (ngModelChange)="updateSelectedWindZone()">
+                <option value="sphere">Sphere</option>
+                <option value="box">Box</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Center</label>
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[0]" (change)="updateSelectedWindZone()">
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[1]" (change)="updateSelectedWindZone()">
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneCenter[2]" (change)="updateSelectedWindZone()">
+        </div>
+        <ng-container *ngIf="windZoneShape === 'sphere'">
+            <div class="scene3d-material-row">
+                <label>Radius</label>
+                <input type="number" min="0.01" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneRadius" (change)="updateSelectedWindZone()">
+            </div>
+        </ng-container>
+        <ng-container *ngIf="windZoneShape === 'box'">
+            <div class="scene3d-material-row">
+                <label>Box Min</label>
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[0]" (change)="updateSelectedWindZone()">
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[1]" (change)="updateSelectedWindZone()">
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMin[2]" (change)="updateSelectedWindZone()">
+            </div>
+            <div class="scene3d-material-row">
+                <label>Box Max</label>
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[0]" (change)="updateSelectedWindZone()">
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[1]" (change)="updateSelectedWindZone()">
+                <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneBoxMax[2]" (change)="updateSelectedWindZone()">
+            </div>
+        </ng-container>
+        <div class="scene3d-material-row">
+            <label>Wind</label>
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindX" (change)="updateSelectedWindZone()" placeholder="X">
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindY" (change)="updateSelectedWindZone()" placeholder="Y">
+            <input type="number" step="0.1" class="scene3d-input-small" [(ngModel)]="windZoneWindZ" (change)="updateSelectedWindZone()" placeholder="Z">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Falloff</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZoneFalloff" (input)="updateSelectedWindZone()">
+            <span class="scene3d-val">{{ windZoneFalloff | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-toggle-row">
+            <label>Pulse</label>
+            <input type="checkbox" [(ngModel)]="windZonePulseEnabled" (ngModelChange)="updateSelectedWindZone()">
+        </div>
+        <ng-container *ngIf="windZonePulseEnabled">
+            <div class="scene3d-material-row">
+                <label>Period</label>
+                <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="windZonePulsePeriod" (change)="updateSelectedWindZone()">
+                <span class="scene3d-val" style="font-size:10px">fr</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Phase</label>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZonePulsePhase" (input)="updateSelectedWindZone()">
+                <span class="scene3d-val">{{ windZonePulsePhase | number:'1.2-2' }}</span>
+            </div>
+        </ng-container>
+    </ng-container>
+</ng-container>

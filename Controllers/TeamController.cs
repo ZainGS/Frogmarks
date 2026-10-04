@@ -1,23 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Frogmarks.Models.Dtos;
 using Frogmarks.Models.Team;
 using Frogmarks.Services;
 using Frogmarks.Services.Interfaces;
 using Frogmarks.Utilities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Frogmarks.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]   // was anonymous (security audit 2026-10-04, Phase 1.3)
     public class TeamController : BaseController
     {
         private readonly ITeamService _teamService;
+        private readonly IResourceAccessService _access;
 
-        public TeamController(ITeamService teamService, IErrorService errorService) : base(errorService)
+        public TeamController(ITeamService teamService, IResourceAccessService access, IErrorService errorService) : base(errorService)
         {
             _teamService = teamService;
+            _access = access;
         }
 
         // GET: api/Team
@@ -27,7 +33,8 @@ namespace Frogmarks.Controllers
             try
             {
                 var result = await _teamService.GetAllTeams();
-                return Ok(result);
+                var mine = await _access.GetMyTeamIdsAsync();   // only your teams (was every team)
+                return Ok(new ResultModel<IEnumerable<TeamDto>>(result.ResultType, resultObject: (result.ResultObject ?? Enumerable.Empty<TeamDto>()).Where(t => mine.Contains(t.Id)).ToList()));
             }
             catch (Exception ex)
             {
@@ -41,6 +48,7 @@ namespace Frogmarks.Controllers
         {
             try
             {
+                if (!await _access.IsMemberOfTeamAsync(id)) return NotFound();
                 var result = await _teamService.GetTeamById(id);
                 if (result.ResultType == ResultType.NotFound)
                 {
@@ -83,6 +91,7 @@ namespace Frogmarks.Controllers
                 {
                     return BadRequest("ID mismatch");
                 }
+                if (!await _access.IsMemberOfTeamAsync(id)) return NotFound();   // members only (audit Phase 1.3)
 
                 var result = await _teamService.UpdateTeam(team);
                 if (result.ResultType == ResultType.NotFound)
@@ -107,6 +116,7 @@ namespace Frogmarks.Controllers
         {
             try
             {
+                if (!await _access.IsMemberOfTeamAsync(id)) return NotFound();   // members only (audit Phase 1.3)
                 var result = await _teamService.DeleteTeam(id);
                 if (result.ResultType == ResultType.NotFound)
                 {
@@ -132,7 +142,8 @@ namespace Frogmarks.Controllers
             try
             {
                 var result = await _teamService.SearchTeams(filterQuery, sortBy, sortDirection, pageIndex, pageSize);
-                return Ok(result);
+                var mine = await _access.GetMyTeamIdsAsync();   // only your teams
+                return Ok(new ResultModel<IEnumerable<TeamDto>>(result.ResultType, resultObject: (result.ResultObject ?? Enumerable.Empty<TeamDto>()).Where(t => mine.Contains(t.Id)).ToList()));
             }
             catch (Exception ex)
             {
@@ -143,6 +154,8 @@ namespace Frogmarks.Controllers
         [HttpGet("User/{userId}")]
         public async Task<IActionResult> GetTeamsByApplicationUserId(string userId)
         {
+            // Only your own teams (this also creates a default team for the id when it has none)
+            if (userId != User.FindFirstValue(ClaimTypes.NameIdentifier)) return Forbid();
             try
             {
                 var result = await _teamService.GetTeamsByApplicationUserId(userId);

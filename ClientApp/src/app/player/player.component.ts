@@ -12,7 +12,7 @@ import { PlayerCartService } from '../shared/services/player-cart.service';
 })
 export class PlayerComponent implements OnInit, OnDestroy {
 
-  private _sm: any = null;
+  private _sm: ShapeManager = null;
   private _rafId: number | null = null;
   private _lastT = 0;
   private _dragCounter = 0;
@@ -35,12 +35,12 @@ export class PlayerComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const pending = this.playerCartService.pendingCart;
     this.playerCartService.pendingCart = null;
-    if (pending) this._loadCart(pending);
+    if (pending) void this._loadCart(pending);
   }
 
   ngOnDestroy(): void {
     this._stopTick();
-    this._sm?.exitUIPlayerMode?.();
+    this._sm?.exitUIPlayerMode();
     if (this._msgListener) {
       window.removeEventListener('message', this._msgListener);
       this._msgListener = null;
@@ -69,12 +69,12 @@ export class PlayerComponent implements OnInit, OnDestroy {
     this._dragCounter = 0;
     this.isDragOver = false;
     const file = e.dataTransfer?.files?.[0];
-    if (file) this._loadCart(file);
+    if (file) void this._loadCart(file);
   }
 
   onFileInput(e: Event): void {
     const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) this._loadCart(file);
+    if (file) void this._loadCart(file);
   }
 
   // ── Load ─────────────────────────────────────────────────────
@@ -89,9 +89,9 @@ export class PlayerComponent implements OnInit, OnDestroy {
         await reinitializeWebGPURendering('playerCanvas');
       }
       this._sm = ShapeManager.getInstance();
-      await this._sm.whenWebGPUReady?.();
+      await this._sm.whenWebGPUReady();
 
-      const result = await this._sm.importFrogcart?.(blob);
+      const result = await this._sm.importFrogcart(blob);
       if (!result) throw new Error('importFrogcart returned null');
 
       this.cartTitle  = result.manifest?.title  ?? '';
@@ -99,9 +99,10 @@ export class PlayerComponent implements OnInit, OnDestroy {
 
       // Deep-link: ?state= overrides the cart's configured initial state
       const deepState = this.route.snapshot.queryParamMap.get('state') ?? undefined;
-      const initialState = deepState ?? result.config?.initialState ?? undefined;
+      // (was result.config — never existed, so the cart's configured initial state was always ignored)
+      const initialState = deepState ?? result.playerConfig?.initialState ?? undefined;
 
-      this._sm.enterUIPlayerMode?.(initialState);
+      this._sm.enterUIPlayerMode(initialState);
       this._wireBridge();
 
       this.isLoaded = true;
@@ -121,7 +122,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
   /** Forward engine UI events to the embedding page. */
   private _wireBridge(): void {
     // Outbound: engine events → parent window
-    this._sm?.onUIEvent?.((event: { name: string; payload?: any }) => {
+    this._sm?.onUIEvent((event) => {
       this._postToParent({ type: 'uiEvent', event });
     });
 
@@ -143,14 +144,20 @@ export class PlayerComponent implements OnInit, OnDestroy {
     const sm = this._sm;
     if (!sm) return;
     switch (data.type) {
-      case 'goToState':
-        sm.goToUIState?.(data.stateId);
+      // The engine keys states/variables by UI layer; the host may name one, else use the active layer.
+      // (Previously the layer argument was missing, so both commands silently did nothing.)
+      case 'goToState': {
+        const layerId = data.layerId ?? sm.activeUILayerId;
+        if (layerId) sm.goToUIState(layerId, data.stateId);
         break;
-      case 'setVariable':
-        sm.setUIVariable?.(data.name, data.value);
+      }
+      case 'setVariable': {
+        const layerId = data.layerId ?? sm.activeUILayerId;
+        if (layerId) sm.setUIVariable(layerId, data.name, data.value);
         break;
+      }
       case 'playSound':
-        sm.playUISound?.(data.soundId);
+        sm.playUISound(data.soundId);
         break;
     }
   }
@@ -161,7 +168,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
     this._lastT = performance.now();
     this.ngZone.runOutsideAngular(() => {
       const loop = (now: number) => {
-        this._sm?.tickUI?.(now - this._lastT);
+        this._sm?.tickUI(now - this._lastT);
         this._lastT = now;
         this._rafId = requestAnimationFrame(loop);
       };
@@ -176,6 +183,6 @@ export class PlayerComponent implements OnInit, OnDestroy {
   // ── Nav ──────────────────────────────────────────────────────
 
   goHome(): void {
-    this.router.navigate(['/']);
+    void this.router.navigate(['/']);
   }
 }

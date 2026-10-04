@@ -1,0 +1,39 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-blend-name {
+    font-size: 10px;
+    color: rgba(255,255,255,0.6);
+    min-width: 60px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.scene3d-blend-kf-btn {
+    background: none;
+    border: 1px solid #555;
+    color: #555;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    font-size: 9px;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s, border-color 0.1s;
+
+    &:hover { border-color: #ffe082; color: #ffe082; }
+
+    &.has-kf {
+        color: #ffe082;
+        border-color: #ffe082;
+        background: rgba(#ffe082, 0.15);
+    }
+}

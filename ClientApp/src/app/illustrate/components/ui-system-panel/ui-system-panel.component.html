@@ -1,0 +1,425 @@
+<div class="ui-sys-panel">
+
+  <!-- Empty state: no layers yet -->
+  <div *ngIf="uiLayers.length === 0" class="ui-empty-state">
+    <div class="ui-empty-icon">🎮</div>
+    <div class="ui-empty-msg">No UI layers yet.<br>Create one to start building interactive menus and HUDs.</div>
+    <button class="ui-create-first-btn" (click)="uiAddLayer()">+ Create UI Layer</button>
+  </div>
+
+  <ng-container *ngIf="uiLayers.length > 0">
+
+    <!-- Layer tab strip -->
+    <div class="ui-layer-bar">
+      <div *ngFor="let l of uiLayers"
+           class="ui-layer-tab"
+           [class.ui-layer-tab--active]="l.id === uiActiveLayerId"
+           (click)="uiSelectLayer(l.id)">
+        <span>{{ l.name }}</span>
+        <span class="ui-layer-del" (click)="uiDeleteLayer(l.id); $event.stopPropagation()" title="Delete layer">✕</span>
+      </div>
+      <button class="ui-layer-add" (click)="uiAddLayer()" title="Add UI layer">+</button>
+    </div>
+
+    <!-- Preview bar -->
+    <div class="ui-preview-bar">
+      <button class="ui-preview-btn"
+              [class.ui-preview-btn--on]="uiPreviewOn"
+              (click)="uiTogglePreview()">
+        {{ uiPreviewOn ? '⏹ Stop Preview' : '▶ Preview' }}
+      </button>
+      <span *ngIf="uiPreviewOn && uiCurrentStateId" class="ui-cur-state-pill">{{ uiGetState(uiCurrentStateId)?.name || uiCurrentStateId }}</span>
+      <span *ngIf="!uiPreviewOn" class="ui-preview-hint">Off — editing mode</span>
+    </div>
+
+    <!-- ── States ── -->
+    <div *ngIf="uiActiveMachine" class="ui-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">States</span>
+        <button class="ui-sec-add" (click)="uiAddingState = !uiAddingState" title="Add state">+</button>
+      </div>
+
+      <div *ngIf="uiAddingState" class="ui-inline-form">
+        <input class="ui-input" [(ngModel)]="uiNewStateName" placeholder="State name…"
+               (keydown.enter)="uiAddState()" (keydown.escape)="uiAddingState=false; uiNewStateName=''">
+        <button class="ui-form-btn" (click)="uiAddState()">Add</button>
+        <button class="ui-form-cancel" (click)="uiAddingState=false; uiNewStateName=''">✕</button>
+      </div>
+
+      <div *ngFor="let s of uiActiveMachine.states"
+           class="ui-state-row"
+           [class.ui-state-row--sel]="s.id === uiSelectedStateId"
+           [class.ui-state-row--live]="uiPreviewOn && s.id === uiCurrentStateId"
+           (click)="uiSelectState(s.id)">
+        <span class="ui-dot" [class.ui-dot--on]="uiPreviewOn && s.id === uiCurrentStateId"></span>
+        <span class="ui-state-name">{{ s.name }}</span>
+        <span *ngIf="s.id === uiActiveMachine.initialStateId" class="ui-badge">start</span>
+        <span *ngIf="s.worldBlur > 0" class="ui-badge ui-badge--modal">modal</span>
+        <div class="ui-row-end">
+          <button *ngIf="s.id !== uiActiveMachine.initialStateId" class="ui-icon-btn"
+                  (click)="uiSetInitialState(s.id); $event.stopPropagation()" title="Set as start state">⊙</button>
+          <button *ngIf="uiPreviewOn" class="ui-icon-btn ui-icon-btn--go"
+                  (click)="uiGoToState(s.id); $event.stopPropagation()" title="Jump to state in preview">▶</button>
+          <button class="ui-icon-btn ui-icon-btn--del"
+                  (click)="uiDeleteState(s.id); $event.stopPropagation()" title="Delete state">✕</button>
+        </div>
+      </div>
+
+      <!-- Selected state details -->
+      <div *ngIf="uiSelectedStateId && uiGetState(uiSelectedStateId) as s" class="ui-state-detail">
+
+        <!-- ── Shape visibility in this state ── -->
+        <div class="ui-subsec-header">
+          <span>Shapes in this state</span>
+        </div>
+        <div *ngIf="uiStateShapeRows.length === 0" class="ui-empty-row">No shapes bound — select a shape in the canvas, then add it</div>
+        <div *ngFor="let r of uiStateShapeRows; trackBy: uiTrackByShapeId" class="ui-interaction-row">
+          <span class="ui-int-id" [title]="r.shapeId">{{ r.name }}</span>
+          <label class="ui-check-label" title="Visible when this state is active">
+            <input type="checkbox" [checked]="r.visible" (change)="uiToggleStateShape(r.shapeId)"> visible
+          </label>
+          <button class="ui-icon-btn ui-icon-btn--del" (click)="uiRemoveStateShape(r.shapeId)" title="Unbind from this state">✕</button>
+        </div>
+        <div class="ui-detail-row">
+          <button class="ui-assign-btn" [disabled]="!uiSelectedShapeId" (click)="uiAddSelectedShapeToState()"
+                  [title]="uiSelectedShapeId ? 'Bind the shape selected in the canvas to this state' : 'Select a shape in the canvas first (arrow tool)'">
+            + Add selected shape</button>
+          <span *ngIf="uiSelectedShapeId" class="ui-assign-id" [title]="uiSelectedShapeId">{{ uiSelectedShapeId | slice:0:10 }}…</span>
+        </div>
+
+        <!-- ── Vector layer visibility in this state ── -->
+        <div *ngIf="uiStateLayerRows.length > 0" class="ui-subsec-header"><span>Vector layers</span></div>
+        <div *ngFor="let l of uiStateLayerRows" class="ui-detail-row">
+          <span class="ui-label" [title]="l.id">{{ l.name }}</span>
+          <select class="ui-select-sm" [ngModel]="l.mode" (ngModelChange)="uiSetStateLayerMode(l.id, $event)">
+            <option value="">—</option>
+            <option value="show">Show</option>
+            <option value="hide">Hide</option>
+          </select>
+        </div>
+
+        <!-- Frozen -->
+        <div class="ui-detail-row">
+          <label class="ui-check-label" title="Pause the world while in this state (menus, dialogs)">
+            <input type="checkbox" [ngModel]="s.frozen ?? false"
+                   (ngModelChange)="uiSetStateField(uiSelectedStateId, 'frozen', $event)"> Frozen (pause world)
+          </label>
+        </div>
+
+        <!-- worldBlur dim slider -->
+        <div class="ui-detail-row">
+          <span class="ui-label">Dim world</span>
+          <input type="range" min="0" max="20" step="0.5" class="ui-slider"
+                 [ngModel]="s.worldBlur || 0"
+                 (ngModelChange)="uiSetStateField(uiSelectedStateId, 'worldBlur', +$event)">
+          <span class="ui-val">{{ s.worldBlur || 0 }}</span>
+        </div>
+        <div *ngIf="s.worldBlur > 0" class="ui-hint-row">Requires layer backgroundOverlay color (set by default on create)</div>
+
+        <!-- Transitions from this state -->
+        <div class="ui-subsec-header">
+          <span>Transitions</span>
+          <button class="ui-sec-add" (click)="uiAddTransitionFromSelected()" title="Add transition from this state">+</button>
+        </div>
+        <div *ngIf="uiTransitionsFrom(uiSelectedStateId).length === 0" class="ui-empty-row">
+          None — add one with +
+        </div>
+        <div *ngFor="let t of uiTransitionsFrom(uiSelectedStateId)"
+             class="ui-trans-row"
+             [class.ui-trans-row--sel]="t.id === uiSelectedTransitionId"
+             (click)="uiSelectedTransitionId = (uiSelectedTransitionId === t.id ? null : t.id); $event.stopPropagation()">
+          <span class="ui-trigger-chip">{{ uiTriggerLabel(t.trigger) }}</span>
+          <span class="ui-arrow">→</span>
+          <span class="ui-target-name">{{ uiGetState(t.toState)?.name || t.toState }}</span>
+          <span *ngIf="t.animation?.type && t.animation.type !== 'none'" class="ui-anim-badge">{{ t.animation.type }}</span>
+          <button class="ui-icon-btn ui-icon-btn--del"
+                  (click)="uiDeleteTransition(t.id); $event.stopPropagation()" title="Delete transition">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Global Transitions ── -->
+    <div *ngIf="uiActiveMachine" class="ui-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">Global Transitions</span>
+        <button class="ui-sec-add" (click)="uiAddGlobalTransition()" title="Add global transition (fires from any state)">+</button>
+      </div>
+      <div *ngIf="uiGlobalTransitions().length === 0" class="ui-empty-row">
+        None — e.g. Escape → Pause (fires from any state)
+      </div>
+      <div *ngFor="let t of uiGlobalTransitions()"
+           class="ui-trans-row"
+           [class.ui-trans-row--sel]="t.id === uiSelectedTransitionId"
+           (click)="uiSelectedStateId = null; uiSelectedTransitionId = (uiSelectedTransitionId === t.id ? null : t.id)">
+        <span class="ui-trigger-chip">{{ uiTriggerLabel(t.trigger) }}</span>
+        <span class="ui-arrow">→</span>
+        <span class="ui-target-name">{{ uiGetState(t.toState)?.name || t.toState }}</span>
+        <span *ngIf="t.animation?.type && t.animation.type !== 'none'" class="ui-anim-badge">{{ t.animation.type }}</span>
+        <button class="ui-icon-btn ui-icon-btn--del"
+                (click)="uiDeleteTransition(t.id); $event.stopPropagation()" title="Delete transition">✕</button>
+      </div>
+    </div>
+
+    <!-- ── Transition Editor (unified, any selected transition) ── -->
+    <div *ngIf="uiSelectedTransitionId && uiGetTransition(uiSelectedTransitionId) as t" class="ui-section ui-trans-edit-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">Edit Transition</span>
+        <button class="ui-form-cancel" (click)="uiSelectedTransitionId = null">✕</button>
+      </div>
+
+      <!-- Trigger type -->
+      <div class="ui-editor-row">
+        <span class="ui-label">Trigger</span>
+        <select class="ui-select" [$any(t).trigger?.type]="$any(t).trigger?.type"
+                [ngModel]="$any(t).trigger?.type"
+                (ngModelChange)="uiSetTransitionTriggerType($any(t).id, $event)">
+          <option value="click">Click on shape</option>
+          <option value="keyDown">Key down</option>
+          <option value="timer">Timer</option>
+          <option value="stateEnter">State enter</option>
+        </select>
+      </div>
+
+      <!-- click: shape target -->
+      <div *ngIf="$any(t).trigger?.type === 'click'" class="ui-editor-row">
+        <span class="ui-label">Shape</span>
+        <span class="ui-shape-id" [title]="$any(t).trigger.targetId">
+          {{ $any(t).trigger.targetId ? ($any(t).trigger.targetId | slice:0:8) + '…' : '(none selected)' }}
+        </span>
+        <button class="ui-form-btn" *ngIf="uiSelectedShapeId"
+                (click)="uiSetTransitionTriggerField($any(t).id, 'targetId', uiSelectedShapeId!)"
+                title="Use currently selected viewport shape">Use selected</button>
+      </div>
+
+      <!-- keyDown: key -->
+      <div *ngIf="$any(t).trigger?.type === 'keyDown'" class="ui-editor-row">
+        <span class="ui-label">Key</span>
+        <input class="ui-input" placeholder="e.g. Escape, Enter, ArrowUp"
+               [ngModel]="$any(t).trigger.key"
+               (ngModelChange)="uiSetTransitionTriggerField($any(t).id, 'key', $event)">
+      </div>
+
+      <!-- timer: delay -->
+      <div *ngIf="$any(t).trigger?.type === 'timer'" class="ui-editor-row">
+        <span class="ui-label">Delay</span>
+        <input class="ui-input ui-input--num" type="number" min="0" step="100"
+               [ngModel]="$any(t).trigger.delay"
+               (ngModelChange)="uiSetTransitionTriggerField($any(t).id, 'delay', +$event)">
+        <span class="ui-val">ms</span>
+      </div>
+
+      <!-- stateEnter: which state -->
+      <div *ngIf="$any(t).trigger?.type === 'stateEnter'" class="ui-editor-row">
+        <span class="ui-label">When state</span>
+        <select class="ui-select" [ngModel]="$any(t).trigger.stateId"
+                (ngModelChange)="uiSetTransitionTriggerField($any(t).id, 'stateId', $event)">
+          <option *ngFor="let s of uiActiveMachine.states" [value]="s.id">{{ s.name }}</option>
+        </select>
+      </div>
+
+      <!-- Target state (go to) -->
+      <div class="ui-editor-row">
+        <span class="ui-label">Go to</span>
+        <select class="ui-select" [ngModel]="$any(t).toState"
+                (ngModelChange)="uiSetTransitionField($any(t).id, 'toState', $event); uiSetTransitionAction($any(t).id, 'stateId', $event)">
+          <option *ngFor="let s of uiActiveMachine.states" [value]="s.id">{{ s.name }}</option>
+        </select>
+      </div>
+
+      <!-- Animation -->
+      <div class="ui-editor-row">
+        <span class="ui-label">Animation</span>
+        <select class="ui-select" [ngModel]="$any(t).animation?.type || 'none'"
+                (ngModelChange)="uiSetTransitionAnimation($any(t).id, $event)">
+          <option value="none">None</option>
+          <option value="fade">Fade</option>
+          <option value="slideLeft">Slide left</option>
+          <option value="slideRight">Slide right</option>
+          <optgroup *ngIf="kitTransitions.length" label="Persona kit">
+            <option *ngFor="let kt of kitTransitions" [value]="kt">{{ kitTransitionLabel(kt) }}</option>
+          </optgroup>
+        </select>
+        <ng-container *ngIf="$any(t).animation?.type && $any(t).animation?.type !== 'none'">
+          <input class="ui-input ui-input--num" type="number" min="100" max="2000" step="50"
+                 [ngModel]="$any(t).animation?.duration"
+                 (ngModelChange)="uiSetTransitionAnimDuration($any(t).id, +$event)"
+                 style="width:52px">
+          <span class="ui-val">ms</span>
+        </ng-container>
+      </div>
+    </div>
+
+    <!-- ── Variables ── -->
+    <div *ngIf="uiActiveMachine" class="ui-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">Variables</span>
+        <button class="ui-sec-add" (click)="uiAddingVar = !uiAddingVar" title="Add variable">+</button>
+      </div>
+      <div *ngIf="uiAddingVar" class="ui-inline-form">
+        <input class="ui-input" [(ngModel)]="uiNewVarName" placeholder="Name…"
+               (keydown.enter)="uiAddVariable()" (keydown.escape)="uiAddingVar=false; uiNewVarName=''">
+        <select class="ui-select-sm" [(ngModel)]="uiNewVarType">
+          <option value="boolean">bool</option>
+          <option value="number">num</option>
+          <option value="string">str</option>
+        </select>
+        <button class="ui-form-btn" (click)="uiAddVariable()">Add</button>
+        <button class="ui-form-cancel" (click)="uiAddingVar=false; uiNewVarName=''">✕</button>
+      </div>
+      <div *ngIf="(uiActiveMachine.variables?.length ?? 0) === 0 && !uiAddingVar" class="ui-empty-row">
+        No variables — use them in conditions and actions
+      </div>
+      <div *ngFor="let v of uiActiveMachine.variables" class="ui-var-row">
+        <span class="ui-var-name">{{ v.name }}</span>
+        <span class="ui-var-type">{{ v.type }}</span>
+        <ng-container *ngIf="uiPreviewOn">
+          <input *ngIf="v.type === 'number'" type="number" class="ui-input ui-input--num"
+                 [ngModel]="uiGetVariable(v.id)"
+                 (ngModelChange)="uiSetVariable(v.id, +$event)">
+          <input *ngIf="v.type === 'string'" type="text" class="ui-input ui-input--sm"
+                 [ngModel]="uiGetVariable(v.id)"
+                 (ngModelChange)="uiSetVariable(v.id, $event)">
+          <input *ngIf="v.type === 'boolean'" type="checkbox"
+                 [ngModel]="!!uiGetVariable(v.id)"
+                 (ngModelChange)="uiSetVariable(v.id, $event)">
+        </ng-container>
+        <span *ngIf="!uiPreviewOn" class="ui-var-default">= {{ v.defaultValue }}</span>
+        <button class="ui-icon-btn ui-icon-btn--del" (click)="uiDeleteVariable(v.id)" title="Delete variable">✕</button>
+      </div>
+    </div>
+
+    <!-- ── Shape Interactions ── -->
+    <div *ngIf="uiActiveLayerId" class="ui-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">Shape Interactions</span>
+      </div>
+
+      <!-- Wire selected shape -->
+      <div *ngIf="uiSelectedShapeId" class="ui-assign-row">
+        <span class="ui-assign-id" [title]="uiSelectedShapeId">{{ uiSelectedShapeId | slice:0:10 }}…</span>
+        <button class="ui-assign-btn" (click)="uiAssignShapeInteraction(uiSelectedShapeId!)">Wire as Button</button>
+      </div>
+      <div *ngIf="!uiSelectedShapeId" class="ui-empty-row">Use the arrow tool to select a shape, then wire it</div>
+
+      <!-- Wired shapes list -->
+      <div *ngFor="let kv of uiInteractionRows; trackBy: uiTrackByShapeId" class="ui-interaction-row">
+        <span class="ui-int-id" [title]="kv.shapeId">{{ kv.shapeId | slice:0:8 }}…</span>
+        <select class="ui-select-sm" [ngModel]="kv.props.cursor || 'pointer'"
+                (ngModelChange)="uiUpdateInteraction(kv.shapeId, 'cursor', $event)">
+          <option value="pointer">pointer</option>
+          <option value="default">default</option>
+          <option value="grab">grab</option>
+          <option value="crosshair">crosshair</option>
+          <option value="none">none</option>
+        </select>
+        <label class="ui-check-label" title="Include in Tab order">
+          <input type="checkbox" [ngModel]="kv.props.focusable"
+                 (ngModelChange)="uiUpdateInteraction(kv.shapeId, 'focusable', $event)"> Tab
+        </label>
+        <button class="ui-icon-btn ui-icon-btn--del" (click)="uiClearInteraction(kv.shapeId)" title="Remove interaction">✕</button>
+      </div>
+    </div>
+
+    <!-- ── Sounds ── -->
+    <div class="ui-section">
+      <div class="ui-sec-header">
+        <span class="ui-sec-title">Sounds</span>
+        <label class="ui-add-btn" title="Upload a sound file (.mp3, .ogg, .wav)">
+          + Add
+          <input type="file" accept="audio/*" style="display:none" (change)="uiUploadSound($event)">
+        </label>
+      </div>
+
+      <div *ngIf="uiSoundList.length === 0" class="ui-empty-row">No sounds registered</div>
+
+      <div *ngFor="let s of uiSoundList" class="ui-sound-row">
+        <span class="ui-sound-icon">🔊</span>
+        <span class="ui-sound-id" [title]="s.assetId">{{ s.assetId }}</span>
+        <button class="ui-icon-btn ui-icon-btn--del" (click)="uiDeleteSound(s.assetId)" title="Remove sound">✕</button>
+      </div>
+    </div>
+
+  </ng-container>
+
+  <!-- ── Persona kit: screen-space HUD / menu / transition pieces (Salsa UI kit) ── -->
+  <div class="ui-section kit-section" *ngIf="kitAvailable">
+    <div class="ui-sec-header">
+      <span class="ui-sec-title kit-title" (click)="kitOpen = !kitOpen">{{ kitOpen ? '▾' : '▸' }} Persona kit</span>
+    </div>
+    <ng-container *ngIf="kitOpen">
+      <div class="kit-row">
+        <button class="kit-btn kit-btn--demo" (click)="kitInsertDemo('hud')" title="New 'Persona HUD' layer: status panels, date/weather, mini-map, prompts, banner, call-out, splash state (key F)">+ Persona HUD</button>
+        <button class="kit-btn kit-btn--demo" (click)="kitInsertDemo('pause')" title="Pause menu (Escape) — merged into the HUD demo layer when it is active">+ Pause menu</button>
+      </div>
+      <div class="kit-row">
+        <select class="ui-select" [(ngModel)]="kitPresetId" title="Piece preset">
+          <option *ngFor="let p of kitPresets; trackBy: kitTrackById" [value]="p.id">{{ p.label }}</option>
+        </select>
+        <button class="kit-btn" (click)="kitInsertPreset()">Insert</button>
+      </div>
+      <div class="kit-row">
+        <select class="ui-select" [(ngModel)]="kitTransitionId" title="Kit transition (use it on a transition's Animation)">
+          <option *ngFor="let kt of kitTransitions" [value]="kt">{{ kitTransitionLabel(kt) }}</option>
+        </select>
+        <button class="kit-btn" (click)="kitPreviewTransition()">▶ Preview</button>
+      </div>
+
+      <div *ngIf="kitRows.length === 0" class="ui-empty-row">No kit pieces on this layer</div>
+      <div class="kit-list" *ngIf="kitRows.length > 0">
+        <div *ngFor="let r of kitRows; trackBy: kitTrackById" class="kit-item" [class.kit-item--sel]="r.id === kitSelectedId"
+             (click)="kitSelect(r.id === kitSelectedId ? null : r.id)">{{ r.label }}</div>
+      </div>
+
+      <div class="kit-props" *ngIf="kitSel">
+        <div class="kit-prop"><span class="ui-label">Name</span>
+          <input class="ui-input" [ngModel]="kitSel.name || ''" (change)="kitSetField('name', $any($event.target).value)"></div>
+        <div class="kit-prop"><span class="ui-label">Anchor</span>
+          <select class="ui-select-sm" [ngModel]="kitSel.anchor" (ngModelChange)="kitSetField('anchor', $event)">
+            <option *ngFor="let a of kitAnchors" [value]="a">{{ a }}</option>
+          </select>
+          <span class="ui-label kit-l2">X</span><input class="ui-input ui-input--num" type="number" [ngModel]="kitSel.x" (ngModelChange)="kitSetField('x', $event)">
+          <span class="ui-label kit-l2">Y</span><input class="ui-input ui-input--num" type="number" [ngModel]="kitSel.y" (ngModelChange)="kitSetField('y', $event)">
+        </div>
+        <div class="kit-prop"><span class="ui-label">Scale</span>
+          <input class="ui-input ui-input--num" type="number" step="0.05" [ngModel]="kitSel.scale ?? 1" (ngModelChange)="kitSetField('scale', $event)">
+          <span class="ui-label kit-l2">Rot</span><input class="ui-input ui-input--num" type="number" [ngModel]="kitSel.rotation ?? 0" (ngModelChange)="kitSetField('rotation', $event)">
+          <span class="ui-label kit-l2">Z</span><input class="ui-input ui-input--num" type="number" [ngModel]="kitSel.z ?? 0" (ngModelChange)="kitSetField('z', $event)">
+        </div>
+        <div class="kit-prop"><span class="ui-label">Opacity</span>
+          <input type="range" min="0" max="1" step="0.05" [ngModel]="kitSel.opacity ?? 1" (ngModelChange)="kitSetField('opacity', $event)"></div>
+        <div class="kit-prop"><span class="ui-label">Intro</span>
+          <select class="ui-select-sm" [ngModel]="kitSel.intro?.type || 'none'" (ngModelChange)="kitSetIntro($event)">
+            <option *ngFor="let it of kitIntros" [value]="it">{{ it }}</option>
+          </select>
+          <select class="ui-select-sm" #kitClipSel title="Play a clip on this piece">
+            <option *ngFor="let c of kitClips" [value]="c">{{ c }}</option>
+          </select>
+          <button class="kit-btn" (click)="kitPlay(kitClipSel.value)">▶</button>
+        </div>
+        <div class="kit-prop"><span class="ui-label">States</span>
+          <input class="ui-input" placeholder="all states (ids, comma separated)" [ngModel]="kitStatesText" (change)="kitSetStates($any($event.target).value)"></div>
+
+        <div *ngFor="let row of kitPropRows; trackBy: kitTrackByKey" class="kit-prop">
+          <span class="ui-label" [title]="row.key">{{ row.label }}</span>
+          <ng-container [ngSwitch]="row.type">
+            <input *ngSwitchCase="'number'" class="ui-input ui-input--num" type="number" [min]="row.min" [max]="row.max" [step]="row.step || 1"
+                   [ngModel]="row.value" (ngModelChange)="kitSetProp(row, $event)">
+            <input *ngSwitchCase="'bool'" type="checkbox" [ngModel]="row.value" (ngModelChange)="kitSetProp(row, $event)">
+            <select *ngSwitchCase="'select'" class="ui-select-sm" [ngModel]="row.value" (ngModelChange)="kitSetProp(row, $event)">
+              <option *ngFor="let o of row.options" [value]="o">{{ o }}</option>
+            </select>
+            <ng-container *ngSwitchCase="'color'">
+              <select class="ui-select-sm" [ngModel]="row.isToken ? row.value : '#'" (ngModelChange)="kitSetProp(row, $event === '#' ? '#ffffff' : $event)">
+                <option *ngFor="let t of kitColorTokens" [value]="t">{{ t }}</option>
+                <option value="#">custom…</option>
+              </select>
+              <input *ngIf="!row.isToken" type="color" [ngModel]="row.value" (ngModelChange)="kitSetProp(row, $event)">
+            </ng-container>
+            <input *ngSwitchDefault class="ui-input" [ngModel]="row.value" (change)="kitSetProp(row, $any($event.target).value)">
+          </ng-container>
+        </div>
+        <div class="kit-row"><button class="kit-btn kit-btn--del" (click)="kitDelete()">Delete piece</button></div>
+      </div>
+    </ng-container>
+  </div>
+</div>

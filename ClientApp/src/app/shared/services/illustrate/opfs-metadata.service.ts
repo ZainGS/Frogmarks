@@ -15,8 +15,31 @@ export class OpfsMetadataService {
     return `ill-${docId}-meta.json`;
   }
 
-  /** Write metadata to OPFS. Strip transient SAS pixel URLs — only metadata is cached. */
-  async write(docId: string, state: IllustrationStateDto): Promise<void> {
+  /** Per-document write chain: writes to one file run one at a time, in call order (a quick flush and a full save used
+   *  to write the same file concurrently). */
+  private _chains = new Map<string, Promise<unknown>>();
+  /** Highest snapshot sequence written per document — an older snapshot that finishes building late is dropped. */
+  private _lastSeq = new Map<string, number>();
+
+  /**
+   * Write metadata to OPFS. Strip transient SAS pixel URLs — only metadata is cached.
+   * @param seq  Optional snapshot sequence, taken BEFORE the state was built; a write older than one already written
+   *             for this document is skipped (counts as success).
+   * @returns true when the file was written (or skipped as stale), false on failure.
+   */
+  write(docId: string, state: IllustrationStateDto, seq?: number): Promise<boolean> {
+    const prev = this._chains.get(docId) ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(() => this._write(docId, state, seq));
+    this._chains.set(docId, next);
+    void next.finally(() => { if (this._chains.get(docId) === next) this._chains.delete(docId); });
+    return next;
+  }
+
+  private async _write(docId: string, state: IllustrationStateDto, seq?: number): Promise<boolean> {
+    if (seq !== undefined) {
+      if (seq < (this._lastSeq.get(docId) ?? -1)) return true;   // a newer snapshot is already on disk
+      this._lastSeq.set(docId, seq);
+    }
     try {
       const toStore: IllustrationStateDto = {
         ...state,
@@ -31,8 +54,10 @@ export class OpfsMetadataService {
       const writable = await (fh as any).createWritable();
       await writable.write(JSON.stringify(toStore));
       await writable.close();
+      return true;
     } catch (e) {
       console.warn('[OpfsMeta] write failed', e);
+      return false;
     }
   }
 

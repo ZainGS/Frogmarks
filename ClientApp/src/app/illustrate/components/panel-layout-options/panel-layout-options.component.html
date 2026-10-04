@@ -1,0 +1,82 @@
+<div class="tool-label">Panel Layout</div>
+<div style="padding: 4px 8px; font-size: 12px;">
+    <!-- Template -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;"
+               title="Pre-made page layout. Choose a template or customize.">Template</label>
+        <select [(ngModel)]="pl.panelTemplate"
+                (ngModelChange)="pl.onPanelTemplateChange($event)"
+                style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <option *ngFor="let t of pl.panelTemplateOptions" [ngValue]="t.value">{{ t.label }}</option>
+        </select>
+    </div>
+    <!-- Page Size -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;"
+               title="Standard manga/comic page dimensions.">Page</label>
+        <select [(ngModel)]="pl.panelPageSizeIndex"
+                (ngModelChange)="pl.onPanelPageSizeChange($event)"
+                style="flex: 1; background: #333; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+            <option *ngFor="let ps of pl.pageSizePresets; let i = index" [ngValue]="i">{{ ps.name }} ({{ ps.description }})</option>
+        </select>
+    </div>
+    <hr style="border-color: #444; margin: 4px 0;">
+    <!-- Gutter Width -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;"
+               title="Space between panels. Wider = more breathing room.">Gutter</label>
+        <input type="range" min="0" max="0.1" step="0.002" style="flex: 1;"
+               [(ngModel)]="pl.panelGutterWidth"
+               (ngModelChange)="pl.onPanelGutterWidthChange($event)">
+        <span style="min-width: 34px; text-align: right; color: #aaa; font-size: 11px;">{{ pl.panelGutterWidth | number:'1.3-3' }}</span>
+    </div>
+    <!-- Bleed Margin -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;"
+               title="Artwork margin outside the trim edge for printing.">Bleed</label>
+        <input type="range" min="0" max="0.05" step="0.001" style="flex: 1;"
+               [(ngModel)]="pl.panelBleedMargin"
+               (ngModelChange)="pl.onPanelBleedMarginChange($event)">
+        <span style="min-width: 34px; text-align: right; color: #aaa; font-size: 11px;">{{ pl.panelBleedMargin | number:'1.3-3' }}</span>
+    </div>
+    <!-- Border Width -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;"
+               title="Thickness of panel border lines.">Border</label>
+        <input type="range" min="0" max="0.02" step="0.001" style="flex: 1;"
+               [(ngModel)]="pl.panelBorderWidth"
+               (ngModelChange)="pl.onPanelBorderWidthChange($event)">
+        <span style="min-width: 34px; text-align: right; color: #aaa; font-size: 11px;">{{ pl.panelBorderWidth | number:'1.3-3' }}</span>
+    </div>
+    <hr style="border-color: #444; margin: 4px 0;">
+    <!-- Colors -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;">Border</label>
+        <input type="color" [(ngModel)]="pl.panelBorderColor"
+               style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 54px; color: #aaa;">Bg</label>
+        <input type="color" [(ngModel)]="pl.panelBackgroundColor"
+               style="width: 32px; height: 22px; padding: 1px 2px; border: 1px solid #555; border-radius: 3px; background: #252525; cursor: pointer; flex-shrink: 0;">
+    </div>
+    <hr style="border-color: #444; margin: 4px 0;">
+    <!-- Guides -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <input type="checkbox" [(ngModel)]="pl.panelShowBleedGuides"
+               (ngModelChange)="pl.onPanelShowBleedGuidesChange($event)"
+               title="Show dashed guides at the bleed margin.">
+        <label style="color: #aaa; font-size: 11px;">Bleed guides</label>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <input type="checkbox" [(ngModel)]="pl.panelShowGutterGuides"
+               (ngModelChange)="pl.onPanelShowGutterGuidesChange($event)"
+               title="Show dashed guides at gutter center lines.">
+        <label style="color: #aaa; font-size: 11px;">Gutter guides</label>
+    </div>
+    <hr style="border-color: #444; margin: 4px 0;">
+    <!-- Create Button -->
+    <button (click)="pl.createPanelLayout()"
+            class="pl-create-btn"
+            title="Create a panel layout on the canvas.">Create Layout</button>
+</div>

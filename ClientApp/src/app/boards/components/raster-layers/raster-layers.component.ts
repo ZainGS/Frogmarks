@@ -9,6 +9,7 @@ import {
   BLEND_MODE_OPTIONS,
   BLEND_MODE_CATEGORIES,
 } from '../../models/brush-preset.model';
+import ShapeManager from '@zaings/salsa/shape-manager';
 
 /** Flat display entry with computed depth for indentation */
 export interface LayerDisplayEntry extends RasterLayer {
@@ -30,7 +31,9 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   selected3DSceneId: string | null = null;
   searchTerm = '';
 
-  @Input() shapeManager: any = null;
+  @Input() shapeManager: ShapeManager = null;
+  /** The host editor's Play mode owns the keyboard: skip the layer hotkeys. */
+  @Input() hotkeysSuspended = false;
 
   /** Emitted when the 3D scene entry is selected/deselected in the layer list */
   @Output() scene3dSelected = new EventEmitter<boolean>();
@@ -104,6 +107,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   @HostListener('document:keydown', ['$event'])
   onKeyDown(e: KeyboardEvent): void {
+    if (this.hotkeysSuspended) return;
     if (e.key === '/' && !this._isInputFocused()) {
       e.preventDefault();
       this.toggleLockTransparencyOnActive();
@@ -216,7 +220,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       // Clear vector layer so only one row appears active at a time
       if (this.activeVectorLayerId) {
         this.activeVectorLayerId = null;
-        this.shapeManager?.setActiveVectorLayer?.(null);
+        this.shapeManager?.setActiveVectorLayer(null);
         this.vectorLayerSelected.emit(null);
       }
       this.scene3dSelected.emit(true);
@@ -231,7 +235,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (this.activeVectorLayerId) {
       this.activeVectorLayerId = null;
-      this.shapeManager?.setActiveVectorLayer?.(null);
+      this.shapeManager?.setActiveVectorLayer(null);
       this.vectorLayerSelected.emit(null);
     }
     this.rasterService.selectLayer(id);
@@ -247,7 +251,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (this.activeVectorLayerId) {
       this.activeVectorLayerId = null;
-      this.shapeManager?.setActiveVectorLayer?.(null);
+      this.shapeManager?.setActiveVectorLayer(null);
       this.vectorLayerSelected.emit(null);
     }
     this.rasterService.addLayer('Layer ' + (this.layers.length + 1));
@@ -306,7 +310,15 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   toggle3DSceneVisible(e: MouseEvent): void {
     e.stopPropagation();
     this.scene3dVisible = !this.scene3dVisible;
-    (this.shapeManager as any).scene3DVisible = this.scene3dVisible;
+    const sm = this.shapeManager;
+    sm.scene3DVisible = this.scene3dVisible;
+    // A hidden scene must not stay hoverable/pickable — detach pointer handling.
+    if (!this.scene3dVisible) {
+      sm.disableTransformControls3D();
+      sm.setHoveredMesh3D(null);
+    } else if (this.selected3DSceneId) {
+      sm.enableTransformControls3D();
+    }
   }
 
   add3DScene(): void {
@@ -337,9 +349,9 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Vector Layers ─────────────────────────────────────────────
 
   addVectorLayer(): void {
-    const id: string | undefined = this.shapeManager?.addVectorLayer?.('Vector Layer');
+    const id: string | undefined = this.shapeManager?.addVectorLayer('Vector Layer');
     if (id) {
-      this.shapeManager?.setActiveVectorLayer?.(id);
+      this.shapeManager?.setActiveVectorLayer(id);
       this.activeVectorLayerId = id;
       this.vectorLayerSelected.emit(id);
     }
@@ -351,19 +363,19 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeLayerId = null;
     this.selected3DSceneId = null;
     this.scene3dSelected.emit(false);
-    this.shapeManager?.setActiveVectorLayer?.(id);
+    this.shapeManager?.setActiveVectorLayer(id);
     this.vectorLayerSelected.emit(id);
   }
 
   deselectVectorLayer(): void {
     this.activeVectorLayerId = null;
-    this.shapeManager?.setActiveVectorLayer?.(null);
+    this.shapeManager?.setActiveVectorLayer(null);
     this.vectorLayerSelected.emit(null);
   }
 
   removeVectorLayer(id: string, e: MouseEvent): void {
     e.stopPropagation();
-    this.shapeManager?.removeVectorLayer?.(id);
+    this.shapeManager?.removeVectorLayer(id);
     if (this.activeVectorLayerId === id) {
       this.activeVectorLayerId = null;
       this.vectorLayerSelected.emit(null);
@@ -373,7 +385,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   toggleVectorVisibility(layer: RasterLayer, e: MouseEvent): void {
     e.stopPropagation();
     const newVisible = !(layer.visible ?? true);
-    this.shapeManager?.setVectorLayerVisible?.(layer.id, newVisible);
+    this.shapeManager?.setVectorLayerVisible(layer.id, newVisible);
     // layers$ doesn't reflect vector visibility changes, so update local state immediately
     const vl = this.vectorLayers.find(v => v.id === layer.id);
     if (vl) vl.visible = newVisible;

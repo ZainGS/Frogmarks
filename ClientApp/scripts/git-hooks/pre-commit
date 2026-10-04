@@ -1,0 +1,17 @@
+#!/bin/sh
+# OPTIONAL Frogmarks pre-commit hook: NOT installed automatically. Enable / disable (from the Frogmarks repo root,
+# i.e. the folder that contains ClientApp/):
+#
+#   git config core.hooksPath ClientApp/scripts/git-hooks   # enable
+#   git config --unset core.hooksPath                       # disable
+#
+# Runs `npm run check:fast` in ClientApp (sanity + tsc + ESLint without type info + the two guards) when the commit
+# touches ClientApp/. Skip once with `git commit --no-verify`.
+if [ -n "$FROGMARKS_SKIP_HOOKS" ]; then exit 0; fi
+git diff --cached --name-only | grep -q '^ClientApp/' || exit 0
+cd ClientApp || exit 1
+npm run --silent check:fast || {
+  echo ""
+  echo "pre-commit: client checks failed (commit aborted). Fix them, or commit with --no-verify to skip once."
+  exit 1
+}

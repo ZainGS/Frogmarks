@@ -45,7 +45,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     document.body.classList.remove('base-body');
     setTimeout(() => this.showContent = true, 100);
     this._spawnParticles();
-    this._spawnThumbnailParticles();
+    void this._spawnThumbnailParticles();
   }
 
   private _spawnParticles(): void {

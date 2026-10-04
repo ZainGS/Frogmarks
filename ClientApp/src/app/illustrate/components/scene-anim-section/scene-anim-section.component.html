@@ -1,0 +1,130 @@
+<details class="scene3d-details">
+    <summary>3D Animation</summary>
+    <div class="scene3d-toggle-row">
+        <label>Auto-Key</label>
+        <input type="checkbox" [checked]="anim.scene3dAutoKey" (change)="anim.scene3dSetAutoKey($any($event.target).checked)" title="Automatically record a keyframe for selected meshes on every gizmo drag">
+    </div>
+    <div class="scene3d-toggle-row">
+        <label>Sync with Timeline</label>
+        <input type="checkbox" [checked]="anim.scene3dAnimSyncWithTimeline" (change)="anim.scene3dToggleAnimationSync($any($event.target).checked)">
+    </div>
+    <div class="scene3d-vec3-row scene3d-anim-grid">
+        <span class="scene3d-vec3-label">Start</span>
+        <input type="number" step="1" [(ngModel)]="anim.scene3dAnimStartFrame" (input)="anim.scene3dApplyAnimationConfig()">
+        <span class="scene3d-vec3-label">End</span>
+        <input type="number" step="1" [(ngModel)]="anim.scene3dAnimEndFrame" (input)="anim.scene3dApplyAnimationConfig()">
+    </div>
+    <div class="scene3d-vec3-row scene3d-anim-grid">
+        <span class="scene3d-vec3-label">FPS</span>
+        <input type="number" step="1" min="1" [(ngModel)]="anim.scene3dAnimFps" (input)="anim.scene3dApplyAnimationConfig()">
+        <span class="scene3d-vec3-label">Loop</span>
+        <input type="checkbox" [checked]="anim.scene3dAnimLoop" (change)="anim.scene3dAnimLoop = $any($event.target).checked; anim.scene3dApplyAnimationConfig()">
+    </div>
+    <div class="scene3d-row">
+        <button class="scene3d-btn" [disabled]="anim.scene3dAnimSyncWithTimeline" (click)="anim.scene3dAnimationPlay()">▶ Play</button>
+        <button class="scene3d-btn" [disabled]="anim.scene3dAnimSyncWithTimeline" (click)="anim.scene3dAnimationPause()">⏸ Pause</button>
+        <button class="scene3d-btn" [disabled]="anim.scene3dAnimSyncWithTimeline" (click)="anim.scene3dAnimationStop()">⏹ Stop</button>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Frame</label>
+        <input type="range" [min]="anim.scene3dAnimStartFrame" [max]="anim.scene3dAnimEndFrame" step="1" [value]="anim.scene3dAnimCurrentFrame" disabled>
+        <span class="scene3d-val">{{ anim.scene3dAnimCurrentFrame }} / {{ anim.scene3dAnimEndFrame }}</span>
+    </div>
+</details>
+
+<!-- ── Player Animation ───────────────────────────────────── -->
+<details class="scene3d-details" *ngIf="anim.scene3dPlayerObjectId">
+    <summary>Player Animation</summary>
+
+    <!-- Locomotion slots -->
+    <div class="scene3d-subsection-title">Locomotion</div>
+    <div class="scene3d-material-row">
+        <label>Idle</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dLocoIdle" (ngModelChange)="anim.scene3dApplyLocomotionSet()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Walk</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dLocoWalk" (ngModelChange)="anim.scene3dApplyLocomotionSet()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Run</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dLocoRun" (ngModelChange)="anim.scene3dApplyLocomotionSet()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Jump</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dLocoJump" (ngModelChange)="anim.scene3dApplyLocomotionSet()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Fall</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dLocoFall" (ngModelChange)="anim.scene3dApplyLocomotionSet()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+
+    <!-- Smooth blend tree -->
+    <div class="scene3d-toggle-row" style="margin-top:6px">
+        <label>Smooth locomotion</label>
+        <input type="checkbox" [checked]="anim.scene3dLocoBlend" (change)="anim.scene3dSetLocoBlend($any($event.target).checked)">
+    </div>
+    <ng-container *ngIf="anim.scene3dLocoBlend">
+        <div class="scene3d-material-row">
+            <label>Walk speed</label>
+            <input type="range" min="0.1" max="5" step="0.1" [(ngModel)]="anim.scene3dLocoBlendWalkSpeed" (input)="anim.scene3dApplyLocoBlendSpeeds()">
+            <span class="scene3d-val">{{ anim.scene3dLocoBlendWalkSpeed | number:'1.1-1' }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Run speed</label>
+            <input type="range" min="0.5" max="10" step="0.1" [(ngModel)]="anim.scene3dLocoBlendRunSpeed" (input)="anim.scene3dApplyLocoBlendSpeeds()">
+            <span class="scene3d-val">{{ anim.scene3dLocoBlendRunSpeed | number:'1.1-1' }}</span>
+        </div>
+    </ng-container>
+
+    <!-- Upper-body overlay -->
+    <div class="scene3d-subsection-title" style="margin-top:8px">Overlay</div>
+    <div class="scene3d-material-row">
+        <label>Clip</label>
+        <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dOverlayClip" (ngModelChange)="anim.scene3dApplyOverlay()">
+            <option value="">— none —</option>
+            <option *ngFor="let e of anim.scene3dAnimLibrary" [value]="e.id">{{ e.name }}</option>
+        </select>
+    </div>
+    <ng-container *ngIf="anim.scene3dOverlayClip">
+        <div class="scene3d-material-row">
+            <label>Region</label>
+            <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dOverlayRegion" (ngModelChange)="anim.scene3dApplyOverlay()">
+                <option value="upperBody">Upper body</option>
+                <option value="lowerBody">Lower body</option>
+                <option value="arms">Arms</option>
+                <option value="head">Head</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Mode</label>
+            <select class="scene3d-select" style="flex:1" [(ngModel)]="anim.scene3dOverlayMode" (ngModelChange)="anim.scene3dApplyOverlay()">
+                <option value="replace">Replace</option>
+                <option value="additive">Additive</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row" *ngIf="anim.scene3dOverlayMode === 'additive'">
+            <label>Weight</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="anim.scene3dOverlayWeight" (input)="anim.scene3dApplyOverlay()">
+            <span class="scene3d-val">{{ anim.scene3dOverlayWeight | number:'1.0-2' }}</span>
+        </div>
+        <div *ngIf="!anim.scene3dLocoBlend" style="font-size:10px;color:#ff9800;margin:4px 0 2px">
+            Enable "Smooth locomotion" to activate the overlay.
+        </div>
+    </ng-container>
+</details>

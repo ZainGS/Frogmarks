@@ -1,0 +1,68 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+// The editor's palette rules that reach these swatches — all of them, in the editor's order (it keeps its copies).
+.palette-circle {
+    border-radius: 100%;
+    width: 2vw;
+    height: 2vw;
+    max-width: 30px;
+    max-height: 30px;
+    flex-wrap: nowrap !important;
+    border: 1px solid #4a4a4a;
+    margin-left: .25vw;
+    margin-right: .25vw;
+}
+
+.color-palette {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.palette-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.palette-circle:hover {
+    transform: scale(1.1);
+    border-color: #fff;
+}
+
+.palette-circle.selected {
+    border-color: #993FF4;
+    box-shadow: 0 0 10px rgba(153, 63, 244, 0.5);
+}
+
+.color-palette {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.palette-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.palette-circle:hover {
+    transform: scale(1.1);
+    border-color: #fff;
+}
+
+.palette-circle.selected {
+    border-color: #993FF4;
+    box-shadow: 0 0 10px rgba(153, 63, 244, 0.5);
+}

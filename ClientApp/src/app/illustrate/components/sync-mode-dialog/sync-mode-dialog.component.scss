@@ -1,0 +1,290 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.smp-card {
+    background: #161618;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    width: 480px;
+    display: flex;
+    flex-direction: column;
+    font-family: inherit;
+}
+
+.smp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.smp-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.smp-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 120ms, background 120ms;
+
+    &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+}
+
+.smp-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.smp-btn {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 120ms, border-color 120ms;
+    color: rgba(255, 255, 255, 0.55);
+
+    &.on {
+        background: rgba(137, 124, 255, 0.18);
+        border-color: rgba(137, 124, 255, 0.5);
+        color: #c8bfff;
+    }
+
+    &:hover:not(.on) {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+    }
+}
+
+.smp-btn-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.smp-btn-label {
+    font-size: 12px;
+    font-weight: 700;
+    display: block;
+}
+
+.smp-btn-desc {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1.5;
+    display: block;
+    margin-top: 4px;
+
+    strong { color: rgba(255, 255, 255, 0.65); }
+}
+
+.smp-section-divider {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 10px 12px 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    margin-top: 4px;
+}
+
+.smp-format-rows {
+    padding: 0 12px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.smp-format-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+
+    &.on { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); }
+    &:hover { background: rgba(255, 255, 255, 0.05); }
+}
+
+.smp-format-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+}
+
+.smp-format-desc {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.smp-format-note {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    padding: 4px 8px 0;
+    font-style: italic;
+}
+
+.smp-size-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px 2px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    margin-top: 4px;
+
+    strong { color: rgba(255, 255, 255, 0.7); }
+}
+
+.smp-size-icon { font-size: 13px; }
+
+.smp-btn-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+}
+
+.smp-hint-icon {
+    position: relative;
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+    cursor: help;
+    transition: border-color 120ms, color 120ms, background 120ms;
+    user-select: none;
+
+    &:hover {
+        border-color: rgba(137, 124, 255, 0.6);
+        color: #c8bfff;
+        background: rgba(137, 124, 255, 0.15);
+    }
+
+    .smp-hint-tip {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        width: 280px;
+        background: #1e1c2a;
+        border: 1px solid rgba(137, 124, 255, 0.4);
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 11.5px;
+        font-weight: 400;
+        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+        white-space: normal;
+        text-align: left;
+        pointer-events: none;
+        z-index: 9999;
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            right: 5px;
+            border: 5px solid transparent;
+            border-top-color: rgba(137, 124, 255, 0.4);
+        }
+    }
+
+    &:hover .smp-hint-tip {
+        display: block;
+    }
+}
+
+.smp-btn {
+    flex-direction: column;
+}
+
+.smp-confirm-body {
+    padding: 20px 20px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    text-align: center;
+}
+
+.smp-confirm-icon {
+    font-size: 28px;
+    line-height: 1;
+    color: #e67e22;
+}
+
+.smp-confirm-msg {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.7;
+    max-width: 380px;
+
+    strong { color: rgba(255, 255, 255, 0.9); }
+}
+
+.smp-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.smp-footer-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 120ms;
+
+    &:disabled { opacity: 0.4; cursor: default; }
+}
+
+.smp-cancel {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.09);
+    color: rgba(255, 255, 255, 0.55);
+
+    &:hover { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.85); }
+}
+
+.smp-apply {
+    background: rgba(137, 124, 255, 0.85);
+    border-color: rgba(137, 124, 255, 0.9);
+    color: #fff;
+
+    &:hover:not(:disabled) { background: rgba(137, 124, 255, 1); }
+}

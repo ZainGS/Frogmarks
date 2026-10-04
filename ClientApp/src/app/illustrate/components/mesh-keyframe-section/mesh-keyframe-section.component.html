@@ -1,0 +1,25 @@
+<details class="scene3d-details">
+    <summary>Keyframe Animation</summary>
+    <div class="scene3d-row scene3d-keyframe-row">
+        <button class="scene3d-help-icon"
+                (mouseenter)="showHint = true"
+                (mouseleave)="showHint = false"
+                title="How to use keyframe animation">?</button>
+        <button class="scene3d-btn scene3d-btn-keyframe"
+                [class.scene3d-btn-autokey]="anim.scene3dAutoKey"
+                [class.scene3d-btn-flash]="anim.scene3dKeyframeFlash"
+                [disabled]="!animationEnabled"
+                (click)="anim.scene3dRecordKeyframe()"
+                [title]="animationEnabled ? 'Snapshot this mesh\'s position/rotation/scale at the current timeline frame (K)' : 'Enable Animation first (Animation menu)'">
+            ◆ Record Keyframe
+        </button>
+        <span class="scene3d-frame-badge" [class.flash]="anim.scene3dKeyframeFlash"
+              title="Current timeline frame">F{{ timelineFrame }}</span>
+    </div>
+    <div class="scene3d-keyframe-hint" *ngIf="showHint">
+        1. Position mesh → Record Keyframe&nbsp;&nbsp;
+        2. Click a later frame in timeline&nbsp;&nbsp;
+        3. Move mesh to new position → Record Keyframe&nbsp;&nbsp;
+        4. Press Play ▶
+    </div>
+</details>

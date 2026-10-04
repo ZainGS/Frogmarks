@@ -84,6 +84,10 @@ namespace Frogmarks.Controllers
         {
             try
             {
+                // Explore is disabled until it is designed (security audit 2026-10-04: it returned every user's items).
+                // Publishing a public feed should filter IsPublic and be [AllowAnonymous] — see the audit doc.
+                return Ok(new ResultModel<IEnumerable<IllustrationDto>>(ResultType.Success, resultObject: Array.Empty<IllustrationDto>()));
+#pragma warning disable CS0162 // unreachable while Explore is disabled
                 // Pre-allocate the HashSet length and then assign values to avoid internal HashSet resizing.
                 var splitIds = cachedThumbnailIllustrationIds?.Split(',') ?? Array.Empty<string>();
                 var illustrationIds = new HashSet<long>(splitIds.Length);
@@ -97,6 +101,7 @@ namespace Frogmarks.Controllers
                 var illustrations = await _illustrationService.SearchIllustrations(name, teamId, favorites, sortBy, sortDirection, pageIndex, pageSize, illustrationIds, isArchived);
                 return Ok(illustrations);
             }
+#pragma warning restore CS0162
             catch (Exception ex)
             {
                 return HandleErrorActionResult(ex);
@@ -331,7 +336,9 @@ namespace Frogmarks.Controllers
             try
             {
                 var result = await _illustrationService.SaveIllustrationState(id, stateDto);
-                return Ok(result);
+                // Real status codes (this returned 200 for every outcome, so the client counted failed saves as saved);
+                // AlreadyExist = revision conflict → 409.
+                return result.ResultType == ResultType.Success ? Ok(result) : GenerateResponseActionResult(result);
             }
             catch (Exception ex)
             {

@@ -1,0 +1,43 @@
+<div class="tool-label">Fill Options</div>
+<div style="padding: 4px 8px;">
+    <!-- Tolerance -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 70px; color:#aaa; font-size: 11px;"
+               title="Color similarity threshold. 0 = exact match, 32 = standard, 64+ = rough sketches.">Tolerance</label>
+        <input type="range" min="0" max="255" step="1" style="flex: 1;"
+               [(ngModel)]="fw.fillTolerance"
+               (ngModelChange)="fw.onFillToleranceChange($event)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 11px;">{{ fw.fillTolerance }}</span>
+    </div>
+    <!-- Gap Closing -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+        <label style="width: 70px; color:#aaa; font-size: 11px;"
+               title="Close small gaps in lineart before filling. 0 = off, 2 = recommended.">Gap Close</label>
+        <input type="range" min="0" max="5" step="1" style="flex: 1;"
+               [(ngModel)]="fw.fillGapClosing"
+               (ngModelChange)="fw.onFillGapClosingChange($event)">
+        <span style="min-width: 18px; text-align: right; color: #aaa; font-size: 11px;">{{ fw.fillGapClosing }}</span>
+    </div>
+    <!-- Contiguous -->
+    <div style="margin-bottom: 6px;">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="fillContiguous"
+                   [checked]="fw.fillContiguous"
+                   (change)="fw.onFillContiguousChange($any($event.target).checked)"
+                   title="ON: fill connected region only. OFF: fill all similar-color pixels on the layer.">
+            <label class="form-check-label" for="fillContiguous" style="color: #ccc; font-size: 11px;">Contiguous</label>
+        </div>
+    </div>
+    <!-- Reference Layer -->
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+        <label style="width: 70px; color:#aaa; font-size: 11px;"
+               title="Use another layer's outlines as fill boundaries. The manga workflow: ink on one layer, fill on another.">Reference</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
+                [(ngModel)]="fw.fillReferenceLayerId"
+                (ngModelChange)="fw.onFillReferenceLayerChange($event)">
+            <option value="">None</option>
+            <option *ngFor="let layer of rasterLayers" [ngValue]="layer.id">{{ layer.name || 'Layer' }}</option>
+        </select>
+    </div>
+    <p style="margin: 0 0 6px 0; font-size: 10px; color: #777; line-height: 1.4;">Detects fill boundaries from another layer. Useful when your line art and colors are on separate layers.</p>
+</div>

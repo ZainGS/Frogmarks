@@ -1,0 +1,29 @@
+<details class="scene3d-details" [open]="!!scene3dScriptSource">
+    <summary>Behavior</summary>
+    <div class="scene3d-toggle-row">
+        <label title="Script runs only in Play mode; everything reverts on Stop">Enabled</label>
+        <input type="checkbox" [(ngModel)]="scene3dScriptEnabled" (change)="scene3dScriptEnabledChanged()">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Snippet</label>
+        <select class="scene3d-select" #snippetSel
+                (change)="scene3dScriptInsertSnippet($any(snippetSel).value); snippetSel.value = ''">
+            <option value="">Insert…</option>
+            <option *ngFor="let sn of scene3dScriptSnippets" [value]="sn.source" [title]="sn.description">{{ sn.name }}</option>
+        </select>
+    </div>
+    <textarea class="scene3d-svg-input" rows="10" spellcheck="false"
+              style="width:100%;font-family:Consolas,'Fira Code',monospace;font-size:11px;tab-size:2"
+              placeholder="export function onTick(ctx, dt) &#123;&#10;  ctx.rotateY(1.5 * dt);&#10;&#125;"
+              [(ngModel)]="scene3dScriptSource"
+              (ngModelChange)="scene3dScriptSourceChanged()"
+              (keydown.tab)="scene3dScriptTab($event)"></textarea>
+    <div *ngIf="scene3dScriptError" class="scene3d-hint" style="color:#f77">
+        ⚠ {{ scene3dScriptError.line != null ? 'line ' + scene3dScriptError.line + ' — ' : '' }}{{ scene3dScriptError.message }}
+    </div>
+    <div class="scene3d-hint" style="margin-top:4px">Runs in Play only; reverts on Stop. Hooks: onStart, onTick, onTrigger, onInteract.</div>
+    <div class="scene3d-material-row" style="margin-top:6px">
+        <button class="scene3d-btn scene3d-btn-sm" style="flex:1" (click)="openApiRef.emit()"
+                title="Everything the ctx object can do, with descriptions">API Reference</button>
+    </div>
+</details>

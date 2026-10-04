@@ -90,43 +90,6 @@ $danger:  #c0392b;
 
 // ── Tool row ──────────────────────────────────────────────────────
 
-.me-tools-row {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-
-.me-tool-btn {
-  flex: 1;
-  background: #222;
-  border: 1px solid #444;
-  color: $muted;
-  padding: 5px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  transition: all 0.12s;
-
-  &:hover { background: #2e2e2e; color: #ccc; }
-
-  &.active {
-    background: rgba($accent, 0.28);
-    border-color: $accent;
-    color: lighten($accent, 28%);
-    font-weight: 600;
-  }
-}
-
-.me-tool-knife.active {
-  background: rgba(220, 200, 40, 0.15);
-  border-color: #c8b800;
-  color: #ffe84a;
-}
-
 .me-kbd {
   font-size: 9px;
   background: rgba(255, 255, 255, 0.08);
@@ -372,44 +335,6 @@ $danger:  #c0392b;
 }
 
 // ── Paint section ─────────────────────────────────────────────────
-
-.me-paint-color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.me-color-swatch {
-  width: 40px;
-  height: 32px;
-  border: 1px solid #555;
-  border-radius: 4px;
-  padding: 1px;
-  background: #252525;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.me-alpha-block {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-
-  input[type="range"] {
-    flex: 1;
-    accent-color: $accent;
-    height: 14px;
-  }
-}
-
-.me-paint-btn-row {
-  display: flex;
-  gap: 6px;
-
-  .me-op-btn { flex: 1; }
-}
 
 // ── Modifier stack ────────────────────────────────────────────────
 

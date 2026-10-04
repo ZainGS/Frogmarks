@@ -1,0 +1,159 @@
+<div class="form-check" style="margin-bottom: 6px;">
+    <input class="form-check-input" type="checkbox"
+           [checked]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).enabled"
+           (change)="fx.onFrameLinkEnabledChange(selectedRasterLayerId, $any($event.target).checked)">
+    <label class="form-check-label" style="color: #ccc; font-size: 11px;">Frame Link Animation</label>
+</div>
+
+<div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).enabled" style="padding-left: 4px;">
+    <!-- Type -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Type</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [ngModel]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type"
+                (ngModelChange)="fx.onFrameLinkTypeChange(selectedRasterLayerId, $event)">
+            <option *ngFor="let opt of fx.frameLinkTypeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- Amplitude -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Amplitude</label>
+        <input type="range" min="0" max="50" step="1" style="flex: 1;"
+               [value]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).amplitude"
+               (input)="fx.onFrameLinkAmplitudeChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).amplitude }}px</span>
+    </div>
+
+    <!-- Frequency (hidden for shake) -->
+    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type !== 'shake'"
+         style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Frequency</label>
+        <input type="range" min="1" max="200" step="1" style="flex: 1;"
+               [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).frequency * 10)"
+               (input)="fx.onFrameLinkFrequencyChange(selectedRasterLayerId, +$any($event.target).value / 10)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).frequency }}</span>
+    </div>
+
+    <!-- Speed -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Speed</label>
+        <input type="range" min="1" max="100" step="1" style="flex: 1;"
+               [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).speed * 100)"
+               (input)="fx.onFrameLinkSpeedChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).speed }}</span>
+    </div>
+
+    <!-- Direction (hidden for shake) -->
+    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type !== 'shake'"
+         style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Direction</label>
+        <input type="range" min="0" max="360" step="1" style="flex: 1;"
+               [value]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).direction"
+               (input)="fx.onFrameLinkDirectionChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).direction }}°</span>
+    </div>
+
+    <!-- Phase -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Phase</label>
+        <input type="range" min="0" max="628" step="1" style="flex: 1;"
+               [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).phase * 100)"
+               (input)="fx.onFrameLinkPhaseChange(selectedRasterLayerId, $any($event.target).value)">
+        <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).phase.toFixed(2) }}</span>
+    </div>
+
+    <!-- Axes -->
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Axes</label>
+        <div class="form-check form-check-inline" style="margin: 0;">
+            <input class="form-check-input" type="checkbox"
+                   [checked]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).displaceX"
+                   (change)="fx.onFrameLinkDisplaceXChange(selectedRasterLayerId, $any($event.target).checked)">
+            <label class="form-check-label" style="color: #ccc; font-size: 9px;">X</label>
+        </div>
+        <div class="form-check form-check-inline" style="margin: 0;">
+            <input class="form-check-input" type="checkbox"
+                   [checked]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).displaceY"
+                   (change)="fx.onFrameLinkDisplaceYChange(selectedRasterLayerId, $any($event.target).checked)">
+            <label class="form-check-label" style="color: #ccc; font-size: 9px;">Y</label>
+        </div>
+    </div>
+
+    <!-- Loop Mode -->
+    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;">Loop</label>
+        <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [ngModel]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).loopMode"
+                (ngModelChange)="fx.onFrameLinkLoopModeChange(selectedRasterLayerId, $event)">
+            <option *ngFor="let opt of fx.frameLinkLoopModeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+        </select>
+    </div>
+
+    <!-- ── Ripple sub-section ── -->
+    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type === 'ripple'">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Ripple</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Center X</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).rippleCenterX * 100)"
+                   (input)="fx.onFrameLinkRippleCenterXChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).rippleCenterX * 100) }}%</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Center Y</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).rippleCenterY * 100)"
+                   (input)="fx.onFrameLinkRippleCenterYChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).rippleCenterY * 100) }}%</span>
+        </div>
+    </div>
+
+    <!-- ── Shake sub-section ── -->
+    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type === 'shake'">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Shake</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Seed</label>
+            <input type="number" min="0" max="9999" step="1"
+                   class="form-control form-control-sm" style="flex: 1; font-size: 10px;"
+                   [value]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).shakeSeed"
+                   (input)="fx.onFrameLinkSeedChange(selectedRasterLayerId, $any($event.target).value)">
+        </div>
+    </div>
+
+    <!-- ── Turbulence sub-section ── -->
+    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type === 'turbulence'">
+        <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
+            <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Turbulence</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Octaves</label>
+            <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                    [ngModel]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).noiseOctaves"
+                    (ngModelChange)="fx.onFrameLinkOctavesChange(selectedRasterLayerId, $event)">
+                <option [ngValue]="1">1</option>
+                <option [ngValue]="2">2</option>
+                <option [ngValue]="3">3</option>
+                <option [ngValue]="4">4</option>
+            </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Lacunarity</label>
+            <input type="range" min="10" max="40" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).noiseLacunarity * 10)"
+                   (input)="fx.onFrameLinkLacunarityChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).noiseLacunarity.toFixed(1) }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+            <label style="width: 60px; color:#aaa; font-size: 10px;">Persist.</label>
+            <input type="range" min="0" max="100" step="1" style="flex: 1;"
+                   [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).noisePersistence * 100)"
+                   (input)="fx.onFrameLinkPersistenceChange(selectedRasterLayerId, $any($event.target).value)">
+            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).noisePersistence * 100) }}%</span>
+        </div>
+    </div>
+</div>

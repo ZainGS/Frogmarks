@@ -4,9 +4,6 @@ using Frogmarks.Models;
 using Frogmarks.Models.Email;
 using Frogmarks.Services;
 using Frogmarks.Services.Interfaces;
-using Frogmarks.SignalR.Hubs;
-using Frogmarks.SignalR.Optimizers;
-using Frogmarks.WebSockets;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -16,7 +13,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text.Json.Serialization;
 using Azure.Storage.Blobs;
 using Frogmarks.Services;
@@ -135,6 +135,23 @@ builder.Services.AddAuthentication(options =>
 });
 */
 
+// Rate limits (security audit 2026-10-04, Phase 1.4 / 1.5). Partitioned per signed-in user, else per client IP.
+static string RateKey(HttpContext ctx) =>
+    ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // AI authoring proxies to Anthropic on the server's key: bound the cost per user.
+    options.AddPolicy("authoring", ctx => RateLimitPartition.GetFixedWindowLimiter(RateKey(ctx), _ =>
+        new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+    // Sign-in / magic-link / re-auth endpoints: slow down guessing and email spamming.
+    options.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ =>
+        new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
+});
+
+builder.Services.AddMemoryCache();   // re-auth attempt counters (EmailService)
+
 // Add session services
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -167,13 +184,13 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 // Register services
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddTransient<IErrorService, ErrorService>();
+builder.Services.AddScoped<IResourceAccessService, ResourceAccessService>();   // owner / team / collaborator checks
 builder.Services.AddScoped<IBoardService, BoardService>();
 builder.Services.AddScoped<IIllustrationService, IllustrationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITeamUserService, TeamUserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<BatchService>();
 builder.Services.AddScoped<TokenGenerator>();
 
 // Blob storage: use local filesystem in Development, Azure Blob Storage otherwise
@@ -191,16 +208,7 @@ else
     builder.Services.AddSingleton<IBlobStorageProvider, AzureBlobStorageProvider>();
 }
 
-// Register Hubs
-builder.Services.AddSingleton<BoardHub>(); // Register BoardHub, if it doesn't depend on scoped services, otherwise use 
 builder.Services.Configure<AzureCommunicationServicesSettings>(builder.Configuration.GetSection("AzureCommunicationServices"));
-
-// Read the Azure SignalR connection string from configuration
-string signalRConnectionString = builder.Configuration["AzureSignalR:ConnectionString"]
-    ?? throw new InvalidOperationException("Azure SignalR connection string is not set.");
-
-// Add Azure SignalR service
-builder.Services.AddSignalR().AddAzureSignalR(signalRConnectionString);
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -233,9 +241,13 @@ builder.Services.AddHttpClient();
 // Add CORS policy
 builder.Services.AddCors(options =>
 {
+    // Only our frontend may call the API with credentials. Set Cors:AllowedOrigins per environment (array); the default
+    // is the local dev server.
+    var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? new[] { "http://localhost:44452", "https://localhost:44452" };
     options.AddPolicy("AllowAngularApp",
         builder => builder
-            .WithOrigins("http://localhost:44452", "https://localhost:44452")
+            .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             //.AllowAnyOrigin());
@@ -297,28 +309,29 @@ app.UseMiddleware<JwtMiddleware>(builder.Configuration["JwtSettings:SecretKey"])
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();   // after authentication, so policies can partition by user
 
-// Enable WebSocket support
-app.UseWebSockets();
+// CSRF (security audit 2026-10-04): auth is a SameSite=None cookie, so a cross-site page could otherwise make the
+// browser send state-changing API calls with it. Those calls must carry X-Requested-With: a page on another origin can't
+// add a custom header without a CORS preflight, and the CORS policy only admits our frontend. Requests without auth
+// cookies (sign-in, public views) are unaffected.
+app.Use(async (ctx, next) =>
+{
+    var method = ctx.Request.Method;
+    var safe = HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method) || HttpMethods.IsTrace(method);
+    if (!safe && ctx.Request.Path.StartsWithSegments("/api")
+        && (ctx.Request.Cookies.ContainsKey("accessToken") || ctx.Request.Cookies.ContainsKey("refreshToken"))
+        && !ctx.Request.Headers.ContainsKey("X-Requested-With"))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await ctx.Response.WriteAsync("Missing X-Requested-With header.");
+        return;
+    }
+    await next();
+});
 
 app.MapControllers();
 app.MapRazorPages();
-app.MapHub<BoardHub>("/boardHub");
 app.MapFallbackToFile("index.html");
-
-// Map WebSocket endpoint
-app.Map("/ws", async context =>
-{
-    if (context.WebSockets.IsWebSocketRequest)
-    {
-        var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        var webSocketService = context.RequestServices.GetRequiredService<IWebSocketService>();
-        await webSocketService.HandleWebSocketConnection(webSocket);
-    }
-    else
-    {
-        context.Response.StatusCode = 400;
-    }
-});
 
 app.Run();

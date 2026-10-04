@@ -1,0 +1,33 @@
+// Shared editor controls — same rules the editor uses.
+@import '../../styles/panel-controls';
+:host { display: block; }
+
+.scene3d-btn-autokey {
+    color: #ff6b6b;
+    border-color: #b84040;
+    background: rgba(#ff6b6b, 0.15);
+
+    &:hover { background: rgba(#ff6b6b, 0.28); }
+}
+
+.scene3d-btn-flash {
+    animation: kf-flash 0.6s ease-out;
+}
+
+.scene3d-help-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(155, 89, 182, 0.25);
+    border: 1px solid rgba(155, 89, 182, 0.5);
+    color: #b07be6;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 1;
+    padding: 0;
+}
