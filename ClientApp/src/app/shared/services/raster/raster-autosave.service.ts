@@ -56,6 +56,11 @@ export class RasterAutoSaveService {
   private _strokeTimer: ReturnType<typeof setTimeout> | null = null;
   private _enabled = false;
   private _saveCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The engine runs the timed + stroke-debounced autosave itself (enableAutoSave) — then the fallbacks below stay
+   *  off. They called saveNow(), an EXPLICIT save: every layer and cel read back from the GPU and PNG-encoded with
+   *  no dirty check, not waiting for Play mode / timeline playback — a second full save on every tick and after
+   *  every stroke, on top of the engine's own. */
+  private _engineAutoSave = false;
 
   constructor(private ngZone: NgZone) {
     void this._checkAvailability();
@@ -98,7 +103,9 @@ export class RasterAutoSaveService {
     this._enabled = true;
 
     // Wire Salsa engine auto-save if available
-    this.sm?.enableAutoSave(docId, name, {
+    const sm = this.sm;
+    this._engineAutoSave = typeof sm?.enableAutoSave === 'function';
+    sm?.enableAutoSave(docId, name, {
       intervalMs: this._intervalMs,
       strokeDebounceMs: this._strokeDebounceMs,
       pixelFormat: 'png',
@@ -120,7 +127,7 @@ export class RasterAutoSaveService {
       }),
     );
 
-    // Fallback periodic timer if engine doesn't handle it
+    // Fallback periodic timer if engine doesn't handle it (no-op when it does)
     this._startFallbackTimer();
 
     if (this._state$.value === 'unavailable') {
@@ -137,6 +144,7 @@ export class RasterAutoSaveService {
    *  the next document loads. enable() binds the next one. */
   disable(): void {
     this._enabled = false;
+    this._engineAutoSave = false;
     this._docId = '';
     this.sm?.disableAutoSave();
     this._stopFallbackTimer();
@@ -202,6 +210,7 @@ export class RasterAutoSaveService {
   notifyStrokeEnd(): void {
     if (!this._enabled) return;
     this.sm?.notifyStrokeEnd();
+    if (this._engineAutoSave) return;   // the engine debounces its own save
 
     // Fallback debounced save
     if (this._strokeTimer) clearTimeout(this._strokeTimer);
@@ -214,6 +223,7 @@ export class RasterAutoSaveService {
 
   setInterval(ms: number): void {
     this._intervalMs = ms;
+    if (this._engineAutoSave) this.sm?.setAutoSaveConfig({ intervalMs: ms });   // the engine owns the timer
     this._stopFallbackTimer();
     if (ms > 0 && this._enabled) {
       this._startFallbackTimer();
@@ -224,7 +234,7 @@ export class RasterAutoSaveService {
 
   private _startFallbackTimer(): void {
     this._stopFallbackTimer();
-    if (this._intervalMs <= 0) return;
+    if (this._intervalMs <= 0 || this._engineAutoSave) return;
     this.ngZone.runOutsideAngular(() => {
       this._intervalTimer = setInterval(() => {
         if (this._enabled) {

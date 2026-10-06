@@ -7,7 +7,7 @@
   <!-- ── Layer labels (left column) ──────────────────────── -->
   <div class="timeline-layers" #timelineLayers (wheel)="onLayersWheel($event)">
     <div class="tl-header-cell">Layers</div>
-    <div *ngFor="let layer of layers"
+    <div *ngFor="let layer of layers; trackBy: trackById"
          class="tl-layer-label"
          [class.animated]="layer.animated"
          [class.static]="!layer.animated"
@@ -19,14 +19,14 @@
       <span class="layer-name">{{ layer.name }}</span>
     </div>
     <!-- 3D Dope Sheet tracks — one block per mesh -->
-    <ng-container *ngFor="let entry of mesh3dAllTracks">
+    <ng-container *ngFor="let entry of mesh3dAllTracks; trackBy: trackByEntry">
       <div class="tl-3d-header-label" [title]="'3D keyframes: ' + entry.name"
            (click)="toggleMesh3dCollapse(entry.meshId)" style="cursor:pointer">
         <span class="layer-type-icon" style="font-size:9px">{{ isMesh3dCollapsed(entry.meshId) ? '▶' : '▼' }}</span>
         <span class="layer-name">{{ entry.name || 'mesh' }}</span>
       </div>
       <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
-        <div *ngFor="let def of getTrackDefsForEntry(entry)" class="tl-3d-track-label"
+        <div *ngFor="let def of getTrackDefsForEntry(entry); trackBy: trackByDefKey" class="tl-3d-track-label"
              [style.border-left-color]="def.color"
              [title]="def.label + ' keyframe track — right-click to clear'"
              (contextmenu)="onKfTrackLabelContextMenu($event, entry.meshId, def.key, !!entry.isCamera)">
@@ -43,7 +43,7 @@
                 (click)="previewToggled.emit(); $event.stopPropagation()"
                 title="Preview render through camera cuts">▶</button>
       </div>
-      <div *ngFor="let cam of cameraNodes" class="tl-3d-track-label"
+      <div *ngFor="let cam of cameraNodes; trackBy: trackById" class="tl-3d-track-label"
            title="Click a frame in this row to drop a cut for {{ cam.name }}">
         <span class="layer-name">{{ cam.name }}</span>
       </div>
@@ -58,7 +58,7 @@
 
     <!-- Frame numbers header row -->
     <div class="tl-frame-header" (mousedown)="onFrameHeaderMouseDown($event)">
-      <div *ngFor="let f of frameNumbers"
+      <div *ngFor="let f of frames; trackBy: trackByIndex"
            class="tl-frame-number"
            [class.current]="f === currentFrame"
            [class.in-range]="f >= playRangeStart && f <= playRangeEnd"
@@ -78,81 +78,77 @@
            title="Drag to set play range end"></div>
     </div>
 
-    <!-- Cel rows per layer -->
-    <div *ngFor="let layer of layers" class="tl-layer-row">
+    <!-- Cel rows per layer (layerRows: precomputed per-frame cel state — see the component's view model) -->
+    <div *ngFor="let row of layerRows; trackBy: trackByRowLayerId" class="tl-layer-row">
 
       <!-- Static layer: solid bar -->
-      <div *ngIf="!layer.animated" class="tl-static-bar"
+      <div *ngIf="!row.layer.animated" class="tl-static-bar"
            [style.width.px]="frameCount * frameWidth"
-           (contextmenu)="onStaticBarContextMenu($event, layer)"
+           (contextmenu)="onStaticBarContextMenu($event, row.layer)"
            title="This layer shows the same image on every frame. Right-click to convert to animated.">
       </div>
 
       <!-- Animated layer: per-frame cells -->
-      <ng-container *ngIf="layer.animated">
-        <div *ngFor="let f of frameNumbers"
+      <ng-container *ngIf="row.layer.animated">
+        <div *ngFor="let c of row.cells; trackBy: trackByIndex"
              class="tl-cell"
-             [class.current]="f === currentFrame"
-             [class.cel-start]="isCelStart(layer, f)"
-             [class.cel-hold]="isCelHold(layer, f)"
-             [class.blank]="isBlankFrame(layer, f)"
+             [class.current]="c.f === currentFrame"
+             [class.cel-start]="c.start"
+             [class.cel-hold]="c.hold"
+             [class.blank]="c.blank"
              [style.width.px]="frameWidth"
-             (click)="onFrameClick(f)"
-             (dblclick)="onCellDoubleClick(layer, f)"
-             (contextmenu)="onCellContextMenu($event, layer, f)"
-             (mousedown)="onCelDragStart($event, layer, f)"
-             [class.drag-ghost]="isDragging && draggingLayerId === layer.id && dragGhostFrame === f"
-             [class.drag-swap]="isDragging && isDragSwap && draggingLayerId === layer.id && dragGhostFrame === f"
-             [title]="isBlankFrame(layer, f)
-               ? 'Blank frame — no drawing. Click to jump here, double-click to create a new cel.'
-               : isCelHold(layer, f)
-                 ? 'This frame holds the previous drawing.'
-                 : 'This frame has a drawing. Click to select it. Drag to move. Alt+drag to swap.'">
+             (click)="onFrameClick(c.f)"
+             (dblclick)="onCellDoubleClick(row.layer, c.f)"
+             (contextmenu)="onCellContextMenu($event, row.layer, c.f)"
+             (mousedown)="onCelDragStart($event, row.layer, c.f)"
+             [class.drag-ghost]="isDragging && draggingLayerId === row.layer.id && dragGhostFrame === c.f"
+             [class.drag-swap]="isDragging && isDragSwap && draggingLayerId === row.layer.id && dragGhostFrame === c.f"
+             [title]="c.title">
           <!-- Key / inbetween markers -->
-          <span *ngIf="isCelStart(layer, f)" class="cel-marker">
-            {{ getCelAtFrame(layer, f)?.isKey ? '◆' : '○' }}
+          <span *ngIf="c.start" class="cel-marker">
+            {{ c.cel?.isKey ? '◆' : '○' }}
           </span>
-          <span *ngIf="isCelHold(layer, f)" class="hold-marker">→</span>
+          <span *ngIf="c.hold" class="hold-marker">→</span>
           <!-- Duration drag handle at the last frame of each cel -->
-          <span *ngIf="isCelEnd(layer, f)"
+          <span *ngIf="c.end"
                 class="duration-handle"
-                (mousedown)="onDurationDragStart($event, layer, getCelAtFrame(layer, f)!)"
+                (mousedown)="onDurationDragStart($event, row.layer, c.cel!)"
                 title="Drag to change how many frames this drawing is held for.">┃</span>
         </div>
       </ng-container>
     </div>
 
-    <!-- 3D Dope Sheet rows — one block per mesh -->
-    <ng-container *ngFor="let entry of mesh3dAllTracks">
+    <!-- 3D Dope Sheet rows — one block per mesh (mesh3dRows: precomputed keyframe sets) -->
+    <ng-container *ngFor="let row of mesh3dRows; trackBy: trackByMeshRow">
       <!-- Summary row (always visible): dot if any track has a keyframe at this frame -->
       <div class="tl-3d-header-row" [style.width.px]="frameCount * frameWidth">
-        <div *ngFor="let f of frameNumbers"
+        <div *ngFor="let f of frames; let i = index; trackBy: trackByIndex"
              class="tl-3d-header-cell"
              [class.current]="f === currentFrame"
              [style.width.px]="frameWidth"
              (click)="onFrameClick(f)">
-          <span *ngIf="hasAnyKeyframeAt(entry.tracks, f, entry.isCamera)" class="kf-any">&#x25E6;</span>
+          <span *ngIf="row.anyKey[i]" class="kf-any">&#x25E6;</span>
         </div>
       </div>
       <!-- Per-property track rows (hidden when mesh is collapsed) -->
-      <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
-        <div *ngFor="let def of getTrackDefsForEntry(entry)" class="tl-3d-track-row">
-          <div *ngFor="let f of frameNumbers"
+      <ng-container *ngIf="!isMesh3dCollapsed(row.entry.meshId)">
+        <div *ngFor="let t of row.tracks; trackBy: trackByTrackRow" class="tl-3d-track-row">
+          <div *ngFor="let f of frames; trackBy: trackByIndex"
                class="tl-3d-cell"
                [class.current]="f === currentFrame"
                [style.width.px]="frameWidth"
                (click)="onFrameClick(f)"
-               [title]="getTrackFrameSet(entry.tracks, def.key).has(f) ? def.label + ' keyframe at frame ' + f + ' — right-click to change easing' : ''">
-            <span *ngIf="getTrackFrameSet(entry.tracks, def.key).has(f)"
+               [title]="t.keys.has(f) ? t.def.label + ' keyframe at frame ' + f + ' — right-click to change easing' : ''">
+            <span *ngIf="t.keys.has(f)"
                   class="kf-diamond"
-                  [class.kf-drag-source]="kfDragging && kfDragMeshId === entry.meshId && kfDragTrackKey === def.key && kfDragFromFrame === f"
-                  [class.kf-selected]="isKfSelected(entry.meshId, def.key, f)"
-                  [style.color]="def.color"
-                  (mousedown)="onKfDiamondMouseDown($event, entry.meshId, def.key, f, !!entry.isCamera)"
-                  (contextmenu)="onKfDiamondContextMenu($event, entry.meshId, def.key, f, !!entry.isCamera)">&#x25C6;</span>
-            <span *ngIf="kfDragging && kfDragMeshId === entry.meshId && kfDragTrackKey === def.key && kfDragGhostFrame === f && kfDragGhostFrame !== kfDragFromFrame"
+                  [class.kf-drag-source]="kfDragging && kfDragMeshId === row.entry.meshId && kfDragTrackKey === t.def.key && kfDragFromFrame === f"
+                  [class.kf-selected]="isKfSelected(row.entry.meshId, t.def.key, f)"
+                  [style.color]="t.def.color"
+                  (mousedown)="onKfDiamondMouseDown($event, row.entry.meshId, t.def.key, f, !!row.entry.isCamera)"
+                  (contextmenu)="onKfDiamondContextMenu($event, row.entry.meshId, t.def.key, f, !!row.entry.isCamera)">&#x25C6;</span>
+            <span *ngIf="kfDragging && kfDragMeshId === row.entry.meshId && kfDragTrackKey === t.def.key && kfDragGhostFrame === f && kfDragGhostFrame !== kfDragFromFrame"
                   class="kf-diamond kf-drag-ghost"
-                  [style.color]="def.color">&#x25C6;</span>
+                  [style.color]="t.def.color">&#x25C6;</span>
           </div>
         </div>
       </ng-container>
@@ -161,19 +157,19 @@
     <!-- Cameras lane grid -->
     <ng-container *ngIf="cameraNodes.length > 0">
       <div class="tl-3d-header-row" [style.width.px]="frameCount * frameWidth">
-        <div *ngFor="let f of frameNumbers"
+        <div *ngFor="let f of frames; trackBy: trackByIndex"
              class="tl-3d-header-cell"
              [class.current]="f === currentFrame"
              [style.width.px]="frameWidth"
              (click)="onFrameClick(f)">
         </div>
       </div>
-      <div *ngFor="let cam of cameraNodes"
+      <div *ngFor="let cam of cameraNodes; trackBy: trackById"
            class="tl-3d-track-row tl-camera-cut-row"
            [style.width.px]="frameCount * frameWidth"
            (click)="onCameraRowClick($event, cam.id)"
            [title]="'Click to drop a cut for ' + cam.name">
-        <div *ngFor="let cut of getCutsForCamera(cam.id)"
+        <div *ngFor="let cut of getCutsForCamera(cam.id); trackBy: trackByIndex"
              class="tl-cut-marker"
              [style.left.px]="(cut.frame - 1) * frameWidth + frameWidth * 0.5 - 6"
              (click)="onCutMarkerClick($event, cut.frame)"
@@ -183,7 +179,7 @@
 
     <!-- Current frame indicator line -->
     <div class="tl-playhead"
-         [style.left.px]="(currentFrame - 1) * frameWidth + frameWidth / 2">
+         [style.transform]="playheadTransform">
     </div>
   </div>
 
@@ -294,7 +290,7 @@
       <div class="tint-row">
         <span class="slider-label" title="Color tint for previous frames. Red is the industry standard.">Prev Tint</span>
         <div class="tint-swatches">
-          <div *ngFor="let t of beforeTintPresets"
+          <div *ngFor="let t of beforeTintPresets; trackBy: trackByIndex"
                class="tint-swatch"
                [class.active]="tintEquals(onionSkin.tintBefore, t)"
                [style.background-color]="tintToRgb(t)"
@@ -304,7 +300,7 @@
       <div class="tint-row">
         <span class="slider-label" title="Color tint for upcoming frames. Blue is the industry standard.">Next Tint</span>
         <div class="tint-swatches">
-          <div *ngFor="let t of afterTintPresets"
+          <div *ngFor="let t of afterTintPresets; trackBy: trackByIndex"
                class="tint-swatch"
                [class.active]="tintEquals(onionSkin.tintAfter, t)"
                [style.background-color]="tintToRgb(t)"
@@ -411,7 +407,7 @@
       Easing — {{ kfContextTrackKey }} F{{ kfContextFrame }}
     </div>
     <div class="ctx-divider"></div>
-    <div *ngFor="let opt of easingOptions"
+    <div *ngFor="let opt of easingOptions; trackBy: trackByIndex"
          class="ctx-item"
          [class.ctx-item-active]="kfContextCurrentEasing === opt.value"
          (click)="setKfEasing(opt.value)">

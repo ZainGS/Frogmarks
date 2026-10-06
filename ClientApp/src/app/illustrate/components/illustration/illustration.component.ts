@@ -590,11 +590,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.shapeManager.redo2DShapes();
   }
 
-  /** Current raster timeline frame (1-based) for display in the 3D panel. */
-  get scene3dTimelineFrame(): number {
-    return this.animationService.getCurrentFrame?.() ?? 1;
-  }
-
   /** Called by layer panel's (scene3dSelected) event */
   /** The 3D scene layer was selected (true) or left (false): grid overrides, toolbar swap, and entering / leaving the
    *  3D editing context. */
@@ -645,9 +640,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager;
 
     // attachKeyframesToTimeline3D connects the 3D engine to the raster timeline
-    // internally — it handles applyAllKeyframesAtFrame on every frame tick itself.
+    // internally — it handles applyAllKeyframesAtFrame on every frame tick itself. (Idempotent; it was also called a
+    // second time here through sm.scene3d, which could leave two retry subscriptions before the timeline existed.)
+    // Deliberately NOT detached in _leave3dContext: the 3D scene layer still renders (and animates) while a 2D layer
+    // is selected, and the per-frame pass is a cheap no-op for meshes without keyframes / Frame Link.
     sm.attachKeyframesToTimeline3D();
-    sm.scene3d?.attachKeyframesToTimeline();
 
     // Disable all tools except cursor/pan while 3D viewport is active.
     this.selectCursor('cursor');

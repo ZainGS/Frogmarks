@@ -118,6 +118,9 @@ export class RasterAnimationService {
   // ── Animation mode ──────────────────────────────────────────
 
   setAnimationEnabled(enabled: boolean): void {
+    // Hiding the timeline stops playback: its rAF clock otherwise kept advancing (and re-rendering) with no Play
+    // button on screen. (Newer Salsa also pauses in setAnimationEnabled(false); this covers older builds.)
+    if (!enabled) this.pausePlayback();
     this.sm?.setAnimationEnabled(enabled);
     this._animationEnabled$.next(enabled);
     if (enabled) {
@@ -176,9 +179,28 @@ export class RasterAnimationService {
 
   // ── Playback ────────────────────────────────────────────────
 
+  /** The playback clock is Salsa's requestAnimationFrame loop, started HERE: zone.js binds a rAF to the zone it was
+   *  requested in, so starting it from a click / keydown (in the zone) ran a full app change detection on every
+   *  display frame for as long as it played. Started outside, nothing ticks per frame: currentFrame$ emits outside
+   *  the zone and the views that show the frame (timeline, frame badges) refresh themselves. Play/pause state
+   *  changes come back into the zone (see _subscribeEvents). */
   togglePlayPause(): void {
-    this.sm?.togglePlayPause();
-    this._isPlaying$.next(!this._isPlaying$.value);
+    const sm = this.sm;
+    this.zone.runOutsideAngular(() => sm?.togglePlayPause());
+    this._isPlaying$.next(this._enginePlaying(sm) ?? !this._isPlaying$.value);
+  }
+
+  /** Pause if playing (no-op otherwise). */
+  pausePlayback(): void {
+    const sm = this.sm;
+    if (this._enginePlaying(sm) ?? this._isPlaying$.value) sm?.pause?.();
+    this._isPlaying$.next(false);
+  }
+
+  /** The engine's playback state; null when it can't say (no engine yet, or a stub without the timeline API). */
+  private _enginePlaying(sm: ShapeManager | null): boolean | null {
+    const state = sm?.getTimelineState?.();
+    return state ? state.playbackState === 'playing' : null;
   }
 
   stopPlayback(): void {
@@ -387,7 +409,8 @@ export class RasterAnimationService {
     this.zone.runOutsideAngular(() => {
       this._unsubscribeEvent = sm.onAnimationEvent((event: AnimationEvent) => {
         if (event.type === 'frame-changed') {
-          // Frame ticks don't need Angular CD — emit outside zone to avoid 60fps CD cycles
+          // Frame ticks don't need app-wide CD: during playback this runs outside the zone (togglePlayPause starts
+          // the clock there) and the subscribers that show the frame detectChanges their own view.
           this._currentFrame$.next(event.frame ?? 1);
           return;
         }

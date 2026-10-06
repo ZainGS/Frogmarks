@@ -1,4 +1,5 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 
@@ -20,11 +21,34 @@ export interface SceneAnimationHost {
 @Injectable()
 export class SceneAnimationService implements OnDestroy {
   private host!: SceneAnimationHost;
-  constructor(public animationService: RasterAnimationService) {}
+  constructor(public animationService: RasterAnimationService, private zone: NgZone) {}
   bind(host: SceneAnimationHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager(); }
 
-  ngOnDestroy(): void { clearTimeout(this._scene3dFlashTimer); }
+  ngOnDestroy(): void { clearTimeout(this._scene3dFlashTimer); this._stopPlayerFramePoll(); }
+
+  /** Fires (outside the Angular zone) when the 3D animation player's frame changes while it plays — for the views
+   *  that show it (scene-anim-section): the player's rAF clock runs outside the zone, so nothing else refreshes them. */
+  readonly scene3dPlayerFrame$ = new Subject<void>();
+  private _playerFramePoll: ReturnType<typeof setInterval> | null = null;
+
+  /** Watch the player's frame while it plays (it has a single onFrame hook, which the engine owns). */
+  private _startPlayerFramePoll(): void {
+    if (this._playerFramePoll) return;
+    let last = -1;
+    this.zone.runOutsideAngular(() => {
+      this._playerFramePoll = setInterval(() => {
+        const player = this.shapeManager.getAnimationPlayer3D();
+        const frame = player?.currentFrame ?? -1;
+        if (frame !== last) { last = frame; this.scene3dPlayerFrame$.next(); }
+        if (!player?.playing) this._stopPlayerFramePoll();
+      }, 50);
+    });
+  }
+
+  private _stopPlayerFramePoll(): void {
+    if (this._playerFramePoll) { clearInterval(this._playerFramePoll); this._playerFramePoll = null; }
+  }
 
   /** Rebuild the per-mesh keyframe rows (+ a synthetic camera row). Returns the selected mesh's row, if any. */
   buildKeyframeTracks(selectedId: string | null, fallbackMeshes: any[]): { meshId: string; name: string; tracks: any } | null {
@@ -318,11 +342,13 @@ export class SceneAnimationService implements OnDestroy {
   scene3dAnimationPlay(): void {
     this.scene3dEnsureAnimationPlayer();
     const sm = this.shapeManager;
-    if (this.scene3dAnimSyncWithTimeline) {
-      sm.scene3d?.startSyncedPlayback();
-      return;
-    }
-    sm.getAnimationPlayer3D()?.play();
+    // The player's rAF clock starts OUTSIDE the zone (a rAF requested in it = an app tick per display frame while it
+    // plays — see RasterAnimationService.togglePlayPause); the frame readout follows via scene3dPlayerFrame$.
+    this.zone.runOutsideAngular(() => {
+      if (this.scene3dAnimSyncWithTimeline) sm.scene3d?.startSyncedPlayback();
+      else sm.getAnimationPlayer3D()?.play();
+    });
+    this._startPlayerFramePoll();
   }
 
   scene3dAnimationPause(): void {

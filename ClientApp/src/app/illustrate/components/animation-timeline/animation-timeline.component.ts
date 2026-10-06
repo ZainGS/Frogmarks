@@ -2,12 +2,16 @@ import {
   Component,
   OnInit,
   OnDestroy,
+  DoCheck,
   HostListener,
   ElementRef,
   ViewChild,
   Input,
   Output,
   EventEmitter,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  NgZone,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -27,13 +31,57 @@ type KeyframeEasing = Parameters<ShapeManager['setMeshKeyframe3D']>[4];
 /** Camera rows only ever carry camera track keys; this names that narrowing in one place. */
 const camKey = (k: string): CameraTrackKey => k as CameraTrackKey;
 
+/** One frame of an animated layer's row, precomputed (it used to be ~8 scans of layer.cels per cell per change
+ *  detection — i.e. per frame of playback). */
+export interface CelCellView {
+  f: number;
+  start: boolean;
+  hold: boolean;
+  blank: boolean;
+  end: boolean;
+  /** The cel showing on this frame (getCelAtFrame), null on a blank frame. */
+  cel: CelInfo | null;
+  title: string;
+}
+
+export interface LayerRowView {
+  layer: TimelineLayerInfo;
+  /** One per frame (index = frame - 1); empty for a static layer. */
+  cells: CelCellView[];
+}
+
+export interface TrackRowView {
+  def: { key: string; label: string; color: string };
+  /** 1-based frames with a keyframe on this track. */
+  keys: Set<number>;
+}
+
+export interface Mesh3dRowView {
+  entry: { meshId: string; name: string; tracks: any; isCamera?: boolean };
+  /** Per frame (index = frame - 1): a keyframe on any of the entry's tracks. */
+  anyKey: boolean[];
+  tracks: TrackRowView[];
+}
+
+const CELL_TITLE_BLANK = 'Blank frame — no drawing. Click to jump here, double-click to create a new cel.';
+const CELL_TITLE_HOLD = 'This frame holds the previous drawing.';
+const CELL_TITLE_DRAWING = 'This frame has a drawing. Click to select it. Drag to move. Alt+drag to swap.';
+const NO_CUTS: { cameraId: string; frame: number }[] = [];
+
+/**
+ * OnPush: playback runs outside the Angular zone (RasterAnimationService), so the per-frame update is this component's
+ * own detectChanges from currentFrame$ — the template is a precomputed view model (frames / layerRows / mesh3dRows),
+ * so a frame only re-evaluates cheap comparisons. Everything else marks for check: the service observables, inputs
+ * (new arrays), template events, and the document-level drag listeners below (markForCheck in each).
+ */
 @Component({
   selector: 'app-animation-timeline',
   standalone: false,
   templateUrl: './animation-timeline.component.html',
   styleUrl: './animation-timeline.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AnimationTimelineComponent implements OnInit, OnDestroy {
+export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
 
   // ── State ─────────────────────────────────────────────────
 
@@ -159,8 +207,19 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
   }
 
   getCutsForCamera(cameraId: string): { cameraId: string; frame: number }[] {
-    return this.cameraCuts.filter(c => c.cameraId === cameraId);
+    if (this._cutsSource !== this.cameraCuts) {   // the host replaces the array on every change
+      this._cutsSource = this.cameraCuts;
+      this._cutsByCamera.clear();
+      for (const c of this.cameraCuts) {
+        let list = this._cutsByCamera.get(c.cameraId);
+        if (!list) { list = []; this._cutsByCamera.set(c.cameraId, list); }
+        list.push(c);
+      }
+    }
+    return this._cutsByCamera.get(cameraId) ?? NO_CUTS;
   }
+  private _cutsSource: { cameraId: string; frame: number }[] | null = null;
+  private _cutsByCamera = new Map<string, { cameraId: string; frame: number }[]>();
 
   onCameraRowClick(event: MouseEvent, cameraId: string): void {
     const frame = Math.max(1, Math.min(this.frameCount, Math.floor(event.offsetX / this.frameWidth) + 1));
@@ -505,6 +564,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
         const dx = e.clientX - event.clientX;
         this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
         this.kfDragIsCopy = e.altKey;
+        this.cdr.markForCheck();   // a document listener — OnPush doesn't see it on its own
       }
     };
 
@@ -530,6 +590,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       }
       this.kfDragging = false;
       this.kfDragMeshId = '';
+      this.cdr.markForCheck();
     };
 
     document.addEventListener('mousemove', onMove);
@@ -557,32 +618,137 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
 
   private subs: Subscription[] = [];
 
-  constructor(public animService: RasterAnimationService, private editorState: EditorStateService) {}
+  constructor(
+    public animService: RasterAnimationService,
+    private editorState: EditorStateService,
+    private cdr: ChangeDetectorRef,
+  ) {}
+
+  /** Subscriptions are live (BehaviorSubjects replay synchronously in ngOnInit — no view refresh needed then). */
+  private _ready = false;
 
   ngOnInit(): void {
     this.subs.push(
-      this.animService.currentFrame$.subscribe(f => this.currentFrame = f),
-      this.animService.frameCount$.subscribe(c => this.frameCount = c),
-      this.animService.fps$.subscribe(f => this.fps = f),
-      this.animService.isPlaying$.subscribe(p => this.isPlaying = p),
-      this.animService.loopMode$.subscribe(m => this.loopMode = m),
-      this.animService.onionSkin$.subscribe(o => this.onionSkin = { ...o }),
-      this.animService.timelineLayers$.subscribe(l => this.layers = l),
-      this.animService.playRangeStart$.subscribe(s => this.playRangeStart = s),
-      this.animService.playRangeEnd$.subscribe(e => this.playRangeEnd = e),
+      // Per frame of playback — emitted OUTSIDE the Angular zone (no app tick), so refresh this view directly.
+      this.animService.currentFrame$.subscribe(f => { if (f !== this.currentFrame) { this.currentFrame = f; this._refresh(); } }),
+      this.animService.frameCount$.subscribe(c => { this.frameCount = c; this._rebuildFrames(); this._refresh(); }),
+      this.animService.fps$.subscribe(f => { this.fps = f; this._refresh(); }),
+      this.animService.isPlaying$.subscribe(p => { this.isPlaying = p; this._refresh(); }),
+      this.animService.loopMode$.subscribe(m => { this.loopMode = m; this._refresh(); }),
+      this.animService.onionSkin$.subscribe(o => { this.onionSkin = { ...o }; this._refresh(); }),
+      this.animService.timelineLayers$.subscribe(l => { this.layers = l; this._rebuildLayerRows(); this._refresh(); }),
+      this.animService.playRangeStart$.subscribe(s => { this.playRangeStart = s; this._refresh(); }),
+      this.animService.playRangeEnd$.subscribe(e => { this.playRangeEnd = e; this._refresh(); }),
     );
+    this._ready = true;
   }
 
   ngOnDestroy(): void {
+    this._ready = false;
     this.subs.forEach(s => s.unsubscribe());
+    // No timeline on screen = nothing to pause it from (animation turned off, the editor left): don't leave the clock
+    // running in the background.
+    this.animService.pausePlayback();
   }
 
-  // ── Frame array for template ──────────────────────────────
+  /** Inputs arrive as new arrays, but keyframe tracks can also change in place (auto-key records into the live
+   *  mesh.keyframeTracks) — so the 3D rows are keyed on a cheap hash of every track's frames, checked here (this
+   *  runs whenever the host is checked, OnPush or not). */
+  ngDoCheck(): void {
+    const sig = this._mesh3dSignature();
+    if (this.mesh3dAllTracks !== this._mesh3dSource || sig !== this._mesh3dSig) {
+      this._rebuildMesh3dRows();
+      this.cdr.markForCheck();
+    }
+  }
 
-  get frameNumbers(): number[] {
-    const arr: number[] = [];
-    for (let i = 1; i <= this.frameCount; i++) arr.push(i);
-    return arr;
+  /** In the zone: mark (the app tick that follows checks this view). Outside it (playback, engine events): check
+   *  this view now — nothing else will. */
+  private _refresh(): void {
+    if (!this._ready) return;
+    if (NgZone.isInAngularZone()) this.cdr.markForCheck();
+    else this.cdr.detectChanges();
+  }
+
+  // ── View model for the template (rebuilt only when its inputs change) ─────
+
+  /** 1..frameCount. */
+  frames: number[] = [];
+  layerRows: LayerRowView[] = [];
+  mesh3dRows: Mesh3dRowView[] = [];
+  private _mesh3dSource: AnimationTimelineComponent['mesh3dAllTracks'] | null = null;
+  private _mesh3dSig = 0;
+
+  private _rebuildFrames(): void {
+    if (this.frames.length !== this.frameCount) {
+      const arr: number[] = [];
+      for (let i = 1; i <= this.frameCount; i++) arr.push(i);
+      this.frames = arr;
+    }
+    this._rebuildLayerRows();
+    this._rebuildMesh3dRows();
+  }
+
+  private _rebuildLayerRows(): void {
+    const n = this.frameCount;
+    this.layerRows = this.layers.map(layer => {
+      const cells: CelCellView[] = [];
+      if (layer.animated) {
+        for (let f = 1; f <= n; f++) {
+          // the same predicates the template used to call per cell (getCelAtFrame / isCelStart / ...)
+          const cel = this.getCelAtFrame(layer, f);
+          const hold = !!cel && cel.frame !== f;
+          cells.push({
+            f,
+            start: this.isCelStart(layer, f),
+            hold,
+            blank: !cel,
+            end: !!cel && f === cel.frame + cel.duration - 1,
+            cel,
+            title: !cel ? CELL_TITLE_BLANK : hold ? CELL_TITLE_HOLD : CELL_TITLE_DRAWING,
+          });
+        }
+      }
+      return { layer, cells };
+    });
+  }
+
+  private _rebuildMesh3dRows(): void {
+    const n = this.frameCount;
+    this._mesh3dSource = this.mesh3dAllTracks;
+    this._mesh3dSig = this._mesh3dSignature();
+    this.mesh3dRows = this.mesh3dAllTracks.map(entry => {
+      const tracks = this.getTrackDefsForEntry(entry).map(def => ({ def, keys: this.getTrackFrameSet(entry.tracks, def.key) }));
+      const anyKey: boolean[] = [];
+      for (let f = 1; f <= n; f++) anyKey.push(tracks.some(t => t.keys.has(f)));
+      return { entry, anyKey, tracks };
+    });
+  }
+
+  /** A hash of every displayed track's keyframe frames (allocation-free: it runs on every host check). */
+  private _mesh3dSignature(): number {
+    let h = this.mesh3dAllTracks.length | 0;
+    for (const entry of this.mesh3dAllTracks) {
+      for (const def of this.getTrackDefsForEntry(entry)) {
+        const track: Array<{ frame: number }> | undefined = entry.tracks?.[def.key];
+        h = (Math.imul(h, 31) + (track ? track.length + 1 : 0)) | 0;
+        if (track) for (const kf of track) h = (Math.imul(h, 31) + (kf.frame | 0)) | 0;
+      }
+    }
+    return h;
+  }
+
+  trackByIndex(i: number): number { return i; }
+  trackById(_i: number, item: { id: string }): string { return item.id; }
+  trackByRowLayerId(_i: number, row: LayerRowView): string { return row.layer.id; }
+  trackByMeshRow(_i: number, row: Mesh3dRowView): string { return row.entry.meshId; }
+  trackByTrackRow(_i: number, row: TrackRowView): string { return row.def.key; }
+  trackByEntry(_i: number, entry: { meshId: string }): string { return entry.meshId; }
+  trackByDefKey(_i: number, def: { key: string }): string { return def.key; }
+
+  /** The playhead's x (transform — no layout per frame). */
+  get playheadTransform(): string {
+    return 'translateX(' + ((this.currentFrame - 1) * this.frameWidth + this.frameWidth / 2 - 1) + 'px)';
   }
 
   get windowHeight(): number {
@@ -829,6 +995,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
         const dx = e.clientX - event.clientX;
         this.dragGhostFrame = Math.max(1, Math.min(this.frameCount, this.draggingFromFrame + Math.round(dx / this.frameWidth)));
         this.isDragSwap = e.altKey;
+        this.cdr.markForCheck();   // a document listener — OnPush doesn't see it on its own
       }
     };
 
@@ -851,6 +1018,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       }
       this.isDragging = false;
       this.draggingCelId = '';
+      this.cdr.markForCheck();
     };
 
     document.addEventListener('mousemove', onMove);
@@ -886,6 +1054,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       this.durationDragging = false;
+      this.cdr.markForCheck();
     };
 
     document.addEventListener('mousemove', onMove);

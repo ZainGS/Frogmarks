@@ -65,6 +65,7 @@ import { DitherOptionsComponent } from './components/dither-options/dither-optio
 import { FrameLinkPanelComponent } from './components/frame-link-panel/frame-link-panel.component';
 import { LayerDitherPanelComponent } from './components/layer-dither-panel/layer-dither-panel.component';
 import { SceneAnimSectionComponent } from './components/scene-anim-section/scene-anim-section.component';
+import { TimelineFrameBadgeComponent } from './components/timeline-frame-badge/timeline-frame-badge.component';
 import { SceneCinematicSectionComponent } from './components/scene-cinematic-section/scene-cinematic-section.component';
 import { EphemeraPanel } from './components/ephemera-panel/ephemera-panel.component';
 import { GreasePencilPanelComponent } from './components/grease-pencil-panel/grease-pencil-panel.component';
@@ -145,6 +146,7 @@ const routes: Routes = [
     FrameLinkPanelComponent,
     LayerDitherPanelComponent,
     SceneAnimSectionComponent,
+    TimelineFrameBadgeComponent,
     SceneCinematicSectionComponent,
     EphemeraPanel,
     GreasePencilPanelComponent,

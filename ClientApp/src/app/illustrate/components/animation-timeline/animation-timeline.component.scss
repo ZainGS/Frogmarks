@@ -143,10 +143,10 @@ $play-range: rgba($accent, 0.08);
   transition: background 0.1s;
 
   &:hover { background: rgba(255, 255, 255, 0.05); }
+  // (no font-weight here: it re-laid out the header on every frame of playback — colour + background only)
   &.current {
     background: $current-frame;
     color: $accent-light;
-    font-weight: 700;
   }
   &.in-range { background: $play-range; }
   &.current.in-range { background: $current-frame; }
@@ -248,15 +248,18 @@ $play-range: rgba($accent, 0.08);
 
 /* ── Playhead (vertical indicator line) ──────────────────────── */
 
+// Positioned by [style.transform] (playheadTransform, which includes the -1px centring) — a compositor-only move per
+// frame of playback, where [style.left] re-ran layout.
 .tl-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   width: 2px;
   background: $accent;
   z-index: 5;
   pointer-events: none;
-  transform: translateX(-1px);
+  will-change: transform;
   box-shadow: 0 0 4px rgba($accent, 0.5);
 }
 
