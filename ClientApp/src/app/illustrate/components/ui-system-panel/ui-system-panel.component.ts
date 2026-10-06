@@ -1,6 +1,17 @@
 import { Component, inject, Input, NgZone, OnDestroy, OnInit } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
+/** The Persona kit section of the UI panel is work in progress and hidden from users. Turn it back on here, or per
+ *  machine for development with localStorage 'fm-dev-persona-kit' = '1'. Hidden = only the section (and the kit
+ *  transitions in a transition's Animation list) is not offered: the engine kit, kit pieces already in a document and
+ *  a transition already using a kit animation keep working (that transition still lists its kit animation). */
+export const SHOW_PERSONA_KIT = false;
+export const PERSONA_KIT_DEV_KEY = 'fm-dev-persona-kit';
+export function personaKitEnabled(): boolean {
+  if (SHOW_PERSONA_KIT) return true;
+  try { return localStorage.getItem(PERSONA_KIT_DEV_KEY) === '1'; } catch { return false; }
+}
+
 /**
  * UI System panel: UI layers, state machine (states, transitions, variables), per-state shape/layer
  * visibility bindings, shape interactions, sounds, live preview.
@@ -20,8 +31,8 @@ export class UiSystemPanelComponent implements OnInit, OnDestroy {
   @Input('selectedShapeId') uiSelectedShapeId: string | null = null;
 
   ngOnInit(): void {
-    // The panel can be re-created (its column is removed while the layer tree is hidden / the CD designer is
-    // open) — rebuild from the engine, which holds the UI layers and state machines.
+    // The panel can be re-created (its column is removed while the UI is hidden / the CD designer is
+    // open; View › Side Panel only hides it) — rebuild from the engine, which holds the UI layers and state machines.
     if (this.shapeManager) { this.uiRefreshLayers(); this.kitRefresh(); }
   }
 
@@ -526,7 +537,13 @@ export class UiSystemPanelComponent implements OnInit, OnDestroy {
   private _kitSchema: any = null;
   private readonly _kitTransitionLabels: Record<string, string> = { slash: 'Slash wipe', shatter: 'Shatter', stripeBurst: 'Stripe burst', panelSlide: 'Panel slide', zoomPunch: 'Zoom punch' };
   kitTransitionLabel(t: string): string { return this._kitTransitionLabels[t] ?? t; }
-  get kitAvailable(): boolean { return !!this.shapeManager; }   // the UI kit is in every current Salsa build
+  /** Persona kit offered in this panel (SHOW_PERSONA_KIT / the dev override; the UI kit is in every current Salsa build). */
+  readonly personaKitEnabled = personaKitEnabled();
+  get kitAvailable(): boolean { return this.personaKitEnabled && !!this.shapeManager; }
+  /** The transition Animation list offers the kit transitions when the kit is on, or when this transition already uses one. */
+  kitTransitionsOffered(currentType: string | undefined): boolean {
+    return this.kitTransitions.length > 0 && (this.kitAvailable || (!!currentType && this.kitTransitions.includes(currentType)));
+  }
 
   /** Load the kit schema/presets once (cached arrays) and rebuild the widget list for the active layer. */
   kitRefresh(): void {

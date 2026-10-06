@@ -44,9 +44,13 @@ import { StorageSettingsService } from '../../services/storage-settings.service'
 import { SceneAddService } from '../../services/scene-add.service';
 import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
-import { cheatsheetColumns, dispatchKey, MOD_KEYMAP, routeUndo, TOOL_KEYMAP } from './editor-keymap';
+import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete,
+  routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
 import { TouchUiService } from '../../services/touch-ui.service';
-import type { TouchAction } from '../touch-action-bar/touch-action-bar.component';
+import { ToolSubpanelCollapse } from '../../utils/tool-subpanel-collapse';
+import { aiToolEnabled } from '../../utils/ai-tool-flag';
+import { SidePanelService } from '../../services/side-panel.service';
+import { toggleAppFullscreen } from '../../../shared/utilities/app-fullscreen';
 import type { OutlinerAction } from '../scene-outliner/scene-outliner.component';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
 import { FillWandService } from '../../services/fill-wand.service';
@@ -189,7 +193,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // State flags
   uiHidden = false;
   isFullscreen = false;
-  layerTreeHidden = false;
   /** Raster animation mode — read from the engine, the single source of truth (audit Phase 5.2: the editor kept its own
    *  copy and five call sites had to update both). Change it with setAnimationEnabled(). */
   get animationEnabled(): boolean { return !!this.shapeManager?.isAnimationEnabled(); }
@@ -243,38 +246,17 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._showUiBtnTimer = setTimeout(() => { this.showUiBtnVisible = false; }, IllustrationComponent.SHOW_UI_BTN_MS);
   }
 
-  toggleLayerTree() {
-    this.layerTreeHidden = !this.layerTreeHidden;
+  /** View › Side Panel: show / hide the right panel column (remembered per machine, SidePanelService). Replaces the
+   *  old "Toggle Layer Tree", which hid only the panel's contents and left the empty 280 px column catching touches. */
+  toggleSidePanel(): void {
+    this.sidePanel.toggle();
     this.closeContextMenu();
   }
 
+  /** View › Toggle Full Screen (F): the whole app, so the rail, sub-panels, timeline and overlays stay visible (it used
+   *  to fullscreen .board-shell, and everything outside that element disappeared). */
   async toggleFullscreen() {
-    const el: any =
-      this.boardShellRef?.nativeElement ??
-      this.canvasRef?.nativeElement ??
-      document.documentElement;
-
-    try {
-      const isActive =
-        !!document.fullscreenElement ||
-        !!(document as any).webkitFullscreenElement;
-
-      if (!isActive) {
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-        } else if (el.webkitRequestFullscreen) {
-          el.webkitRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          (document as any).webkitExitFullscreen();
-        }
-      }
-    } catch (err) {
-      console.error('Fullscreen toggle failed:', err);
-    }
+    await toggleAppFullscreen();
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -362,6 +344,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   authoringPanelOpen = false;
+  /** The AI Scene Authoring rail button + sub-panel are offered (WIP: off unless SHOW_AI_TOOL / the dev override). */
+  readonly showAiTool = aiToolEnabled();
 
   /** Right-panel tab: 'scene' = layers + outliner/mesh, 'global' = global scene settings, 'ui' = UI system */
   rightPanelTab: 'scene' | 'global' | 'ui' = 'scene';
@@ -780,31 +764,49 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── Touch (mobile-parity TOUCH-10): the floating action bar + Edit-menu undo routing ──
+  // ── Edit menu routing + the touch Apply / Cancel pill (mobile-parity TOUCH-10, replaced the floating action bar) ──
 
-  /** Edit › Undo / Redo and the touch bar: routed per context like Ctrl+Z (was raster-only). */
+  /** Edit › Undo / Redo: routed per context like Ctrl+Z (was raster-only). */
   editUndo(): void { routeUndo(this, false); }
   editRedo(): void { routeUndo(this, true); }
+  /** Edit › Duplicate: routed like Ctrl+D (editor-keymap routeDuplicate); disabled when nothing is selected. */
+  editDuplicate(): void { routeDuplicate(this); }
+  get canEditDuplicate(): boolean { return canRouteDuplicate(this); }
+  /** Edit › Delete: 2D shapes / pixel selection like the Delete key, 3D items through the outliner's delete path. */
+  editDelete(): void { routeDelete(this); }
 
-  onTouchAction(a: TouchAction): void {
-    switch (a) {
-      case 'undo': this.editUndo(); break;
-      case 'redo': this.editRedo(); break;
-      // The rest go out as the key the keyboard would send, so the engine's own tool listeners (mesh edit, path
-      // edit, pen close, gizmo modal, selection transform) and the editor keymap handle them exactly as usual.
-      case 'delete': this._sendKey('Delete', 'Delete'); break;
-      case 'duplicate': this._sendKey('d', 'KeyD', true); break;
-      case 'escape': this._sendKey('Escape', 'Escape'); break;
-      case 'enter': this._sendKey('Enter', 'Enter'); break;
-    }
+  /** The touch pill for the current modal state (null = none). Shown only under (pointer: coarse), outside Play. */
+  get contextPill(): ContextPillSpec | null { return activeContextPill(this); }
+  runContextPill(spec: ContextPillSpec, which: 'apply' | 'cancel'): void {
+    // Re-check: the mode may have ended between render and tap (a late tap must not act on a newer mode)
+    if (activeContextPill(this) !== spec) return;
+    spec[which]?.run(this);
   }
 
-  /** A synthetic keydown + keyup from <body> (bubbles to the window listeners the engine + editor use). */
-  private _sendKey(key: string, code: string, mod = false): void {
-    const mac = navigator.userAgent.includes('Mac');
-    const init: KeyboardEventInit = { key, code, bubbles: true, cancelable: true, ctrlKey: mod && !mac, metaKey: mod && mac };
-    document.body.dispatchEvent(new KeyboardEvent('keydown', init));
-    document.body.dispatchEvent(new KeyboardEvent('keyup', init));
+  /** Brush list auto-close on touch: <app-brush-options> picked a brush; tapping the tool again reopens the panel. */
+  readonly toolSubpanel = new ToolSubpanelCollapse(() => this.touchUi.coarse);
+  onToolBrushPicked(): void { this.toolSubpanel.onBrushPicked(); }
+
+  /** Edit › Delete in the 3D view: every selected item, each through the outliner ✕'s routing (decal / package / CD
+   *  kit / group or array group / mesh incl. a character body). The city container is skipped (World › Clear). */
+  scene3dDeleteSelected(): void {
+    const es = this.editorState;
+    const ids = new Set<string>(es.scene3dSelectedMeshIds);
+    if (es.scene3dSelectedMeshId) ids.add(es.scene3dSelectedMeshId);
+    if (this.scene3dCityContainerId) ids.delete(this.scene3dCityContainerId);
+    if (ids.size === 0) return;
+    const sm = this.shapeManager;
+    for (const id of ids) {
+      if (this.outliner.scene3dDecalIds.has(id)) this.decal.scene3dOutlinerDeleteDecal(id);
+      else if (this.outliner.scene3dPackageIds.has(id)) this.scene3dDeletePackage(id);
+      else if (this.outliner.scene3dCDKitIds.has(id)) this.scene3dOutlinerDeleteCDKit(id);
+      else if (sm.isArrayGroup3D(id) || sm.scene3d?.getMeshGroup(id)) this.scene3dDeleteGroup(id);
+      else this.scene3dDeleteMesh(id);
+    }
+    es.scene3dSelectedMeshIds.clear();
+    this.clearMeshSelection();
+    this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
   }
 
   // ── CD Jewel-Case Designer ─────────────────────────────────
@@ -815,6 +817,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (!result?.rootId) return;
     this.cdKitRootId = result.rootId;
     sm.enterCDDesigner3D(result.rootId);
+    this.sidePanel.show();   // the designer panel (and its Exit) lives in the side panel column
     this.cdDesignerActive = true;   // <app-cd-designer-panel> resets its view state for the new kit
   }
 
@@ -1494,6 +1497,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     private localIllustrationService: LocalIllustrationService,
     /** Touch-first device, primary pointer coarse: the touch-only UI, mobile-parity TOUCH-4 / TOUCH-10 / UI-1. */
     public touchUi: TouchUiService,
+    /** View › Side Panel visibility: the right panel column, remembered per machine. */
+    public sidePanel: SidePanelService,
   ) { }
 
   ngOnInit() {
@@ -2174,7 +2179,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // update our own state. Salsa's overlay textarea also handles Escape
     // internally, but we need to sync liveTextIsEditing.
     if (event.key === 'Escape' && this.liveTextOptions?.liveTextIsEditing) {
-      this.liveTextOptions.endLiveTextEditing();
+      MODE_ACTIONS.endLiveText(this);
       event.preventDefault();
       return;
     }
@@ -2273,6 +2278,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   setActiveTool(activeTool: string, event?: MouseEvent) {
+    // Touch: the tool's options panel folded away after a brush pick; tapping the tool again reopens it (not off)
+    if (this.toolSubpanel.onToolTap(activeTool, this.controlPanelActiveTool)) { this.ditherRevealSubpanel(); return; }
     if (activeTool && activeTool === this.controlPanelActiveTool) activeTool = '';
     if (activeTool) this.showEphemeraPanel = false;
     const prevTool = this.controlPanelActiveTool;

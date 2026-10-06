@@ -100,6 +100,28 @@ canvas {
     &:hover { color: #fff; background: rgba(255,255,255,0.08); }
 }
 
+/* Touch screens: the 5vw box is ~40 px wide in portrait (~64 px landscape) on a tablet: too small to hit.
+   Fixed comfortable size instead. The box is anchored bottom/right, so it grows LEFTWARD and keeps the same gap to
+   the side panel and the screen bottom. Desktop (fine pointer) is unchanged. */
+@media (pointer: coarse) {
+    .zoom-control {
+        width: 120px;
+        min-width: 120px;
+        max-width: 120px;
+    }
+    .zoom-button-left,
+    .zoom-button-right {
+        min-height: 40px;
+        max-height: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .zoom-symbol { font-size: 16px; }
+    .zoom-percent-display { font-size: 12px; padding: 5px 0; }
+    .zoom-control .fit-artboard-btn { font-size: 12px; padding: 7px 0; }
+}
+
 .fit-artboard-btn {
     font-size: 10px;
     font-weight: 600;
@@ -915,7 +937,7 @@ svg {
         position: fixed;
         left: 70px;
         top: 40px;
-        bottom: 200px;
+        bottom: 204px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1047,7 +1069,7 @@ svg {
         height: auto !important;
         min-height: 0 !important;
         bottom: auto !important;                 /* content height, still stopping above the colour picker: */
-        max-height: calc(100% - 240px);          /* % of the same box the picker's bottom:0 uses */
+        max-height: calc(100% - 244px);          /* % of the same box the picker's bottom:0 uses */
         padding: 28px 20px 20px !important;
         width: 218px !important;
     }
@@ -1130,7 +1152,7 @@ svg {
        max-height calc(100vh - 240px) ran ~a URL bar's height past the picker's top edge and covered it (dvh needs
        Chrome 108+). top/bottom resolve against the same box as the picker's bottom:0, so they always meet. */
     top: 40px;
-    bottom: 200px;
+    bottom: 204px;   /* the colour picker's top edge (height 204) */
     margin-top: 0;
     height: auto;
     max-height: none;
@@ -1522,7 +1544,7 @@ svg {
     bottom: 0;
     left: 70px;      /* flush with side toolbar right edge */
     width: 250px;
-    height: 200px;
+    height: 204px;   /* = the animation timeline (200 px + its 4 px top border), so the two top borders line up */
     z-index: 510;
     display: flex;
     flex-direction: row;
@@ -2524,4 +2546,24 @@ svg {
         pointer-events: auto;
         transition-duration: 0.15s;
     }
+}
+
+// View › Side Panel off (SidePanelService): the right column leaves the layout (its panels stay mounted) and the
+// widgets parked beside it move to the screen edge; the canvas is full-width underneath, so it simply shows.
+.right-column.side-panel-hidden {
+    display: none;
+}
+
+.zoom-control.no-side-panel {
+    right: 16px;
+}
+
+.scene3d-stats-toggle.no-side-panel,
+.scene3d-stats-hud.no-side-panel {
+    right: 21px;
+}
+
+/* Toggle UI (File/View › Toggle UI, X) hides the left tool rail too. */
+.vertical-control-panel.rail-hidden {
+    display: none !important;
 }

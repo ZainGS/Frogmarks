@@ -38,13 +38,113 @@ function undo(ed: Pick<KeymapHost, 'is3DContextActive' | 'scene3dUndo' | 'scene3
   else void (redo ? ed.rasterRedo() : ed.rasterUndo());
 }
 
-/** Undo / redo from a BUTTON (Edit menu, touch action bar): routed exactly like Ctrl+Z / Ctrl+Y. The 2D object stack
+/** Undo / redo from a BUTTON (Edit menu): routed exactly like Ctrl+Z / Ctrl+Y. The 2D object stack
  *  goes first (for the keys the engine consumes it itself; a button has to call it), then the active context. */
 export function routeUndo(ed: Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
   const sm = ed.shapeManager;
   if (!redo && sm.canUndo2DShapes) { sm.undo2DShapes(); return; }
   if (redo && sm.canRedo2DShapes) { sm.redo2DShapes(); return; }
   undo(ed, redo);
+}
+
+/** Exactly the editor members Edit › Duplicate / Delete use. */
+export type EditRouteHost = Pick<IllustrationComponent, 'shapeManager' | 'editorState' | 'meshEdit' | 'scene3dDuplicateMesh' |
+  'scene3dDeleteSelected' | 'deleteSelectionOrLayers'>;
+
+/** The 3D branch of Ctrl+D (MOD_KEYMAP): the 3D view is showing and a mesh is selected. */
+function has3DMeshSelection(ed: Pick<EditRouteHost, 'editorState'>): boolean {
+  return !!(ed.editorState.scene3dPanelVisible && ed.editorState.scene3dSelectedMeshId);
+}
+
+/** What the engine's own Ctrl+D / Delete handlers require (raster-interaction-controller): selected 2D nodes, and no
+ *  creator / Player mode owning the input. */
+function has2DShapeSelection(ed: Pick<EditRouteHost, 'shapeManager'>): boolean {
+  const is = ed.shapeManager?.interactionService;
+  return !!is && is.selectedNodes.size > 0 && !is.suppressBoxSelect;
+}
+
+/** Edit › Duplicate is enabled: there is something Ctrl+D would duplicate. */
+export function canRouteDuplicate(ed: Pick<EditRouteHost, 'shapeManager' | 'editorState'>): boolean {
+  return has3DMeshSelection(ed) || has2DShapeSelection(ed);
+}
+
+/** Edit › Duplicate, routed like Ctrl+D: the selected 3D mesh in the 3D view (the keymap's branch), else the selected 2D
+ *  shapes (the engine's Ctrl+D handler: one 'Duplicate shapes' undo step). Never Ctrl+D's raster "Deselect" half (that
+ *  is Edit › Deselect). No-op when nothing is selected. */
+export function routeDuplicate(ed: Pick<EditRouteHost, 'shapeManager' | 'editorState' | 'scene3dDuplicateMesh'>): void {
+  if (has3DMeshSelection(ed)) { ed.scene3dDuplicateMesh(ed.editorState.scene3dSelectedMeshId!); return; }
+  if (has2DShapeSelection(ed)) ed.shapeManager.duplicateSelectedShapes();
+}
+
+/** Edit › Delete, routed per context. 3D view: in mesh edit mode the selected faces (the Mesh Edit panel's Delete),
+ *  else the selected 3D items through the editor's own teardown (the outliner's ✕ path: characters, groups, packages,
+ *  CD kits, decals). 2D: what the Delete key does — the engine deletes the selected 2D shapes, then the keymap's
+ *  deleteSelectionOrLayers clears the pixel selection / drops the layers' editor-side state. */
+export function routeDelete(ed: EditRouteHost): void {
+  if (has3DMeshSelection(ed)) {
+    if (ed.meshEdit.scene3dIsEditingMesh) ed.meshEdit.deleteSelectedFaces();
+    else ed.scene3dDeleteSelected();
+    return;
+  }
+  if (has2DShapeSelection(ed)) ed.shapeManager.deleteSelectedShapes();
+  ed.deleteSelectionOrLayers();
+}
+
+/** The editor members the modal-state actions below use. */
+export type ModeHost = Pick<IllustrationComponent, 'shapeManager' | 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions'>;
+
+/**
+ * Leaving the editor's modal states: ONE implementation shared by the keys (Esc / Enter: the tables below and
+ * IllustrationComponent.handleHotkeys) and the touch Apply / Cancel pill (CONTEXT_PILLS), so a tap does exactly what
+ * the key does.
+ */
+export const MODE_ACTIONS = {
+  /** Esc while editing a LiveText node (handled before the tables: the text overlay has focus). */
+  endLiveText: (ed: Pick<ModeHost, 'liveTextOptions'>): void => { ed.liveTextOptions?.endLiveTextEditing(); },
+  /** Esc with the decal placement tool on. */
+  exitDecalPlacement: (ed: Pick<ModeHost, 'decal' | 'shapeManager'>): void => {
+    ed.decal.scene3dDecalToolActive = false;
+    ed.shapeManager.exitDecalPlaceMode3D();
+  },
+  /** Esc with the mesh-edit knife: drop the cut in progress and go back to select (a drag cuts on release; there is
+   *  no separate commit). */
+  cancelKnife: (ed: Pick<ModeHost, 'meshEdit'>): void => { ed.meshEdit.cancelKnifeCut(); },
+  /** Enter / Esc during a raster selection transform. */
+  commitTransform: (ed: Pick<ModeHost, 'rasterSelectionService'>): void => { ed.rasterSelectionService.commitTransform(); },
+  cancelTransform: (ed: Pick<ModeHost, 'rasterSelectionService'>): void => { ed.rasterSelectionService.cancelTransform(); },
+};
+
+export type ContextPillMode = 'liveText' | 'decal' | 'knife' | 'transform';
+
+export interface ContextPillAction { label: string; run: (ed: ModeHost) => void }
+export interface ContextPillSpec {
+  mode: ContextPillMode;
+  /** Optional hint before the buttons (what the mode is waiting for). */
+  hint?: string;
+  apply?: ContextPillAction;
+  cancel?: ContextPillAction;
+}
+
+/** The touch Apply / Cancel pill per mode (mobile-parity TOUCH-10): the Enter / Esc actions above, as buttons. */
+export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> = {
+  liveText: { mode: 'liveText', apply: { label: 'Done editing text', run: MODE_ACTIONS.endLiveText } },
+  decal: { mode: 'decal', apply: { label: 'Done placing decals', run: MODE_ACTIONS.exitDecalPlacement } },
+  knife: { mode: 'knife', hint: 'Drag across the mesh to cut', cancel: { label: 'Cancel knife', run: MODE_ACTIONS.cancelKnife } },
+  transform: {
+    mode: 'transform',
+    apply: { label: 'Apply transform', run: MODE_ACTIONS.commitTransform },
+    cancel: { label: 'Cancel', run: MODE_ACTIONS.cancelTransform },
+  },
+};
+
+/** The modal state the pill is for, in the same priority Esc resolves them (live text first, then the Escape
+ *  binding's order: decal tool, knife, selection transform); null = no pill. */
+export function activeContextPill(ed: Pick<ModeHost, 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions'>): ContextPillSpec | null {
+  if (ed.liveTextOptions?.liveTextIsEditing) return CONTEXT_PILLS.liveText;
+  if (ed.decal.scene3dDecalToolActive) return CONTEXT_PILLS.decal;
+  if (ed.meshEdit.scene3dIsEditingMesh && ed.meshEdit.scene3dEditTool === 'knife') return CONTEXT_PILLS.knife;
+  if (ed.rasterSelectionService.info.isTransforming) return CONTEXT_PILLS.transform;
+  return null;
 }
 
 export const MOD_KEYMAP: KeyBinding[] = [
@@ -87,7 +187,7 @@ export const MOD_KEYMAP: KeyBinding[] = [
   } },
   { keys: ['Enter'], group: 'Selection', help: 'Commit transform', run: (ed) => {
     if (!ed.rasterSelectionService.info.isTransforming) return false;
-    ed.rasterSelectionService.commitTransform();
+    MODE_ACTIONS.commitTransform(ed);
   } },
 ];
 
@@ -95,12 +195,11 @@ export const TOOL_KEYMAP: KeyBinding[] = [
   { keys: ['Backspace'], alt: true, group: 'Edit', help: 'Fill selection with the pen colour', run: (ed) => { void ed.animationService.fillSelection(ed.draw.selectedPenColor); } },
   { keys: ['Escape'], group: 'Selection', help: 'Cancel / cursor tool', run: (ed) => {
     if (ed.decal.scene3dDecalToolActive) {
-      ed.decal.scene3dDecalToolActive = false;
-      ed.shapeManager.exitDecalPlaceMode3D();
+      MODE_ACTIONS.exitDecalPlacement(ed);
     } else if (ed.meshEdit.scene3dIsEditingMesh && ed.meshEdit.scene3dEditTool === 'knife') {
-      ed.meshEdit.cancelKnifeCut();
+      MODE_ACTIONS.cancelKnife(ed);
     } else if (ed.rasterSelectionService.info.isTransforming) {
-      ed.rasterSelectionService.cancelTransform();
+      MODE_ACTIONS.cancelTransform(ed);
     } else {
       ed.selectCursor('cursor');
     }

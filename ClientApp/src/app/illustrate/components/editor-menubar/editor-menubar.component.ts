@@ -8,11 +8,12 @@ import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
 
 /** Exactly the editor members the menubar uses (compile-time checked against the editor). */
 export type EditorMenubarHost = Pick<IllustrationComponent, 'doc' | 'imports' | 'artboard' |
-  'animationEnabled' | 'closeAllMenus' | 'editRedo' | 'editUndo' | 'menuAddCel' | 'menuAddFrames' |
+  'animationEnabled' | 'closeAllMenus' | 'editRedo' | 'editUndo' | 'editDuplicate' | 'canEditDuplicate' | 'editDelete' |
+  'sidePanel' | 'toggleSidePanel' | 'menuAddCel' | 'menuAddFrames' |
   'menuDeleteFrame' | 'menuInsertFrame' | 'openFrogmarksPicker' | 'rasterFlipHorizontal' | 'rasterFlipVertical' | 'rasterRedo' |
   'rasterRotate' | 'rasterSelectionService' | 'rasterUndo' | 'retroThemeActive' | 'saveNow' | 'showAnimationMenu' | 'showEditMenu' | 'showFileMenu' | 'showShortcutCheatsheet' |
   'showViewMenu' | 'toggleAnimationMenu' | 'toggleAnimationMode' | 'toggleEditMenu' | 'toggleFileMenu' |
-  'toggleFullscreen' | 'toggleLayerTree' | 'toggleRetroTheme' | 'toggleUI' | 'toggleViewMenu'
+  'toggleFullscreen' | 'toggleRetroTheme' | 'toggleUI' | 'toggleViewMenu'
 >;
 
 /** Top menubar: File / Edit / View / Animation / Help menus (the dropdowns). The open flags, closeAllMenus and every action stay the editor's (its document click closes the menus); this view reaches them through `editor` (refactor-plan 2.9F). */

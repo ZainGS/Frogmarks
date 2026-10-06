@@ -84,12 +84,14 @@
         <!-- Stats toggle + HUD (only shown when a 3D scene is present) -->
         <button *ngIf="!uiHidden && has3DScene"
                 class="scene3d-stats-toggle"
+                [class.no-side-panel]="!sidePanel.visible"
                 [class.scene3d-stats-toggle-on]="stats.scene3dStatsVisible"
                 (click)="stats.scene3dToggleStats()"
                 title="Toggle performance stats">▲ Stats</button>
 
         <!-- Performance stats HUD -->
-        <div *ngIf="!uiHidden && stats.scene3dStatsVisible && stats.scene3dStats" class="scene3d-stats-hud">
+        <div *ngIf="!uiHidden && stats.scene3dStatsVisible && stats.scene3dStats" class="scene3d-stats-hud"
+             [class.no-side-panel]="!sidePanel.visible">
             <div class="scene3d-stats-headline">
                 <span>{{ stats.scene3dStats.fps | number:'1.0-0' }} fps</span>
                 <span class="scene3d-stats-sep">·</span>
@@ -362,15 +364,20 @@
              [style.height.px]="draw.rasterBrushSize">
         </div>
 
-        <!-- Touch (salsa docs/specs/mobile-parity.md): Play touch controls (TOUCH-4), the floating action bar for
-             keyboard-only actions (TOUCH-10) and a way back from Hide UI without the X key (UI-1 / UI-13). -->
+        <!-- Touch (salsa docs/specs/mobile-parity.md): Play touch controls (TOUCH-4), the contextual Apply / Cancel pill
+             for the modal states Enter / Esc end (TOUCH-10; the other keyboard-only actions are in the Edit / View
+             menus) and a way back from Hide UI without the X key (UI-1 / UI-13). -->
         <app-play-touch-controls *ngIf="touchUi.coarse && scene3dViewIsPlaying"
                                  [shapeManager]="shapeManager"
                                  [leftInset]="70"
-                                 [rightInset]="(!uiHidden && !isViewerMode) ? 280 : 0"
+                                 [rightInset]="(!uiHidden && !isViewerMode && sidePanel.visible) ? 280 : 0"
                                  (stop)="scene3dTogglePlay()"></app-play-touch-controls>
-        <app-touch-action-bar *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying"
-                              (action)="onTouchAction($event)"></app-touch-action-bar>
+        <ng-container *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying">
+            <app-touch-context-pill *ngIf="contextPill as pill" [spec]="pill"
+                                    [aboveTimeline]="animationEnabled" [sidePanelOpen]="sidePanel.visible"
+                                    (apply)="runContextPill(pill, 'apply')"
+                                    (cancel)="runContextPill(pill, 'cancel')"></app-touch-context-pill>
+        </ng-container>
         <!-- Hidden UI: shown for ~3 s after hiding, then faded; a tap on the canvas fades it back in (any device: a
              touchscreen laptop has no "coarse" pointer). X toggles the UI too. -->
         <button *ngIf="uiHidden" type="button" class="touch-show-ui-btn" [class.visible]="showUiBtnVisible"
@@ -465,7 +472,10 @@
         </div>
 
         <!-- Right-side column: Tool Options + Layers stacked vertically -->
-        <div *ngIf="!uiHidden && !isViewerMode" class="right-column" [class.no-timeline]="!animationEnabled">
+        <!-- View › Side Panel hides the column with display:none (SidePanelService): the panels stay mounted, so
+             code that updates / opens one while it is hidden keeps working; it shows when the column is back on. -->
+        <div *ngIf="!uiHidden && !isViewerMode" class="right-column" [class.no-timeline]="!animationEnabled"
+             [class.side-panel-hidden]="!sidePanel.visible">
 
         <!-- Right Content Panel (hidden — properties panel deferred) -->
         <!--
@@ -527,7 +537,7 @@
         -->
 
         <!-- Layer Panel (inside right-column wrapper) -->
-        <div *ngIf="!layerTreeHidden && !cdDesignerActive" class="layer-panel">
+        <div *ngIf="!cdDesignerActive" class="layer-panel">
 
             <!-- Scene / Global / UI tab switcher -->
             <div class="right-panel-tabs">
@@ -834,7 +844,8 @@
         </div>
 
         <!-- Zoom Controls -->
-        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled">
+        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled"
+             [class.no-side-panel]="!sidePanel.visible">
             <div class="zoom-percent-display" (click)="artboard.zoomFitClick()" [title]="editorState.scene3dViewCameraMode === 'free3D' ? 'Click to return to the scene view' : 'Current zoom — click to fit artboard'">{{ artboard.currentZoomPercent }}</div>
             <div class="row zoom-control-row">
                 <div class="col-6 zoom-button-left" (click)="artboard.zoomOut()">
@@ -920,9 +931,9 @@
                 <mat-icon class="menu-icon mt-1">fullscreen</mat-icon>
                 Toggle Full Screen
             </button>
-            <button (click)="toggleLayerTree()" class="menu-item" role="menuitem">
+            <button (click)="toggleSidePanel()" class="menu-item" role="menuitem">
                 <mat-icon class="menu-icon mt-1">account_tree</mat-icon>
-                Toggle Layer Tree
+                {{ sidePanel.visible ? 'Hide' : 'Show' }} Side Panel
             </button>
             <button (click)="toggleUI(true)" class="menu-item" role="menuitem">
                 <mat-icon class="menu-icon mt-1">toggle_on</mat-icon>
@@ -941,7 +952,7 @@
     </div>
 
     <!-- Vertical Control Panel -->
-    <div class="vertical-control-panel">
+    <div class="vertical-control-panel" [class.rail-hidden]="uiHidden">
         <!-- Cursor Controls -->
         <div class="cursor-controls">
             <div class="vertical-tool-button" 
@@ -1436,7 +1447,8 @@
             </div>
         </div><!-- /.tools-3d-mesh-actions -->
 
-        <!-- AI authoring button — pinned to bottom of toolbar -->
+        <!-- AI authoring button — pinned to bottom of toolbar. WIP: hidden unless showAiTool (utils/ai-tool-flag.ts) -->
+        <ng-container *ngIf="showAiTool">
         <div class="toolbar-ai-spacer"></div>
         <div class="vertical-tool-button ai-authoring-btn"
              [class.selected]="authoringPanelOpen"
@@ -1447,11 +1459,12 @@
                       fill="#c8ede3" stroke="#c8ede3" stroke-width="0.5" stroke-linejoin="round"/>
             </svg>
         </div>
+        </ng-container>
 
     </div><!-- /.vertical-control-panel -->
 
-    <!-- AI Authoring subpanel — kept in DOM so session state survives close/reopen -->
-    <div class="tool-subpanel authoring-subpanel" [class.visible]="authoringPanelOpen && !uiHidden">
+    <!-- AI Authoring subpanel — kept in DOM so session state survives close/reopen (not mounted while the tool is hidden) -->
+    <div *ngIf="showAiTool" class="tool-subpanel authoring-subpanel" [class.visible]="authoringPanelOpen && !uiHidden">
         <app-authoring-panel [authoring]="authoringApi"></app-authoring-panel>
     </div>
 
@@ -1654,14 +1667,16 @@
         </div>
     </div>
 
-    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout' || controlPanelActiveTool === 'misc')">
+    <!-- toolSubpanel.collapsed: touch only, folded after a brush pick (tap the tool again to reopen) -->
+    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && !toolSubpanel.collapsed && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout' || controlPanelActiveTool === 'misc')">
         <!-- Drawing Tool Options -->
         <div *ngIf="controlPanelActiveTool.startsWith('drawing')">
             <div class="tool-label">Drawing Options</div>
             
             <div *ngIf="controlPanelActiveTool === 'drawing:pen'">
                 <app-brush-options
-                    (presetChanged)="rasterBrushService.refreshPresets()">
+                    (presetChanged)="rasterBrushService.refreshPresets()"
+                    (brushPicked)="onToolBrushPicked()">
                 </app-brush-options>
             </div>
 

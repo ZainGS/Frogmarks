@@ -38,6 +38,9 @@ export const HIDDEN_BRUSH_PRESET_IDS: ReadonlySet<string> = new Set(['default_er
 })
 export class BrushOptionsComponent implements OnInit, OnDestroy {
   @Output() presetChanged = new EventEmitter<string>();
+  /** The user tapped a brush row in the list (not the Eraser row, whose options open below it; not an editor / import
+   *  change). The illustration tool panel folds itself away on this, on touch only (mobile-parity TOUCH-10). */
+  @Output() brushPicked = new EventEmitter<string>();
   @ViewChild('gridColorPicker') gridColorPickerRef!: ColorPickerComponent;
   @ViewChild('editorColorPicker') editorColorPickerRef!: ColorPickerComponent;
 
@@ -232,6 +235,12 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   quickSelectBrush(id: string): void {
     this.rasterService.selectBrush(id);
     this.presetChanged.emit(id);
+  }
+
+  /** A brush row tapped in the grid: select it, then tell the host (brushPicked). */
+  pickBrush(id: string): void {
+    this.quickSelectBrush(id);
+    this.brushPicked.emit(id);
   }
 
   /** Eraser row: turn the eraser tool on (erasing with the current brush tip), or back off to that brush. */

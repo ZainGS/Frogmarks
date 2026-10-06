@@ -42,7 +42,7 @@
       <div *ngFor="let preset of presets"
            class="brush-row"
            [class.active]="isPresetActive(preset.id)"
-           (click)="quickSelectBrush(preset.id)">
+           (click)="pickBrush(preset.id)">
         <!-- Preview image or stroke placeholder -->
         <div class="brush-row-preview">
           <img *ngIf="preset.icon" [src]="preset.icon" alt="" class="brush-preview-img">

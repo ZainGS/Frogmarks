@@ -1,4 +1,0 @@
-<button type="button" *ngFor="let b of buttons" class="tab-btn"
-        [title]="b.title" [attr.aria-label]="b.title"
-        (pointerdown)="$event.preventDefault()"
-        (click)="action.emit(b.id)">{{ b.label }}</button>

@@ -17,6 +17,7 @@ import { LayerTreeNode } from 'app/boards/models/layer-tree-node.model';
 import { AuthService } from 'app/shared/services/auth/auth.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
+import { toggleAppFullscreen } from 'app/shared/utilities/app-fullscreen';
 
 @Component({
   selector: 'app-board',
@@ -64,35 +65,10 @@ export class BoardComponent implements OnInit {
     this.closeContextMenu();
   }
 
-  // Fullscreen toggle (container -> fullscreen; falls back to documentElement)
+  // Fullscreen toggle: the whole app (document root), not the canvas shell, so the toolbars, panels and the overlays
+  // attached to <body> stay visible (shared/utilities/app-fullscreen).
   async toggleFullscreen() {
-    const el: any =
-      this.boardShellRef?.nativeElement ??
-      this.canvasRef?.nativeElement ??
-      document.documentElement;
-
-    try {
-      const isActive =
-        !!document.fullscreenElement ||
-        // Safari (older)
-        !!(document as any).webkitFullscreenElement;
-
-      if (!isActive) {
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-        } else if (el.webkitRequestFullscreen) {
-          el.webkitRequestFullscreen(); // Safari
-        }
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          (document as any).webkitExitFullscreen(); // Safari
-        }
-      }
-    } catch (err) {
-      console.error('Fullscreen toggle failed:', err);
-    }
+    await toggleAppFullscreen();
   }
 
   // Keep isFullscreen in sync with browser state

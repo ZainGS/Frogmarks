@@ -1,0 +1,8 @@
+<!-- pointerdown preventDefault: a tap must not move focus (the LiveText overlay keeps its caret until Done runs) -->
+<div class="pill" role="toolbar" [attr.aria-label]="spec.apply?.label || spec.cancel?.label">
+    <span *ngIf="spec.hint" class="pill-hint">{{ spec.hint }}</span>
+    <button *ngIf="spec.cancel" type="button" class="pill-btn pill-cancel"
+            (pointerdown)="$event.preventDefault()" (click)="cancel.emit()">✕ {{ spec.cancel.label }}</button>
+    <button *ngIf="spec.apply" type="button" class="pill-btn pill-apply"
+            (pointerdown)="$event.preventDefault()" (click)="apply.emit()">✓ {{ spec.apply.label }}</button>
+</div>

@@ -133,3 +133,18 @@ describe('BrushOptionsComponent eraser / brush selection', () => {
     t.panel.ngOnDestroy();
   });
 });
+
+describe('BrushOptionsComponent brushPicked (touch auto-close hook)', () => {
+  it('a brush row tap selects the brush and emits brushPicked; the Eraser row does not (its options open below)', () => {
+    const t = setup();
+    const picked: string[] = [];
+    t.panel.brushPicked.subscribe(id => picked.push(id));
+    t.panel.pickBrush('default_hard_pen');
+    expect(t.state.active).toBe('default_hard_pen');
+    expect(picked).toEqual(['default_hard_pen']);
+    t.panel.selectEraserTool();   // on
+    t.panel.selectEraserTool();   // back to the brush (quickSelectBrush, not a list pick)
+    expect(picked).toEqual(['default_hard_pen']);
+    t.panel.ngOnDestroy();
+  });
+});

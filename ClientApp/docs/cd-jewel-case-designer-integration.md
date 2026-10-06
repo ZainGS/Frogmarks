@@ -46,7 +46,7 @@ async cdExportPrintSet()     // exportCDKitPrintSet3D → download each PNG blob
 "CD Kit" item calls `cdAddKit()` directly — creates kit and immediately enters designer mode.
 
 ### CD Designer panel
-Appears in `.layer-panel` slot when `cdDesignerActive === true` (the normal layer panel is hidden via `*ngIf="!layerTreeHidden && !cdDesignerActive"`).
+Appears in `.layer-panel` slot when `cdDesignerActive === true` (the normal layer panel is hidden via `*ngIf="!cdDesignerActive"`; starting the designer also turns View › Side Panel back on).
 
 Panel layout:
 - **Header**: "💿 CD Designer" + Done button (`cdExitDesigner()`)

@@ -37,15 +37,6 @@
         <div class="edit-menu-item" (click)="editor.doc.setCurrentViewAsThumbnail(); editor.closeAllMenus()">
             <span>Capture Thumbnail</span>
         </div>
-        <div class="edit-menu-item" (click)="editor.toggleFullscreen(); editor.closeAllMenus()">
-            <span>Toggle Full Screen</span>
-        </div>
-        <div class="edit-menu-item" (click)="editor.toggleUI(true); editor.closeAllMenus()">
-            <span>Toggle UI</span>
-        </div>
-        <div class="edit-menu-item" (click)="editor.toggleLayerTree(); editor.closeAllMenus()">
-            <span>Toggle Layer Tree</span>
-        </div>
         <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="storage.openSyncModeDialog(); editor.closeAllMenus()">
             <span>Storage mode…</span>
@@ -95,7 +86,11 @@
         <div class="edit-menu-item" (click)="editor.imports.pasteImageFromClipboard(); editor.closeAllMenus()">
             <span>Paste Image</span>
         </div>
-        <div class="edit-menu-item" (click)="editor.rasterSelectionService.deleteSelection(); editor.closeAllMenus()">
+        <!-- Duplicate / Delete are routed per context like Ctrl+D / Del (editor-keymap routeDuplicate / routeDelete) -->
+        <div class="edit-menu-item" [class.disabled]="!editor.canEditDuplicate" (click)="editor.editDuplicate(); editor.closeAllMenus()">
+            <span>Duplicate</span><span class="shortcut">Ctrl+D</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.editDelete(); editor.closeAllMenus()">
             <span>Delete</span><span class="shortcut">Del</span>
         </div>
         <div class="edit-menu-divider"></div>
@@ -134,10 +129,6 @@
             <span>Rotate 180°</span>
         </div>
         <div class="edit-menu-divider"></div>
-        <div class="edit-menu-item" (click)="hud.toggleScreencastKeys(); editor.closeAllMenus()">
-            <span>{{ hud.screencastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
-        </div>
-        <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.artboard.openResizeDialog(); editor.closeAllMenus()">
             <span>Resize Canvas…</span>
         </div>
@@ -174,6 +165,21 @@
     <div class="menubar-btn" [class.active]="editor.showViewMenu"
          (click)="editor.toggleViewMenu(); $event.stopPropagation()">View</div>
     <div *ngIf="editor.showViewMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
+        <div class="edit-menu-item" (click)="editor.toggleSidePanel(); editor.closeAllMenus()"
+             title="Show / hide the right panel column (Scene / Global / UI + Layers). Remembered on this device.">
+            <span>Side Panel</span>
+            <span class="shortcut" *ngIf="editor.sidePanel.visible">✓</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.toggleUI(true); editor.closeAllMenus()">
+            <span>Toggle UI</span><span class="shortcut">X</span>
+        </div>
+        <div class="edit-menu-item" (click)="editor.toggleFullscreen(); editor.closeAllMenus()">
+            <span>Toggle Full Screen</span><span class="shortcut">F</span>
+        </div>
+        <div class="edit-menu-item" (click)="hud.toggleScreencastKeys(); editor.closeAllMenus()">
+            <span>{{ hud.screencastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
+        </div>
+        <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.toggleRetroTheme(); editor.closeAllMenus()">
             <span>Retro Chrome</span>
             <span class="shortcut" *ngIf="editor.retroThemeActive">✓</span>

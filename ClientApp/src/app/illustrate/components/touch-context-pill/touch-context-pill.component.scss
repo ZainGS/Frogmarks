@@ -1,0 +1,66 @@
+// Contextual Apply / Cancel pill (mobile-parity TOUCH-10). The host is the free canvas strip at the bottom (the
+// colour picker ends at 320 px; the zoom widget sits at right 290 px, ~110 px wide, beside the 280 px side panel) and
+// centres the pill in it; only the pill itself takes touches.
+:host {
+    position: fixed;
+    left: 320px;
+    right: 130px;              // side panel off: clear of the zoom widget at right 16 px
+    bottom: 16px;
+    z-index: 950;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+:host(.side-panel-open) { right: 400px; }
+:host(.above-timeline) { bottom: 214px; }
+
+// Narrow screens (phone landscape): no room beside the picker, so sit above it (the zoom widget is at the bottom
+// then); with the timeline open the zoom widget moves up to this row too, so keep clear of it again.
+@media (max-width: 900px) {
+    :host { left: 70px; right: 0; bottom: 214px; }
+    :host(.side-panel-open) { right: 280px; }
+    :host(.above-timeline) { right: 130px; }
+    :host(.above-timeline.side-panel-open) { right: 400px; }
+}
+
+.pill {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px;
+    max-width: 100%;
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid #555;
+    border-radius: 26px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.pill-hint {
+    padding: 0 6px 0 10px;
+    color: #bbb;
+    font: 500 13px/1.2 system-ui, sans-serif;
+    white-space: nowrap;
+}
+
+.pill-btn {
+    min-height: 44px;          // touch target
+    padding: 0 16px;
+    border: 1px solid #555;
+    border-radius: 22px;
+    background: #2b2b2b;
+    color: #eee;
+    font: 600 14px/1 system-ui, sans-serif;
+    white-space: nowrap;
+    touch-action: manipulation;
+
+    &:active { background: #444; }
+}
+
+.pill-apply {
+    background: #3b6151;
+    border-color: #4caf96;
+
+    &:active { background: #4caf96; }
+}

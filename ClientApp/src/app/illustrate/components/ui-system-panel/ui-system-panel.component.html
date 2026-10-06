@@ -235,7 +235,7 @@
           <option value="fade">Fade</option>
           <option value="slideLeft">Slide left</option>
           <option value="slideRight">Slide right</option>
-          <optgroup *ngIf="kitTransitions.length" label="Persona kit">
+          <optgroup *ngIf="kitTransitionsOffered($any(t).animation?.type)" label="Persona kit">
             <option *ngFor="let kt of kitTransitions" [value]="kt">{{ kitTransitionLabel(kt) }}</option>
           </optgroup>
         </select>
@@ -341,7 +341,8 @@
 
   </ng-container>
 
-  <!-- ── Persona kit: screen-space HUD / menu / transition pieces (Salsa UI kit) ── -->
+  <!-- ── Persona kit: screen-space HUD / menu / transition pieces (Salsa UI kit). WIP: hidden unless SHOW_PERSONA_KIT
+       or the dev override is on (kitAvailable, ui-system-panel.component.ts) ── -->
   <div class="ui-section kit-section" *ngIf="kitAvailable">
     <div class="ui-sec-header">
       <span class="ui-sec-title kit-title" (click)="kitOpen = !kitOpen">{{ kitOpen ? '▾' : '▸' }} Persona kit</span>

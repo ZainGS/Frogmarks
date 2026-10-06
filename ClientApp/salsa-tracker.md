@@ -1038,6 +1038,27 @@ Engine docs: `docs/ui/persona-ui-kit.md` (Salsa) and `docs/specs/ui-system.md` �
   merge (TOUCH-4 Salsa half) and the `interact` copy in `setPlayInput3D`: both in Salsa source now, not yet in the dist.
 - **Navigate** toggle (3D view bar, coarse pointers): calls `sm.setTouchNavigate3D(on)`. It's in Salsa source; the
   button stays hidden until the dist is rebuilt (guarded through a local type; drop the cast once the dist has it).
-- **Touch action bar** (`app-touch-action-bar`): Undo / Redo (`routeUndo`, also used by Edit › Undo / Redo now),
-  Delete / Duplicate / Esc / Enter as synthetic keys. Open: multi-select toggle, Snap, Frame selected.
+- ~~**Touch action bar** (`app-touch-action-bar`)~~: REMOVED, replaced by the menu items + contextual pill below.
 - **Needs a Salsa dist rebuild**, then a check on the tablet.
+
+## 2026-10-06 — Touch UI follow-up (TOUCH-10 replaced, UI-6 fullscreen, side panel)
+
+- **Touch action bar removed.** Replaced by: Edit › **Duplicate** (`routeDuplicate` in `editor-keymap.ts`, like Ctrl+D:
+  selected 3D mesh in the 3D view, else selected 2D shapes; disabled with nothing selected) and a context-routed Edit ›
+  **Delete** (`routeDelete`: 2D = what the Delete key does; 3D = the outliner's delete path per item via
+  `scene3dDeleteSelected`, selected faces in mesh edit mode via `MeshEditService.deleteSelectedFaces`).
+- **File / Edit → View:** Toggle Full Screen (F), Toggle UI (X), Screencast Keys (was in Edit), and the old "Toggle
+  Layer Tree" became **View › Side Panel** (`SidePanelService`, localStorage `fm-side-panel-visible`; display:none,
+  panels stay mounted; the CD designer auto-shows it; zoom widget / stats move to the edge when it's off).
+- **Contextual Apply / Cancel pill** (`app-touch-context-pill`, coarse pointers only, not in Play / hidden UI):
+  `CONTEXT_PILLS` + `MODE_ACTIONS` shared with Enter / Esc. Transform (Apply / Cancel), knife (Cancel), decals (Done),
+  LiveText (Done).
+- **Brush list auto-close on touch** (`ToolSubpanelCollapse`, `<app-brush-options (brushPicked)>`): tap the tool again
+  to reopen; desktop unchanged.
+- **Fullscreen = `document.documentElement`** (`shared/utilities/app-fullscreen.ts`) in the illustration AND board
+  editors (UI-6): the rail, sub-panels, colour picker, timeline and CDK overlays no longer vanish.
+- **Persona kit hidden** in the UI panel (WIP): `SHOW_PERSONA_KIT = false` in `ui-system-panel.component.ts`; per-machine
+  dev override `localStorage['fm-dev-persona-kit'] = '1'`. A transition already using a kit animation still lists it.
+- **AI Scene Authoring tool hidden** (WIP): the rail button + sub-panel are gated by `SHOW_AI_TOOL = false`
+  (`illustrate/utils/ai-tool-flag.ts`); dev override `localStorage['fm-dev-ai-tool'] = '1'`. No keyboard shortcut existed.
+- Not yet checked on the tablet.

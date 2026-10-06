@@ -1895,6 +1895,12 @@ body.theme-retro-chrome::before {
   pointer-events: none;
 }
 
+/* Toggle UI: the screen-edge strips go away with the rest of the chrome. */
+body.theme-retro-chrome:has(.board-shell.ui-hidden)::after,
+body.theme-retro-chrome:has(.board-shell.ui-hidden)::before {
+  display: none;
+}
+
 body.theme-retro-chrome .right-column {
   border-bottom: 4px solid var(--rc-green);
 }

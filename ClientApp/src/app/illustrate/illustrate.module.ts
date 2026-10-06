@@ -59,7 +59,7 @@ import { LiveTextOptionsComponent } from './components/live-text-options/live-te
 import { BalloonOptionsComponent } from './components/balloon-options/balloon-options.component';
 import { PersistentColorPickerComponent } from './components/persistent-color-picker/persistent-color-picker.component';
 import { PlayTouchControlsComponent } from './components/play-touch-controls/play-touch-controls.component';
-import { TouchActionBarComponent } from './components/touch-action-bar/touch-action-bar.component';
+import { TouchContextPillComponent } from './components/touch-context-pill/touch-context-pill.component';
 import { VectorLayerPanelComponent } from './components/vector-layer-panel/vector-layer-panel.component';
 import { DitherOptionsComponent } from './components/dither-options/dither-options.component';
 import { FrameLinkPanelComponent } from './components/frame-link-panel/frame-link-panel.component';
@@ -139,7 +139,7 @@ const routes: Routes = [
     BalloonOptionsComponent,
     PersistentColorPickerComponent,
     PlayTouchControlsComponent,
-    TouchActionBarComponent,
+    TouchContextPillComponent,
     VectorLayerPanelComponent,
     DitherOptionsComponent,
     FrameLinkPanelComponent,

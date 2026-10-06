@@ -108,7 +108,10 @@ export class MeshEditService {
     if (!(this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart)) return false;
     const canvas = this.host.canvasRef?.nativeElement;
     if (canvas && this.editorState.scene3dSelectedMeshId) {
-      const dpr = window.devicePixelRatio || 1;
+      // The canvas BACKING ratio, not window.devicePixelRatio: on mobile the backing store is capped (e.g. 1.5 on a DPR-2
+      // tablet), so devicePixelRatio put the cut at 2/1.5 of the finger position.
+      const cssW = canvas.getBoundingClientRect().width || canvas.clientWidth;
+      const dpr = cssW > 0 ? canvas.width / cssW : (window.devicePixelRatio || 1);
       this.shapeManager.knifeCut3D(
         this.editorState.scene3dSelectedMeshId,
         this._knifeStart.x * dpr, this._knifeStart.y * dpr,
@@ -126,6 +129,18 @@ export class MeshEditService {
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
     this._clearKnifePreview();
+  }
+
+  /** Edit › Delete in mesh edit mode: the selected faces of the mesh being edited (what the Mesh Edit panel's Delete
+   *  button does — that panel edits the selected mesh too). */
+  deleteSelectedFaces(): void {
+    const id = this.editorState.scene3dSelectedMeshId;
+    if (!this.scene3dIsEditingMesh || !id) return;
+    const sm = this.shapeManager;
+    const faces = [...(sm.getEditSelection3D(id)?.faces ?? [])];
+    if (faces.length === 0) return;
+    for (const fi of faces.sort((a, b) => b - a)) sm.deleteEditFace3D(id, fi);   // highest first: no index shifting
+    sm.clearEditSelection3D(id);
   }
 
   toggleKnifeTool(): void {
