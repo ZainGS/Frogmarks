@@ -190,3 +190,62 @@
         </div>
     </div>
 </div>
+<!-- Experimental: per-machine engine experiments (ExperimentalSettingsService). An item is hidden when this Salsa dist
+     has no API for it. Toggles keep the menu open so the new state shows; actions close it and open the dialog. -->
+<div class="menubar-item">
+    <div class="menubar-btn" [class.active]="showExperimentalMenu"
+         (click)="toggleExperimentalMenu(); $event.stopPropagation()">Experimental</div>
+    <div *ngIf="showExperimentalMenu" class="edit-menu-dropdown exp-menu" (click)="$event.stopPropagation()">
+        <div *ngIf="exp.hasStrokePrediction" class="edit-menu-item" (click)="exp.toggleStrokePrediction(engine)"
+             title="Draws a predicted tail ahead of the pen / finger. Remembered on this device.">
+            <span>Stroke prediction</span>
+            <span class="exp-check">{{ exp.strokePrediction ? '✓' : '' }}</span>
+        </div>
+        <div *ngIf="exp.hasDirtyCompositing" class="edit-menu-item" (click)="exp.toggleDirtyCompositing(engine)"
+             title="Re-composites the raster layers only where they changed. Remembered on this device.">
+            <span>Fast compositing (changed-area only)</span>
+            <span class="exp-check">{{ exp.dirtyCompositing ? '✓' : '' }}</span>
+        </div>
+        <ng-container *ngIf="exp.hasTouchSmoothing">
+            <div class="edit-menu-divider"></div>
+            <div class="exp-menu-label">Finger smoothing</div>
+            <div class="exp-segment">
+                <button type="button" *ngFor="let o of exp.smoothingOptions" class="exp-segment-btn"
+                        [class.active]="exp.touchSmoothing === o.value" [attr.aria-pressed]="exp.touchSmoothing === o.value"
+                        (click)="exp.setTouchSmoothing(engine, o.value)">{{ o.label }}</button>
+            </div>
+        </ng-container>
+        <ng-container *ngIf="exp.hasSelfTest || exp.hasGpuInfo">
+            <div class="edit-menu-divider"></div>
+            <div *ngIf="exp.hasSelfTest" class="edit-menu-item" (click)="exp.runPredictionSelfTest(engine); closeExperimentalMenu()">
+                <span>Run prediction self-test…</span>
+            </div>
+            <div *ngIf="exp.hasGpuInfo" class="edit-menu-item" (click)="exp.showGpuInfo(engine); closeExperimentalMenu()">
+                <span>GPU info…</span>
+            </div>
+        </ng-container>
+        <div class="edit-menu-divider"></div>
+        <div class="edit-menu-item exp-two-line" (click)="closeExperimentalMenu(); exp.toggleSafeMode(engine)">
+            <span>
+                <span>Safe mode</span>
+                <span class="exp-hint">{{ exp.safeMode ? 'Turning off reloads (same as ?salsaSafe=0)' : 'Turning on reloads (same as ?salsaSafe=1)' }}</span>
+            </span>
+            <span class="exp-check">{{ exp.safeMode ? '✓' : '' }}</span>
+        </div>
+    </div>
+</div>
+<!-- Result dialog of the two Experimental actions: selectable text + Copy, sized for a tablet. -->
+<div *ngIf="exp.dialog as dlg" class="exp-dialog-overlay" (click)="exp.closeDialog(); $event.stopPropagation()">
+    <div class="exp-dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="exp-dialog-header">
+            <span>{{ dlg.title }}</span>
+            <button type="button" class="exp-dialog-btn" aria-label="Close" (click)="exp.closeDialog()">✕</button>
+        </div>
+        <pre class="exp-dialog-body">{{ dlg.text }}</pre>
+        <div class="exp-dialog-footer">
+            <span class="exp-dialog-copied" *ngIf="dlg.copied">Copied</span>
+            <button type="button" class="exp-dialog-btn primary" [disabled]="dlg.busy" (click)="exp.copyDialog()">Copy</button>
+            <button type="button" class="exp-dialog-btn" (click)="exp.closeDialog()">Close</button>
+        </div>
+    </div>
+</div>

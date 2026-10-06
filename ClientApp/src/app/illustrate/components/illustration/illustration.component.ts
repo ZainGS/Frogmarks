@@ -50,6 +50,7 @@ import { TouchUiService } from '../../services/touch-ui.service';
 import { ToolSubpanelCollapse } from '../../utils/tool-subpanel-collapse';
 import { aiToolEnabled } from '../../utils/ai-tool-flag';
 import { SidePanelService } from '../../services/side-panel.service';
+import { applyStoredExperiments } from '../../services/experimental-settings.service';
 import { toggleAppFullscreen } from '../../../shared/utilities/app-fullscreen';
 import type { OutlinerAction } from '../scene-outliner/scene-outliner.component';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
@@ -1832,6 +1833,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // (A former renderer-argument path passed a renderer where getInstance expects a ShapeFactory — it only worked
     // because the argument is ignored once the instance exists.)
     this.shapeManager = ShapeManager.getInstance();
+    // Experimental menu: re-apply the per-machine switches Salsa keeps for the session only (Fast compositing).
+    applyStoredExperiments(this.shapeManager);
 
     // On reinit (shell→illustration nav) startWebGPURendering's overlay is bound to the
     // old destroyed canvas. Recreate it against the live canvas so ephemera renders.

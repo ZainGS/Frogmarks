@@ -82,3 +82,156 @@
     white-space: normal;
   }
 }
+
+// ── Experimental menu ─────────────────────────────────────────────────────────────────────────────────────────
+// Rows are taller than the other menus' (and taller again on a touch screen): these are flipped by finger on a tablet.
+.exp-menu {
+  min-width: 280px;
+
+  .edit-menu-item { min-height: 34px; box-sizing: border-box; }
+}
+
+.exp-check {
+  width: 18px;
+  margin-left: 16px;
+  text-align: right;
+  font-size: 14px;
+  color: #4caf96;
+  flex-shrink: 0;
+}
+
+.exp-menu-label {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  color: #999;
+}
+
+.exp-segment {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px 8px;
+}
+
+.exp-segment-btn {
+  flex: 1 1 0;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #242424;
+  color: #ccc;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { background: rgba(#4caf96, 0.18); }
+  &.active {
+    background: rgba(#4caf96, 0.3);
+    border-color: #4caf96;
+    color: #fff;
+  }
+}
+
+.exp-two-line > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exp-hint {
+  font-size: 10px;
+  color: #888;
+}
+
+@media (pointer: coarse) {
+  .exp-menu .edit-menu-item { min-height: 44px; }
+  .exp-segment-btn { min-height: 40px; }
+}
+
+// The result dialog. .left-panel (the top bar this sits in) is position: fixed with no transform / filter, so
+// position: fixed here still means the viewport.
+.exp-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.exp-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-width: 94vw;
+  max-height: 84vh;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+  color: #e0e0e0;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.exp-dialog-header,
+.exp-dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+
+.exp-dialog-header {
+  justify-content: space-between;
+  border-bottom: 1px solid #333;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.exp-dialog-footer {
+  justify-content: flex-end;
+  border-top: 1px solid #333;
+}
+
+.exp-dialog-body {
+  flex: 1 1 auto;
+  min-height: 60px;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.exp-dialog-copied {
+  margin-right: auto;
+  color: #4caf96;
+}
+
+.exp-dialog-btn {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover { background: #333; }
+  &:disabled { opacity: 0.4; cursor: default; }
+  &.primary {
+    background: rgba(#4caf96, 0.3);
+    border-color: #4caf96;
+  }
+}
