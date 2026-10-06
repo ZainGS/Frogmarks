@@ -17,7 +17,19 @@ export const SALSA_SAFE_QUERY = 'salsaSafe';
 export type ExperimentalEngineApi = Partial<Pick<ShapeManager,
   'setStrokePrediction' | 'getStrokePrediction' | 'setRasterDirtyCompositing' | 'getRasterDirtyCompositing' |
   'setTouchSmoothing' | 'getTouchSmoothing' | 'runStrokePredictionSelfTest' | 'getGpuDiagnostics3D'>>;
-type EngineHandle = ExperimentalEngineApi | null | undefined;
+/** The Render debug calls (Salsa render-debug.ts, docs/ui/gpu-diagnostics.md "Render debug"). Declared here, loosely
+ *  typed, so this app also builds against a Salsa dist that predates them; each call is guarded at runtime. */
+export interface RenderDebugEngineApi {
+  setRenderDebug3D?(patch: { [key: string]: boolean | undefined }): object;
+  getRenderDebug3D?(): object;
+  getRenderDebugFlagList3D?(): ReadonlyArray<{ key: string; label: string }>;
+  getRenderDebugStatus3D?(): object;
+  captureCanvasPNG3D?(opts?: { opaque?: boolean }): Promise<{ blob: Blob; dataUrl: string; width: number; height: number; source: string }>;
+}
+type EngineHandle = (ExperimentalEngineApi & RenderDebugEngineApi) | null | undefined;
+
+/** One row of the Render debug section. */
+export interface RenderDebugRow { key: string; label: string; on: boolean }
 
 export type FingerSmoothing = 'off' | 'light' | 'normal';
 export const FINGER_SMOOTHING_OPTIONS: ReadonlyArray<{ value: FingerSmoothing; label: string }> = [
@@ -27,7 +39,11 @@ export const FINGER_SMOOTHING_OPTIONS: ReadonlyArray<{ value: FingerSmoothing; l
 ];
 
 /** The small read-and-copy dialog the two actions (self-test, GPU info) show. */
-export interface ExperimentalDialog { title: string; text: string; busy: boolean; copied: boolean }
+export interface ExperimentalDialog {
+  title: string; text: string; busy: boolean; copied: boolean;
+  /** A real screenshot to preview and open (a blob: URL, revoked when the dialog closes). */
+  imageUrl?: string;
+}
 
 function readStored(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -56,6 +72,15 @@ export class ExperimentalSettingsService {
   hasTouchSmoothing = false;
   hasSelfTest = false;
   hasGpuInfo = false;
+  hasRenderDebug = false;
+  hasRealScreenshot = false;
+
+  /** Render debug: the section is expanded, its rows (engine order), and the status line (resolution scale / lo-res path). */
+  renderDebugOpen = false;
+  renderDebugRows: RenderDebugRow[] = [];
+  renderDebugStatus = '';
+  /** How many render-debug switches are on (shown on the collapsed row). */
+  get renderDebugOnCount(): number { return this.renderDebugRows.filter((r) => r.on).length; }
 
   // The values the menu shows; read from the engine when the menu opens and after each change.
   strokePrediction = false;
@@ -78,6 +103,9 @@ export class ExperimentalSettingsService {
       if (typeof sm?.getTouchSmoothing === 'function') this.touchSmoothing = sm.getTouchSmoothing();
     } catch { /* keep the last known values */ }
     this.safeMode = this.readSafeMode(sm);
+    this.hasRenderDebug = typeof sm?.setRenderDebug3D === 'function' && typeof sm.getRenderDebug3D === 'function';
+    this.hasRealScreenshot = typeof sm?.captureCanvasPNG3D === 'function';
+    this.readRenderDebug(sm);
   }
 
   /** Stroke prediction. Salsa persists it per machine. */
@@ -148,7 +176,96 @@ export class ExperimentalSettingsService {
     this.dialog = { title: 'GPU info', text, busy: false, copied: false };
   }
 
-  closeDialog(): void { this.dialog = null; }
+  closeDialog(): void {
+    if (this.dialog?.imageUrl) { try { URL.revokeObjectURL(this.dialog.imageUrl); } catch { /* already gone */ } }
+    this.dialog = null;
+  }
+
+  // ── Render debug (bisect a device-only GPU glitch; Salsa docs/ui/gpu-diagnostics.md "Render debug") ──
+
+  /** Read the switches + the status line from the engine. Rows follow the engine's list (its suggested bisect order). */
+  readRenderDebug(sm: EngineHandle): void {
+    if (typeof sm?.getRenderDebug3D !== 'function') { this.renderDebugRows = []; this.renderDebugStatus = ''; return; }
+    try {
+      const flags = sm.getRenderDebug3D() as Record<string, unknown>;
+      const list = typeof sm.getRenderDebugFlagList3D === 'function'
+        ? sm.getRenderDebugFlagList3D()
+        : Object.keys(flags).map((key) => ({ key, label: key }));
+      this.renderDebugRows = list.map(({ key, label }) => ({ key, label, on: flags[key] === true }));
+    } catch { this.renderDebugRows = []; }
+    this.renderDebugStatus = this.describeRenderStatus(sm);
+  }
+
+  /** "3D scale 0.75 (auto) · lo-res 960×540 · TAA" / "3D scale 1 (off) · native": is the tablet on the lo-res path? */
+  private describeRenderStatus(sm: EngineHandle): string {
+    if (typeof sm?.getRenderDebugStatus3D !== 'function') return '';
+    try {
+      const s = sm.getRenderDebugStatus3D() as {
+        resolutionScale?: number; resolutionMode?: string; temporalAA?: boolean;
+        loResPath?: { width: number; height: number; dynamic: boolean } | null;
+      };
+      const scale = typeof s.resolutionScale === 'number' ? String(Math.round(s.resolutionScale * 100) / 100) : '?';
+      const parts = [`3D scale ${scale}${s.resolutionMode ? ` (${s.resolutionMode})` : ''}`];
+      parts.push(s.loResPath ? `lo-res ${s.loResPath.width}×${s.loResPath.height}${s.loResPath.dynamic ? '' : ' (PS1)'}` : 'native');
+      if (s.temporalAA) parts.push('TAA');
+      return parts.join(' · ');
+    } catch { return ''; }
+  }
+
+  toggleRenderDebug(sm: EngineHandle, key: string): void {
+    if (typeof sm?.setRenderDebug3D !== 'function') return;
+    const row = this.renderDebugRows.find((r) => r.key === key);
+    try { sm.setRenderDebug3D({ [key]: !(row?.on ?? false) }); } catch { /* keep the menu usable */ }
+    this.readRenderDebug(sm);
+  }
+
+  resetRenderDebug(sm: EngineHandle): void {
+    if (typeof sm?.setRenderDebug3D !== 'function') return;
+    try { sm.setRenderDebug3D({ reset: true }); } catch { /* keep the menu usable */ }
+    this.readRenderDebug(sm);
+  }
+
+  /**
+   * Save what the renderer actually produced (Salsa reads back the canvas texture at the end of the next frame): a PNG
+   * download, plus a dialog with the preview, an "Open image" link (a new tab, for a tablet where the download is
+   * hard to find) and the facts (source, size, switches on).
+   */
+  async saveRealScreenshot(sm: EngineHandle): Promise<void> {
+    if (typeof sm?.captureCanvasPNG3D !== 'function') return;
+    this.closeDialog();
+    const dialog: ExperimentalDialog = { title: 'Real screenshot', text: 'Capturing the next frame…', busy: true, copied: false };
+    this.dialog = dialog;
+    try {
+      const shot = await sm.captureCanvasPNG3D();
+      const url = URL.createObjectURL(shot.blob);
+      dialog.imageUrl = url;
+      const name = `frogmarks-render-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      this.downloadUrl(url, name);
+      const on = this.renderDebugRows.filter((r) => r.on).map((r) => r.key);
+      const extra = shot as unknown as { format?: string; translucentPixels?: number };
+      dialog.text = [
+        `Saved ${name} (${shot.width}×${shot.height}).`,
+        `Source: ${shot.source}${extra.format ? ` (${extra.format})` : ''}`,
+        typeof extra.translucentPixels === 'number' ? `Pixels with alpha < 255: ${extra.translucentPixels}` : '',
+        this.renderDebugStatus ? `Render: ${this.renderDebugStatus}` : '',
+        `Render debug on: ${on.length ? on.join(', ') : 'none'}`,
+      ].filter(Boolean).join('\n');
+    } catch (e) {
+      dialog.text = 'The screenshot failed:\n' + (e instanceof Error ? e.message : String(e));
+    }
+    dialog.busy = false;
+  }
+
+  /** Browser seam (the specs replace it): start a download of `url` as `name`. */
+  downloadUrl(url: string, name: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
   /** Copy the dialog text. Falls back to a hidden textarea where the async clipboard API is missing or refused. */
   async copyDialog(): Promise<void> {

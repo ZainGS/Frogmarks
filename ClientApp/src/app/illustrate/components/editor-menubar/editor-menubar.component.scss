@@ -143,6 +143,29 @@
   color: #888;
 }
 
+// Render debug: touch-sized rows everywhere (it is used on the tablet), the switch list scrolls inside the dropdown.
+.exp-menu .edit-menu-item.exp-rd-row { min-height: 44px; }
+.exp-rd-sub { padding-left: 26px; }
+.exp-rd-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.exp-dialog-image {
+  display: block;
+  max-width: 100%;
+  max-height: 40vh;
+  margin: 0 auto 8px;
+  object-fit: contain;
+  border: 1px solid #333;
+}
+a.exp-dialog-btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 @media (pointer: coarse) {
   .exp-menu .edit-menu-item { min-height: 44px; }
   .exp-segment-btn { min-height: 40px; }

@@ -229,6 +229,40 @@
                 <span>GPU info…</span>
             </div>
         </ng-container>
+        <!-- Render debug: one switch per 3D pass / feature, to bisect a device-only GPU glitch (Salsa
+             docs/ui/gpu-diagnostics.md "Render debug"). Remembered on this device by Salsa. -->
+        <ng-container *ngIf="exp.hasRenderDebug || exp.hasRealScreenshot">
+            <div class="edit-menu-divider"></div>
+            <div class="edit-menu-item exp-two-line exp-rd-row" (click)="exp.renderDebugOpen = !exp.renderDebugOpen"
+                 [attr.aria-expanded]="exp.renderDebugOpen">
+                <span>
+                    <span>Render debug{{ exp.renderDebugOnCount ? ' (' + exp.renderDebugOnCount + ' on)' : '' }}</span>
+                    <span *ngIf="exp.renderDebugStatus" class="exp-hint">{{ exp.renderDebugStatus }}</span>
+                </span>
+                <span class="exp-check">{{ exp.renderDebugOpen ? '▾' : '▸' }}</span>
+            </div>
+            <ng-container *ngIf="exp.renderDebugOpen">
+                <div *ngIf="exp.hasRealScreenshot" class="edit-menu-item exp-rd-row exp-rd-sub"
+                     (click)="closeExperimentalMenu(); exp.saveRealScreenshot(engine)"
+                     title="Reads back what the renderer produced for the next frame and saves it as a PNG.">
+                    <span>Save real screenshot…</span>
+                </div>
+                <ng-container *ngIf="exp.hasRenderDebug">
+                    <div class="edit-menu-item exp-rd-row exp-rd-sub" (click)="exp.resetRenderDebug(engine)">
+                        <span>Reset render debug</span>
+                        <span class="exp-check"></span>
+                    </div>
+                    <div class="exp-rd-list">
+                        <div *ngFor="let r of exp.renderDebugRows" class="edit-menu-item exp-rd-row exp-rd-sub"
+                             role="menuitemcheckbox" [attr.aria-checked]="r.on" [title]="r.key"
+                             (click)="exp.toggleRenderDebug(engine, r.key)">
+                            <span>{{ r.label }}</span>
+                            <span class="exp-check">{{ r.on ? '✓' : '' }}</span>
+                        </div>
+                    </div>
+                </ng-container>
+            </ng-container>
+        </ng-container>
         <div class="edit-menu-divider"></div>
         <div class="edit-menu-item exp-two-line" (click)="closeExperimentalMenu(); exp.toggleSafeMode(engine)">
             <span>
@@ -247,8 +281,10 @@
             <button type="button" class="exp-dialog-btn" aria-label="Close" (click)="exp.closeDialog()">✕</button>
         </div>
         <pre class="exp-dialog-body">{{ dlg.text }}</pre>
+        <img *ngIf="dlg.imageUrl" class="exp-dialog-image" [src]="dlg.imageUrl" alt="Real screenshot">
         <div class="exp-dialog-footer">
             <span class="exp-dialog-copied" *ngIf="dlg.copied">Copied</span>
+            <a *ngIf="dlg.imageUrl" class="exp-dialog-btn" [href]="dlg.imageUrl" target="_blank" rel="noopener">Open image</a>
             <button type="button" class="exp-dialog-btn primary" [disabled]="dlg.busy" (click)="exp.copyDialog()">Copy</button>
             <button type="button" class="exp-dialog-btn" (click)="exp.closeDialog()">Close</button>
         </div>

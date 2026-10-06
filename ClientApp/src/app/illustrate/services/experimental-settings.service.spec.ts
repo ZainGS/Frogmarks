@@ -287,4 +287,96 @@ describe('ExperimentalSettingsService (editor › Experimental menu)', () => {
       expect(reload).not.toHaveBeenCalled();
     });
   });
+
+  describe('render debug', () => {
+    /** A stand-in for Salsa's render-debug API (render-debug.ts), backed by a plain flag record. */
+    function makeRenderDebugEngine(status: object = { resolutionScale: 0.75, resolutionMode: 'auto', loResPath: { width: 960, height: 540, dynamic: true }, temporalAA: false }) {
+      const flags: Record<string, boolean> = { forceFullRes: false, solidMesh: false, noGrid: false };
+      const blob = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+      const sm = {
+        setRenderDebug3D: jasmine.createSpy('setRenderDebug3D').and.callFake((p: Record<string, boolean | undefined>) => {
+          if (p['reset']) for (const k of Object.keys(flags)) flags[k] = false;
+          for (const k of Object.keys(flags)) if (typeof p[k] === 'boolean') flags[k] = p[k] as boolean;
+          return { ...flags };
+        }),
+        getRenderDebug3D: () => ({ ...flags }),
+        getRenderDebugFlagList3D: () => [
+          { key: 'forceFullRes', label: 'Force full resolution' }, { key: 'solidMesh', label: 'Solid magenta meshes' },
+          { key: 'noGrid', label: 'No grid' },
+        ],
+        getRenderDebugStatus3D: () => status,
+        captureCanvasPNG3D: jasmine.createSpy('captureCanvasPNG3D')
+          .and.resolveTo({ blob, dataUrl: 'data:image/png;base64,iVBORw==', width: 4, height: 3, source: 'swapchain', format: 'bgra8unorm', translucentPixels: 0 }),
+      };
+      return { sm, flags };
+    }
+
+    it('is hidden when the Salsa dist has no render-debug API', () => {
+      const { svc } = makeService();
+      svc.refresh(makeEngine().sm);
+      expect(svc.hasRenderDebug).toBeFalse();
+      expect(svc.hasRealScreenshot).toBeFalse();
+      expect(svc.renderDebugRows).toEqual([]);
+    });
+
+    it('lists the engine switches in its order, with the resolution / lo-res status line', () => {
+      const { svc } = makeService();
+      const { sm } = makeRenderDebugEngine();
+      svc.refresh(sm);
+      expect(svc.hasRenderDebug).toBeTrue();
+      expect(svc.hasRealScreenshot).toBeTrue();
+      expect(svc.renderDebugRows.map((r) => r.key)).toEqual(['forceFullRes', 'solidMesh', 'noGrid']);
+      expect(svc.renderDebugRows.every((r) => !r.on)).toBeTrue();
+      expect(svc.renderDebugStatus).toBe('3D scale 0.75 (auto) · lo-res 960×540');
+    });
+
+    it('toggles one switch, counts the ones on, and resets them all', () => {
+      const { svc } = makeService();
+      const { sm, flags } = makeRenderDebugEngine({ resolutionScale: 1, resolutionMode: 'off', loResPath: null });
+      svc.refresh(sm);
+      expect(svc.renderDebugStatus).toBe('3D scale 1 (off) · native');
+      svc.toggleRenderDebug(sm, 'solidMesh');
+      expect(sm.setRenderDebug3D).toHaveBeenCalledOnceWith({ solidMesh: true });
+      expect(flags['solidMesh']).toBeTrue();
+      expect(svc.renderDebugRows.find((r) => r.key === 'solidMesh')?.on).toBeTrue();
+      svc.toggleRenderDebug(sm, 'noGrid');
+      expect(svc.renderDebugOnCount).toBe(2);
+      svc.toggleRenderDebug(sm, 'solidMesh');
+      expect(sm.setRenderDebug3D.calls.mostRecent().args).toEqual([{ solidMesh: false }]);
+      svc.resetRenderDebug(sm);
+      expect(sm.setRenderDebug3D.calls.mostRecent().args).toEqual([{ reset: true }]);
+      expect(svc.renderDebugOnCount).toBe(0);
+    });
+
+    it('saves the real screenshot as a PNG download and shows it in the dialog', async () => {
+      const { svc } = makeService();
+      const { sm } = makeRenderDebugEngine();
+      const download = spyOn(svc, 'downloadUrl');
+      svc.refresh(sm);
+      svc.toggleRenderDebug(sm, 'forceFullRes');
+      await svc.saveRealScreenshot(sm);
+      expect(sm.captureCanvasPNG3D).toHaveBeenCalledTimes(1);
+      expect(download).toHaveBeenCalledTimes(1);
+      const [url, name] = download.calls.mostRecent().args;
+      expect(url.startsWith('blob:')).toBeTrue();
+      expect(name).toMatch(/^frogmarks-render-.*\.png$/);
+      expect(svc.dialog?.busy).toBeFalse();
+      expect(svc.dialog?.imageUrl).toBe(url);
+      expect(svc.dialog?.text).toContain('Source: swapchain (bgra8unorm)');
+      expect(svc.dialog?.text).toContain('Render debug on: forceFullRes');
+      svc.closeDialog();
+      expect(svc.dialog).toBeNull();
+    });
+
+    it('reports a failed capture in the dialog instead of throwing', async () => {
+      const { svc } = makeService();
+      const { sm } = makeRenderDebugEngine();
+      sm.captureCanvasPNG3D.and.rejectWith(new Error('no frame was rendered within 5 s'));
+      const download = spyOn(svc, 'downloadUrl');
+      await svc.saveRealScreenshot(sm);
+      expect(download).not.toHaveBeenCalled();
+      expect(svc.dialog?.text).toContain('no frame was rendered within 5 s');
+      expect(svc.dialog?.busy).toBeFalse();
+    });
+  });
 });
