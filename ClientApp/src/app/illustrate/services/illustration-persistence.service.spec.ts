@@ -234,4 +234,69 @@ describe('IllustrationPersistenceService across a document switch (New / Duplica
       expect(host.applyFrogImport).not.toHaveBeenCalled();
     });
   });
+
+  describe('a document the Shell created a moment ago (nothingSavedYet)', () => {
+    /** A switch service whose autosave can load, with the engine bits the local load path touches. */
+    function makeLocal() {
+      const m = makeSwitchService();
+      const loadDocument = jasmine.createSpy('loadDocument').and.resolveTo({ success: false, layers: [] });
+      (m.autoSave as any).loadDocument = loadDocument;
+      (m.animation as any).beginBulkRestore = jasmine.createSpy('beginBulkRestore');
+      (m.animation as any).endBulkRestore = jasmine.createSpy('endBulkRestore');
+      const shell = { isSceneActive: false, destroyScene: jasmine.createSpy('destroyScene') };
+      const renderer = { isSuspended: false, resumeRendering: jasmine.createSpy('resumeRendering') };
+      Object.assign(m.engine, { fitArtboard: jasmine.createSpy('fitArtboard'), shell, webgpuRenderer: renderer });
+      return { ...m, loadDocument, shell, renderer };
+    }
+    const nextFrame = () => new Promise<void>(r => requestAnimationFrame(() => r()));
+
+    it('skips the OPFS lookup, stays on the blank engine document, and still finishes the load + binds the autosave', async () => {
+      const { svc, host, autoSave, loadDocument, engine } = makeLocal();
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'Untitled Illustration', syncMode: 2 } as any, { nothingSavedYet: true });
+      expect(loadDocument).not.toHaveBeenCalled();
+      expect(autoSave.enable.calls.mostRecent().args[0]).toBe('local-NEW');   // saves go to the new document
+      expect(host.markLoaded).toHaveBeenCalledWith('illustration');
+      await nextFrame();
+      expect((engine as any).fitArtboard).toHaveBeenCalled();
+      expect(host.markLoaded).toHaveBeenCalledWith('sceneApplied');
+    });
+
+    it('is one-shot: the same service loads the next document (and this one again) from OPFS as usual', async () => {
+      const { svc, loadDocument } = makeLocal();
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'n', syncMode: 2 } as any, { nothingSavedYet: true });
+      await svc.initWithIllustration({ uuid: 'OLD', name: 'o', syncMode: 2 } as any);
+      expect(loadDocument.calls.allArgs()).toEqual([['local-OLD']]);
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'n', syncMode: 2 } as any);
+      expect(loadDocument.calls.allArgs()).toEqual([['local-OLD'], ['local-NEW']]);
+    });
+
+    it("without the hint a new local document takes the normal path (a reload, the editor's own New, a Duplicate)", async () => {
+      const { svc, loadDocument, host } = makeLocal();
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'n', syncMode: 2 } as any);
+      expect(loadDocument).toHaveBeenCalledOnceWith('local-NEW');
+      await nextFrame();
+      expect(host.markLoaded).toHaveBeenCalledWith('sceneApplied');
+    });
+
+    it('a pending .frog import still wins over the hint', async () => {
+      const { svc, frogFile, host, loadDocument } = makeLocal();
+      frogFile.pendingImport = { name: 'x' };
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'n', syncMode: 2 } as any, { nothingSavedYet: true });
+      expect(host.applyFrogImport).toHaveBeenCalled();
+      expect(loadDocument).not.toHaveBeenCalled();
+    });
+
+    it("keeps what Salsa's loadDocument did before looking: releases a Shell scene that is still up / a suspended renderer", async () => {
+      const a = makeLocal();
+      a.shell.isSceneActive = true;
+      await a.svc.initWithIllustration({ uuid: 'A', name: 'n', syncMode: 2 } as any, { nothingSavedYet: true });
+      expect(a.shell.destroyScene).toHaveBeenCalledTimes(1);
+      expect(a.renderer.resumeRendering).not.toHaveBeenCalled();
+      const b = makeLocal();
+      b.renderer.isSuspended = true;
+      await b.svc.initWithIllustration({ uuid: 'B', name: 'n', syncMode: 2 } as any, { nothingSavedYet: true });
+      expect(b.renderer.resumeRendering).toHaveBeenCalledTimes(1);
+      expect(b.shell.destroyScene).not.toHaveBeenCalled();
+    });
+  });
 });

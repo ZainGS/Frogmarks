@@ -4,6 +4,8 @@ import { ResultType } from '../../../shared/models/error-result.model';
 
 import { IllustrationService } from 'app/shared/services/illustrate/illustration.service';
 import { LocalIllustrationService } from 'app/shared/services/illustrate/local-illustration.service';
+import { takeFreshLocalDocument } from 'app/shared/services/illustrate/fresh-local-document';
+import { logCreateTimeline, perfMark } from 'app/shared/utilities/perf-marks';
 import { FrogImportResult } from 'app/shared/services/illustrate/frog-file.service';
 
 import { Illustration } from 'app/illustrate/models/illustration.model';
@@ -1500,7 +1502,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     public touchUi: TouchUiService,
     /** View › Side Panel visibility: the right panel column, remembered per machine. */
     public sidePanel: SidePanelService,
-  ) { }
+  ) { perfMark('editor:ctor'); }
 
   ngOnInit() {
     this.ngZone.runOutsideAngular(() => {
@@ -1627,11 +1629,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.persist.startBlankDocument(ShapeManager.getInstance(), this.persist.isLocalMode ? illustrationUid : null));
     if (!isRendererLive) {
       await this.ngZone.runOutsideAngular(() => startWebGPURendering('webgpuCanvas'));
+      perfMark('reinit-done');
       await startBlank();
+      perfMark('blank-done');
       this.ngZone.run(() => this.afterRendererBoot(false));
     } else {
       await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering('webgpuCanvas'));
+      perfMark('reinit-done');
       await startBlank();
+      perfMark('blank-done');
       this.ngZone.run(() => this.afterRendererBoot(true));
     }
 
@@ -1649,12 +1655,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       if (this.isViewerMode) {
         await this.files._initViewerMode(this.persist.illustrationUid);
       } else if (this.persist.isLocalMode) {
-        // Local-only: resolve from IndexedDB, not the API
-        const fromState = stateIllustration?.syncMode === 2 && stateIllustration?.uuid === this.persist.illustrationUid
+        // Local-only: resolve from IndexedDB, not the API. A document the Shell created a moment ago is handed over
+        // in memory (one-shot, see fresh-local-document.ts): no read-back, and nothing saved to look for.
+        const fresh = takeFreshLocalDocument(this.persist.illustrationUid);
+        const fromState = fresh ?? (stateIllustration?.syncMode === 2 && stateIllustration?.uuid === this.persist.illustrationUid
           ? stateIllustration
-          : await this.localIllustrationService.getByUuid(this.persist.illustrationUid);
+          : await this.localIllustrationService.getByUuid(this.persist.illustrationUid));
         if (fromState) {
-          await this.persist.initWithIllustration(fromState as any);
+          await this.persist.initWithIllustration(fromState as any, { nothingSavedYet: !!fresh });
         } else {
           this.notifyService.error('Local illustration not found');
           this.markLoaded('illustration');
@@ -2704,6 +2712,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.loadingState[key] = true;
     if (Object.values(this.loadingState).every(Boolean)) {
       this.isLoading = false;
+      perfMark('doc-loaded');
+      requestAnimationFrame(() => requestAnimationFrame(() => { perfMark('editor:first-frame'); logCreateTimeline(); }));
       this.doc.startExportReminder();
       void this.storage._initPixelFormat();
       this.canvasLook.loadCanvasGrid();

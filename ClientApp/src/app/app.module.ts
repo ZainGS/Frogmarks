@@ -40,6 +40,7 @@ import { DocsComponent } from './shared/components/docs/docs.component';
 import { StudioComponent } from './shared/components/studio/studio.component';
 import { PackageEditorComponent } from './package-designer/package-editor/package-editor.component';
 import { PlayerComponent } from './player/player.component';
+import { loadIllustrateModule } from './illustrate-loader';
 
 
 @NgModule({
@@ -92,8 +93,10 @@ import { PlayerComponent } from './player/player.component';
       { path: 'board/:id', component: BoardComponent},
       // The Illustrate editor is lazy-loaded (audit Phase 4.1): ~2.3 MB of editor code no longer ships with the shell.
       // Same URLs: /illustration/:id, /illustration/local/:id, /view/:id (viewer data is inherited by the child route).
-      { path: 'illustration', loadChildren: () => import('./illustrate/illustrate.module').then(m => m.IllustrateModule) },
-      { path: 'view', data: { viewer: true }, loadChildren: () => import('./illustrate/illustrate.module').then(m => m.IllustrateModule) },
+      // One shared loader (illustrate-loader.ts): the Shell preloads the chunk through it at idle moments, so the
+      // navigation usually finds it already fetched + evaluated.
+      { path: 'illustration', loadChildren: loadIllustrateModule },
+      { path: 'view', data: { viewer: true }, loadChildren: loadIllustrateModule },
       { path: 'docs', component: DocsComponent },
       { path: 'packaging/local/:id', component: PackageEditorComponent, data: { local: true } },
       { path: 'packaging/:id',       component: PackageEditorComponent },

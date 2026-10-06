@@ -570,6 +570,9 @@ export class IllustrationPersistenceService implements OnDestroy {
   /** Load the current document. Picks the source — local-only OPFS, this device's OPFS copy when it is at least as
    *  fresh as the server, else the server — and hands off to that path. Each path ends by marking 'sceneApplied'. */
   async loadIllustrationV2(): Promise<void> {
+    // One load only, whichever branch below runs (a later reload of this document must look at OPFS again).
+    const nothingSavedYet = this._nothingSavedYet;
+    this._nothingSavedYet = false;
     // ── Pending .frog import (from dashboard) — for the document opened right after it was set ──
     // (Checked before the local-only branch: a local-only import used to be skipped and stay pending, and was then
     // imported into whichever cloud document opened next — e.g. a New Illustration.)
@@ -582,7 +585,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     }
 
     // Local-only: OPFS is the only source — no SQL state, no blob downloads
-    if (this.syncMode === 2) return this._loadLocalOnly();
+    if (this.syncMode === 2) return this._loadLocalOnly(nothingSavedYet);
 
     if (!this.illustration?.id) {
       requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
@@ -666,9 +669,25 @@ export class IllustrationPersistenceService implements OnDestroy {
     requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
   }
 
+  /** Set by initWithIllustration, consumed by the load it starts: a brand-new local document with nothing saved. */
+  private _nothingSavedYet = false;
+
   /** Local-only document: Salsa's own OPFS document + our OPFS metadata (keyed by uuid). */
-  private async _loadLocalOnly(): Promise<void> {
+  private async _loadLocalOnly(nothingSavedYet = false): Promise<void> {
     const opfsDocId = 'local-' + (this.illustration?.uuid ?? '');
+    if (nothingSavedYet) {
+      // Created a moment ago: there is no OPFS document to find, so the engine stays on the blank document that
+      // startBlankDocument gave it — exactly where a failed lookup ends up, minus the lookup. (Salsa's loadDocument
+      // also releases the Shell scene / resumes the editor renderer before it looks; keep that part.)
+      const sm = this.shapeManager;
+      if (sm.shell?.isSceneActive) sm.shell.destroyScene();
+      else if (sm.webgpuRenderer?.isSuspended) sm.webgpuRenderer.resumeRendering();
+      requestAnimationFrame(() => {
+        this.shapeManager.fitArtboard();
+        this.host.markLoaded('sceneApplied');
+      });
+      return;
+    }
     try {
       this.animationService.beginBulkRestore();
       const result = await this.autoSaveService.loadDocument(opfsDocId).finally(() => {
@@ -1305,8 +1324,13 @@ export class IllustrationPersistenceService implements OnDestroy {
     }
   }
 
-  async initWithIllustration(illustration: Illustration): Promise<void> {
+  /**
+   * @param opts.nothingSavedYet the document was created a moment ago in this session and handed over in memory (the
+   *        Shell's New Project, see fresh-local-document.ts): the local-only load skips probing OPFS for a saved copy.
+   */
+  async initWithIllustration(illustration: Illustration, opts: { nothingSavedYet?: boolean } = {}): Promise<void> {
     this._resetForNewDocument();
+    this._nothingSavedYet = opts.nothingSavedYet === true;
     this.illustration = illustration;
     this.host.doc.illustrationTitle = illustration.name ?? 'Untitled';
     this.syncMode = illustration.syncMode ?? (this.isLocalMode ? 2 : 0);

@@ -27,7 +27,7 @@
 
   <!-- Offscreen ARIA tree for screen readers -->
   <ul class="shell-aria-tree" aria-label="Frogmarks shell" role="tree">
-    <li *ngFor="let slot of ariaSlots" role="treeitem" [attr.aria-label]="slot.name">
+    <li *ngFor="let slot of ariaSlots; trackBy: trackAriaSlot" role="treeitem" [attr.aria-label]="slot.name">
       {{ slot.name }}
     </li>
   </ul>
