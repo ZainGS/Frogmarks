@@ -844,7 +844,7 @@
         </div>
 
         <!-- Zoom Controls -->
-        <div *ngIf="!uiHidden && !isViewerMode" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled"
+        <div *ngIf="!uiHidden && !isViewerMode && sidePanel.zoomControlsVisible" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled"
              [class.no-side-panel]="!sidePanel.visible">
             <div class="zoom-percent-display" (click)="artboard.zoomFitClick()" [title]="editorState.scene3dViewCameraMode === 'free3D' ? 'Click to return to the scene view' : 'Current zoom — click to fit artboard'">{{ artboard.currentZoomPercent }}</div>
             <div class="row zoom-control-row">

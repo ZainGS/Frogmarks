@@ -170,6 +170,11 @@
             <span>Side Panel</span>
             <span class="shortcut" *ngIf="editor.sidePanel.visible">✓</span>
         </div>
+        <div class="edit-menu-item" (click)="editor.sidePanel.toggleZoomControls(); editor.closeAllMenus()"
+             title="Show / hide the zoom box (percent, − / +, Fit). Pinch and wheel zoom still work. Remembered on this device.">
+            <span>Zoom Controls</span>
+            <span class="shortcut" *ngIf="editor.sidePanel.zoomControlsVisible">✓</span>
+        </div>
         <div class="edit-menu-item" (click)="editor.toggleUI(true); editor.closeAllMenus()">
             <span>Toggle UI</span><span class="shortcut">X</span>
         </div>
