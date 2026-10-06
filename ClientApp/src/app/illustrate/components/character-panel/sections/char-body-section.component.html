@@ -1,5 +1,5 @@
 <ng-container *ngIf="look.scene3dBodyParams">
-    <div class="eye-proc-group">Skin Shading</div>
+    <ng-container *ngIf="cp.sub.id === 'skin-shading'"><!-- Skin Shading -->
     <div class="scene3d-toggle-row">
         <label title="Half-Lambert wrapped lighting — lifts the dark side of the face">Soft lighting</label>
         <input type="checkbox" [(ngModel)]="look.scene3dSoftLightOn" (change)="look.scene3dSoftLightToggle()">
@@ -41,9 +41,9 @@
             <label title="Warm shadow colour — white = neutral">Shadow tint</label>
             <input type="color" [(ngModel)]="look.scene3dRampShadowTintHex" (ngModelChange)="look.scene3dRampSettingsChanged()">
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Joints</div>
+    <ng-container *ngIf="cp.sub.id === 'joints'"><!-- Joints -->
     <div class="scene3d-material-row">
         <label title="Blends skin weights at the armpit/elbow seams so they stop folding when posed. Saved characters are 0; new ones start at 0.5.">Smoothness</label>
         <input type="range" min="0" max="1" step="0.05"
@@ -57,9 +57,9 @@
             <option value="linear">Linear</option>
             <option value="dualQuat">Dual quaternion</option>
         </select>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Size</div>
+    <ng-container *ngIf="cp.sub.id === 'size'"><!-- Size -->
     <div class="scene3d-material-row">
         <label title="Scales the WHOLE character (body, clothes, hair, face, glasses) as one, from the feet. No regeneration; saved with the scene. Play's camera, collision and stride follow.">Scale</label>
         <input type="range" min="0.25" max="4" step="0.05"
@@ -73,9 +73,9 @@
                [ngModel]="look.scene3dCharHeightM" (change)="look.scene3dCharHeightChanged(+$any($event.target).value)">
         <button class="scene3d-btn scene3d-btn-sm" [disabled]="look.scene3dCharSceneMpu == null" (click)="look.scene3dFitCharToCity()"
                 title="Scale to real human size (1.7 m) in the city">Fit to city</button>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Proportions</div>
+    <ng-container *ngIf="cp.sub.id === 'proportions'"><!-- Proportions -->
     <div class="scene3d-material-row">
         <label>Height</label>
         <input type="range" min="0.1" max="1" step="0.05"
@@ -117,8 +117,8 @@
                [(ngModel)]="look.scene3dBodyParams.headSize"
                (ngModelChange)="look.scene3dBodyParamChanged()">
         <span class="scene3d-val">{{ look.scene3dBodyParams.headSize | number:'1.2-2' }}</span>
-    </div>
-    <div class="eye-proc-group">Shape</div>
+    </div></ng-container>
+    <ng-container *ngIf="cp.sub.id === 'shape'"><!-- Shape -->
     <div class="scene3d-material-row">
         <label>Bust</label>
         <input type="range" min="0" max="2" step="0.05"
@@ -166,11 +166,11 @@
         <input type="color"
                [(ngModel)]="look.scene3dSkinTone"
                (ngModelChange)="look.scene3dSkinToneChanged()">
-    </div>
+    </div></ng-container>
 </ng-container>
-<button *ngIf="!look.scene3dBodyParams" class="scene3d-btn" style="width:100%"
-        (click)="cp.scene3dInitBodyParams()">Load Body Params</button>
-<div class="eye-proc-group" style="margin-top:12px">Texture</div>
+<ng-container *ngIf="!cp.sub.id"><button *ngIf="!look.scene3dBodyParams" class="scene3d-btn" style="width:100%"
+        (click)="cp.scene3dInitBodyParams()">Load Body Params</button></ng-container>
+<ng-container *ngIf="cp.sub.id === 'texture'"><!-- Texture -->
 <div class="scene3d-material-row">
     <label>Diffuse</label>
     <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
@@ -178,4 +178,25 @@
     </label>
     <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['body']"
             (click)="cp.scene3dClearCharPartTexture('body')" title="Clear texture">✕</button>
+</div></ng-container>
+
+<div class="nav-tiles" *ngIf="!cp.sub.id">
+    <button class="nav-tile" *ngIf="look.scene3dBodyParams" (click)="cp.sub.open('skin-shading', 'Skin Shading')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Skin Shading</span><span class="nav-tile-hint">Soft lighting · Softness · Skin style · Bands …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="look.scene3dBodyParams" (click)="cp.sub.open('joints', 'Joints')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Joints</span><span class="nav-tile-hint">Smoothness · Blending</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="look.scene3dBodyParams" (click)="cp.sub.open('size', 'Size')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Size</span><span class="nav-tile-hint">Scale · Height (m)</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="look.scene3dBodyParams" (click)="cp.sub.open('proportions', 'Proportions')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Proportions</span><span class="nav-tile-hint">Height · Leg length · Limb thick · Torso width …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="look.scene3dBodyParams" (click)="cp.sub.open('shape', 'Shape')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Shape</span><span class="nav-tile-hint">Bust · Waist · Hip Width · Hip Front …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="cp.sub.open('texture', 'Texture')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Texture</span><span class="nav-tile-hint">Diffuse · Upload</span></span><span class="nav-tile-chev">›</span>
+    </button>
 </div>

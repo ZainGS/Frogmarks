@@ -1,7 +1,11 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { TouchUiService } from '../../services/touch-ui.service';
 
-type CameraMode = 'ortho2D' | 'perspective2D' | 'free3D';
+/** Salsa's TOUCH-3 host switch (ShapeManager.setTouchNavigate3D), typed locally until the dist ships it. */
+type TouchNavigateApi = { setTouchNavigate3D?: (on: boolean) => void } | null;
+
+type CameraMode ='ortho2D' | 'perspective2D' | 'free3D';
 
 /**
  * Top-bar 3D view controls: camera mode, Illustration / Scene target, artboard frame, fly, 1P / 3P, the
@@ -30,6 +34,24 @@ export class SceneViewBarComponent {
   @Output() togglePlay = new EventEmitter<void>();
   @Output() playCameraModeChange = new EventEmitter<'first' | 'third'>();
   @Output() dirty = new EventEmitter<void>();
+
+  constructor(public touchUi: TouchUiService) {}
+
+  // ── Touch "Navigate" (mobile-parity TOUCH-3 + the Frogmarks toggle): one finger orbits / pans the camera even in
+  // tool modes (City / Edit Mesh / paint use alt-orbit, unreachable by touch). Salsa's setTouchNavigate3D(on) is new:
+  // until the dist that has it is built the button stays hidden (a guarded call, not a hard one).
+  scene3dTouchNavigate = false;
+
+  private get _touchNavApi(): TouchNavigateApi { return this.shapeManager as unknown as TouchNavigateApi; }
+
+  get touchNavAvailable(): boolean { return typeof this._touchNavApi?.setTouchNavigate3D === 'function'; }
+
+  scene3dToggleTouchNavigate(): void {
+    const api = this._touchNavApi;
+    if (typeof api?.setTouchNavigate3D !== 'function') return;
+    this.scene3dTouchNavigate = !this.scene3dTouchNavigate;
+    api.setTouchNavigate3D(this.scene3dTouchNavigate);
+  }
 
   // ── Play settings (Salsa polish round 3 T5) ──
   scene3dPlaySettingsOpen = false;

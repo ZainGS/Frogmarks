@@ -1,14 +1,19 @@
 <!-- Main picker: hue ring + swatch -->
 <div class="picker-main">
     <div class="hue-ring" #hueRing
-         (mousedown)="onHueRingMouseDown($event)">
+         (pointerdown)="onHueRingPointerDown($event)"
+         (pointermove)="onHueRingPointerMove($event)"
+         (pointerup)="onPickerPointerEnd()"
+         (pointercancel)="onPickerPointerEnd()"
+         (lostpointercapture)="onPickerPointerEnd()">
         <div class="hue-ring-thumb"
              [style.transform]="'rotate(' + persistentHue + 'deg) translateY(-63px)'">
         </div>
         <!-- SB square inside the ring -->
         <div class="sb-square" #sbSquare
              [style.background]="'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + persistentHue + ', 100%, 50%))'"
-             (mousedown)="onSbSquareMouseDown($event)">
+             (pointerdown)="onSbSquarePointerDown($event)"
+             (pointermove)="onSbSquarePointerMove($event)">
             <div class="sb-indicator"
                  [style.left.%]="persistentSbX"
                  [style.top.%]="persistentSbY">

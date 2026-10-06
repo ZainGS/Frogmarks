@@ -1,0 +1,135 @@
+import ShapeManager from '@zaings/salsa/shape-manager';
+import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
+import { BrushOptionsComponent, HIDDEN_BRUSH_PRESET_IDS } from './brush-options.component';
+
+/** A stand-in for the engine bits the brush panel touches: the preset library + RasterDrawingService's tool mode. */
+function fakeEngine(opts: { withPicker?: boolean } = {}) {
+  const presets = [
+    { id: 'default_round_soft', name: 'Round Soft', category: 'Pen' },
+    { id: 'default_hard_pen', name: 'Hard Pen', category: 'Pen' },
+    { id: 'default_eraser', name: 'Eraser', category: 'Eraser' },
+  ];
+  const state = { active: 'default_round_soft', toolMode: 'paint' as 'paint' | 'erase' | 'clear', hard: false, picks: 0 };
+  const rds = {
+    setEraserMode: (m: 'paint' | 'erase' | 'clear') => { state.toolMode = m; },
+    setEraserHard: (h: boolean) => { state.hard = h; },
+    getEraseMode: (): number | null =>
+      state.toolMode === 'paint' ? null : state.toolMode === 'erase' ? (state.hard ? 3 : 1) : 2,
+  };
+  const sm: Record<string, unknown> = {
+    rasterDrawingService: rds,
+    getBrushPresets: () => presets,
+    getActiveBrushPresetId: () => state.active,
+    getBrushPreset: () => undefined,   // keeps _syncFromPreset a no-op
+    exportBrushPreset: (id: string) => JSON.stringify({ id }),
+    setActiveBrushPreset: (id: string) => { if (!presets.some(p => p.id === id)) return false; state.active = id; return true; },
+    enableRasterEraserTool: () => rds.setEraserMode('erase'),
+    enableRasterClearEraserTool: () => rds.setEraserMode('clear'),
+    enableRasterTool: () => rds.setEraserMode('paint'),
+  };
+  if (opts.withPicker) {
+    sm['selectRasterBrushPreset'] = (id: string) => {
+      state.picks++;
+      const ok = (sm['setActiveBrushPreset'] as (i: string) => boolean)(id);
+      if (ok) rds.setEraserMode('paint');
+      return ok;
+    };
+  }
+  return { sm, state };
+}
+
+function setup(opts: { withPicker?: boolean } = {}) {
+  const eng = fakeEngine(opts);
+  spyOn(ShapeManager, 'getInstance').and.returnValue(eng.sm as unknown as ShapeManager);
+  const service = new RasterBrushService();
+  const panel = new BrushOptionsComponent(service);
+  panel.ngOnInit();
+  return { ...eng, service, panel };
+}
+
+describe('BrushOptionsComponent eraser / brush selection', () => {
+  it('lists ONE eraser: the built-in Eraser preset is hidden behind the Eraser row', () => {
+    const t = setup();
+    expect(HIDDEN_BRUSH_PRESET_IDS.has('default_eraser')).toBeTrue();
+    expect(t.panel.presets.map(p => p.id)).toEqual(['default_round_soft', 'default_hard_pen']);
+    t.panel.ngOnDestroy();
+  });
+
+  it('Eraser row then a brush: erase mode is left and only the brush row is highlighted', () => {
+    const t = setup();
+    expect(t.panel.eraserActive).toBeFalse();
+    expect(t.panel.isPresetActive('default_round_soft')).toBeTrue();
+
+    t.panel.selectEraserTool();
+    expect(t.state.toolMode).toBe('erase');
+    expect(t.panel.eraserActive).toBeTrue();
+    expect(t.panel.isPresetActive('default_round_soft')).toBeFalse();   // no double highlight
+
+    t.panel.quickSelectBrush('default_hard_pen');
+    expect(t.state.toolMode).toBe('paint');                             // the bug: this stayed 'erase'
+    expect(t.state.active).toBe('default_hard_pen');
+    expect(t.panel.eraserActive).toBeFalse();
+    expect(t.panel.isPresetActive('default_hard_pen')).toBeTrue();
+    expect(t.panel.isPresetActive('default_round_soft')).toBeFalse();
+    t.panel.ngOnDestroy();
+  });
+
+  it('clicking the Eraser row again goes back to the brush (and stops erasing)', () => {
+    const t = setup();
+    t.panel.selectEraserTool();
+    t.panel.selectEraserTool();
+    expect(t.state.toolMode).toBe('paint');
+    expect(t.panel.isPresetActive('default_round_soft')).toBeTrue();
+    t.panel.ngOnDestroy();
+  });
+
+  it('Clear style and Hard edge reach the engine, and a brush pick leaves them too', () => {
+    const t = setup();
+    t.panel.selectEraserTool();
+    t.panel.onEraserHardnessChange('hard');
+    expect(t.service.getEraseMode()).toBe(3);
+    t.panel.onEraserStyleChange('clear');
+    expect(t.service.getEraseMode()).toBe(2);
+    t.panel.quickSelectBrush('default_round_soft');
+    expect(t.service.getEraseMode()).toBeNull();
+    t.panel.ngOnDestroy();
+  });
+
+  it('opening a brush editor (gear) selects that brush and leaves the eraser', () => {
+    const t = setup();
+    t.panel.selectEraserTool();
+    t.panel.openEditor('default_hard_pen', new MouseEvent('click'));
+    expect(t.state.toolMode).toBe('paint');
+    expect(t.panel.isPresetActive('default_hard_pen')).toBeTrue();
+    t.panel.ngOnDestroy();
+  });
+
+  it('the highlight follows the ENGINE: an eraser switched on elsewhere (rail / keymap) shows on the row', () => {
+    const t = setup();
+    (t.sm['enableRasterClearEraserTool'] as () => void)();   // e.g. the rail Eraser / Shift+E
+    expect(t.panel.eraserActive).toBeTrue();
+    expect(t.panel.isPresetActive('default_round_soft')).toBeFalse();
+    (t.sm['enableRasterTool'] as () => void)();               // back to the pen
+    expect(t.panel.eraserActive).toBeFalse();
+    t.panel.ngOnDestroy();
+  });
+
+  it('a document whose active preset is the hidden Eraser preset shows the Eraser row; the row returns to a brush', () => {
+    const t = setup();
+    t.service.setActivePreset('default_eraser');
+    expect(t.panel.eraserActive).toBeTrue();
+    t.panel.selectEraserTool();
+    expect(t.state.active).toBe('default_round_soft');
+    expect(t.panel.eraserActive).toBeFalse();
+    t.panel.ngOnDestroy();
+  });
+
+  it("uses Salsa's selectRasterBrushPreset when the engine has it", () => {
+    const t = setup({ withPicker: true });
+    t.panel.selectEraserTool();
+    t.panel.quickSelectBrush('default_hard_pen');
+    expect(t.state.picks).toBe(1);
+    expect(t.state.toolMode).toBe('paint');
+    t.panel.ngOnDestroy();
+  });
+});

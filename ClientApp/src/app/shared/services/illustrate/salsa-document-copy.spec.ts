@@ -1,0 +1,64 @@
+import { copySalsaDocument } from './salsa-document-copy';
+
+/** Runs against the karma browser's real OPFS (its own temporary profile). */
+async function salsaRoot(): Promise<FileSystemDirectoryHandle> {
+  return (await navigator.storage.getDirectory()).getDirectoryHandle('salsa-documents', { create: true });
+}
+async function write(dir: FileSystemDirectoryHandle, name: string, data: string): Promise<void> {
+  const w = await (await dir.getFileHandle(name, { create: true })).createWritable();
+  await w.write(data);
+  await w.close();
+}
+async function read(dir: FileSystemDirectoryHandle, name: string): Promise<string> {
+  return (await (await dir.getFileHandle(name)).getFile()).text();
+}
+
+describe('copySalsaDocument (Duplicate Illustration, engine half)', () => {
+  const src = `spec-copy-src-${Date.now()}`;
+  const dst = `${src}-dst`;
+
+  afterEach(async () => {
+    const root = await salsaRoot();
+    for (const id of [src, dst]) { try { await root.removeEntry(id, { recursive: true }); } catch { /* */ } }
+  });
+
+  it('copies every file and folder, rewrites the manifest for the new id, and leaves the original as it was', async () => {
+    const root = await salsaRoot();
+    const dir = await root.getDirectoryHandle(src, { create: true });
+    const original = { version: 3, docId: src, name: 'Original', savedAt: '2020-01-01T00:00:00.000Z', layers: [{ id: 'L1' }] };
+    await write(dir, 'manifest.json', JSON.stringify(original));
+    await write(dir, 'scene.json', '{"root":{"children":[1]}}');
+    await write(dir, 'scene3d.json', '{"nodes":[{"id":"m"}]}');
+    await write(await dir.getDirectoryHandle('layers', { create: true }), 'L1.png', 'PIXELS');
+    await write(await dir.getDirectoryHandle('models3d', { create: true }), 'm.glb', 'GLB');
+
+    expect(await copySalsaDocument(src, dst, 'Copy of Original')).toBeTrue();
+
+    const copy = await root.getDirectoryHandle(dst);
+    const manifest = JSON.parse(await read(copy, 'manifest.json'));
+    expect(manifest.docId).toBe(dst);
+    expect(manifest.name).toBe('Copy of Original');
+    expect(manifest.layers).toEqual([{ id: 'L1' }]);
+    expect(Date.parse(manifest.savedAt)).toBeGreaterThan(Date.parse(original.savedAt));
+    expect(await read(copy, 'scene.json')).toBe('{"root":{"children":[1]}}');
+    expect(await read(copy, 'scene3d.json')).toBe('{"nodes":[{"id":"m"}]}');
+    expect(await read(await copy.getDirectoryHandle('layers'), 'L1.png')).toBe('PIXELS');
+    expect(await read(await copy.getDirectoryHandle('models3d'), 'm.glb')).toBe('GLB');
+
+    // The original is untouched.
+    expect(JSON.parse(await read(dir, 'manifest.json'))).toEqual(original);
+  });
+
+  it('a document that was never saved (no folder / no manifest) is not copied', async () => {
+    expect(await copySalsaDocument(src, dst, 'x')).toBeFalse();
+    const root = await salsaRoot();
+    await root.getDirectoryHandle(src, { create: true });   // folder without a manifest
+    expect(await copySalsaDocument(src, dst, 'x')).toBeFalse();
+  });
+
+  it('refuses a copy onto itself or an empty id', async () => {
+    expect(await copySalsaDocument(src, src, 'x')).toBeFalse();
+    expect(await copySalsaDocument('', dst, 'x')).toBeFalse();
+    expect(await copySalsaDocument(src, '', 'x')).toBeFalse();
+  });
+});

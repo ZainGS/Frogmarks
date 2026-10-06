@@ -193,7 +193,7 @@
 
             <!-- Dropdown panel -->
             <div *ngIf="openBlendDropdownId === layer.id" class="blend-dropdown"
-                 [ngStyle]="blendDropdownStyle">
+                 [ngStyle]="blendDropdownStyle" (click)="$event.stopPropagation()">
               <ng-container *ngFor="let cat of blendModeCategories">
                 <div class="blend-cat-label">{{ cat }}</div>
                 <div *ngFor="let opt of optionsForCategory(cat)"

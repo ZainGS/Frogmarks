@@ -1011,3 +1011,33 @@ Engine docs: `docs/ui/persona-ui-kit.md` (Salsa) and `docs/specs/ui-system.md` �
   `components/scene-outliner/scene-outliner.component.html`. `tsc -p tsconfig.app.json` + `ngc` clean.
 - **Check:** add a character → one collapsed 👤 Character row with 🕹; expand → parts; 🕹 → Play follows it; add a box →
   the row doesn't change; reload → same.
+
+## Play camera: hard vs soft occluders + "Camera: Auto / Block / Ignore" (Salsa 2026-10-04: DONE · Frogmarks UI: DONE)
+
+- Salsa (`src/game/camera-occluders.ts`; play-mode.md "Hard vs soft occluders"): the 3P camera pulls in only for walls /
+  buildings / ground / bridges / big solids; poles, lamps, signals, signs, trees, props, cars, walkers are passed through,
+  and a soft object between the camera and the player dithers out (`Mesh3D.hlodFade` lane). Per-mesh override
+  `sm.setMeshCameraBlock3D(id, 'auto' | 'block' | 'ignore')` / `getMeshCameraBlock3D(id)` (saved as `cameraBlock`);
+  `sm.getCameraOccluderClass3D(id)` diagnostics.
+- Frogmarks (backups: agent scratchpad `pupdrive/camocc/backup/`): `mesh-behavior-section.component.ts` / `.html`, a
+  **Camera** select under the Behavior section. Guarded calls, tsc clean.
+- **Needs a Salsa dist rebuild** (until then the select reads Auto and does nothing). Then check in the browser
+  (Salsa docs/ui/frogmarks-update-2026-09-28.md, 2026-10-04 "Play camera ignores poles" section).
+
+## 2026-10-06 — Mobile / touch batch (salsa docs/specs/mobile-parity.md TOUCH-1/2/4/10, BRUSH-2, UI-1)
+
+- **Colour pickers** (persistent + shared): pointer events + capture + `touch-action:none`; per-instance `--hue`;
+  `@ViewChild` instead of `document.querySelector('.color-gradient')`.
+- **Global touch CSS** (`styles.scss`, `retro-chrome-theme.scss`, `index.html`): overscroll none, tap highlight off,
+  `touch-action:manipulation`, coarse-pointer slider thumbs, `interactive-widget=resizes-visual`.
+- **Brush lag (BRUSH-2)**: no zone entry per move during raster strokes; other drags coalesced to one CD per rAF;
+  brush ring moved by a direct transform write (pen + touch).
+- **UI-1**: tool rail scrolls; floating **Show UI** button on touch; editor `100vh` → `100dvh`.
+- **Play touch overlay** (`app-play-touch-controls`, coarse pointers only): left stick, right-half look, Jump / Use /
+  Run / Sneak / Stop; Play enters with `mouseLook:false` on touch. The stick needs Salsa's keyboard + host-input
+  merge (TOUCH-4 Salsa half) and the `interact` copy in `setPlayInput3D`: both in Salsa source now, not yet in the dist.
+- **Navigate** toggle (3D view bar, coarse pointers): calls `sm.setTouchNavigate3D(on)`. It's in Salsa source; the
+  button stays hidden until the dist is rebuilt (guarded through a local type; drop the cast once the dist has it).
+- **Touch action bar** (`app-touch-action-bar`): Undo / Redo (`routeUndo`, also used by Edit › Undo / Redo now),
+  Delete / Duplicate / Esc / Enter as synthetic keys. Open: multi-select toggle, Snap, Frame selected.
+- **Needs a Salsa dist rebuild**, then a check on the tablet.

@@ -2,7 +2,8 @@ import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-import { RouterModule } from '@angular/router';
+import { RouteReuseStrategy, RouterModule } from '@angular/router';
+import { DocumentRouteReuseStrategy } from './shared/routing/document-route-reuse.strategy';
 import { MatSnackBarModule } from '@angular/material/snack-bar'
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -105,6 +106,8 @@ import { PlayerComponent } from './player/player.component';
       provide: HTTP_INTERCEPTORS,
       useClass: AuthInterceptor, multi: true
     },
+    // One editor instance per document (New / Duplicate Illustration): see DocumentRouteReuseStrategy.
+    { provide: RouteReuseStrategy, useClass: DocumentRouteReuseStrategy },
   ],
   bootstrap: [AppComponent]
 })

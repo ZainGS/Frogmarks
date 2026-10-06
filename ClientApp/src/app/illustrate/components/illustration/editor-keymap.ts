@@ -33,9 +33,18 @@ export type KeymapHost = Pick<IllustrationComponent,
 >;
 
 /** Undo / redo go to the active context; the engine's 2D object stack has already handled the key when it can. */
-function undo(ed: KeymapHost, redo: boolean): void {
+function undo(ed: Pick<KeymapHost, 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
   if (ed.is3DContextActive) redo ? ed.scene3dRedo() : ed.scene3dUndo();
   else void (redo ? ed.rasterRedo() : ed.rasterUndo());
+}
+
+/** Undo / redo from a BUTTON (Edit menu, touch action bar): routed exactly like Ctrl+Z / Ctrl+Y. The 2D object stack
+ *  goes first (for the keys the engine consumes it itself; a button has to call it), then the active context. */
+export function routeUndo(ed: Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
+  const sm = ed.shapeManager;
+  if (!redo && sm.canUndo2DShapes) { sm.undo2DShapes(); return; }
+  if (redo && sm.canRedo2DShapes) { sm.redo2DShapes(); return; }
+  undo(ed, redo);
 }
 
 export const MOD_KEYMAP: KeyBinding[] = [

@@ -34,7 +34,7 @@
  * - hslToHex() / hexToHSL(): Format conversion utilities.
  */
 
-import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRef } from '@angular/core';
+import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRef, ViewChild } from '@angular/core';
 
 @Component({
   selector: 'app-color-picker',
@@ -57,6 +57,7 @@ export class ColorPickerComponent implements OnInit {
   isSelecting: boolean = false; // Tracks if the user is dragging
   isInitializing = true;
   private suppressEmit = false;
+  @ViewChild('gradient') gradientRef?: ElementRef<HTMLDivElement>;
 
   constructor(private elRef: ElementRef) {}
 
@@ -98,29 +99,32 @@ private sbYToLightness(sbY: number, s: number): number {
   return L_left * (1 - s / 200);
 }
 
-  // Start color selection on click
-  startColorSelection(event: MouseEvent) {
+  // Start color selection (pointer events + capture, mobile-parity TOUCH-1: mouse, pen and touch all drag; the
+  // captured square keeps receiving moves off its bounds, so no document listeners).
+  startColorSelection(event: PointerEvent) {
+      if (event.button !== 0 && event.pointerType === 'mouse') return;
+      event.preventDefault();
       this.isSelecting = true;
+      try { (event.currentTarget as HTMLElement | null)?.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
       this.updateColorFromEvent(event);
   }
 
   // Update color on drag
-  @HostListener('document:mousemove', ['$event'])
-  onMouseMove(event: MouseEvent) {
+  onGradientPointerMove(event: PointerEvent) {
       if (this.isSelecting) {
           this.updateColorFromEvent(event);
       }
   }
 
-  // Stop selecting when mouse is released
-  @HostListener('document:mouseup')
-  onMouseUp() {
+  // Stop selecting on pointerup / pointercancel / lostpointercapture
+  endColorSelection() {
       this.isSelecting = false;
   }
 
   // Update color based on cursor position inside SB gradient
   updateColorFromEvent(event: MouseEvent) {
-      const gradient = document.querySelector(".color-gradient") as HTMLDivElement;
+      // THIS instance's square (was document.querySelector('.color-gradient'): the first picker on the page).
+      const gradient = this.gradientRef?.nativeElement;
       if (!gradient) return;
       
       const rect = gradient.getBoundingClientRect();
@@ -149,7 +153,8 @@ private sbYToLightness(sbY: number, s: number): number {
 
   // Updates SB Gradient when Hue changes
   updateGradient() {
-      document.documentElement.style.setProperty('--hue', this.hue.toString());
+      // Per instance (was documentElement: every picker on the page shared one hue).
+      (this.elRef.nativeElement as HTMLElement).style.setProperty('--hue', this.hue.toString());
       this.updateColor();
   }
 

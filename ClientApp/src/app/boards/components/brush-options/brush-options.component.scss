@@ -223,6 +223,12 @@ $radius: 6px;
   gap: 5px;
 }
 
+/* Eraser tool options in the grid view: compact side-by-side choices */
+.eraser-options {
+  .radio-row { flex-direction: row; margin: 0; }
+  .radio-option { flex: 1; text-align: center; }
+}
+
 .quick-row {
   display: flex;
   align-items: center;

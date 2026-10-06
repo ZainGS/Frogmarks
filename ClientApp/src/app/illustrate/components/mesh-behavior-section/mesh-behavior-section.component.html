@@ -27,3 +27,11 @@
                 title="Everything the ctx object can do, with descriptions">API Reference</button>
     </div>
 </details>
+<div class="scene3d-material-row" title="How the Play third-person camera treats this object. Auto: large objects block (the camera moves in front of them, like a wall), small or thin ones are ignored (the camera passes through them and they fade). Block: always a wall. Ignore: never pulls the camera in.">
+    <label>Camera</label>
+    <select class="scene3d-select" [(ngModel)]="cameraBlock" (change)="cameraBlockChanged()">
+        <option value="auto">Auto</option>
+        <option value="block">Block</option>
+        <option value="ignore">Ignore</option>
+    </select>
+</div>

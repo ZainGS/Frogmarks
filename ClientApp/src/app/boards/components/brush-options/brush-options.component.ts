@@ -1,6 +1,5 @@
 import {
   Component,
-  Input,
   Output,
   EventEmitter,
   OnInit,
@@ -22,6 +21,15 @@ import {
 
 export type BrushPanelView = 'grid' | 'editor';
 
+/**
+ * Presets kept out of the brush list. The built-in "Eraser" preset (category 'Eraser', erases by its category) was a
+ * second "Eraser" entry next to the Eraser row. The row is the eraser TOOL: it erases with the current brush tip,
+ * has Fade / Clear + Soft / Hard, and is what UV / decal / packaging / garment painting read as "erasing" (a
+ * category-erase preset there painted black on garments). The preset still exists in the engine (saved documents
+ * carry it); while it is the active preset the panel shows the Eraser row as selected.
+ */
+export const HIDDEN_BRUSH_PRESET_IDS: ReadonlySet<string> = new Set(['default_eraser']);
+
 @Component({
   selector: 'app-brush-options',
   standalone: false,
@@ -29,10 +37,7 @@ export type BrushPanelView = 'grid' | 'editor';
   styleUrl: './brush-options.component.scss',
 })
 export class BrushOptionsComponent implements OnInit, OnDestroy {
-  /** The current raster tool mode set by the parent */
-  @Input() activeRasterTool: 'brush' | 'airbrush' | 'eraser' = 'brush';
   @Output() presetChanged = new EventEmitter<string>();
-  @Output() toolSelected = new EventEmitter<'brush' | 'airbrush' | 'eraser'>();
   @ViewChild('gridColorPicker') gridColorPickerRef!: ColorPickerComponent;
   @ViewChild('editorColorPicker') editorColorPickerRef!: ColorPickerComponent;
 
@@ -193,13 +198,14 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
 
     this.subs.push(
       this.rasterService.presets$.subscribe(presets => {
-        this.presets = presets;
+        this.presets = presets.filter(p => !HIDDEN_BRUSH_PRESET_IDS.has(p.id));
       }),
       this.rasterService.activePresetId$.subscribe(id => {
         this.activePresetId = id;
         this._syncFromPreset();
       })
     );
+    this._syncEraserFromEngine();
   }
 
   ngOnDestroy(): void {
@@ -210,20 +216,34 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
   //  GRID VIEW actions
   // ═══════════════════════════════════════════════════════════════
 
-  /** Quick-select a brush from the grid (just activates it, stays on grid) */
-  quickSelectBrush(id: string): void {
-    this.rasterService.setActivePreset(id);
-    this.presetChanged.emit(id);
-    this.toolSelected.emit('brush');
+  /** Is the eraser on? Read from the ENGINE (not a parent input) so the highlight is right however it was switched
+   *  (this row, the rail, the keymap) and in every host panel. */
+  get eraserActive(): boolean {
+    return this.rasterService.isEraserActive()
+      || (!!this.activePresetId && HIDDEN_BRUSH_PRESET_IDS.has(this.activePresetId));
   }
 
+  /** A preset row is highlighted only while it is the brush actually painting (never alongside the Eraser row). */
+  isPresetActive(id: string): boolean {
+    return !this.eraserActive && this.activePresetId === id;
+  }
+
+  /** Quick-select a brush from the grid (activates it AND leaves the eraser, stays on grid) */
+  quickSelectBrush(id: string): void {
+    this.rasterService.selectBrush(id);
+    this.presetChanged.emit(id);
+  }
+
+  /** Eraser row: turn the eraser tool on (erasing with the current brush tip), or back off to that brush. */
   selectEraserTool(): void {
-    if (this.activeRasterTool === 'eraser') {
-      if (this.activePresetId) this.rasterService.setActivePreset(this.activePresetId);
-      this.toolSelected.emit('brush');
+    if (this.eraserActive) {
+      const id = this.activePresetId && !HIDDEN_BRUSH_PRESET_IDS.has(this.activePresetId)
+        ? this.activePresetId
+        : this.presets[0]?.id;
+      if (id) this.quickSelectBrush(id);
     } else {
+      this.rasterService.setEraserHardness(this.eraserHardness);
       this.rasterService.enableEraserTool(this.eraserStyle);
-      this.toolSelected.emit('eraser');
     }
   }
 
@@ -232,7 +252,7 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
     event.stopPropagation(); // don't trigger quickSelect
     this.isCreating = false;
     this.editingPresetId = id;
-    this.rasterService.setActivePreset(id);
+    this.rasterService.selectBrush(id);   // editing a brush selects it (and leaves the eraser)
 
     // Take a JSON snapshot for reset
     const json = this.rasterService.exportPreset(id);
@@ -306,7 +326,7 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
     };
     const newId = this.rasterService.createPreset(preset);
     if (newId) {
-      this.rasterService.setActivePreset(newId);
+      this.rasterService.selectBrush(newId);
       this.presetChanged.emit(newId);
     }
     this.closeEditor();
@@ -503,6 +523,14 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
 
   onEraserHardnessChange(h: 'soft' | 'hard'): void {
     this.eraserHardness = h;
+    this.rasterService.setEraserHardness(h);   // was UI-only: the radio never reached the engine
+  }
+
+  /** Mirror the engine's eraser mode into the Fade / Clear + Soft / Hard radios (the panel is re-created per host). */
+  private _syncEraserFromEngine(): void {
+    const mode = this.rasterService.getEraseMode();
+    if (mode === 2) this.eraserStyle = 'clear';
+    else if (mode === 1 || mode === 3) { this.eraserStyle = 'fade'; this.eraserHardness = mode === 3 ? 'hard' : 'soft'; }
   }
 
   // ═══════════════════════════════════════════════════════════════

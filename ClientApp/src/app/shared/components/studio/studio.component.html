@@ -20,6 +20,8 @@
   <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()">
     <h3>Settings</h3>
     <p class="shell-dialog-sub">Settings coming soon.</p>
+    <!-- Deploy check: bump APP_VERSION in src/app/app-version.ts -->
+    <p class="shell-dialog-version">{{ appVersionLabel }}<br><span>{{ appBuildLabel }}</span></p>
     <button class="shell-btn shell-btn-ghost" (click)="closeSettingsOverlay()">Close</button>
   </div>
 

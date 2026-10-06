@@ -12,6 +12,9 @@ import { StorageSettingsService } from './storage-settings.service';
 import { ResultType } from '../../shared/models/error-result.model';
 import { Illustration } from 'app/illustrate/models/illustration.model';
 import { firstValueFrom } from 'rxjs';
+import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
+import { IllustrationStateDto } from 'app/shared/services/illustrate/illustration.service';
+import { copySalsaDocument } from 'app/shared/services/illustrate/salsa-document-copy';
 
 /** Exactly the editor state the document actions use. */
 export type DocumentActionsHost = Pick<IllustrationComponent, 'shapeManager' |
@@ -27,7 +30,7 @@ export type DocumentActionsHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class DocumentActionsService implements OnDestroy {
   private host!: DocumentActionsHost;
-  constructor(private autoSaveService: RasterAutoSaveService, private files: ProjectFileService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private persist: IllustrationPersistenceService, private router: Router, private storage: StorageSettingsService) {}
+  constructor(private autoSaveService: RasterAutoSaveService, private files: ProjectFileService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private persist: IllustrationPersistenceService, private router: Router, private storage: StorageSettingsService, private opfsMeta: OpfsMetadataService) {}
   bind(host: DocumentActionsHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -103,56 +106,136 @@ export class DocumentActionsService implements OnDestroy {
   }
 
   // ---- context menu actions (renamed) ----
-  newIllustrationButtonClicked(): void {
-    this.host.closeContextMenu();
-    if (!this.persist.illustration) return;
-    const newIllustration: Illustration = {
-      id: 0,
-      name: 'Untitled Illustration',
-      description: '',
-      teamId: this.persist.illustration.teamId
-    } as Illustration;
 
-    this.illustrationService.createIllustration(newIllustration).subscribe({
-      next: (res: any) => {
-        if (res.resultType === ResultType.Success) {
-          this.persist.saveThumbnailIfChanged();   // the current document's thumbnail, before leaving it
-          void this.router.navigate(['/illustrate', res.resultObject.uuid]);
-        } else {
-          this.notifyService.error('There was an error creating a new illustration :(');
-        }
-      },
-      error: () => this.notifyService.error('There was an error creating a new illustration :(')
-    });
+  /** A New / Duplicate is already running (a double click must not create two). */
+  private _docActionRunning = false;
+
+  /** The open document's id in Salsa's document store (and the OPFS metadata key). */
+  private _salsaKey(syncMode: number, ill: Illustration): string {
+    return syncMode === 2 ? 'local-' + (ill.uuid ?? '') : String(ill.id ?? '');
   }
 
-  duplicateIllustrationButtonClicked(): void {
+  /** Leaving the open document for another: save its pending change (bounded: a slow network must not trap the user;
+   *  the route guard saves again on the way out) and refresh its thumbnail while it is still on screen. */
+  private async _saveBeforeLeaving(): Promise<void> {
+    await Promise.race([this.persist.flushPendingSave(), new Promise(r => setTimeout(r, 10_000))]);
+    if (!this.persist.illustration?.isCustomThumbnail) {
+      try { await this.persist.saveThumbnailIfChangedNow(); } catch { /* non-fatal */ }
+    }
+  }
+
+  /**
+   * File > New Illustration: save the open document, create a new, EMPTY illustration in the same storage mode
+   * (local-only: this browser; cloud / no-cloud: a new server record) and open it. Nothing of the open document is
+   * carried over: the editor is recreated for the new route (DocumentRouteReuseStrategy) and starts from a blank
+   * engine document (IllustrationPersistenceService.startBlankDocument).
+   */
+  async newIllustrationButtonClicked(): Promise<void> {
     this.host.closeContextMenu();
-    if (!this.persist.illustration) {
+    const current = this.persist.illustration;
+    if (!current || this._docActionRunning) return;
+    this._docActionRunning = true;
+    try {
+      await this._saveBeforeLeaving();
+      const name = 'Untitled Illustration';
+      if (this.persist.syncMode === 2) {
+        const local = await this.localIllustrationService.create(name);
+        await this.router.navigate(['/illustration/local', local.uuid], { state: { illustration: local, isNew: true } });
+        return;
+      }
+      const res: any = await firstValueFrom(this.illustrationService.createIllustration({
+        id: 0, name, description: '', teamId: current.teamId, syncMode: this.persist.syncMode,
+      } as Illustration));
+      if (res?.resultType !== ResultType.Success || !res.resultObject?.uuid) throw new Error('create failed');
+      await this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject, isNew: true } });
+    } catch (e) {
+      console.error('[New Illustration]', e);
+      this.notifyService.error('There was an error creating a new illustration :(');
+    } finally {
+      this._docActionRunning = false;
+    }
+  }
+
+  /**
+   * File > Duplicate Illustration: save the open document, then copy it AS SAVED into a new illustration and open the
+   * copy. The copy is made from this device's saved document (Salsa's OPFS document + the editor's OPFS metadata), so
+   * it is complete: layers and cels, vector shapes, the 3D scene, characters, city, cameras, textures, settings. For a
+   * cloud illustration the copy's first save uploads all of it. The original is not touched: its files are only read,
+   * and the editor reopens on the copy's own document id, so later edits (and autosaves) go to the copy alone.
+   */
+  async duplicateIllustrationButtonClicked(): Promise<void> {
+    this.host.closeContextMenu();
+    const src = this.persist.illustration;
+    if (!src) {
       this.notifyService.error('No illustration loaded to duplicate.');
       return;
     }
+    if (this._docActionRunning) return;
+    this._docActionRunning = true;
+    try {
+      await this._saveBeforeLeaving();   // the copy is the document as it is now, not its last autosave
+      const mode = this.persist.syncMode;
+      const name = `Copy of ${this.illustrationTitle || src.name || 'Untitled'}`;
+      const srcKey = this._salsaKey(mode, src);
 
-    const payload = {
-      name: `Copy of ${this.persist.illustration.name}`,
-      teamId: this.persist.illustration.teamId,
-      copyThumbnail: false
-    };
-
-    this.illustrationService.duplicateIllustration(this.persist.illustration.id, payload).subscribe({
-      next: (res: any) => {
-        if (res.resultType === ResultType.Success) {
-          const newUuid = res.resultObject.uuid;
-          void this.router.navigate(['/illustrate', newUuid]);
-        } else {
-          this.notifyService.error('There was an error duplicating the illustration :(');
+      if (mode === 2) {
+        const srcRecord = src.uuid ? await this.localIllustrationService.getByUuid(src.uuid) : null;
+        const created = await this.localIllustrationService.create(name, srcRecord?.documentAspect ?? src.documentAspect, srcRecord?.kind);
+        if (!await this._copySavedDocument(srcKey, 'local-' + created.uuid, name)) {
+          await this.localIllustrationService.delete(created.uuid).catch(() => {});
+          throw new Error('the saved document could not be copied');
         }
-      },
-      error: (err) => {
-        console.error(err);
-        this.notifyService.error('There was an error duplicating the illustration :(');
+        const copy = srcRecord?.thumbnailDataUrl
+          ? await this.localIllustrationService.update({ uuid: created.uuid, thumbnailDataUrl: srcRecord.thumbnailDataUrl })
+          : created;
+        await this.router.navigate(['/illustration/local', copy.uuid], { state: { illustration: copy, duplicateOf: src.uuid } });
+        return;
       }
-    });
+
+      const res: any = await firstValueFrom(this.illustrationService.createIllustration({
+        id: 0, name, description: src.description ?? '', teamId: src.teamId, syncMode: mode, documentAspect: src.documentAspect,
+      } as Illustration));
+      if (res?.resultType !== ResultType.Success || !res.resultObject?.uuid) throw new Error('create failed');
+      const ill: Illustration = res.resultObject;
+      if (!await this._copySavedDocument(srcKey, String(ill.id ?? ''), name)) {
+        // No saved copy on this device to copy from (browser storage unavailable): fall back to the server's own
+        // duplicate, which copies the raster layers only.
+        if (ill.id) this.illustrationService.deleteIllustration(ill.id).subscribe({ error: () => {} });
+        await this._serverDuplicate(src, name);
+        return;
+      }
+      await this.router.navigate(['/illustration', ill.uuid], { state: { illustration: ill, duplicateOf: src.uuid } });
+    } catch (e) {
+      console.error('[Duplicate Illustration]', e);
+      this.notifyService.error('There was an error duplicating the illustration :(');
+    } finally {
+      this._docActionRunning = false;
+    }
+  }
+
+  /** Copy the saved document `srcKey` to `dstKey`: Salsa's document (every layer, the 3D scene, textures ...) and the
+   *  editor's OPFS metadata (settings, dither, 3D host state). The copy's metadata drops the original's server
+   *  revision (the copy is a different server record) and is marked not yet synced. */
+  private async _copySavedDocument(srcKey: string, dstKey: string, name: string): Promise<boolean> {
+    if (!srcKey || !dstKey || srcKey.endsWith('-') ) return false;
+    if (!await copySalsaDocument(srcKey, dstKey, name)) return false;
+    const meta = await this.opfsMeta.read(srcKey);
+    if (meta) {
+      const copy = { ...meta } as IllustrationStateDto & { backendSynced?: boolean };
+      delete copy.revision;
+      delete copy.baseRevision;
+      copy.backendSynced = false;
+      if (!await this.opfsMeta.write(dstKey, copy)) return false;
+    }
+    return true;
+  }
+
+  /** The server-side duplicate (raster layers + pixels only), used when this device has no saved copy to copy. */
+  private async _serverDuplicate(src: Illustration, name: string): Promise<void> {
+    const res: any = await firstValueFrom(this.illustrationService.duplicateIllustration(src.id!, { name, teamId: src.teamId, copyThumbnail: false }));
+    if (res?.resultType !== ResultType.Success || !res.resultObject?.uuid) throw new Error('server duplicate failed');
+    this.notifyService.error('Only the painted layers could be duplicated: this browser has no saved copy of the rest.');
+    await this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject } });
   }
 
   async setCurrentViewAsThumbnail() {

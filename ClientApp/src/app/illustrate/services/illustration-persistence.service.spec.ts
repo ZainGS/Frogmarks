@@ -1,5 +1,6 @@
 import { IllustrationPersistenceService } from './illustration-persistence.service';
 import { EditorStateService } from './editor-state.service';
+import { of } from 'rxjs';
 
 /** The persistence service with every collaborator stubbed: just enough engine / host for the save paths. */
 function makeService() {
@@ -120,6 +121,117 @@ describe('IllustrationPersistenceService saving', () => {
       await svc.saveIllustrationV2();
       await svc.saveIllustrationV2();
       expect(notify.error).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+/** The persistence service wired for the document-switch paths: autosave + animation + .frog import stubs. */
+function makeSwitchService() {
+  const order: string[] = [];
+  const autoSave = {
+    disable: jasmine.createSpy('disable').and.callFake(() => order.push('autosave-off')),
+    enable: jasmine.createSpy('enable'),
+    saveNow: jasmine.createSpy('saveNow').and.resolveTo(true),
+    state$: of('idle'),
+  };
+  const animation = { resetForNewDocument: jasmine.createSpy('resetForNewDocument').and.callFake(() => order.push('animation-reset')) };
+  const frogFile = { pendingImport: null as any };
+  const svc = new IllustrationPersistenceService(
+    new EditorStateService(), {} as any, {} as any, {} as any, animation as any, autoSave as any, frogFile as any,
+    { layerDitherConfigs: new Map(), layerFrameLinkConfigs: new Map() } as any, {} as any,
+    {} as any, { error: () => undefined } as any, { write: async () => true, read: async () => null } as any, {} as any,
+  );
+  const engine = {
+    startBlankDocument: jasmine.createSpy('startBlankDocument').and.callFake(async () => { order.push('engine-blank'); }),
+    getSaveBlockedReason: () => null,
+    getLastRestoreIssues: () => [],
+    getDocumentSize: () => null,
+  };
+  const host = {
+    shapeManager: engine, isLoading: true, doc: { illustrationTitle: '' }, selectedAutoSaveInterval: 30_000,
+    resetSceneState: jasmine.createSpy('resetSceneState'),
+    markLoaded: jasmine.createSpy('markLoaded'),
+    applyFrogImport: jasmine.createSpy('applyFrogImport').and.resolveTo(),
+  };
+  svc.bind(host as any);
+  return { svc, engine, host, autoSave, animation, frogFile, order };
+}
+
+describe('IllustrationPersistenceService across a document switch (New / Duplicate / Shell new)', () => {
+
+  describe('startBlankDocument', () => {
+    it('unbinds the autosave from the previous document BEFORE the engine is reset, and resets the app-wide animation state', async () => {
+      const { svc, engine, order } = makeSwitchService();
+      await svc.startBlankDocument(engine as any, 'NEW');
+      expect(order).toEqual(['autosave-off', 'animation-reset', 'engine-blank']);
+      expect(engine.startBlankDocument).toHaveBeenCalledWith('local-NEW', 'Untitled');
+    });
+
+    it('a cloud document gets no engine id until it is resolved (nothing can be saved meanwhile)', async () => {
+      const { svc, engine } = makeSwitchService();
+      await svc.startBlankDocument(engine as any, null);
+      expect(engine.startBlankDocument).toHaveBeenCalledWith(undefined, 'Untitled');
+    });
+  });
+
+  describe('the autosave targets the document that was opened', () => {
+    it('a new local-only illustration (editor New / Shell new) autosaves to local-<its uuid>', async () => {
+      const { svc, autoSave } = makeSwitchService();
+      spyOn(svc, 'loadIllustrationV2').and.resolveTo();
+      await svc.initWithIllustration({ uuid: 'NEW', name: 'Untitled Illustration', syncMode: 2 } as any);
+      expect(autoSave.enable.calls.mostRecent().args[0]).toBe('local-NEW');
+      expect(svc.illustration?.uuid).toBe('NEW');
+    });
+
+    it('a new cloud illustration autosaves to its own server id', async () => {
+      const { svc, autoSave } = makeSwitchService();
+      spyOn(svc, 'loadIllustrationV2').and.resolveTo();
+      await svc.initWithIllustration({ id: 42, uuid: 'C', name: 'x', syncMode: 0 } as any);
+      expect(autoSave.enable.calls.mostRecent().args[0]).toBe('42');
+    });
+
+    it("a cloud Duplicate's first save uploads everything (the server has none of the copy yet)", async () => {
+      const { svc } = makeSwitchService();
+      spyOn(svc, 'loadIllustrationV2').and.resolveTo();
+      const full = spyOn(svc, 'forceFullUpload').and.callThrough();
+      const prev = window.history.state;
+      window.history.replaceState({ duplicateOf: 'SRC', illustration: { uuid: 'COPY' } }, '');
+      try {
+        await svc.initWithIllustration({ id: 7, uuid: 'COPY', name: 'Copy of Frog', syncMode: 0 } as any);
+        expect(full).toHaveBeenCalledTimes(1);
+        expect(svc._pendingChange).toBeTrue();
+        // Opening a different document with that history state does not.
+        full.calls.reset();
+        await svc.initWithIllustration({ id: 8, uuid: 'OTHER', name: 'o', syncMode: 0 } as any);
+        expect(full).not.toHaveBeenCalled();
+      } finally {
+        window.history.replaceState(prev, '');
+      }
+    });
+  });
+
+  describe('a pending .frog import', () => {
+    it('is applied to the local-only document opened right after it was set (it used to wait for the next CLOUD doc)', async () => {
+      const { svc, frogFile, host } = makeSwitchService();
+      const pending = { manifest: { name: 'Imported', layers: [] } };
+      frogFile.pendingImport = pending;
+      svc.syncMode = 2;
+      svc.illustration = { uuid: 'L', name: 'L' } as any;
+      const localLoad = spyOn(svc as any, '_loadLocalOnly').and.resolveTo();
+      await svc.loadIllustrationV2();
+      expect(host.applyFrogImport).toHaveBeenCalledWith(pending);
+      expect(frogFile.pendingImport).toBeNull();
+      expect(localLoad).not.toHaveBeenCalled();
+    });
+
+    it('a New Illustration opened with nothing pending loads normally', async () => {
+      const { svc, host } = makeSwitchService();
+      svc.syncMode = 2;
+      svc.illustration = { uuid: 'L', name: 'L' } as any;
+      const localLoad = spyOn(svc as any, '_loadLocalOnly').and.resolveTo();
+      await svc.loadIllustrationV2();
+      expect(localLoad).toHaveBeenCalled();
+      expect(host.applyFrogImport).not.toHaveBeenCalled();
     });
   });
 });

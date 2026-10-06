@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Input, NgZone, OnDestroy, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy, Output } from '@angular/core';
+import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { hexToRgba01Obj } from '../../utils/color-utils';
 import { TEMPORAL_AA_OPTIONS } from '../../services/scene3d-settings.service';
@@ -25,7 +26,7 @@ export class WorldPanelComponent implements OnDestroy {
   /** The engine's character-outline state, read while syncing the city look (an editor field). */
   @Output() charOutlinesSynced = new EventEmitter<boolean>();
 
-  constructor(private ngZone: NgZone) {}
+  constructor(private ngZone: NgZone, private el: ElementRef<HTMLElement>) {}
 
   ngOnDestroy(): void {
     this._stopStreamStats();
@@ -311,22 +312,14 @@ export class WorldPanelComponent implements OnDestroy {
     this._syncCityLookFromEngine();
   }
 
-  // ── City panel sections (Salsa city-quality U1, 2026-09-29) ─────────────────────────────────────────────────────
-  // The panel is grouped into collapsible sections; which are open is a per-browser convenience (localStorage).
-  worldSecOpen: Record<string, boolean> = (() => {
-    const d: Record<string, boolean> = { presets: true, look: true, time: true, layout: false, streets: false, life: false, edge: false, perf: false };
-    try { const v = JSON.parse(localStorage.getItem('frogmarks.citySections') ?? 'null'); if (v && typeof v === 'object') Object.assign(d, v); } catch { /* storage blocked */ }
-    return d;
-  })();
-  worldToggleSec(key: string): void {
-    this.worldSecOpen = { ...this.worldSecOpen, [key]: !this.worldSecOpen[key] };
-    try { localStorage.setItem('frogmarks.citySections', JSON.stringify(this.worldSecOpen)); } catch { /* storage blocked */ }
-  }
-  worldSetAllSecs(open: boolean): void {
-    const n: Record<string, boolean> = {};
-    for (const k of Object.keys(this.worldSecOpen)) n[k] = open;
-    this.worldSecOpen = n;
-    try { localStorage.setItem('frogmarks.citySections', JSON.stringify(n)); } catch { /* storage blocked */ }
+  // ── City panel navigation (utils/sub-nav.ts): a menu of sections -> a section's groups -> one group's controls.
+  //    (Replaced the collapsible accordion sections, which put every control on screen at once.) ──
+  readonly worldSub = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
+  readonly worldNav = new SubNav(() => { this.worldSub.reset(); scrollPanelToTop(this.el.nativeElement); this._perfSyncPoll(); });
+
+  worldBack(): void {
+    if (this.worldSub.id) this.worldSub.close();
+    else this.worldNav.close();
   }
 
   // ── City panel PERFORMANCE group (Salsa docs/ui/performance.md §Resolution scaling / §LOD settings, 2026-10-01) ──
@@ -393,12 +386,12 @@ export class WorldPanelComponent implements OnDestroy {
   /** Live: "Active: GPU · reason: CPU-bound" (empty when the engine has no GPU culling mode). */
   perfGpuCullLine = '';
 
-  perfToggleSec(): void {
-    this.worldToggleSec('perf');
-    if (this.worldSecOpen['perf']) { this.perfSync(); this._perfStartPoll(); } else this._perfStopPoll();
+  /** The live Performance readout polls only while that section is open. */
+  private _perfSyncPoll(): void {
+    if (this.worldNav.id === 'perf') { this.perfSync(); this._perfStartPoll(); } else this._perfStopPoll();
   }
   private _perfOnPanelOpen(): void {
-    if (this.worldSecOpen['perf']) { this.perfSync(); this._perfStartPoll(); }
+    if (this.worldNav.id === 'perf') { this.perfSync(); this._perfStartPoll(); }
   }
   /** Read the engine state into the panel fields (arrays updated in place, so the sliders keep their DOM). */
   perfSync(): void {
@@ -525,7 +518,7 @@ export class WorldPanelComponent implements OnDestroy {
   }
   private _perfPollTick(): void {
     {
-      if (!this.open || !this.worldSecOpen['perf']) { this._perfStopPoll(); return; }
+      if (!this.open || this.worldNav.id !== 'perf') { this._perfStopPoll(); return; }
       const sm = this.shapeManager;
       const st = sm.getCityLodStats3D();
       const r = sm.getResolutionScale3D();

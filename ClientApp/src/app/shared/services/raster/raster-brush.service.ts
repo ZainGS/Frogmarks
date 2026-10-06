@@ -60,6 +60,25 @@ export class RasterBrushService {
     this._activePresetId$.next(id);
   }
 
+  /**
+   * PICK a brush (brush-list click): activates the preset AND leaves the eraser tool's erase mode, so a brush
+   * picked after the Eraser paints instead of erasing. (setActivePreset only swaps the preset; it is also the
+   * path for live edits of the active brush, which must not drop erase mode.)
+   */
+  selectBrush(id: string): void {
+    const sm = this.sm;
+    if (!sm) return;
+    // Salsa's selectRasterBrushPreset (also releases the eraser's render lease) — fall back to the two calls it
+    // makes for a Salsa dist built before it existed. Drop the fallback once the dist has it.
+    const picker = sm as ShapeManager & { selectRasterBrushPreset?: (presetId: string) => boolean };
+    if (typeof picker.selectRasterBrushPreset === 'function') {
+      picker.selectRasterBrushPreset(id);
+    } else if (sm.setActiveBrushPreset(id)) {
+      sm.rasterDrawingService?.setEraserMode('paint');
+    }
+    this._activePresetId$.next(id);
+  }
+
   getActivePreset(): BrushPreset | null {
     const id = this._activePresetId$.value;
     if (!id) return null;
@@ -82,6 +101,21 @@ export class RasterBrushService {
     } else {
       sm.enableRasterEraserTool();
     }
+  }
+
+  /** The engine's current erase mode: null = painting, 1 = fade, 3 = fade (hard edge), 2 = clear. The ONE source of
+   *  truth for "is the eraser on" — the rail tools, the keymap and the brush panel all switch it. */
+  getEraseMode(): number | null {
+    return this.sm?.rasterDrawingService?.getEraseMode() ?? null;
+  }
+
+  isEraserActive(): boolean {
+    return this.getEraseMode() !== null;
+  }
+
+  /** Soft / hard edge for the fade eraser (clear is always a hard cutout). */
+  setEraserHardness(hardness: EraserHardness): void {
+    this.sm?.rasterDrawingService?.setEraserHard(hardness === 'hard');
   }
 
   disableRasterTool(): void {

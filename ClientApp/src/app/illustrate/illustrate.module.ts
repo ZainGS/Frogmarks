@@ -5,6 +5,7 @@ import { RouterModule, Routes } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { SharedUiModule } from '../shared/shared-ui.module';
 import { IllustrationComponent } from './components/illustration/illustration.component';
+import { NEW_INSTANCE_PER_DOCUMENT } from '../shared/routing/document-route-reuse.strategy';
 import { AnimationTimelineComponent } from './components/animation-timeline/animation-timeline.component';
 import { AnimationExportComponent } from './components/animation-export/animation-export.component';
 import { ClothBuilderComponent } from './components/cloth-builder/cloth-builder.component';
@@ -57,6 +58,8 @@ import { PanelLayoutOptionsComponent } from './components/panel-layout-options/p
 import { LiveTextOptionsComponent } from './components/live-text-options/live-text-options.component';
 import { BalloonOptionsComponent } from './components/balloon-options/balloon-options.component';
 import { PersistentColorPickerComponent } from './components/persistent-color-picker/persistent-color-picker.component';
+import { PlayTouchControlsComponent } from './components/play-touch-controls/play-touch-controls.component';
+import { TouchActionBarComponent } from './components/touch-action-bar/touch-action-bar.component';
 import { VectorLayerPanelComponent } from './components/vector-layer-panel/vector-layer-panel.component';
 import { DitherOptionsComponent } from './components/dither-options/dither-options.component';
 import { FrameLinkPanelComponent } from './components/frame-link-panel/frame-link-panel.component';
@@ -72,9 +75,11 @@ import { AuthoringPanelComponent } from './components/authoring-panel/authoring-
 const flushBeforeLeave = (c: IllustrationComponent) => c.flushBeforeLeave();
 
 /** Mounted under both /illustration and /view (app.module); /view sets data.viewer, which the child inherits. */
+/** NEW_INSTANCE_PER_DOCUMENT: switching documents (New / Duplicate Illustration) recreates the editor instead of reusing
+ *  it, so no component-scoped state carries over (see DocumentRouteReuseStrategy). */
 const routes: Routes = [
-  { path: 'local/:id', component: IllustrationComponent, data: { local: true }, canDeactivate: [flushBeforeLeave] },
-  { path: ':id', component: IllustrationComponent, canDeactivate: [flushBeforeLeave] },
+  { path: 'local/:id', component: IllustrationComponent, data: { local: true, [NEW_INSTANCE_PER_DOCUMENT]: true }, canDeactivate: [flushBeforeLeave] },
+  { path: ':id', component: IllustrationComponent, data: { [NEW_INSTANCE_PER_DOCUMENT]: true }, canDeactivate: [flushBeforeLeave] },
 ];
 
 /** The Illustrate editor and all its panels — lazy-loaded (audit Phase 4.1). */
@@ -133,6 +138,8 @@ const routes: Routes = [
     LiveTextOptionsComponent,
     BalloonOptionsComponent,
     PersistentColorPickerComponent,
+    PlayTouchControlsComponent,
+    TouchActionBarComponent,
     VectorLayerPanelComponent,
     DitherOptionsComponent,
     FrameLinkPanelComponent,

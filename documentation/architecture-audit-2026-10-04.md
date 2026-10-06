@@ -203,6 +203,11 @@ build passes.
   caught two extraction mistakes during this work (unprefixed template refs, multi-field declaration lines).
 - Cost: the editor chunk +~90KB raw / ~2KB gzip (the shared control styles imported by each section component).
 
+**Mobile — 2026-10-06.** Touch-first devices (`pointer: coarse`) drop the backdrop blurs over the editor canvas (one
+list in `styles.scss`). The editor's window scroll / resize and the layers panel's resize listeners run outside the
+zone and re-enter only to close an open menu (Android URL bars fire resizes constantly). OnPush for the heavy panels:
+planned in `onpush-plan.md` (not started). Salsa-side suggestion: SSAO / SSR off in the mobile GPU tier.
+
 ## Phase 1 — Backend security (do first)
 
 Severity assumes the site is reachable on the internet. Ask the user whether it is deployed; it changes urgency, not the fix.

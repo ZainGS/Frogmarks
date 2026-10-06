@@ -56,15 +56,31 @@ export class PersistentColorPickerComponent implements OnChanges {
     this.colorPicked.emit(hex);
   }
 
-  onHueRingMouseDown(e: MouseEvent): void {
+  // Pointer events + capture (mobile-parity TOUCH-1): mouse, pen and touch all drag; the captured element keeps
+  // receiving moves off its bounds, so no document listeners. touch-action:none on the areas (scss) stops the
+  // browser from turning a finger drag into a scroll.
+  onHueRingPointerDown(e: PointerEvent): void {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
     e.stopPropagation();
     this._hueSelecting = true;
+    this._sbSelecting = false;
+    this._capture(e);
     this._updateHueFromEvent(e);
-    const moveHandler = (ev: MouseEvent) => { if (this._hueSelecting) this._updateHueFromEvent(ev); };
-    const upHandler = () => { this._hueSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
-    document.addEventListener('mousemove', moveHandler);
-    document.addEventListener('mouseup', upHandler);
+  }
+
+  onHueRingPointerMove(e: PointerEvent): void {
+    if (this._hueSelecting) this._updateHueFromEvent(e);
+  }
+
+  /** pointerup / pointercancel / lostpointercapture on either area (the square's bubble up to the ring). */
+  onPickerPointerEnd(): void {
+    this._hueSelecting = false;
+    this._sbSelecting = false;
+  }
+
+  private _capture(e: PointerEvent): void {
+    try { (e.currentTarget as HTMLElement | null)?.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
   }
 
   _updateHueFromEvent(e: MouseEvent): void {
@@ -78,15 +94,20 @@ export class PersistentColorPickerComponent implements OnChanges {
     this._persistentPickerEmit();
   }
 
-  onSbSquareMouseDown(e: MouseEvent): void {
+  onSbSquarePointerDown(e: PointerEvent): void {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation();   // the square sits inside the hue ring
     this._sbSelecting = true;
+    this._hueSelecting = false;
+    this._capture(e);
     this._updateSbFromEvent(e);
-    const moveHandler = (ev: MouseEvent) => { if (this._sbSelecting) this._updateSbFromEvent(ev); };
-    const upHandler = () => { this._sbSelecting = false; document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); };
-    document.addEventListener('mousemove', moveHandler);
-    document.addEventListener('mouseup', upHandler);
+  }
+
+  onSbSquarePointerMove(e: PointerEvent): void {
+    if (!this._sbSelecting) return;
+    e.stopPropagation();
+    this._updateSbFromEvent(e);
   }
 
   _updateSbFromEvent(e: MouseEvent): void {

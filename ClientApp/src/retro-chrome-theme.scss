@@ -186,6 +186,28 @@ body.theme-retro-chrome input[type="range"]::-moz-range-thumb {
   border-radius: 0 !important;
 }
 
+// Touch (mobile-parity TOUCH-2): a 10×16 px thumb can't be grabbed with a finger. Taller hit row + a 22×28 thumb.
+@media (pointer: coarse) {
+  body.theme-retro-chrome input[type="range"] {
+    height: 30px !important;
+  }
+  body.theme-retro-chrome input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px !important;
+  }
+  body.theme-retro-chrome input[type="range"]::-webkit-slider-thumb {
+    width: 22px !important;
+    height: 28px !important;
+    margin-top: -11px !important;
+  }
+  body.theme-retro-chrome input[type="range"]::-moz-range-track {
+    height: 8px !important;
+  }
+  body.theme-retro-chrome input[type="range"]::-moz-range-thumb {
+    width: 22px !important;
+    height: 28px !important;
+  }
+}
+
 // ── Text inputs / number inputs / selects ─────────────────────────────────
 body.theme-retro-chrome input[type="text"],
 body.theme-retro-chrome input[type="number"],

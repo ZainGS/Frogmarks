@@ -132,6 +132,27 @@ export class RasterAnimationService {
     return this._animationEnabled$.value;
   }
 
+  /** A new document is opening: back to this service's initial state (animation off, playback stopped, default fps /
+   *  frame count / loop / range / onion skin, no timeline layers). This service is app-wide, and the editor's save
+   *  payload reads animation from it — the previous document's animation mode, frame count etc. used to be saved into
+   *  the next document. The load turns animation back on when that document has it. */
+  resetForNewDocument(): void {
+    if (this._isPlaying$.value) this.sm?.stopPlayback();
+    this._unsubscribeEvents();
+    this._suppressRefresh = false;
+    this._lastTimelineJson = '';
+    this._animationEnabled$.next(false);
+    this._isPlaying$.next(false);
+    this._currentFrame$.next(1);
+    this._frameCount$.next(24);
+    this._fps$.next(12);
+    this._loopMode$.next('loop');
+    this._playRangeStart$.next(1);
+    this._playRangeEnd$.next(24);
+    this._onionSkin$.next({ enabled: false, framesBefore: 2, framesAfter: 1, opacity: 0.3, tintBefore: [1.0, 0.2, 0.2], tintAfter: [0.2, 0.5, 1.0] });
+    this._timelineLayers$.next([]);
+  }
+
   // ── Frame navigation ────────────────────────────────────────
 
   setCurrentFrame(frame: number): void {

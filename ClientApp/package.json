@@ -22,7 +22,7 @@
     "check:fast": "node scripts/check.mjs --fast",
     "lint": "eslint . --pass-on-unpruned-suppressions",
     "sanity": "node scripts/check-source-sanity.mjs",
-    "build": "ng build",
+    "build": "node scripts/build.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:ci": "ng test --watch=false --browsers=ChromeHeadless",

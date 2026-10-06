@@ -4,7 +4,7 @@ import type { CharacterPanelComponent } from './character-panel.component';
 
 /** What CharCharmsService reads / writes on the panel. */
 export type CharCharmsHost = Pick<CharacterPanelComponent,
-  'shapeManager' | 'dirty' | 'scene3dEditCharBodyId'
+  'shapeManager' | 'dirty' | 'scene3dEditCharBodyId' | 'sub'
 >;
 
 /**
@@ -45,7 +45,6 @@ export class CharCharmsService implements OnDestroy {
 
   scene3dAccordionOpen: Record<string, boolean> = {};
 
-  scene3dCharmOpen: Record<string, boolean> = {};
 
   scene3dAttachmentsByType: Array<{ type: string; items: typeof this.scene3dAttachments }> = [];
 
@@ -63,7 +62,6 @@ export class CharCharmsService implements OnDestroy {
       if (!_groups.has(a.type)) _groups.set(a.type, []);
       _groups.get(a.type)!.push(a);
       if (!(a.type in this.scene3dAccordionOpen)) this.scene3dAccordionOpen[a.type] = false;
-      if (!(a.id in this.scene3dCharmOpen)) this.scene3dCharmOpen[a.id] = false;
     }
     this.scene3dAttachmentsByType = Array.from(_groups.entries()).map(([type, items]) => ({ type, items }));
     if (this.scene3dAttachmentTypes.length && !this.scene3dAttachmentTypes.includes(this.scene3dNewAttachmentType)) {
@@ -112,7 +110,7 @@ export class CharCharmsService implements OnDestroy {
         this.scene3dRefreshAttachments();
         if (placedId) {
           this.scene3dAccordionOpen[type] = true;
-          this.scene3dCharmOpen[placedId] = true;
+          this._openCharm(placedId, type);
         }
         this.host.dirty.emit();
       },
@@ -146,7 +144,7 @@ export class CharCharmsService implements OnDestroy {
         this.scene3dRefreshAttachments();
         if (chainId) {
           this.scene3dAccordionOpen['chain'] = true;
-          this.scene3dCharmOpen[chainId] = true;
+          this._openCharm(chainId, 'chain');
         }
         this.host.dirty.emit();
       },
@@ -235,16 +233,21 @@ export class CharCharmsService implements OnDestroy {
     this.scene3dRefreshAttachments();
     if (newId) {
       this.scene3dAccordionOpen[this.scene3dNewAttachmentType] = true;
-      this.scene3dCharmOpen[newId] = true;
+      this._openCharm(newId, this.scene3dNewAttachmentType);
     }
     this.host.dirty.emit();
     if (this.scene3dPlacingCharmType) this._showCharmPreview();
   }
 
+  /** A new charm opens its own view (the panel's drill-down), as its settings card used to expand. */
+  private _openCharm(id: string, type: string): void {
+    this.host.sub.open('charm:' + id, type);
+  }
+
   scene3dRemoveAttachment(attachId: string): void {
     const sm = this.shapeManager;
     sm.removeAttachment3D(attachId);
-    delete this.scene3dCharmOpen[attachId];
+    if (this.host.sub.id === 'charm:' + attachId) this.host.sub.close();
     this.scene3dRefreshAttachments();
     this.host.dirty.emit();
   }
@@ -254,7 +257,7 @@ export class CharCharmsService implements OnDestroy {
     const ids = this.scene3dAttachments.filter(a => a.type === type).map(a => a.id);
     for (const id of ids) {
       sm.removeAttachment3D(id);
-      delete this.scene3dCharmOpen[id];
+      if (this.host.sub.id === 'charm:' + id) this.host.sub.close();
     }
     delete this.scene3dAccordionOpen[type];
     this.scene3dRefreshAttachments();

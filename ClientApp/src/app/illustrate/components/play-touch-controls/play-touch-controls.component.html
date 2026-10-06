@@ -1,0 +1,22 @@
+<!-- Left half: floating move stick. Right half: look drag. (Listeners are added outside the zone in the .ts.) -->
+<div class="ptc-zone ptc-stick-zone" #stickZone
+     [style.left.px]="leftInset"
+     [style.right]="'calc(50% + ' + (rightInset - leftInset) / 2 + 'px)'"></div>
+<div class="ptc-zone ptc-look-zone" #lookZone
+     [style.left]="'calc(50% + ' + (leftInset - rightInset) / 2 + 'px)'"
+     [style.right.px]="rightInset"></div>
+<div class="ptc-hint" [style.left.px]="leftInset + 16">Drag left to move &middot; drag right to look</div>
+
+<div class="ptc-stick-base" #stickBase><div class="ptc-stick-knob" #stickKnob></div></div>
+
+<div class="ptc-buttons" [style.right.px]="rightInset + 16">
+    <button type="button" class="ptc-btn ptc-btn-sm" (click)="stop.emit()" title="Stop: back to the editor">Stop</button>
+    <button type="button" class="ptc-btn ptc-btn-sm" [class.on]="sneaking" (click)="toggleSneak()" title="Sneak (toggle)">Sneak</button>
+    <button type="button" class="ptc-btn ptc-btn-sm" [class.on]="running" (click)="toggleRun()" title="Walk / run (toggle)">Run</button>
+    <button type="button" class="ptc-btn" [class.on]="useHeld"
+            (pointerdown)="useDown($event)" (pointerup)="useUp()" (pointercancel)="useUp()" (lostpointercapture)="useUp()"
+            title="Use / interact">Use</button>
+    <button type="button" class="ptc-btn ptc-btn-jump" [class.on]="jumpHeld"
+            (pointerdown)="jumpDown($event)" (pointerup)="jumpUp()" (pointercancel)="jumpUp()" (lostpointercapture)="jumpUp()"
+            title="Jump (hold for higher)">Jump</button>
+</div>

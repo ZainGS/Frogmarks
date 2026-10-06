@@ -40,18 +40,18 @@
         <!-- UV Editor canvas — right half of the split viewport (hidden until user enables UV Pane) -->
         <canvas #uvCanvas id="uvCanvas" *ngIf="uv.uvEditorOpen || character.eyeDrawMode"
                 [style.display]="(uv.uvEditorOpen && uv.showUVPane) || character.eyeDrawMode ? '' : 'none'"
-                style="position:absolute;top:0;left:50vw;width:calc(50vw - 280px);height:100vh;z-index:1;background:#111;border-left:1px solid #333;"></canvas>
+                style="position:absolute;top:0;left:50vw;width:calc(50vw - 280px);height:100dvh;z-index:1;background:#111;border-left:1px solid #333;"></canvas>
 
         <!-- Package Creator dieline pane — board-shell level, full viewport height -->
         <ng-container *ngIf="pkg.scene3dPkgCreatorOpen && pkg.pkgViewMode !== '3d'">
             <canvas #pkgDielinePane id="pkgDielinePane"
                     [style.left]="pkg.pkgViewMode === 'split' ? '50vw' : '0'"
                     [style.width]="pkg.pkgViewMode === 'split' ? 'calc(50vw - 280px)' : 'calc(100vw - 280px)'"
-                    style="position:absolute;top:0;height:100vh;z-index:1;background:#1a1a1a;border-left:1px solid #333;"></canvas>
+                    style="position:absolute;top:0;height:100dvh;z-index:1;background:#1a1a1a;border-left:1px solid #333;"></canvas>
             <canvas #pkgDielineGuide
                     [style.left]="pkg.pkgViewMode === 'split' ? '50vw' : '0'"
                     [style.width]="pkg.pkgViewMode === 'split' ? 'calc(50vw - 280px)' : 'calc(100vw - 280px)'"
-                    style="position:absolute;top:0;height:100vh;z-index:2;pointer-events:none;"></canvas>
+                    style="position:absolute;top:0;height:100dvh;z-index:2;pointer-events:none;"></canvas>
         </ng-container>
 
         <!-- 3D rotation drag degree readout -->
@@ -262,7 +262,7 @@
                 </div>
             </div>
             <div class="eye-draw-brush">
-                <app-brush-options [activeRasterTool]="'brush'"></app-brush-options>
+                <app-brush-options></app-brush-options>
             </div>
         </div>
 
@@ -355,13 +355,27 @@
         <!-- Selection overlay is rendered on the GPU by the Salsa engine -->
 
         <!-- Brush Size Cursor Overlay -->
-        <div *ngIf="showBrushCursor"
+        <div *ngIf="showBrushCursor" #brushCursorRing
              class="brush-cursor-ring"
-             [style.left.px]="brushCursorX"
-             [style.top.px]="brushCursorY"
+             [style.transform]="brushCursorTransform"
              [style.width.px]="draw.rasterBrushSize"
              [style.height.px]="draw.rasterBrushSize">
         </div>
+
+        <!-- Touch (salsa docs/specs/mobile-parity.md): Play touch controls (TOUCH-4), the floating action bar for
+             keyboard-only actions (TOUCH-10) and a way back from Hide UI without the X key (UI-1 / UI-13). -->
+        <app-play-touch-controls *ngIf="touchUi.coarse && scene3dViewIsPlaying"
+                                 [shapeManager]="shapeManager"
+                                 [leftInset]="70"
+                                 [rightInset]="(!uiHidden && !isViewerMode) ? 280 : 0"
+                                 (stop)="scene3dTogglePlay()"></app-play-touch-controls>
+        <app-touch-action-bar *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying"
+                              (action)="onTouchAction($event)"></app-touch-action-bar>
+        <!-- Hidden UI: shown for ~3 s after hiding, then faded; a tap on the canvas fades it back in (any device: a
+             touchscreen laptop has no "coarse" pointer). X toggles the UI too. -->
+        <button *ngIf="uiHidden" type="button" class="touch-show-ui-btn" [class.visible]="showUiBtnVisible"
+                [attr.aria-hidden]="!showUiBtnVisible" [attr.tabindex]="showUiBtnVisible ? 0 : -1"
+                (click)="toggleUI(false); $event.stopPropagation()" title="Show the editor UI (X)">Show UI</button>
 
         <!-- Panel Layout Guide Overlays (SVG) -->
         <svg *ngIf="pl.activePanelLayoutId && (pl.panelShowBleedGuides || pl.panelShowGutterGuides)"
@@ -870,11 +884,11 @@
 
             <button (click)="doc.newIllustrationButtonClicked()" class="menu-item" role="menuitem">
                 <mat-icon class="menu-icon mt-1">open_in_new</mat-icon>
-                New Board
+                New Illustration
             </button>
             <button (click)="doc.duplicateIllustrationButtonClicked()" class="menu-item" role="menuitem">
                 <mat-icon class="menu-icon mt-1">content_copy</mat-icon>
-                Duplicate Board
+                Duplicate Illustration
             </button>
             <hr/>
             <button class="menu-item" role="menuitem">
@@ -1647,9 +1661,7 @@
             
             <div *ngIf="controlPanelActiveTool === 'drawing:pen'">
                 <app-brush-options
-                    [activeRasterTool]="activeRasterTool"
-                    (presetChanged)="rasterBrushService.refreshPresets()"
-                    (toolSelected)="activeRasterTool = $event">
+                    (presetChanged)="rasterBrushService.refreshPresets()">
                 </app-brush-options>
             </div>
 

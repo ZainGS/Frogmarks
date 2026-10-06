@@ -28,10 +28,10 @@
         </div>
         <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.doc.newIllustrationButtonClicked(); editor.closeAllMenus()">
-            <span>New Board</span>
+            <span>New Illustration</span>
         </div>
         <div class="edit-menu-item" (click)="editor.doc.duplicateIllustrationButtonClicked(); editor.closeAllMenus()">
-            <span>Duplicate Board</span>
+            <span>Duplicate Illustration</span>
         </div>
         <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.doc.setCurrentViewAsThumbnail(); editor.closeAllMenus()">
@@ -64,16 +64,22 @@
         <div class="edit-menu-item" (click)="editor.doc.returnToDashboard(); editor.closeAllMenus()">
             <span>Back to Dashboard</span>
         </div>
+        <div class="edit-menu-divider"></div>
+        <!-- Deploy check: bump APP_VERSION in src/app/app-version.ts (README "Versioning / deploy check") -->
+        <div class="edit-menu-item edit-menu-version" aria-disabled="true" [title]="appBuildLabel">
+            <span>{{ appVersionLabel }}</span>
+            <span class="edit-menu-version-build">{{ appBuildLabel }}</span>
+        </div>
     </div>
 </div>
 <div class="menubar-item">
     <div class="menubar-btn" [class.active]="editor.showEditMenu"
          (click)="editor.toggleEditMenu(); $event.stopPropagation()">Edit</div>
     <div *ngIf="editor.showEditMenu" class="edit-menu-dropdown" (click)="$event.stopPropagation()">
-        <div class="edit-menu-item" (click)="editor.rasterUndo(); editor.closeAllMenus()">
+        <div class="edit-menu-item" (click)="editor.editUndo(); editor.closeAllMenus()">
             <span>Undo</span><span class="shortcut">Ctrl+Z</span>
         </div>
-        <div class="edit-menu-item" (click)="editor.rasterRedo(); editor.closeAllMenus()">
+        <div class="edit-menu-item" (click)="editor.editRedo(); editor.closeAllMenus()">
             <span>Redo</span><span class="shortcut">Ctrl+Y</span>
         </div>
         <div class="edit-menu-divider"></div>

@@ -131,6 +131,7 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     );
     position: relative;
     cursor: crosshair;
+    touch-action: none;   /* TOUCH-1: a finger drag picks, never scrolls */
     flex-shrink: 0;
 
     /* Hollow out the center to form a ring */
@@ -175,6 +176,7 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     transform: translate(-50%, -50%);
     z-index: 2;
     cursor: crosshair;
+    touch-action: none;
     border: 1px solid rgba(255,255,255,0.15);
 }
 

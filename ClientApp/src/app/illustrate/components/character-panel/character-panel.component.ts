@@ -1,10 +1,11 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { CharLookService } from './char-look.service';
 import { CharFaceService } from './char-face.service';
 import { CharHairService } from './char-hair.service';
 import { CharClothingService } from './char-clothing.service';
 import { CharCharmsService } from './char-charms.service';
+import { NavStack, SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 
 /** Used when the engine predates sm.getHairStyles3D (the picker then simply does nothing). */
 
@@ -117,7 +118,8 @@ export class CharacterPanelComponent implements OnChanges {
   @Output() exitEyeDraw = new EventEmitter<void>();
   @Output() toggleClothingPaint = new EventEmitter<'top' | 'bottom' | 'shoes' | 'socks'>();
 
-  constructor(public look: CharLookService, public face: CharFaceService, public hair: CharHairService, public clothing: CharClothingService, public charms: CharCharmsService) {
+  constructor(public look: CharLookService, public face: CharFaceService, public hair: CharHairService, public clothing: CharClothingService, public charms: CharCharmsService,
+              private el: ElementRef<HTMLElement>) {
     look.bind(this); face.bind(this); hair.bind(this); clothing.bind(this); charms.bind(this);
   }
 
@@ -134,17 +136,29 @@ export class CharacterPanelComponent implements OnChanges {
     }
   }
 
-  private _charSection: 'menu' | 'body' | 'eyes' | 'face' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms' = 'menu';
+  private _charSection: 'menu' | 'body' | 'face' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms' = 'menu';
 
   get charSection() { return this._charSection; }
 
-  set charSection(v: 'menu' | 'body' | 'eyes' | 'face' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms') {
+  set charSection(v: 'menu' | 'body' | 'face' | 'hair' | 'top' | 'bottom' | 'shoes' | 'socks' | 'charms') {
     if (this._charSection === 'charms' && v !== 'charms') {
       this.charms.scene3dEndPlacePick();
       this.charms._hideCharmPreview();
     }
     this._charSection = v;
+    this.nav.reset();
     if (v === 'face') this.face.scene3dInitFaceKit();
+  }
+
+  // ── Drill-down inside a section (utils/sub-nav.ts): sub = a group of the section (Face › Brows / Face › Eyes),
+  //    sub2 / sub3 = deeper views (Face › Eyes › Happy › Iris). Back steps up one level at a time. ──
+  readonly nav = new NavStack(3, () => scrollPanelToTop(this.el.nativeElement));
+  get sub(): SubNav { return this.nav.levels[0]; }
+  get sub2(): SubNav { return this.nav.levels[1]; }
+  get sub3(): SubNav { return this.nav.levels[2]; }
+
+  charBack(): void {
+    if (!this.nav.back()) this.charSection = 'menu';
   }
 
   // ── Face kit (Salsa face-features.ts: brows / mouth / nose / hair shadow / blush + expressions) ──

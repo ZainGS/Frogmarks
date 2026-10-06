@@ -132,12 +132,20 @@ export class RasterAutoSaveService {
     }
   }
 
+  /** Stop saving the current document. Called when the editor leaves it (after its pending change was saved): the
+   *  document id is dropped too, so neither a stroke debounce nor an explicit saveNow() can write into it while
+   *  the next document loads. enable() binds the next one. */
   disable(): void {
     this._enabled = false;
+    this._docId = '';
     this.sm?.disableAutoSave();
     this._stopFallbackTimer();
+    if (this._strokeTimer) { clearTimeout(this._strokeTimer); this._strokeTimer = null; }
     this._clearSaveCheck();
   }
+
+  /** The document saves go to ('' when none is bound). */
+  get docId(): string { return this._docId; }
 
   // ── Manual save (Ctrl+S) ──────────────────────────────────
 

@@ -1492,7 +1492,7 @@ onKeydown(e: KeyboardEvent) {
     if (this._newIllustrationDialogRef) return;
     this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
-      panelClass: 'new-illustration-dialog',
+      panelClass: ['new-illustration-dialog', 'fm-dialog'],
       disableClose: false,
       enterAnimationDuration: '0ms',
       data: { isLoggedIn: this.isLoggedIn },
@@ -1569,7 +1569,7 @@ onKeydown(e: KeyboardEvent) {
     if (this._newIllustrationDialogRef) return;
     this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
-      panelClass: 'new-illustration-dialog',
+      panelClass: ['new-illustration-dialog', 'fm-dialog'],
       disableClose: false,
       enterAnimationDuration: '0ms',
       data: { isLoggedIn: this.isLoggedIn },
@@ -1649,7 +1649,7 @@ onKeydown(e: KeyboardEvent) {
       if (this._newIllustrationDialogRef) return;
       this._newIllustrationDialogRef = this.dialog.open(NewIllustrationDialogComponent, {
         width: '420px',
-        panelClass: 'new-illustration-dialog',
+        panelClass: ['new-illustration-dialog', 'fm-dialog'],
         disableClose: false,
         enterAnimationDuration: '0ms',
         data: { importMode: true, defaultName: result.manifest.name || 'Imported Illustration', isLoggedIn: this.isLoggedIn }

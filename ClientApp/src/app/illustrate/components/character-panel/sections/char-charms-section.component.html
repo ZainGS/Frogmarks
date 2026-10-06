@@ -1,3 +1,4 @@
+<ng-container *ngIf="!cp.sub.id">
 <div class="eye-proc-group">Add Charm</div>
 <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
     <select class="scene3d-select" style="flex:1" [ngModel]="charms.scene3dNewAttachmentType" (ngModelChange)="charms.scene3dNewAttachmentTypeChanged($event)">
@@ -56,10 +57,11 @@
     <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='glint'" (click)="charms.scene3dSetCharSparkleMode('glint')">◦ Glint</button>
     <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='star'" (click)="charms.scene3dSetCharSparkleMode('star')">✦ Star</button>
 </div>
+</ng-container>
 
 <!-- Charms grouped by type — each type is a collapsible accordion -->
 <ng-container *ngFor="let group of charms.scene3dAttachmentsByType">
-    <div class="scene3d-charm-group-header" (click)="charms.scene3dAccordionOpen[group.type] = !charms.scene3dAccordionOpen[group.type]">
+    <div class="scene3d-charm-group-header" *ngIf="!cp.sub.id" (click)="charms.scene3dAccordionOpen[group.type] = !charms.scene3dAccordionOpen[group.type]">
         <span style="text-transform:capitalize;font-weight:600">{{ group.type }}</span>
         <span style="color:#666;font-size:11px;margin-left:6px">{{ group.items.length }}</span>
         <span style="margin-left:auto;font-size:11px;color:#666">{{ charms.scene3dAccordionOpen[group.type] ? '▾' : '▸' }}</span>
@@ -67,20 +69,21 @@
                 (click)="$event.stopPropagation(); charms.scene3dRemoveAttachmentsByType(group.type)"
                 title="Remove all {{ group.type }} charms">✕ all</button>
     </div>
-    <ng-container *ngIf="charms.scene3dAccordionOpen[group.type]">
-    <div *ngFor="let a of group.items; let i = index" style="border:1px solid #2a2a2a;border-radius:6px;margin-bottom:4px">
-        <!-- Collapsible charm header -->
-        <div style="display:flex;align-items:center;padding:5px 8px;cursor:pointer;gap:5px"
-             (click)="charms.scene3dCharmOpen[a.id]=!charms.scene3dCharmOpen[a.id]">
+    <ng-container *ngIf="charms.scene3dAccordionOpen[group.type] || cp.sub.id">
+    <div *ngFor="let a of group.items; let i = index" [class.charm-card]="!cp.sub.id">
+        <!-- Charm row: opens the charm's own view -->
+        <div *ngIf="!cp.sub.id" style="display:flex;align-items:center;padding:5px 8px;cursor:pointer;gap:5px"
+             (click)="cp.sub.open('charm:' + a.id, group.type + ' #' + (i + 1))">
             <span style="font-size:10px;color:#555">#{{ i + 1 }}</span>
             <span style="font-size:11px;color:#888;text-transform:capitalize">{{ a.placement.joint }}</span>
-            <span style="margin-left:auto;font-size:10px;color:#555">{{ charms.scene3dCharmOpen[a.id] ? '▾' : '▸' }}</span>
+            <span style="margin-left:auto;font-size:12px;color:#666">›</span>
             <button class="scene3d-btn" style="color:#f08080;padding:1px 6px;font-size:11px"
                     (click)="$event.stopPropagation(); charms.scene3dRemoveAttachment(a.id)">✕</button>
         </div>
         <!-- Expanded body -->
-        <ng-container *ngIf="charms.scene3dCharmOpen[a.id]">
-        <div style="padding:0 8px 8px">
+        <ng-container *ngIf="cp.sub.id === 'charm:' + a.id">
+        <div>
+    <button class="scene3d-btn" style="width:100%;margin-bottom:8px;color:#f08080" (click)="charms.scene3dRemoveAttachment(a.id)">Remove this charm</button>
 
     <div class="eye-proc-group" style="margin-top:0;margin-bottom:4px">Placement</div>
     <div class="scene3d-material-row">
@@ -501,6 +504,6 @@
     </ng-container><!-- end accordion body -->
 </ng-container><!-- end type group -->
 
-<div *ngIf="charms.scene3dAttachments.length === 0" style="color:#666;font-size:12px;text-align:center;padding:16px 0">
+<div *ngIf="charms.scene3dAttachments.length === 0 && !cp.sub.id" style="color:#666;font-size:12px;text-align:center;padding:16px 0">
     No charms yet — pick a type and click Add.
 </div>

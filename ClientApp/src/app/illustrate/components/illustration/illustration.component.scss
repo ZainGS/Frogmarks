@@ -10,7 +10,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden; /* Prevent scrollbars from appearing */
 }
 
@@ -25,7 +25,7 @@ canvas {
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     z-index: 0; /* Ensure it's behind the control panel */
 }
 
@@ -587,7 +587,9 @@ svg {
     color: white;
     background: rgba(26, 26, 26, 0.95);
     padding-right: 8px !important;
-    backdrop-filter: blur(10px);
+    /* NO backdrop-filter here: it makes .layer-panel the containing block of every position:fixed descendant, so the
+       Layers blend-mode dropdown (raster-layers .blend-dropdown, placed with viewport coords) opened ~a panel-width
+       off-screen to the right: "tapping Normal does nothing" (desktop too). The 95% background hides the blur anyway. */
     border-radius: 0px;
     display: flex;
     flex-direction: column;
@@ -805,7 +807,12 @@ svg {
         left: 0;
         top: 0;
         width: 70px;
-        height: 100vh;
+        height: 100dvh;
+        /* UI-1 (mobile-parity): ~20 3D tools ≈ 1200 px; on a short (tablet) screen the lower ones were unreachable. */
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
         background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
         border-right: 2px solid #444;
         display: flex;
@@ -814,6 +821,8 @@ svg {
         padding: 10px 0;
         z-index: 1000;
         box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+        &::-webkit-scrollbar { display: none; }
+        & > * { flex-shrink: 0; }   /* scroll instead of squashing the buttons */
     }
 
     .vertical-tool-button {
@@ -1020,7 +1029,7 @@ svg {
         left: 75px;
         top: 0;
         width: 250px;
-        height: 100vh;
+        height: 100dvh;
         background: rgba(26, 26, 26, 0.95);
         border-right: 1px solid #444;
         backdrop-filter: blur(10px);
@@ -1037,6 +1046,8 @@ svg {
 .tool-subpanel--compact {
         height: auto !important;
         min-height: 0 !important;
+        bottom: auto !important;                 /* content height, still stopping above the colour picker: */
+        max-height: calc(100% - 240px);          /* % of the same box the picker's bottom:0 uses */
         padding: 28px 20px 20px !important;
         width: 218px !important;
     }
@@ -1114,10 +1125,16 @@ svg {
     .tool-subpanel {
     position: fixed;
     left: 70px;
-    top: 0;
-    margin-top: 40px;
+    /* Between the 40 px top bar and the 200 px colour picker (bottom:0; height:200px). Anchored with top + bottom,
+       NOT a viewport-unit height: on Android Chrome 100vh is the URL-bar-HIDDEN height, so the old
+       max-height calc(100vh - 240px) ran ~a URL bar's height past the picker's top edge and covered it (dvh needs
+       Chrome 108+). top/bottom resolve against the same box as the picker's bottom:0, so they always meet. */
+    top: 40px;
+    bottom: 200px;
+    margin-top: 0;
+    height: auto;
+    max-height: none;
     width: 250px;
-    max-height: calc(100vh - 240px);
     overflow-y: auto;
     background: rgba(26, 26, 26, 0.95);
     border-right: 1px solid #444;
@@ -1491,10 +1508,12 @@ svg {
     z-index: 9999;
     border: 1.5px solid rgba(255, 255, 255, 0.75);
     border-radius: 50%;
-    transform: translate(-50%, -50%);
+    /* Positioned by transform: translate(x, y) translate(-50%, -50%), written directly per pointer move (BRUSH-2). */
+    left: 0;
+    top: 0;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
     transition: width 0.05s, height 0.05s;
-    will-change: left, top;
+    will-change: transform;
 }
 
 /* ── Persistent (always-visible) color picker ── */
@@ -2293,7 +2312,7 @@ svg {
 // ── UV Editor ────────────────────────────────────────────────────
 
 #uvCanvas {
-    // overrides the global canvas rule (position:absolute; top:0; left:0; width:100vw; height:100vh)
+    // overrides the global canvas rule (position:absolute; top:0; left:0; width:100vw; height:100dvh)
     // the left/width/height are set as inline styles on the element
     cursor: crosshair;
 }
@@ -2479,3 +2498,30 @@ svg {
 }
 @keyframes engine-status-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .engine-status-spinner { animation: none; } }
+
+/* UI-1 / UI-13 (mobile-parity): Hide UI — no X key on a tablet, so a floating button brings it back. Rendered while
+   the UI is hidden; faded out (and click-through) until a canvas tap reveals it (.visible, ~3 s: HiddenUiWake). */
+.touch-show-ui-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1100;
+    min-width: 88px;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid #777;
+    border-radius: 22px;
+    background: rgba(20, 20, 20, 0.8);
+    color: #fff;
+    font: 600 14px/1 system-ui, sans-serif;
+    touch-action: manipulation;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+
+    &.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transition-duration: 0.15s;
+    }
+}

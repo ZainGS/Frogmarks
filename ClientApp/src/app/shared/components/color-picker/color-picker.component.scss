@@ -1,4 +1,4 @@
-:root {
+:host { /* per instance: each picker sets its own --hue on its host (was :root + documentElement, shared by all) */
     --hue: 0; /* Default hue */
 }
 
@@ -117,6 +117,7 @@
         linear-gradient(to right, white, hsl(var(--hue), 100%, 50%)); /* Saturation */
     position: relative;
     cursor: crosshair;
+    touch-action: none; /* TOUCH-1: a finger drag picks, never scrolls */
 }
 
 .color-indicator {

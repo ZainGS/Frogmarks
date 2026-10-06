@@ -107,6 +107,22 @@ services). Templates bind `svc.member`.
 - **armature-panel**: `rig` (skeletons, joints, IK, constraints), `binding` (bind + weight paint), `anim` (clips, NLA,
   retarget), `library` (preset poses, pose / animation / global library), `spring`. One template (stacked sections).
 
+### Drill-down navigation (City, Edit Character)
+
+Big panels don't show every control at once: a view is a short menu of buttons (`.nav-tile`, with a subtitle naming
+the first few controls inside), each opening one group's controls, with a Back header (`.nav-header`, breadcrumb).
+State is `utils/sub-nav.ts` `SubNav` (`id` null = the menu; `open(id, label)`, `close()`, `reset()`); styles are
+`styles/_sub-nav.scss` (imported only by the panels that use it).
+
+- City: `worldNav` (Presets, Look, Time & Weather, Layout, Streets & Buildings, Life & Props, Edge, Performance) →
+  `worldSub` (the groups inside). The Performance readout polls only while that section is open.
+- Character: `charSection` (the existing menu) → `cp.nav`, a `NavStack` of 3 levels exposed as `cp.sub` / `cp.sub2` /
+  `cp.sub3` (opening a level resets deeper ones; Back closes the deepest). Eyes live under Face: Face › Eyes (eye
+  states, gaze, blink) › a state's settings › Iris / Lashes / …. A charm opens `charm:<id>`; placing a new charm opens it.
+- **Adding controls**: put them under an existing group heading (`<ng-container *ngIf="nav.id === 'x'">`), or add a
+  new group = a wrapper `*ngIf="nav.id === 'new'"` plus a `.nav-tile` in the menu with the same conditions as the
+  controls. Content outside every group shows on the menu view only.
+
 ## Styles
 
 - `styles/_panel-controls.scss`: the shared control rules (`.scene3d-*`, sliders, rows, buttons). A child view

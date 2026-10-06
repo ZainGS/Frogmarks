@@ -15,7 +15,12 @@
     <input type="range" class="hue-slider" min="0" max="360" [(ngModel)]="hue" (input)="updateGradient()" />
 
     <!-- Saturation/Brightness Square -->   
-    <div class="color-gradient" (mousedown)="startColorSelection($event)">
+    <div class="color-gradient" #gradient
+         (pointerdown)="startColorSelection($event)"
+         (pointermove)="onGradientPointerMove($event)"
+         (pointerup)="endColorSelection()"
+         (pointercancel)="endColorSelection()"
+         (lostpointercapture)="endColorSelection()">
         <div class="color-indicator" [ngStyle]="{'top': sbY + '%', 'left': sbX + '%'}"></div>
     </div>
 </div>

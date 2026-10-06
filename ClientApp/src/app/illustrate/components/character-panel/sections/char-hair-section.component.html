@@ -1,9 +1,9 @@
-<div *ngIf="!hair.scene3dHairParams">
+<ng-container *ngIf="!cp.sub.id"><div *ngIf="!hair.scene3dHairParams">
     <button class="scene3d-btn" style="width:100%" (click)="hair.scene3dInitHair()">Generate Hair</button>
-</div>
+</div></ng-container>
 <ng-container *ngIf="hair.scene3dHairParams">
     <!-- Hair type first: every group below shows only the controls the chosen build reads (HAIR_CONTROL_MODES). -->
-    <div class="eye-proc-group">Hair type</div>
+    <ng-container *ngIf="cp.sub.id === 'hair-type'"><!-- Hair type -->
     <div class="scene3d-material-row">
         <label title="Styled = big anime locks (presets) · Chunky = cap + bangs + tails · Cards = alpha hair cards">Mode</label>
         <div style="display:flex;gap:2px">
@@ -14,9 +14,9 @@
             <button class="bp-seg-btn" [class.bp-seg-active]="hair.scene3dHairParams.hairMode === 'cards'"
                     (click)="hair.scene3dSetHairMode('cards')">Cards</button>
         </div>
-    </div>
-    <ng-container *ngIf="hair.scene3dHairStyles.length">
-        <div class="eye-proc-group">Style</div>
+    </div></ng-container>
+    <ng-container *ngIf="cp.sub.id === 'style'"><ng-container *ngIf="hair.scene3dHairStyles.length">
+        <!-- Style -->
         <div class="scene3d-material-row">
             <label title="Anime lock styles: big shaped locks + a clean fringe (keeps the hair colours)">Style</label>
             <select [ngModel]="hair.scene3dHairParams.hairMode === 'locks' ? hair.scene3dHairParams.hairStyle : ''"
@@ -27,9 +27,9 @@
             <button class="bp-seg-btn" *ngIf="hair.scene3dHairParams.hairMode === 'locks'" title="Re-roll the per-lock variation"
                     (click)="hair.scene3dVaryHairStyle()">Vary</button>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
     <ng-container *ngIf="hair.scene3dHairParams.hairMode === 'locks'">
-        <div class="eye-proc-group">Fringe</div>
+        <ng-container *ngIf="cp.sub.id === 'fringe'"><!-- Fringe -->
         <div class="scene3d-material-row">
             <label>Shape</label>
             <select [(ngModel)]="hair.scene3dHairParams.fringeStyle" (ngModelChange)="hair.scene3dHairParamChanged()">
@@ -53,8 +53,8 @@
             <input type="range" min="-1" max="1" step="0.05"
                    [(ngModel)]="hair.scene3dHairParams.fringeSide" (ngModelChange)="hair.scene3dHairParamChanged()">
             <span class="scene3d-val">{{ hair.scene3dHairParams.fringeSide | number:'1.2-2' }}</span>
-        </div>
-        <div class="eye-proc-group">Length + locks</div>
+        </div></ng-container>
+        <ng-container *ngIf="cp.sub.id === 'length-locks'"><!-- Length + locks -->
         <div class="scene3d-material-row">
             <label title="Back length (0.3 nape · 0.75 bob · 3 mid-back)">Back</label>
             <input type="range" min="0" max="4.5" step="0.05"
@@ -120,8 +120,8 @@
             <input type="range" min="0" max="2" step="1"
                    [(ngModel)]="hair.scene3dHairParams.ahoge" (ngModelChange)="hair.scene3dHairParamChanged()">
             <span class="scene3d-val">{{ hair.scene3dHairParams.ahoge }}</span>
-        </div>
-        <div class="eye-proc-group">Curl + volume</div>
+        </div></ng-container>
+        <ng-container *ngIf="cp.sub.id === 'curl-volume'"><!-- Curl + volume -->
         <div class="scene3d-material-row">
             <label title="Wave / curl on the crown, side and tail locks">Curl</label>
             <input type="range" min="0" max="1" step="0.05"
@@ -163,9 +163,9 @@
         <div class="scene3d-material-row" style="opacity:0.6;font-size:11px">
             Styled hair also uses Crown / Hairline, Buns, Facial hair, Side locks, Tails and Colour below; the Chunky / Cards-only controls are hidden.
             <ng-container *ngIf="cp.hairGathered"> Gathered: Sides, Flick, Messiness, Layers and Spikes only shape loose hair, so they are hidden.</ng-container>
-        </div>
+        </div></ng-container>
     </ng-container>
-    <div class="eye-proc-group">{{ cp.hairControlMode === 'locks' ? 'Crown + hairline' : 'Cap' }}</div>
+    <ng-container *ngIf="cp.sub.id === 'cap'"><!-- {{ cp.hairControlMode === 'locks' ? 'Crown + hairline' : 'Cap' }} -->
     <div class="scene3d-material-row" *ngIf="cp.hairShow('verticalOffset') && !cp.hairBuzzOn" title="Raises the bang hairline">
         <label>V offset</label>
         <input type="range" min="0.6" max="0.8" step="0.02"
@@ -215,10 +215,10 @@
                [(ngModel)]="hair.scene3dHairParams.hairlineFront"
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ hair.scene3dHairParams.hairlineFront | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('spikeCap') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Spiky</div>
+    <ng-container *ngIf="cp.sub.id === 'spiky'"><ng-container *ngIf="cp.hairShow('spikeCap') && !cp.hairBuzzOn">
+    <!-- Spiky -->
     <div class="scene3d-material-row">
         <label>Spiky</label>
         <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.spikeCap"
@@ -249,19 +249,19 @@
             <span class="scene3d-val">{{ (hair.scene3dHairParams.spikeJitter ?? 0) | number:'1.2-2' }}</span>
         </div>
     </ng-container>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('buzzCut')">
-    <div class="eye-proc-group">Buzz</div>
+    <ng-container *ngIf="cp.sub.id === 'buzz'"><ng-container *ngIf="cp.hairShow('buzzCut')">
+    <!-- Buzz -->
     <div class="scene3d-material-row">
         <label title="A short cap hugging the scalp: hides bangs, side locks, tails, drape, length, buns and spikes">Buzz cut</label>
         <input type="checkbox" [(ngModel)]="hair.scene3dHairParams.buzzCut"
                (ngModelChange)="hair.scene3dHairParamChanged()">
     </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('sideCut')">
-    <div class="eye-proc-group">Undercut</div>
+    <ng-container *ngIf="cp.sub.id === 'undercut'"><ng-container *ngIf="cp.hairShow('sideCut')">
+    <!-- Undercut -->
     <div class="scene3d-material-row">
         <label>Side cut</label>
         <input type="range" min="0" max="1" step="0.05"
@@ -269,10 +269,10 @@
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ (hair.scene3dHairParams.sideCut ?? 0) | number:'1.2-2' }}</span>
     </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('bunStyle') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Buns</div>
+    <ng-container *ngIf="cp.sub.id === 'buns'"><ng-container *ngIf="cp.hairShow('bunStyle') && !cp.hairBuzzOn">
+    <!-- Buns -->
     <div class="scene3d-material-row">
         <label [title]="cp.hairShow('verticalOffset') ? '' : 'Styled hair: any bun style makes one bun at the back of the head'">Style</label>
         <select class="scene3d-select" [ngModel]="hair.scene3dHairParams.bunStyle || 'none'"
@@ -293,9 +293,9 @@
             <span class="scene3d-val">{{ (hair.scene3dHairParams.bunSize ?? 0.15) | number:'1.2-2' }}</span>
         </div>
     </ng-container>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Facial Hair</div>
+    <ng-container *ngIf="cp.sub.id === 'facial-hair'"><!-- Facial Hair -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.facialHair"
@@ -325,19 +325,19 @@
                    (ngModelChange)="hair.scene3dHairParamChanged()">
             <span class="scene3d-val">{{ (hair.scene3dHairParams.beardDensity ?? 0.5) | number:'1.2-2' }}</span>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
     <ng-container *ngIf="cp.hairShow('scalpLength') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Length</div>
+    <ng-container *ngIf="cp.sub.id === 'length'"><!-- Length -->
     <div class="scene3d-material-row">
         <label title="Hanging scalp hair past the hairline (0 = cap only). Curl and Layering shape these strands.">Length</label>
         <input type="range" min="0" max="2" step="0.05"
                [(ngModel)]="hair.scene3dHairParams.scalpLength"
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ hair.scene3dHairParams.scalpLength | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
     <ng-container *ngIf="hair.scene3dHairParams.scalpLength > 0">
-        <div class="scene3d-material-row">
+        <ng-container *ngIf="!cp.sub.id"><div class="scene3d-material-row">
             <label>Front</label>
             <input type="range" min="0" max="1" step="0.05"
                    [(ngModel)]="hair.scene3dHairParams.lengthFront"
@@ -364,9 +364,9 @@
                    [(ngModel)]="hair.scene3dHairParams.scalpBluntness"
                    (ngModelChange)="hair.scene3dHairParamChanged()">
             <span class="scene3d-val">{{ hair.scene3dHairParams.scalpBluntness | number:'1.2-2' }}</span>
-        </div>
+        </div></ng-container>
 
-    <div class="eye-proc-group">Curl</div>
+    <ng-container *ngIf="cp.sub.id === 'curl'"><!-- Curl -->
     <div class="scene3d-material-row">
         <label>Type</label>
         <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.curlType"
@@ -398,9 +398,9 @@
                    (ngModelChange)="hair.scene3dHairParamChanged()">
             <span class="scene3d-val">{{ hair.scene3dHairParams.curlPhaseJitter | number:'1.2-2' }}</span>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Layering</div>
+    <ng-container *ngIf="cp.sub.id === 'layering'"><!-- Layering -->
     <div class="scene3d-material-row">
         <label>Layering</label>
         <input type="range" min="0" max="1" step="0.05"
@@ -414,12 +414,12 @@
                [(ngModel)]="hair.scene3dHairParams.chop"
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ hair.scene3dHairParams.chop | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
     </ng-container>
     </ng-container>
 
-    <ng-container *ngIf="cp.hairShow('partingStyle') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Bangs</div>
+    <ng-container *ngIf="cp.sub.id === 'bangs'"><ng-container *ngIf="cp.hairShow('partingStyle') && !cp.hairBuzzOn">
+    <!-- Bangs -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.partingStyle"
@@ -478,10 +478,10 @@
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ hair.scene3dHairParams.bangOffset | number:'1.2-2' }}</span>
     </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('sideLock') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Side Locks</div>
+    <ng-container *ngIf="cp.sub.id === 'side-locks'"><ng-container *ngIf="cp.hairShow('sideLock') && !cp.hairBuzzOn">
+    <!-- Side Locks -->
     <div class="scene3d-material-row">
         <label>Enable</label>
         <input type="checkbox"
@@ -511,10 +511,10 @@
             <span class="scene3d-val">{{ hair.scene3dHairParams.sideLockCount }}</span>
         </div>
     </ng-container>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('tailStyle') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Tails</div>
+    <ng-container *ngIf="cp.sub.id === 'tails'"><ng-container *ngIf="cp.hairShow('tailStyle') && !cp.hairBuzzOn">
+    <!-- Tails -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [(ngModel)]="hair.scene3dHairParams.tailStyle"
@@ -608,10 +608,10 @@
             </select>
         </div>
     </ng-container>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="cp.hairShow('frontDrape') && !cp.hairBuzzOn">
-    <div class="eye-proc-group">Front drape</div>
+    <ng-container *ngIf="cp.sub.id === 'front-drape'"><ng-container *ngIf="cp.hairShow('frontDrape') && !cp.hairBuzzOn">
+    <!-- Front drape -->
     <div class="scene3d-material-row">
         <label>Amount</label>
         <input type="range" min="0" max="1" step="0.05"
@@ -685,9 +685,9 @@
             <span class="scene3d-val">{{ (hair.scene3dHairParams.frontDrapeStrayZ ?? 0.4) | number:'1.2-2' }}</span>
         </div>
     </ng-container>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Colour</div>
+    <ng-container *ngIf="cp.sub.id === 'colour'"><!-- Colour -->
     <div class="scene3d-material-row">
         <label>Root</label>
         <input type="color"
@@ -712,9 +712,9 @@
                [(ngModel)]="hair.scene3dHairParams.tipFade"
                (ngModelChange)="hair.scene3dHairParamChanged()">
         <span class="scene3d-val">{{ hair.scene3dHairParams.tipFade | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Render</div>
+    <ng-container *ngIf="cp.sub.id === 'render'"><!-- Render -->
     <div class="scene3d-material-row" *ngIf="cp.hairShow('chunkiness')">
         <label>Chunkiness</label>
         <input type="range" min="0" max="1" step="0.05"
@@ -794,8 +794,8 @@
     <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
             (click)="hair.scene3dRemoveHair()">Remove Hair</button>
     <button class="scene3d-btn" style="width:100%;margin-top:4px"
-            (click)="hair.scene3dBakeHair()">Save as Part</button>
-    <div class="eye-proc-group" style="margin-top:12px">Texture</div>
+            (click)="hair.scene3dBakeHair()">Save as Part</button></ng-container>
+    <ng-container *ngIf="cp.sub.id === 'texture'"><!-- Texture -->
     <div class="scene3d-material-row">
         <label>Diffuse</label>
         <label class="scene3d-btn" style="cursor:pointer;flex:1;text-align:center">
@@ -803,5 +803,71 @@
         </label>
         <button class="scene3d-btn" *ngIf="cp.charPartTextureSet['hair']"
                 (click)="cp.scene3dClearCharPartTexture('hair')" title="Clear texture">✕</button>
-    </div>
+    </div></ng-container>
 </ng-container>
+
+<div class="nav-tiles" *ngIf="!cp.sub.id">
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('hair-type', 'Hair type')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Hair type</span><span class="nav-tile-hint">Mode</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && hair.scene3dHairStyles.length" (click)="cp.sub.open('style', 'Style')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Style</span><span class="nav-tile-hint">Style</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && hair.scene3dHairParams.hairMode === 'locks'" (click)="cp.sub.open('fringe', 'Fringe')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Fringe</span><span class="nav-tile-hint">Shape · Height · Locks · Side</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && hair.scene3dHairParams.hairMode === 'locks'" (click)="cp.sub.open('length-locks', 'Length + locks')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Length + locks</span><span class="nav-tile-hint">Back · Sides · Lock count · Lock width …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && hair.scene3dHairParams.hairMode === 'locks'" (click)="cp.sub.open('curl-volume', 'Curl + volume')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Curl + volume</span><span class="nav-tile-hint">Curl · Curl type · Curl freq · Spikes …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('cap', cp.hairControlMode === 'locks' ? 'Crown + hairline' : 'Cap')">
+        <span class="nav-tile-text"><span class="nav-tile-label">{{ cp.hairControlMode === 'locks' ? 'Crown + hairline' : 'Cap' }}</span><span class="nav-tile-hint">V offset · Thickness · Volume · Cap sweep …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('spikeCap') && !cp.hairBuzzOn" (click)="cp.sub.open('spiky', 'Spiky')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Spiky</span><span class="nav-tile-hint">Spiky · Pattern · Length · Jitter</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('buzzCut')" (click)="cp.sub.open('buzz', 'Buzz')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Buzz</span><span class="nav-tile-hint">Buzz cut</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('sideCut')" (click)="cp.sub.open('undercut', 'Undercut')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Undercut</span><span class="nav-tile-hint">Side cut</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('bunStyle') && !cp.hairBuzzOn" (click)="cp.sub.open('buns', 'Buns')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Buns</span><span class="nav-tile-hint">Style · Size</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('facial-hair', 'Facial Hair')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Facial Hair</span><span class="nav-tile-hint">Style · Length · Density</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('scalpLength') && !cp.hairBuzzOn" (click)="cp.sub.open('length', 'Length')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Length</span><span class="nav-tile-hint">Length</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('scalpLength') && !cp.hairBuzzOn && hair.scene3dHairParams.scalpLength > 0" (click)="cp.sub.open('curl', 'Curl')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Curl</span><span class="nav-tile-hint">Type · Amount · Frequency · Jitter</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('scalpLength') && !cp.hairBuzzOn && hair.scene3dHairParams.scalpLength > 0" (click)="cp.sub.open('layering', 'Layering')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Layering</span><span class="nav-tile-hint">Layering · Chop</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('partingStyle') && !cp.hairBuzzOn" (click)="cp.sub.open('bangs', 'Bangs')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Bangs</span><span class="nav-tile-hint">Style · Part pos · Part width · Count …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('sideLock') && !cp.hairBuzzOn" (click)="cp.sub.open('side-locks', 'Side Locks')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Side Locks</span><span class="nav-tile-hint">Enable · Length · Width · Count</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('tailStyle') && !cp.hairBuzzOn" (click)="cp.sub.open('tails', 'Tails')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Tails</span><span class="nav-tile-hint">Style · Gathered · Form · Drill turns …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams && cp.hairShow('frontDrape') && !cp.hairBuzzOn" (click)="cp.sub.open('front-drape', 'Front drape')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Front drape</span><span class="nav-tile-hint">Amount · Side · Origin · Length …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('colour', 'Colour')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Colour</span><span class="nav-tile-hint">Root · Gradient · Tip · Tip fade</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('render', 'Render')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Render</span><span class="nav-tile-hint">Chunkiness · Sheen · Highlight band · Card width …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="hair.scene3dHairParams" (click)="cp.sub.open('texture', 'Texture')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Texture</span><span class="nav-tile-hint">Diffuse · Upload</span></span><span class="nav-tile-chev">›</span>
+    </button>
+</div>

@@ -18,6 +18,35 @@ a {
   overflow: hidden !important;
 }
 
+/* Touch-first devices (phones / tablets): no live blur over the editor's canvas. A backdrop-filter over a canvas
+   that redraws every frame is re-blurred every frame, which is heavy on mobile GPUs; these overlays are 72–95%
+   opaque, so the blur was barely visible anyway. Desktop (fine pointer) keeps it. One list on purpose: add any new
+   editor overlay that blurs here. */
+@media (pointer: coarse) {
+  .right-panel, .tool-subpanel, .scene3d-stats-hud, .scene3d-shortcut-hud, .viewer-bar, .smp-backdrop, .nc-empty-state {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* Touch (mobile-parity TOUCH-2): no pull-to-refresh / scroll chaining, no 300 ms double-tap-zoom delay, no grey
+   tap flash. touch-action:manipulation still allows pan + pinch where a page scrolls; canvases and pickers set
+   their own touch-action:none. */
+html, body {
+  overscroll-behavior: none;
+}
+body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Generic range inputs (non-retro themes): a finger-sized thumb on coarse pointers. */
+@media (pointer: coarse) {
+  input[type="range"] {
+    min-height: 28px;
+  }
+}
+
 body, .navbar {
   background-color: var(--background-color) !important;
   color: var(--text-color) !important;
@@ -924,17 +953,58 @@ mat-error {
   background-color: var(--primary-color) !important;
 }
 
-// New Illustration dialog — strip Material's white surface so custom .nid card shows
+// ── Responsive dialog shell (panelClass 'fm-dialog'; the New / Import Illustration dialog uses it) ──────────────
+// The CDK overlay's structural CSS (cdk/overlay-prebuilt.css) is not loaded in this app, so MatDialog's pane is NOT
+// a fixed, centred layer: it sat wherever the overlay container landed in the page flow, and the old absolute
+// surface was centred on that point (Studio pushed it to y=420 with position.top:'100%'). On a short / narrow screen
+// (a tablet in landscape with the URL bar, a phone) the card ran off the bottom with no way to scroll to Create.
+// The pane is now a fixed full-viewport flex box that centres the card; the card is capped to the viewport
+// (16 px margin each side) and the dialog's own body scrolls (.nid-body). Desktop: same 700 px card, centred.
+.fm-dialog.cdk-overlay-pane,
+.new-illustration-dialog.cdk-overlay-pane {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  z-index: 99999 !important;
+  pointer-events: none;   // the empty area around the card doesn't eat taps (the card re-enables them)
+}
+.fm-dialog .mat-mdc-dialog-container,
+.new-illustration-dialog .mat-mdc-dialog-container,
+.fm-dialog .mdc-dialog__container,
+.new-illustration-dialog .mdc-dialog__container {
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0 !important;
+  display: flex !important;
+}
+// Strip Material's white surface so the custom card (.nid) shows.
+.fm-dialog .mdc-dialog__surface,
+.fm-dialog .mat-mdc-dialog-surface,
 .new-illustration-dialog .mdc-dialog__surface,
 .new-illustration-dialog .mat-mdc-dialog-surface {
   background: transparent !important;
   box-shadow: none !important;
   padding: 0 !important;
-  position: absolute !important;
-  z-index: 99999 !important;
-  max-width: 700px !important;
-  align-self: center !important;
-  min-height: fit-content !important;
+  position: relative !important;
+  width: min(700px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100dvh - 32px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;   // the dialog's own body scrolls; header + footer stay put
+  display: flex !important;
+  flex-direction: column;
+  pointer-events: auto;
 }
 
 // ── .frogui skin image application layer ─────────────────────────────────────

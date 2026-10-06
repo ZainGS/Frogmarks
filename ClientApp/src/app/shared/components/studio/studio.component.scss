@@ -10,6 +10,10 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  // Above #shellCanvas (position:fixed; z-index:0): as a plain block it painted UNDER the canvas, so the Settings /
+  // Install dialogs were in the DOM but invisible (and their buttons unreachable).
+  position: relative;
+  z-index: 1;
 
   &.has-dialog {
     pointer-events: auto;
@@ -25,8 +29,11 @@
   border: 1px solid #333;
   border-radius: 12px;
   padding: 28px 32px;
-  min-width: 340px;
-  max-width: 480px;
+  min-width: min(340px, calc(100vw - 32px));
+  max-width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);   // fits a phone / a landscape tablet; scrolls inside if it must
+  overflow-y: auto;
+  box-sizing: border-box;
   pointer-events: auto;
 
   h3 {
@@ -41,6 +48,16 @@
   margin: 0 0 18px;
   font-size: 13px;
   color: #aaa;
+}
+
+// App version (deploy check) under the Settings text.
+.shell-dialog-version {
+  margin: -8px 0 18px;
+  font-size: 12px;
+  color: #777;
+  line-height: 1.5;
+
+  span { font-size: 11px; color: #5f5f5f; }
 }
 
 .shell-dialog-input {

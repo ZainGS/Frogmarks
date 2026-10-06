@@ -23,6 +23,7 @@ import { DitherConfig } from 'app/boards/models/brush-preset.model';
 import { CanvasAppearanceService } from './canvas-appearance.service';
 import { ArtboardService } from './artboard.service';
 import { EditorStateService } from './editor-state.service';
+import { startBlankEngineDocument } from '../utils/blank-engine-document';
 /** Exactly the editor state persistence reads and writes (canvas settings, layer tree, document size, 3D host
  *  state, loading lifecycle). Typed against the editor so a rename breaks here at compile time. */
 export type PersistenceHost = Pick<IllustrationComponent, 'shapeManager' | 'doc' | '_scene3dReconstructGroups' | 'setAnimationEnabled' |
@@ -71,6 +72,21 @@ export class IllustrationPersistenceService implements OnDestroy {
     this.lastThumbnailTime = 0;
     this._rasterEditedSinceThumbnail = false;
     this.autoSaveState = 'idle';
+  }
+
+  /**
+   * Before a document loads: unbind the autosave from the previous document and give the engine (and the app-wide
+   * animation state) a BLANK document. The ShapeManager outlives every document, so without this a document with
+   * nothing saved yet (New Illustration, a new Shell project) opened on top of the previous one's layers, shapes, 3D,
+   * characters, city and settings — and its first save wrote them in as its own. The editor calls this right after
+   * the renderer boots, before it subscribes to the engine (the reset's scene-changed event is not "loaded").
+   * @param localUuid the local-only document's uuid (its Salsa id is `local-<uuid>`); null for a cloud document,
+   *                  whose id is bound once it is resolved (until then nothing can be saved).
+   */
+  async startBlankDocument(sm: ShapeManager, localUuid: string | null): Promise<void> {
+    this.autoSaveService.disable();              // nothing may save into the previous document from here on
+    this.animationService.resetForNewDocument();
+    await startBlankEngineDocument(sm, localUuid ? 'local-' + localUuid : undefined);
   }
 
   private _autoSaveStateSub: { unsubscribe(): void } | null = null;
@@ -554,19 +570,21 @@ export class IllustrationPersistenceService implements OnDestroy {
   /** Load the current document. Picks the source — local-only OPFS, this device's OPFS copy when it is at least as
    *  fresh as the server, else the server — and hands off to that path. Each path ends by marking 'sceneApplied'. */
   async loadIllustrationV2(): Promise<void> {
-    // Local-only: OPFS is the only source — no SQL state, no blob downloads
-    if (this.syncMode === 2) return this._loadLocalOnly();
-
-    if (!this.illustration?.id) {
+    // ── Pending .frog import (from dashboard) — for the document opened right after it was set ──
+    // (Checked before the local-only branch: a local-only import used to be skipped and stay pending, and was then
+    // imported into whichever cloud document opened next — e.g. a New Illustration.)
+    if (this.frogFileService.pendingImport && (this.syncMode === 2 || this.illustration?.id)) {
+      const pending = this.frogFileService.pendingImport;
+      this.frogFileService.pendingImport = null; // consume it
+      await this.host.applyFrogImport(pending);
       requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
       return;
     }
 
-    // ── Pending .frog import (from dashboard) ──
-    if (this.frogFileService.pendingImport) {
-      const pending = this.frogFileService.pendingImport;
-      this.frogFileService.pendingImport = null; // consume it
-      await this.host.applyFrogImport(pending);
+    // Local-only: OPFS is the only source — no SQL state, no blob downloads
+    if (this.syncMode === 2) return this._loadLocalOnly();
+
+    if (!this.illustration?.id) {
       requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
       return;
     }
@@ -1233,14 +1251,20 @@ export class IllustrationPersistenceService implements OnDestroy {
   lastSavedThumbnailJSON = '';
 
   saveThumbnailIfChanged() {
+    void this.saveThumbnailIfChangedNow();
+  }
+
+  /** saveThumbnailIfChanged, awaitable: before leaving a document the capture must finish while it is still on screen
+   *  (New Illustration used to start it and navigate at once). */
+  async saveThumbnailIfChangedNow(): Promise<void> {
     const current = this.shapeManager.getSceneGraphJSON();
     const now = Date.now();
     // The scene-graph JSON carries no pixels, so raster-only edits are tracked separately (they never refreshed it)
     if (current !== this.lastSavedThumbnailJSON || this._rasterEditedSinceThumbnail) {
       this._rasterEditedSinceThumbnail = false;
-      void this.saveThumbnail();
       this.lastSavedThumbnailJSON = current;
       this.lastThumbnailTime = now;
+      await this.saveThumbnail();
     }
   }
 
@@ -1317,7 +1341,9 @@ export class IllustrationPersistenceService implements OnDestroy {
       this.autoSaveService.enable(
         opfsDocId,
         this.illustration.name ?? 'Untitled',
-        { intervalMs: this.host.selectedAutoSaveInterval, strokeDebounceMs: 100 }
+        // BRUSH-6 (salsa docs/specs/mobile-parity.md §3): 100 ms autosaved (read back EVERY layer) after nearly
+        // every stroke while painting — a hitch per stroke on tablets. 1.5 s waits for a pause instead.
+        { intervalMs: this.host.selectedAutoSaveInterval, strokeDebounceMs: 1500 }
       );
       this._autoSaveStateSub = this.autoSaveService.state$.subscribe(s => this.autoSaveState = s);
     }
@@ -1329,6 +1355,14 @@ export class IllustrationPersistenceService implements OnDestroy {
           this.saveThumbnailIfChanged();
         }
       });
+
+    // A Duplicate (DocumentActionsService) was copied on this device's storage; the server has none of it yet. Its
+    // first cloud save uploads EVERY layer, mesh and the texture library (not just what changed since this load).
+    const nav = (typeof window !== 'undefined' ? window.history.state : null) as { duplicateOf?: string; illustration?: { uuid?: string } } | null;
+    if (this.syncMode === 0 && nav?.duplicateOf && nav.illustration?.uuid === illustration.uuid) {
+      this.forceFullUpload();
+      this.sceneChanged$.next('__duplicate_' + Date.now());
+    }
 
     this._checkSaveBlocked();
     this.host.markLoaded('illustration');

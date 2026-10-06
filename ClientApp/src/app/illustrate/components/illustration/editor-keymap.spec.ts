@@ -1,4 +1,4 @@
-import { cheatsheetColumns, chordLabel, dispatchKey, KeyBinding, MOD_KEYMAP, TOOL_KEYMAP } from './editor-keymap';
+import { cheatsheetColumns, chordLabel, dispatchKey, KeyBinding, MOD_KEYMAP, routeUndo, TOOL_KEYMAP } from './editor-keymap';
 
 function key(k: string, mods: { shift?: boolean; alt?: boolean } = {}): KeyboardEvent {
   return new KeyboardEvent('keydown', { key: k, shiftKey: !!mods.shift, altKey: !!mods.alt, cancelable: true });
@@ -91,6 +91,38 @@ describe('editor keymap', () => {
       expect(chordLabel({ keys: ['h', 'H'], mod: true, shift: true, group: 'Edit', help: '', run: () => {} })).toBe('Ctrl+Shift+H');
       expect(chordLabel({ keys: ['Delete', 'Backspace'], group: 'Edit', help: '', run: () => {} })).toBe('Del / Backspace');
       expect(chordLabel({ keys: ['Backspace'], alt: true, group: 'Edit', help: '', run: () => {} })).toBe('Alt+Backspace');
+    });
+  });
+
+  describe('routeUndo (Edit menu / touch action bar buttons, mobile-parity TOUCH-10)', () => {
+    function host(o: { can2DUndo?: boolean; can2DRedo?: boolean; is3D?: boolean }) {
+      return {
+        shapeManager: {
+          canUndo2DShapes: !!o.can2DUndo, canRedo2DShapes: !!o.can2DRedo,
+          undo2DShapes: jasmine.createSpy('undo2D'), redo2DShapes: jasmine.createSpy('redo2D'),
+        },
+        is3DContextActive: !!o.is3D,
+        scene3dUndo: jasmine.createSpy('u3'), scene3dRedo: jasmine.createSpy('r3'),
+        rasterUndo: jasmine.createSpy('ur'), rasterRedo: jasmine.createSpy('rr'),
+      };
+    }
+
+    it('takes the 2D object stack first', () => {
+      const ed = host({ can2DUndo: true, is3D: true });
+      routeUndo(ed as any, false);
+      expect(ed.shapeManager.undo2DShapes).toHaveBeenCalled();
+      expect(ed.scene3dUndo).not.toHaveBeenCalled();
+      expect(ed.rasterUndo).not.toHaveBeenCalled();
+    });
+
+    it('then the 3D context, else raster', () => {
+      const ed3 = host({ is3D: true });
+      routeUndo(ed3 as any, true);
+      expect(ed3.scene3dRedo).toHaveBeenCalled();
+      const ed2 = host({});
+      routeUndo(ed2 as any, false);
+      expect(ed2.rasterUndo).toHaveBeenCalled();
+      expect(ed2.shapeManager.undo2DShapes).not.toHaveBeenCalled();
     });
   });
 });

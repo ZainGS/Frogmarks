@@ -44,7 +44,9 @@ import { StorageSettingsService } from '../../services/storage-settings.service'
 import { SceneAddService } from '../../services/scene-add.service';
 import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
-import { cheatsheetColumns, dispatchKey, MOD_KEYMAP, TOOL_KEYMAP } from './editor-keymap';
+import { cheatsheetColumns, dispatchKey, MOD_KEYMAP, routeUndo, TOOL_KEYMAP } from './editor-keymap';
+import { TouchUiService } from '../../services/touch-ui.service';
+import type { TouchAction } from '../touch-action-bar/touch-action-bar.component';
 import type { OutlinerAction } from '../scene-outliner/scene-outliner.component';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
 import { FillWandService } from '../../services/fill-wand.service';
@@ -72,6 +74,7 @@ import { RasterBrushService } from 'app/shared/services/raster/raster-brush.serv
 import { RasterSelectionService } from 'app/shared/services/raster/raster-selection.service';
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
+import { HiddenUiWake } from '../../utils/hidden-ui-wake';
 import {
   SelectionTool, CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS, ArrowheadStyle,
   ARROWHEAD_OPTIONS,
@@ -163,8 +166,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   // Close on any document click, scroll, resize, or Escape
   @HostListener('document:click') onDocClick() { this.closeAllMenus(); }
-  @HostListener('window:scroll') onWinScroll() { this.closeContextMenu(); }
-  @HostListener('window:resize') onWinResize() { this.closeContextMenu(); }
+  /** Window scroll / resize close the context menu. Listened OUTSIDE the zone (registered in ngOnInit): Android's URL
+   *  bar fires resizes constantly and each in-zone event re-checked the whole editor; re-enter only to close a menu. */
+  private readonly _onWinScrollOrResize = (): void => {
+    if (this.contextMenu.visible) this.ngZone.run(() => this.closeContextMenu());
+  };
   @HostListener('document:keydown.escape') onEsc() {
     if (this.scene3dViewIsPlaying) return; // Esc releases pointer-lock; Play Mode handles it
     this.charPanel?.charms.scene3dEndPlacePick();
@@ -204,9 +210,37 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   toggleUI(force?: boolean) {
-    this.notifyService.success('Press the X button to toggle UI');
     this.uiHidden = typeof force === 'boolean' ? force : !this.uiHidden;
-    if (this.uiHidden) this.closeContextMenu();
+    // No keyboard on a tablet (UI-1): a floating "Show UI" button brings the UI back. It shows for a few seconds after
+    // hiding, then fades; a tap on the canvas fades it back in (that tap only wakes it, it doesn't paint: HiddenUiWake).
+    // The X key still toggles on any device.
+    if (this.uiHidden) {
+      this.notifyService.success(this.touchUi.coarse ? 'Tap the canvas, then "Show UI", to bring the UI back' : 'Press X (or tap the canvas, then "Show UI") to bring the UI back');
+      this.closeContextMenu();
+      this.ngZone.runOutsideAngular(() => this._hiddenUiWake.attach());   // window pointermove: no change detection per move
+      this.revealShowUiButton();
+    } else {
+      this._hiddenUiWake.detach();
+      clearTimeout(this._showUiBtnTimer);
+      this.showUiBtnVisible = false;
+    }
+  }
+
+  /** The floating "Show UI" button (only rendered while the UI is hidden) is faded in. */
+  showUiBtnVisible = false;
+  private _showUiBtnTimer?: ReturnType<typeof setTimeout>;
+  static readonly SHOW_UI_BTN_MS = 3000;
+  private readonly _hiddenUiWake = new HiddenUiWake(window, {
+    isButtonShowing: () => this.showUiBtnVisible,
+    passThrough: () => this.scene3dViewIsPlaying,   // Play: a touch drives the camera; never eat it
+    onWake: () => this.ngZone.run(() => this.revealShowUiButton()),
+  });
+
+  /** Fade the "Show UI" button in and (re)start its ~3 s fade-out timer. */
+  revealShowUiButton(): void {
+    this.showUiBtnVisible = true;
+    clearTimeout(this._showUiBtnTimer);
+    this._showUiBtnTimer = setTimeout(() => { this.showUiBtnVisible = false; }, IllustrationComponent.SHOW_UI_BTN_MS);
   }
 
   toggleLayerTree() {
@@ -740,8 +774,37 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (sm.isPlaying3D) {
       sm.exitPlayMode3D();
     } else {
-      sm.enterPlayMode3D({ config: { cameraMode: this.scene3dPlayCameraMode } });
+      // Touch (mobile-parity TOUCH-4): no pointer-lock mouse-look (it doesn't work on Android); the Play touch
+      // overlay's right-half drag feeds lookYaw / lookPitch instead.
+      sm.enterPlayMode3D({ config: { cameraMode: this.scene3dPlayCameraMode }, ...(this.touchUi.coarse ? { mouseLook: false } : {}) });
     }
+  }
+
+  // ── Touch (mobile-parity TOUCH-10): the floating action bar + Edit-menu undo routing ──
+
+  /** Edit › Undo / Redo and the touch bar: routed per context like Ctrl+Z (was raster-only). */
+  editUndo(): void { routeUndo(this, false); }
+  editRedo(): void { routeUndo(this, true); }
+
+  onTouchAction(a: TouchAction): void {
+    switch (a) {
+      case 'undo': this.editUndo(); break;
+      case 'redo': this.editRedo(); break;
+      // The rest go out as the key the keyboard would send, so the engine's own tool listeners (mesh edit, path
+      // edit, pen close, gizmo modal, selection transform) and the editor keymap handle them exactly as usual.
+      case 'delete': this._sendKey('Delete', 'Delete'); break;
+      case 'duplicate': this._sendKey('d', 'KeyD', true); break;
+      case 'escape': this._sendKey('Escape', 'Escape'); break;
+      case 'enter': this._sendKey('Enter', 'Enter'); break;
+    }
+  }
+
+  /** A synthetic keydown + keyup from <body> (bubbles to the window listeners the engine + editor use). */
+  private _sendKey(key: string, code: string, mod = false): void {
+    const mac = navigator.userAgent.includes('Mac');
+    const init: KeyboardEventInit = { key, code, bubbles: true, cancelable: true, ctrlKey: mod && !mac, metaKey: mod && mac };
+    document.body.dispatchEvent(new KeyboardEvent('keydown', init));
+    document.body.dispatchEvent(new KeyboardEvent('keyup', init));
   }
 
   // ── CD Jewel-Case Designer ─────────────────────────────────
@@ -1083,15 +1146,33 @@ export class IllustrationComponent implements OnInit, OnDestroy {
    *   - a button is held outside Play (a drag: pan / orbit / gizmo / marquee / paint): engine callbacks that update
    *     bound panels during a drag (viewport-changed -> the artboard overlay, gizmo drags) don't enter the zone
    *     themselves and relied on this per-move change detection, so drags keep it.
-   *  Plain hover moves and Play (mouse look) run no change detection. */
+   *  Plain hover moves and Play (mouse look) run no change detection.
+   *  mobile-parity BRUSH-2: the re-entry is coalesced to ONE change detection per animation frame (a pen / fast mouse
+   *  fires several moves a frame), and a RASTER STROKE (brush / airbrush / eraser / drawing pen) skips it entirely:
+   *  the stroke draws engine-side and binds nothing per move; the canvas (pointerup) binding runs one change
+   *  detection when the stroke ends. */
   private _canvasPointerMoveOutsideZone = (event: PointerEvent): void => {
     const pts = this.ribbon.scene3dRibbonControlPoints;
     this.scene3dCanvasPointerMove(event);
-    if (this.ribbon.scene3dRibbonControlPoints !== pts || (event.buttons !== 0 && !this.scene3dViewIsPlaying)) {
-      this.ngZone.run(() => { /* change detection for the state the move changed */ });
-    }
+    if (this.ribbon.scene3dRibbonControlPoints !== pts) { this._scheduleZoneTick(); return; }
+    if (event.buttons !== 0 && !this.scene3dViewIsPlaying && !this._isRasterStrokeTool()) this._scheduleZoneTick();
   };
   private _canvasPointerMoveEl: HTMLCanvasElement | null = null;
+  private _zoneTickRaf = 0;
+  /** One change detection on the next animation frame (coalesces the per-move re-entries). Called outside the zone,
+   *  so the rAF callback is outside too and enters the zone exactly once. */
+  private _scheduleZoneTick(): void {
+    if (this._zoneTickRaf) return;
+    this._zoneTickRaf = requestAnimationFrame(() => {
+      this._zoneTickRaf = 0;
+      this.ngZone.run(() => { /* change detection for the state the moves changed */ });
+    });
+  }
+  /** The active tool paints raster strokes (BRUSH-2: no change detection per pointer move while one is held). */
+  private _isRasterStrokeTool(): boolean {
+    const t = this.controlPanelActiveTool;
+    return t === 'raster:brush' || t === 'raster:airbrush' || t === 'raster:eraser' || (typeof t === 'string' && t.startsWith('drawing:'));
+  }
 
   scene3dCanvasPointerMove(event: PointerEvent): void {
     if (this.scene3dViewIsPlaying) return;   // Play: no editor hover picking (landmark cards, ribbon handles) — saves a raycast per mouse move
@@ -1411,9 +1492,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     public autoSaveService: RasterAutoSaveService,
     private ngZone: NgZone,
     private localIllustrationService: LocalIllustrationService,
+    /** Touch-first device, primary pointer coarse: the touch-only UI, mobile-parity TOUCH-4 / TOUCH-10 / UI-1. */
+    public touchUi: TouchUiService,
   ) { }
 
   ngOnInit() {
+    this.ngZone.runOutsideAngular(() => {
+      window.addEventListener('scroll', this._onWinScrollOrResize, { passive: true });
+      window.addEventListener('resize', this._onWinScrollOrResize);
+    });
     this.editorState.bind(this);
     this.doc.bind(this);
     this.stats.bind(this);
@@ -1527,11 +1614,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // calls don't get Zone.js-wrapped and trigger CD on every pointer event.
     // afterRendererBoot is explicitly re-entered into the zone because the await
     // continuation resumes in the outer (non-Angular) zone context.
+    // Between boot and afterRendererBoot: the engine outlives every document, so each one starts from a BLANK engine
+    // document (else a new / unsaved document opened on the previous one's content). Before afterRendererBoot
+    // subscribes, so the reset's scene-changed event isn't taken as this document's load.
+    const startBlank = () => this.ngZone.runOutsideAngular(() =>
+      this.persist.startBlankDocument(ShapeManager.getInstance(), this.persist.isLocalMode ? illustrationUid : null));
     if (!isRendererLive) {
       await this.ngZone.runOutsideAngular(() => startWebGPURendering('webgpuCanvas'));
+      await startBlank();
       this.ngZone.run(() => this.afterRendererBoot(false));
     } else {
       await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering('webgpuCanvas'));
+      await startBlank();
       this.ngZone.run(() => this.afterRendererBoot(true));
     }
 
@@ -1606,20 +1700,22 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   private _installInputListeners(): void {
     // (a doc switch re-runs this on the same instance — drop the previous set first)
     this._removeInputListeners();
+    // A document POINTERmove (was mousemove): the brush ring + preview shape follow a pen and a finger too.
     this.onMouseMove = (event: MouseEvent) => {
       if (event.target !== this.canvas) return;
-      // Skip zone entry when nothing needs Angular CD (e.g. city mode, no active tool).
-      if (!this.draw.selectedShapeType && !this.showBrushCursor) return;
-      this.ngZone.run(() => {
-        if (this.draw.selectedShapeType) this.shapeManager.updatePreviewShapePosition(event);
-        if (this.showBrushCursor) {
-          this.brushCursorX = event.clientX;
-          this.brushCursorY = event.clientY;
-        }
-      });
+      // BRUSH-2: the brush ring moves by a direct style write, outside the zone (it entered the zone, i.e. ran a
+      // whole-editor change detection, on every move of every raster tool). The [style.transform] binding only
+      // places it when the ring is created.
+      if (this.showBrushCursor) {
+        this.brushCursorX = event.clientX;
+        this.brushCursorY = event.clientY;
+        const ring = this.brushCursorRingRef?.nativeElement;
+        if (ring) ring.style.transform = this.brushCursorTransform;
+      }
+      if (this.draw.selectedShapeType) this.ngZone.run(() => this.shapeManager.updatePreviewShapePosition(event));
     };
     this.ngZone.runOutsideAngular(() => {
-      document.addEventListener('mousemove', this.onMouseMove);
+      document.addEventListener('pointermove', this.onMouseMove);
       // Salsa step 2: the 3D canvas pointermove (was the template's (pointermove) binding), see _canvasPointerMoveOutsideZone.
       const cv = this.canvasRef?.nativeElement ?? null;
       if (cv && this._canvasPointerMoveEl !== cv) {
@@ -1712,7 +1808,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   /** Removes the document / window / canvas input listeners initForIllustration installs (it re-installs them per doc). */
   private _removeInputListeners(): void {
-    if (this.onMouseMove) document.removeEventListener('mousemove', this.onMouseMove);
+    if (this.onMouseMove) document.removeEventListener('pointermove', this.onMouseMove);
+    if (this._zoneTickRaf) { cancelAnimationFrame(this._zoneTickRaf); this._zoneTickRaf = 0; }
     this._canvasPointerMoveEl?.removeEventListener('pointermove', this._canvasPointerMoveOutsideZone); this._canvasPointerMoveEl = null;
     if (this.onClick) document.removeEventListener('click', this.onClick);
     if (this.onDblClick) this.canvas?.removeEventListener('dblclick', this.onDblClick);
@@ -2132,6 +2229,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   showBrushCursor = false;
   brushCursorX = 0;
   brushCursorY = 0;
+  /** The ring (only while showBrushCursor): moved by direct style writes outside the zone (BRUSH-2). */
+  @ViewChild('brushCursorRing') brushCursorRingRef?: ElementRef<HTMLDivElement>;
+  get brushCursorTransform(): string {
+    return `translate(${this.brushCursorX}px, ${this.brushCursorY}px) translate(-50%, -50%)`;
+  }
 
   async rasterUndo() {
     try {
@@ -2541,6 +2643,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    window.removeEventListener('scroll', this._onWinScrollOrResize);
+    window.removeEventListener('resize', this._onWinScrollOrResize);
+    this._hiddenUiWake.detach();
+    clearTimeout(this._showUiBtnTimer);
     this._teardownEngineSubs();
     this.routeSub?.unsubscribe();
     this.rt._rasterTextSub?.unsubscribe(); this.rt._rasterTextSub = null;

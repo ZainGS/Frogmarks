@@ -1,35 +1,9 @@
 // Shared editor controls — same rules the editor uses.
 @import '../../styles/panel-controls';
+@import '../../styles/sub-nav';
 :host { display: block; }
 
-// ── Character creator navigation ─────────────────────────────────
-
-.char-nav-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.char-back-btn {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid #444;
-    border-radius: 3px;
-    color: #aaa;
-    font-size: 10px;
-    padding: 3px 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    &:hover { background: rgba(255,255,255,0.14); color: #ddd; }
-}
-
-.char-nav-title {
-    font-size: 10px;
-    font-weight: 600;
-    color: #888;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
+// ── Character creator menu (the Back header uses the shared .nav-* rules) ──
 
 .char-menu {
     display: flex;

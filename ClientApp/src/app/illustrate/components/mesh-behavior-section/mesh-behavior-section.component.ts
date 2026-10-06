@@ -21,6 +21,16 @@ export class MeshBehaviorSectionComponent implements OnChanges {
   /** Re-read the section from the engine (the editor calls this on a same-id re-select). */
   load(id: string | null = this.meshId): void {
     if (id) this._syncScriptFromMesh(id);
+    if (id) this.cameraBlock = this.shapeManager?.getMeshCameraBlock3D(id) ?? 'auto';
+  }
+
+  // -- Play camera occluder override (salsa camera-occluders.ts): Auto / Block (a wall) / Ignore (a lamp post)
+  cameraBlock: 'auto' | 'block' | 'ignore' = 'auto';
+
+  cameraBlockChanged(): void {
+    const id = this.meshId;
+    if (!id) return;
+    if (this.shapeManager?.setMeshCameraBlock3D(id, this.cameraBlock)) this.dirty.emit();
   }
 
   // -- Script behavior (code editor) for selected mesh

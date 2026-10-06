@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter, NgZone } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import {
@@ -24,7 +24,7 @@ export interface LayerDisplayEntry extends RasterLayer {
 })
 export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
-  constructor(private rasterService: RasterBrushService, private elRef: ElementRef) {}
+  constructor(private rasterService: RasterBrushService, private elRef: ElementRef, private ngZone: NgZone) {}
 
   layers: RasterLayer[] = [];
   activeLayerId: string | null = null;
@@ -74,6 +74,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Lifecycle ─────────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.ngZone.runOutsideAngular(() => window.addEventListener('resize', this._onWinResize));
     this.rasterService.refreshLayers();
     this.subs.push(
       this.rasterService.layers$.subscribe(l => {
@@ -98,10 +99,17 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    window.removeEventListener('resize', this._onWinResize);
     this.subs.forEach(s => s.unsubscribe());
   }
 
-  @HostListener('document:click') onDocClick() { this.showAddMenu = false; }
+  // A tap / click anywhere else closes the add menu and the blend-mode dropdown (their own clicks stopPropagation).
+  @HostListener('document:click') onDocClick() { this.showAddMenu = false; this.openBlendDropdownId = null; }
+  /** Window resize closes the blend dropdown. Listened outside the zone (mobile URL bars fire resizes constantly);
+   *  re-enter only when a dropdown is open. */
+  private readonly _onWinResize = (): void => {
+    if (this.openBlendDropdownId !== null) this.ngZone.run(() => { this.openBlendDropdownId = null; });
+  };
 
   // ── Keyboard shortcuts ────────────────────────────────────────
 
@@ -414,26 +422,51 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     const btn = e.currentTarget as HTMLElement;
     const rect = btn.getBoundingClientRect();
     const maxHeight = Math.min(window.innerHeight * 0.6, 400);
+    // Keep the 130 px+ list on screen horizontally (a narrow / touch viewport).
+    const left = Math.max(4, Math.min(rect.left, window.innerWidth - 160));
     // Try to open upward from button
     const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
     if (spaceAbove >= maxHeight || spaceAbove > spaceBelow) {
       // Open upward
+      const bottom = window.innerHeight - rect.top + 2;
       this.blendDropdownStyle = {
-        left: rect.left + 'px',
-        bottom: (window.innerHeight - rect.top + 2) + 'px',
+        left: left + 'px',
+        bottom: bottom + 'px',
         top: 'auto',
         'max-height': Math.min(spaceAbove - 8, maxHeight) + 'px',
       };
+      this._correctFixedOffset(left, null, rect.top - 2);
     } else {
       // Open downward
+      const top = rect.bottom + 2;
       this.blendDropdownStyle = {
-        left: rect.left + 'px',
-        top: (rect.bottom + 2) + 'px',
+        left: left + 'px',
+        top: top + 'px',
         bottom: 'auto',
         'max-height': Math.min(spaceBelow - 8, maxHeight) + 'px',
       };
+      this._correctFixedOffset(left, top, null);
     }
+  }
+
+  /**
+   * The dropdown is position:fixed with viewport coords, but an ancestor with transform / filter / backdrop-filter /
+   * contain becomes its containing block and shifts it: the editor's Layers panel blur once put it ~a panel-width
+   * off-screen, so tapping "Normal ▾" looked dead. After it renders, measure where it landed and cancel any shift.
+   */
+  private _correctFixedOffset(wantLeft: number, wantTop: number | null, wantBottom: number | null): void {
+    setTimeout(() => {
+      const el = (this.elRef.nativeElement as HTMLElement).querySelector('.blend-dropdown') as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const dx = r.left - wantLeft;
+      const dy = wantTop !== null ? r.top - wantTop : wantBottom !== null ? r.bottom - wantBottom : 0;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.style.left = (parseFloat(el.style.left) - dx) + 'px';
+      if (wantTop !== null) el.style.top = (parseFloat(el.style.top) - dy) + 'px';
+      else el.style.bottom = (parseFloat(el.style.bottom) + dy) + 'px';
+    });
   }
 
   setBlendMode(layer: RasterLayer, mode: LayerBlendMode, e: MouseEvent): void {

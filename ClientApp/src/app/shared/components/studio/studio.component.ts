@@ -6,6 +6,7 @@ import ShapeManager from '@zaings/salsa/shape-manager';
 import { isRendererLive, startWebGPURendering } from '@zaings/salsa';
 import { LocalIllustrationService } from '../../services/illustrate/local-illustration.service';
 import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-illustration-dialog.component';
+import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
 
 @Component({
   selector: 'app-studio',
@@ -24,6 +25,9 @@ export class StudioComponent implements OnInit, OnDestroy {
   showSettingsOverlay = false;
   installUrlInput    = '';
   ariaSlots: { id: string; name: string }[] = [];
+  /** Shown in the Settings dialog (deploy check; bump APP_VERSION in app-version.ts). */
+  readonly appVersionLabel = APP_VERSION_LABEL;
+  readonly appBuildLabel = APP_BUILD_LABEL;
 
   constructor(
     private router: Router,
@@ -37,13 +41,16 @@ export class StudioComponent implements OnInit, OnDestroy {
     const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
     if (webgpuCanvas) webgpuCanvas.style.pointerEvents = 'none';
 
+    // The renderer + Shell rAF loops, pointer listeners and pipeline warm-up run OUTSIDE the Angular zone (as in
+    // illustration.component) — inside it every Shell frame triggered app-wide change detection (mobile-parity UI-16).
+    // Shell → Angular callbacks below re-enter the zone with ngZone.run.
     if (!isRendererLive) {
-      await startWebGPURendering('shellCanvas');
+      await this.ngZone.runOutsideAngular(() => startWebGPURendering('shellCanvas'));
     }
 
     this.sm = ShapeManager.getInstance();
     await this.sm.whenWebGPUReady();
-    this.sm.bootAndWarm(); // fire-and-forget: warms all pipelines while user browses shell
+    this.ngZone.runOutsideAngular(() => this.sm.bootAndWarm()); // fire-and-forget: warms all pipelines while user browses shell
 
     // Point the shell at our IndexedDB illustration store so project IDs match.
     this.sm.shell?.setDocumentSource({
@@ -75,27 +82,29 @@ export class StudioComponent implements OnInit, OnDestroy {
       this.ngZone.run(() => this._handleActivation(id, kind, dashboardKind));
     });
 
-    this._changeSub = this.sm.shell?.onChange?.subscribe(() => {
+    this._changeSub = this.sm.shell?.onChange?.subscribe((reason?: string) => {
+      if (reason === 'hover') return;   // hover never changes the slot / project list (no zone re-entry per hover)
       this.ngZone.run(() => this._refreshAria());
     });
 
     this._deleteSub = this.sm.shell?.onProjectDelete?.subscribe(({ id }: { id: string }) => {
-      void this.localIllustrationService.delete(id).then(() => {
+      this.ngZone.run(() => void this.localIllustrationService.delete(id).then(() => {
         // (notifyProjectsChanged never existed — the shell list never refreshed after a delete)
         void this.sm.shell?.refreshProjects();
-      });
+      }));
     });
 
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
-    await this.sm.shell?.initializeScene(shellCanvas);
-    this._refreshAria();
+    await this.ngZone.runOutsideAngular(() => this.sm.shell?.initializeScene(shellCanvas));
+    this.ngZone.run(() => this._refreshAria());
   }
 
   ngOnDestroy(): void {
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
     this._deleteSub?.unsubscribe();
-    this.sm?.shell?.destroyScene();
+    // destroyScene restarts the editor loop (play()) — keep that rAF loop outside the zone too.
+    this.ngZone.runOutsideAngular(() => this.sm?.shell?.destroyScene());
     const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
     if (webgpuCanvas) webgpuCanvas.style.pointerEvents = '';
   }
@@ -145,11 +154,10 @@ export class StudioComponent implements OnInit, OnDestroy {
     if (this.dialog.openDialogs.length > 0) return;
     const dialogRef = this.dialog.open(NewIllustrationDialogComponent, {
       width: '420px',
-      panelClass: 'new-illustration-dialog',
+      panelClass: ['new-illustration-dialog', 'fm-dialog'],
       disableClose: false,
       enterAnimationDuration: '0ms',
       data: { isLoggedIn: false },
-      position: { top: '100%' },
     });
     dialogRef.afterClosed().subscribe(async (result: any) => {
       if (!result) return;

@@ -1,9 +1,9 @@
-<div class="scene3d-material-row">
+<ng-container *ngIf="!cp.sub.id"><div class="scene3d-material-row">
     <label title="Brows, mouth, nose, hair shadow and blush, on top of the eyes. Characters saved before the face kit start with it off.">Face kit</label>
     <input type="checkbox" [ngModel]="!!face.scene3dFaceKit" (ngModelChange)="face.scene3dSetFaceKitEnabled($event)">
-</div>
+</div></ng-container>
 <ng-container *ngIf="face.scene3dFaceKit">
-    <div class="eye-proc-group">Expression</div>
+    <ng-container *ngIf="cp.sub.id === 'expression'"><!-- Face expression -->
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
         <button *ngFor="let e of face.scene3dFaceExpressionNames" class="scene3d-btn scene3d-btn-sm"
                 [class.scene3d-btn-active]="face.scene3dFacePreviewExpr === e"
@@ -14,9 +14,9 @@
         <span class="scene3d-val" style="flex:1">{{ face.scene3dFaceKit.expression | titlecase }}</span>
         <button class="scene3d-btn scene3d-btn-sm" (click)="face.scene3dSetRestingFaceExpression()"
                 [disabled]="face.scene3dFacePreviewExpr === face.scene3dFaceKit.expression" title="Keep the previewed expression">Use preview</button>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Brows</div>
+    <ng-container *ngIf="cp.sub.id === 'brows'"><!-- Brows -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [(ngModel)]="face.scene3dFaceKit.browStyle" (ngModelChange)="face.scene3dFaceKitChanged()">
@@ -51,9 +51,9 @@
     <div class="scene3d-material-row">
         <label title="Draw the brows over the bangs (anime style)">Over hair</label>
         <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.browsThroughHair" (ngModelChange)="face.scene3dFaceKitChanged()">
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Mouth</div>
+    <ng-container *ngIf="cp.sub.id === 'mouth'"><!-- Mouth -->
     <div class="scene3d-material-row">
         <label>Width</label>
         <input type="range" min="0.2" max="0.9" step="0.02" [(ngModel)]="face.scene3dFaceKit.mouthWidth" (ngModelChange)="face.scene3dFaceKitChanged()">
@@ -68,9 +68,9 @@
         <label title="From just under the nose (0) to the chin (1)">Position</label>
         <input type="range" min="0" max="1" step="0.02" [(ngModel)]="face.scene3dFaceKit.mouthHeight" (ngModelChange)="face.scene3dFaceKitChanged()">
         <span class="scene3d-val">{{ face.scene3dFaceKit.mouthHeight | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Nose</div>
+    <ng-container *ngIf="cp.sub.id === 'nose'"><!-- Nose -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [(ngModel)]="face.scene3dFaceKit.noseStyle" (ngModelChange)="face.scene3dFaceKitChanged()">
@@ -81,9 +81,9 @@
         <label>Size</label>
         <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.noseSize" (ngModelChange)="face.scene3dFaceKitChanged()">
         <span class="scene3d-val">{{ face.scene3dFaceKit.noseSize | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Shading</div>
+    <ng-container *ngIf="cp.sub.id === 'shading'"><!-- Shading -->
     <div class="scene3d-material-row">
         <label>Blush</label>
         <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.blush" (ngModelChange)="face.scene3dFaceKitChanged()">
@@ -116,9 +116,9 @@
     <div class="scene3d-material-row">
         <label title="Show the eyes through bangs that hang over them">Eyes over hair</label>
         <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.eyesThroughHair" (ngModelChange)="face.scene3dFaceKitChanged()">
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Life</div>
+    <ng-container *ngIf="cp.sub.id === 'life'"><!-- Life -->
     <div class="scene3d-material-row">
         <label title="Chance that a blink comes with a small brow raise">Brow raise</label>
         <input type="range" min="0" max="1" step="0.05" [(ngModel)]="face.scene3dFaceKit.lifeBrowRaise" (ngModelChange)="face.scene3dFaceKitChanged()">
@@ -127,5 +127,32 @@
     <div class="scene3d-material-row">
         <label title="Now and then a short smile while idle">Idle smiles</label>
         <input type="checkbox" [(ngModel)]="face.scene3dFaceKit.lifeSmile" (ngModelChange)="face.scene3dFaceKitChanged()">
-    </div>
+    </div></ng-container>
 </ng-container>
+
+<!-- Eyes: their own drill-down (eye states › one state's settings), one level below Face -->
+<app-char-eyes-section *ngIf="cp.sub.id === 'eyes'"></app-char-eyes-section>
+
+<div class="nav-tiles" *ngIf="!cp.sub.id">
+    <button class="nav-tile" (click)="cp.sub.open('eyes', 'Eyes')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Eyes</span><span class="nav-tile-hint">Eye states · shape · iris · lashes · gaze · blink</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('expression', 'Face expression')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Face expression</span><span class="nav-tile-hint">Resting</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('brows', 'Brows')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Brows</span><span class="nav-tile-hint">Style · Thickness · Length · Height …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('mouth', 'Mouth')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Mouth</span><span class="nav-tile-hint">Width · Line · Position</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('nose', 'Nose')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Nose</span><span class="nav-tile-hint">Style · Size</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('shading', 'Shading')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Shading</span><span class="nav-tile-hint">Blush · Blush lines · Cheeks · Hair shadow …</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="face.scene3dFaceKit" (click)="cp.sub.open('life', 'Life')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Life</span><span class="nav-tile-hint">Brow raise · Idle smiles</span></span><span class="nav-tile-chev">›</span>
+    </button>
+</div>

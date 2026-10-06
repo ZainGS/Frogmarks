@@ -36,6 +36,12 @@
         [class.active]="scene3dViewFly"
         (click)="setFly.emit(!scene3dViewFly)"
         title="WASD flythrough: W/S forward, A/D strafe, E/Q up/down, Shift boost. Aim by orbit-drag.">🛩</button>
+<!-- Touch only (mobile-parity): one finger moves the camera instead of the active tool -->
+<button class="scene-view-btn"
+        *ngIf="touchUi.coarse && touchNavAvailable && !scene3dViewIsPlaying"
+        [class.active]="scene3dTouchNavigate"
+        (click)="scene3dToggleTouchNavigate()"
+        title="Navigate: one finger orbits / pans the camera (instead of using the tool). Two fingers always navigate.">Navigate</button>
 <!-- 1P/3P toggle + Play button (scene target only) -->
 <ng-container *ngIf="scene3dViewTarget === 'scene'">
     <div class="scene-view-seg" title="Camera perspective when playing">

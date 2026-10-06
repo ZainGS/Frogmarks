@@ -1,21 +1,51 @@
 <div class="tool-label">CITY TOOL</div>
 <div style="padding: 4px 8px;">
 
-    <div style="display:flex;gap:4px;padding:0 0 8px;">
-        <button class="scene3d-btn" style="flex:1;" (click)="worldGenerate()">Regenerate</button>
-        <button class="scene3d-btn" (click)="worldHeroView()" [disabled]="!worldHasWorld" title="Frame the city from a low, street-canyon angle">Hero view</button>
-        <button class="scene3d-btn" (click)="worldStreetView()" [disabled]="!worldHasWorld" title="Eye-level view along a street (click again for the next street). City mode only.">Street view</button>
-        <button class="scene3d-btn" (click)="worldClear()" [disabled]="!worldHasWorld">Clear</button>
-    </div>
+    <!-- City actions: build / clear, then the camera shortcuts (two rows so nothing clips in a narrow panel) -->
     <div style="display:flex;gap:4px;padding:0 0 4px;">
-        <button class="scene3d-btn scene3d-btn-sm" style="flex:0 0 auto;" (click)="worldSetAllSecs(true)">Expand all</button>
-        <button class="scene3d-btn scene3d-btn-sm" style="flex:0 0 auto;" (click)="worldSetAllSecs(false)">Collapse all</button>
+        <button class="scene3d-btn" style="flex:1;" (click)="worldGenerate()">Regenerate</button>
+        <button class="scene3d-btn" style="flex:1;" (click)="worldClear()" [disabled]="!worldHasWorld">Clear</button>
+    </div>
+    <div style="display:flex;gap:4px;padding:0 0 8px;">
+        <button class="scene3d-btn" style="flex:1;" (click)="worldHeroView()" [disabled]="!worldHasWorld" title="Frame the city from a low, street-canyon angle">Hero view</button>
+        <button class="scene3d-btn" style="flex:1;" (click)="worldStreetView()" [disabled]="!worldHasWorld" title="Eye-level view along a street (click again for the next street). City mode only.">Street view</button>
+    </div>
+    <div *ngIf="worldNav.id" class="nav-header">
+        <button class="nav-back" (click)="worldBack()">← Back</button>
+        <span class="nav-crumb">
+            <span [class.nav-crumb-here]="!worldSub.id">{{ worldNav.label }}</span>
+            <ng-container *ngIf="worldSub.id"><span class="nav-crumb-sep">›</span><span class="nav-crumb-here">{{ worldSub.label }}</span></ng-container>
+        </span>
+    </div>
+    <div class="nav-tiles" *ngIf="!worldNav.id">
+        <button class="nav-tile" (click)="worldNav.open('presets', 'Presets')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Presets</span><span class="nav-tile-hint">Scene looks · style packs</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('look', 'Look')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Look</span><span class="nav-tile-hint">Style · outlines · sky dome · rendering · grade</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('time', 'Time & Weather')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Time &amp; Weather</span><span class="nav-tile-hint">Time of day · weather · clouds</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('layout', 'Layout')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Layout</span><span class="nav-tile-hint">Size · pattern · roads · lots · terrain</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('streets', 'Streets & Buildings')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Streets &amp; Buildings</span><span class="nav-tile-hint">Traffic · rail · buildings</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('life', 'Life & Props')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Life &amp; Props</span><span class="nav-tile-hint">Pedestrians · nature · props</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('edge', 'Edge')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Edge</span><span class="nav-tile-hint">World border</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldNav.open('perf', 'Performance')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Performance</span><span class="nav-tile-hint">Resolution · culling · LOD · shadows</span></span><span class="nav-tile-chev">›</span>
+        </button>
     </div>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.presets" (click)="worldToggleSec('presets')">
-        <span class="city-sec-caret">{{ worldSecOpen.presets ? '▾' : '▸' }}</span>Presets
-    </div>
-    <ng-container *ngIf="worldSecOpen.presets">
+    <!-- ── Presets ── -->
+    <ng-container *ngIf="worldNav.id === 'presets'">
     <div style="display:flex;flex-wrap:wrap;gap:3px;padding:2px 0 6px;">
         <button *ngFor="let p of worldScenePresets"
                 class="scene3d-btn scene3d-btn-sm"
@@ -43,10 +73,9 @@
     </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.look" (click)="worldToggleSec('look')">
-        <span class="city-sec-caret">{{ worldSecOpen.look ? '▾' : '▸' }}</span>Look
-    </div>
-    <ng-container *ngIf="worldSecOpen.look">
+    <!-- ── Look ── -->
+    <ng-container *ngIf="worldNav.id === 'look'">
+    <ng-container *ngIf="worldSub.id === 'style'"><!-- Style -->
     <div class="scene3d-material-row">
         <label>Style</label>
         <select class="scene3d-select" [ngModel]="worldRenderStyle" (ngModelChange)="worldSetRenderStyle($event || null)">
@@ -78,7 +107,8 @@
             <option value="phantom">Phantom (Persona 5)</option>
             <option value="inaba">Inaba (Persona 4)</option>
         </select>
-    </div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'lighting'"><!-- Lighting -->
     <div class="scene3d-toggle-row">
         <label>Sky lighting</label>
         <input type="checkbox" [ngModel]="worldSkyLighting" (ngModelChange)="worldSetSkyLighting($event)" title="Light the city from its own sky (blue from above, warm from the sun side)">
@@ -90,7 +120,8 @@
     <div class="scene3d-toggle-row">
         <label title="Screen-space ambient occlusion: contact shadows in street canyons and under eaves. GPU-heavy — turn off if the frame rate dips.">SSAO</label>
         <input type="checkbox" [ngModel]="worldSSAO" (ngModelChange)="worldSetSSAO($event)" title="Ambient occlusion (SSAO) in street canyons and under eaves">
-    </div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'outlines'"><!-- Outlines -->
     <div class="scene3d-toggle-row">
         <label>Ink outlines</label>
         <input type="checkbox" [ngModel]="worldOutlines" (ngModelChange)="worldSetOutlines($event)" title="Screen-space ink edge lines over the city">
@@ -105,7 +136,8 @@
             <input type="range" min="1" max="4" step="1" [ngModel]="worldOutlineThreshold" (ngModelChange)="worldOutlineThreshold = +$event; worldSetOutlines(true)">
             <span class="scene3d-val">{{ worldOutlineThreshold }}px</span>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
+    <ng-container *ngIf="worldSub.id === 'surfaces'"><!-- Surfaces -->
     <div class="scene3d-material-row">
         <label>Street haze</label>
         <input type="range" min="0" max="1.2" step="0.05" [ngModel]="worldHeightFog" (ngModelChange)="worldSetHeightFog(+$event)" title="Ground-hugging height fog: street canyons haze, rooftops stay crisp (needs Fog on)">
@@ -129,7 +161,8 @@
         <label title="Pull building colours toward a warm grey so signs stand out">Mute buildings</label>
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldBuildingMute" (ngModelChange)="worldSetLookValue('setBuildingMute', +$event, 'worldBuildingMute')">
         <span class="scene3d-val">{{ worldBuildingMute | number:'1.2-2' }}</span>
-    </div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'sky'"><!-- Sky -->
     <div class="scene3d-toggle-row">
         <label title="Soft painted clouds + horizon cloud banks">Painted clouds</label>
         <input type="checkbox" [ngModel]="worldPaintedClouds" (ngModelChange)="worldSetLookValue('setPaintedClouds', $event, 'worldPaintedClouds')">
@@ -166,7 +199,8 @@
             <label>Glow colour</label>
             <input type="color" [ngModel]="worldSkyGlowColor" (ngModelChange)="worldSetSkyGlowColor($event)" title="The city glow's colour">
         </div>
-    </ng-container>
+    </ng-container></ng-container>
+    <ng-container *ngIf="worldSub.id === 'sun-shadows'"><!-- Sun & shadows -->
     <div class="scene3d-material-row">
         <label>Shadow softness</label>
         <input type="range" min="0.5" max="4" step="0.1" [ngModel]="worldShadowSoftness" (ngModelChange)="worldSetLookValue('setCityShadowSoftness', +$event, 'worldShadowSoftness')">
@@ -176,8 +210,8 @@
         <label title="How gold the low sun gets at dawn / dusk">Golden warmth</label>
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldSunWarmth" (ngModelChange)="worldSetLookValue('setSunWarmth', +$event, 'worldSunWarmth')">
         <span class="scene3d-val">{{ worldSunWarmth | number:'1.2-2' }}</span>
-    </div>
-    <div class="eye-proc-group">Rendering</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'rendering'"><!-- Rendering -->
     <div class="scene3d-material-row">
         <label title="Anti-aliasing on the 3D view (FXAA). Smooths jagged wires, poles and edges.">Anti-aliasing</label>
         <select class="scene3d-select" [ngModel]="scene3dAAMode" (ngModelChange)="scene3dSetAA($event)">
@@ -287,8 +321,8 @@
             <option value="silhouette">Outline only</option>
             <option value="off">None</option>
         </select>
-    </div>
-    <div class="eye-proc-group">Per time of day</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'per-time-of-day'"><!-- Per time of day -->
     <div style="display:flex;gap:3px;padding:2px 0 4px;">
         <button *ngFor="let ph of ['night','dawn','noon','dusk']"
                 class="scene3d-btn scene3d-btn-sm" style="flex:1;"
@@ -326,13 +360,37 @@
             <label>Highlight tone</label>
             <input type="color" [ngModel]="worldGradeTintHex('highlightTint')" (ngModelChange)="worldSetGradeTint('highlightTint', $event)" title="Split-tone: the hue pushed into the bright parts">
         </div>
-    </ng-container>
+    </ng-container></ng-container>
+        <div class="nav-tiles" *ngIf="!worldSub.id">
+        <button class="nav-tile" (click)="worldSub.open('style', 'Style')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Style</span><span class="nav-tile-hint">Style · Toon shadows · Rim light · Palette</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('lighting', 'Lighting')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Lighting</span><span class="nav-tile-hint">Sky lighting · Wet reflections · SSAO</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('outlines', 'Outlines')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Outlines</span><span class="nav-tile-hint">Ink outlines · Ink colour · Line width</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('surfaces', 'Surfaces')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Surfaces</span><span class="nav-tile-hint">Street haze · Ground finish · Paving · Mute buildings</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('sky', 'Sky')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Sky</span><span class="nav-tile-hint">Painted clouds · Sky dome · Cloud style · Stars …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('sun-shadows', 'Sun & shadows')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Sun &amp; shadows</span><span class="nav-tile-hint">Shadow softness · Golden warmth</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('rendering', 'Rendering')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Rendering</span><span class="nav-tile-hint">Anti-aliasing · Shadow quality · Crisp range · Ground contact …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('per-time-of-day', 'Per time of day')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Per time of day</span><span class="nav-tile-hint">Shadow colour · Cinematic · Bloom · Vignette …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+    </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.time" (click)="worldToggleSec('time')">
-        <span class="city-sec-caret">{{ worldSecOpen.time ? '▾' : '▸' }}</span>Time &amp; Weather
-    </div>
-    <ng-container *ngIf="worldSecOpen.time">
+    <!-- ── Time & Weather ── -->
+    <ng-container *ngIf="worldNav.id === 'time'">
     <div class="scene3d-material-row">
         <label>City lighting</label>
         <input type="checkbox" [ngModel]="worldOverrideGlobalLighting" (ngModelChange)="worldSetOverrideLighting($event)"
@@ -391,10 +449,9 @@
     </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.layout" (click)="worldToggleSec('layout')">
-        <span class="city-sec-caret">{{ worldSecOpen.layout ? '▾' : '▸' }}</span>Layout
-    </div>
-    <ng-container *ngIf="worldSecOpen.layout">
+    <!-- ── Layout ── -->
+    <ng-container *ngIf="worldNav.id === 'layout'">
+    <ng-container *ngIf="worldSub.id === 'shape-size'"><!-- Shape & size -->
     <div class="scene3d-array-strip-label" style="margin-bottom:4px;">Mode</div>
     <div class="scene3d-row scene3d-array-mode-row" style="padding:0 0 8px 0;">
         <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="worldMode==='diorama'" (click)="worldMode='diorama'; worldParamChanged()">Diorama</button>
@@ -459,9 +516,9 @@
         <label>Size</label>
         <input type="range" min="3" max="14" step="0.5" [(ngModel)]="worldRadius" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldRadius }}</span>
-    </div>
-    <ng-container *ngIf="worldPattern === 'radial'">
-        <div class="eye-proc-group">Roads</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'roads'"><ng-container *ngIf="worldPattern === 'radial'">
+        <!-- Roads -->
         <div class="scene3d-material-row">
             <label>Arterials</label>
             <input type="range" min="3" max="16" step="1" [(ngModel)]="worldSpokeCount" (ngModelChange)="worldParamChanged()">
@@ -472,10 +529,10 @@
             <input type="range" min="1" max="8" step="1" [(ngModel)]="worldRingCount" (ngModelChange)="worldParamChanged()">
             <span class="scene3d-val">{{ worldRingCount }}</span>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <ng-container *ngIf="worldPattern === 'grid'">
-        <div class="eye-proc-group">Roads</div>
+    <ng-container *ngIf="worldSub.id === 'roads-2'"><ng-container *ngIf="worldPattern === 'grid'">
+        <!-- Roads -->
         <div class="scene3d-material-row">
             <label>Columns</label>
             <input type="range" min="2" max="14" step="1" [(ngModel)]="worldGridCols" (ngModelChange)="worldParamChanged()">
@@ -496,9 +553,9 @@
         <label>Plaza</label>
         <input type="range" min="0.03" max="0.2" step="0.005" [(ngModel)]="worldPlazaRadius" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldPlazaRadius | number:'1.3-3' }}</span>
-    </div>
-    <ng-container *ngIf="worldPattern === 'radial'">
-    <div class="eye-proc-group">Lots</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'lots'"><ng-container *ngIf="worldPattern === 'radial'">
+    <!-- Lots -->
     <div class="scene3d-material-row">
         <label>Radial</label>
         <input type="range" min="1" max="4" step="1" [(ngModel)]="worldLotsRadial" (ngModelChange)="worldParamChanged()">
@@ -509,8 +566,8 @@
         <input type="range" min="1" max="5" step="1" [(ngModel)]="worldLotsAngular" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldLotsAngular }}</span>
     </div>
-    </ng-container>
-    <div class="eye-proc-group">Terrain</div>
+    </ng-container></ng-container>
+    <ng-container *ngIf="worldSub.id === 'terrain'"><!-- Terrain -->
     <div class="scene3d-material-row">
         <label>Parks</label>
         <input type="range" min="0" max="0.5" step="0.01" [(ngModel)]="worldParkChance" (ngModelChange)="worldParamChanged()">
@@ -541,9 +598,9 @@
             <label>Terraces</label>
             <input type="checkbox" [(ngModel)]="worldTerraces" (ngModelChange)="worldParamChanged()">
         </div>
-    </ng-container>
-    <ng-container *ngIf="worldRegions.length > 0">
-        <div class="eye-proc-group">Regions</div>
+    </ng-container></ng-container>
+    <ng-container *ngIf="worldSub.id === 'regions'"><ng-container *ngIf="worldRegions.length > 0">
+        <!-- Regions -->
         <div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 8px;">
             <button class="scene3d-btn scene3d-btn-sm"
                     [class.scene3d-btn-active]="worldEnabledRegions === null"
@@ -554,14 +611,32 @@
                     (click)="worldToggleRegion(r.id)"
                     [title]="r.type">{{ r.type }}</button>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
+        <div class="nav-tiles" *ngIf="!worldSub.id">
+        <button class="nav-tile" (click)="worldSub.open('shape-size', 'Shape & size')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Shape &amp; size</span><span class="nav-tile-hint">Tile radius · Stream to camera · Outside tiles · Skyline distance …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" *ngIf="worldPattern === 'radial'" (click)="worldSub.open('roads', 'Roads')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Arterials · Rings</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" *ngIf="worldPattern === 'grid'" (click)="worldSub.open('roads-2', 'Roads')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Columns · Rows · Street W · Plaza</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" *ngIf="worldPattern === 'radial'" (click)="worldSub.open('lots', 'Lots')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Lots</span><span class="nav-tile-hint">Radial · Angular</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('terrain', 'Terrain')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Terrain</span><span class="nav-tile-hint">Parks · Water · Elevation · Warp …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" *ngIf="worldRegions.length > 0" (click)="worldSub.open('regions', 'Regions')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Regions</span></span><span class="nav-tile-chev">›</span>
+        </button>
+    </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.streets" (click)="worldToggleSec('streets')">
-        <span class="city-sec-caret">{{ worldSecOpen.streets ? '▾' : '▸' }}</span>Streets &amp; Buildings
-    </div>
-    <ng-container *ngIf="worldSecOpen.streets">
-    <div class="eye-proc-group">Streets</div>
+    <!-- ── Streets & Buildings ── -->
+    <ng-container *ngIf="worldNav.id === 'streets'">
+    <ng-container *ngIf="worldSub.id === 'streets'"><!-- Streets -->
     <div class="scene3d-material-row">
         <label>Sidewalks</label>
         <input type="checkbox" [(ngModel)]="worldSidewalks" (ngModelChange)="worldParamChanged()">
@@ -635,8 +710,8 @@
         <label>Local cars</label>
         <input type="range" min="2" max="4" step="1" [(ngModel)]="worldLocalLineCars" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldLocalLineCars }}</span>
-    </div>
-    <div class="eye-proc-group">Buildings</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'buildings'"><!-- Buildings -->
     <div class="scene3d-material-row">
         <label>Detailed buildings</label>
         <input type="checkbox" [(ngModel)]="worldDetailedBuildings" (ngModelChange)="worldParamChanged()"
@@ -695,13 +770,20 @@
             <label>Shotengai</label>
             <input type="checkbox" [(ngModel)]="worldShotengai" (ngModelChange)="worldParamChanged()">
         </div>
-    </ng-container>
+    </ng-container></ng-container>
+        <div class="nav-tiles" *ngIf="!worldSub.id">
+        <button class="nav-tile" (click)="worldSub.open('streets', 'Streets')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Streets</span><span class="nav-tile-hint">Sidewalks · Road paint · Street lights · Traffic lights …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('buildings', 'Buildings')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Buildings</span><span class="nav-tile-hint">Detailed buildings · Facade detail · Rooftop detail · Corners …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+    </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.life" (click)="worldToggleSec('life')">
-        <span class="city-sec-caret">{{ worldSecOpen.life ? '▾' : '▸' }}</span>Life &amp; Props
-    </div>
-    <ng-container *ngIf="worldSecOpen.life">
+    <!-- ── Life & Props ── -->
+    <ng-container *ngIf="worldNav.id === 'life'">
+    <ng-container *ngIf="worldSub.id === 'crowd'"><!-- Crowd -->
     <div class="scene3d-material-row">
         <label>Pedestrians</label>
         <input type="checkbox" [(ngModel)]="worldPedestrians" (ngModelChange)="worldParamChanged()">
@@ -720,7 +802,8 @@
             <option value="cel-hd">Cel HD</option>
             <option value="ink">Ink</option>
         </select>
-    </div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'props'"><!-- Props -->
     <div class="scene3d-material-row">
         <label>Parked cars</label>
         <input type="checkbox" [(ngModel)]="worldParkedCars" (ngModelChange)="worldParamChanged()">
@@ -740,8 +823,8 @@
     <div class="scene3d-material-row">
         <label>Holograms</label>
         <input type="checkbox" [(ngModel)]="worldHolograms" (ngModelChange)="worldParamChanged()">
-    </div>
-    <div class="eye-proc-group">Nature</div>
+    </div></ng-container>
+    <ng-container *ngIf="worldSub.id === 'nature'"><!-- Nature -->
     <div class="scene3d-material-row">
         <label>Street trees</label>
         <input type="checkbox" [(ngModel)]="worldStreetTrees" (ngModelChange)="worldParamChanged()">
@@ -754,13 +837,22 @@
         <label>Leaf variety</label>
         <input type="range" min="0" max="0.4" step="0.01" [(ngModel)]="worldLeafColorVar" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldLeafColorVar | number:'1.2-2' }}</span>
+    </div></ng-container>
+        <div class="nav-tiles" *ngIf="!worldSub.id">
+        <button class="nav-tile" (click)="worldSub.open('crowd', 'Crowd')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Crowd</span><span class="nav-tile-hint">Pedestrians · Density · Style</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('props', 'Props')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Props</span><span class="nav-tile-hint">Parked cars · Furniture · Bicycles · Lanterns …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('nature', 'Nature')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Nature</span><span class="nav-tile-hint">Street trees · Leaf color · Leaf variety</span></span><span class="nav-tile-chev">›</span>
+        </button>
     </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen.edge" (click)="worldToggleSec('edge')">
-        <span class="city-sec-caret">{{ worldSecOpen.edge ? '▾' : '▸' }}</span>Edge<span class="city-sec-hint">world border</span>
-    </div>
-    <ng-container *ngIf="worldSecOpen.edge">
+    <!-- ── Edge ── -->
+    <ng-container *ngIf="worldNav.id === 'edge'">
     <div class="scene3d-material-row">
         <label>Void grid</label>
         <input type="checkbox" [(ngModel)]="worldVoidGrid" (ngModelChange)="worldParamChanged()">
@@ -790,17 +882,15 @@
     </div>
     </ng-container>
 
-    <div class="city-sec-head" [class.open]="worldSecOpen['perf']" (click)="perfToggleSec()">
-        <span class="city-sec-caret">{{ worldSecOpen['perf'] ? '▾' : '▸' }}</span>Performance<span class="city-sec-hint">resolution · culling · LOD</span>
-    </div>
-    <ng-container *ngIf="worldSecOpen['perf']">
-    <div class="perf-readout" title="Live: frames per second, GPU time per frame, render scale / triangles drawn, draw calls, meshes culled by the camera, meshes hidden by distance LOD">
+    <!-- ── Performance ── -->
+    <ng-container *ngIf="worldNav.id === 'perf'">
+    <ng-container *ngIf="!worldSub.id"><div class="perf-readout" title="Live: frames per second, GPU time per frame, render scale / triangles drawn, draw calls, meshes culled by the camera, meshes hidden by distance LOD">
         <div>{{ perfStatsLine || '…' }}</div>
         <div>{{ perfStatsLine2 }}</div>
         <div *ngIf="perfBudgetLine" [class.perf-budget-over]="perfBudgetOver" title="Scene budgets: about 3 M triangles drawn, 2 k draw calls, 500 MB of geometry, 200 k instances (sm.setSceneBudget3D)">{{ perfBudgetLine }}</div>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Resolution scaling</div>
+    <ng-container *ngIf="worldSub.id === 'resolution-scaling'"><!-- Resolution scaling -->
     <div class="scene3d-material-row">
         <label title="Render the 3D scene at a lower resolution and upscale it. The UI, gizmos and text stay sharp. Saved for this computer, not in the document.">Mode</label>
         <select class="scene3d-select" [ngModel]="perfResMode" (ngModelChange)="perfSetResMode($event)">
@@ -841,9 +931,9 @@
     <div style="font-size:10px;color:#888;padding:0 0 4px 8px;white-space:normal;line-height:1.35;">{{ perfTaaDesc }}<ng-container *ngIf="perfTaaNote"> {{ perfTaaNote }}</ng-container></div>
     <div class="scene3d-material-row scene3d-indent" *ngIf="perfResMode !== 'off'" style="font-size:10px;color:#888;">
         <span>Current scale {{ perfResCurrent | number:'1.2-2' }}<ng-container *ngIf="perfGpuMs != null"> · GPU {{ perfGpuMs | number:'1.1-1' }} ms {{ perfResTiming }}</ng-container></span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">GPU culling</div>
+    <ng-container *ngIf="worldSub.id === 'gpu-culling'"><!-- GPU culling -->
     <div class="scene3d-material-row">
         <label title="Who decides what to draw each frame: the GPU (frees the CPU) or the classic CPU path. Saved for this computer, not in the document.">GPU culling</label>
         <select class="scene3d-select" [ngModel]="perfGpuCull" (ngModelChange)="perfSetGpuCull($event)">
@@ -853,9 +943,9 @@
     <div class="perf-gpu-cull-desc" style="font-size:10px;color:#888;padding:0 0 4px 8px;white-space:normal;line-height:1.35;">{{ perfGpuCullDesc }}</div>
     <div class="scene3d-material-row scene3d-indent" *ngIf="perfGpuCullLine" style="font-size:10px;color:#888;" title="The path drawing right now and why (Auto switches at most every 1.5 s)">
         <span>{{ perfGpuCullLine }}</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Draw distance (LOD)</div>
+    <ng-container *ngIf="worldSub.id === 'draw-distance-lod'"><!-- Draw distance (LOD) -->
     <div class="scene3d-toggle-row">
         <label title="Hide small things once the camera is far from them (per chunk, every camera mode)">Distance LOD</label>
         <input type="checkbox" [ngModel]="perfDistanceLod" (ngModelChange)="perfSetLod({ distanceLod: $event })">
@@ -873,9 +963,9 @@
         <label [title]="f.label + ': hidden beyond about ' + (f.metres | number:'1.0-0') + ' m'">{{ f.label }}</label>
         <input type="range" min="0.1" max="3" step="0.05" [ngModel]="f.multiplier" (ngModelChange)="perfSetFamily(f.id, +$event)">
         <span class="scene3d-val">{{ f.metres | number:'1.0-0' }}m</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Zoom tiers</div>
+    <ng-container *ngIf="worldSub.id === 'zoom-tiers'"><!-- Zoom tiers -->
     <div class="scene3d-toggle-row">
         <label title="Hide whole groups (fine detail, roof objects, props, paving) when zoomed far out over the city">Zoom tiers</label>
         <input type="checkbox" [ngModel]="perfZoomTiers" (ngModelChange)="perfSetLod({ zoomTiers: $event })">
@@ -886,16 +976,16 @@
             <input type="range" min="0.25" max="4" step="0.05" [ngModel]="perfZoom[z.key]" (ngModelChange)="perfSetZoom(z.key, +$event)">
             <span class="scene3d-val">×{{ perfZoom[z.key] | number:'1.2-2' }}</span>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Near / far swaps</div>
+    <ng-container *ngIf="worldSub.id === 'near-far-swaps'"><!-- Near / far swaps -->
     <div class="scene3d-material-row" *ngFor="let t of perfTwinKeys; trackBy: perfTrackId">
         <label [title]="t.title">{{ t.label }}</label>
         <input type="range" min="0" [max]="t.max" step="1" [ngModel]="perfTwins[t.key]" (ngModelChange)="perfSetTwin(t.key, +$event)">
         <span class="scene3d-val">{{ perfTwins[t.key] | number:'1.0-0' }}m</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Shadows</div>
+    <ng-container *ngIf="worldSub.id === 'shadows'"><!-- Shadows -->
     <div class="scene3d-material-row">
         <label title="One choice for every shadow cost: the edge filter, the crisp near cascades, the map sizes and how often the far map refreshes. High = the default. Custom = the filter or cascades were changed on their own.">Shadow quality</label>
         <select class="scene3d-select" [ngModel]="perfShadowQuality" (ngModelChange)="perfSetShadowQuality($event)">
@@ -925,9 +1015,9 @@
         <label title="How far the camera may move (in shadow-map texels) before the far shadow map re-renders. 0 = every texel (slowest).">Shadow slack</label>
         <input type="range" min="0" max="64" step="1" [ngModel]="perfSlack" (ngModelChange)="perfSetShadow({ slackTexels: +$event })">
         <span class="scene3d-val">{{ perfSlack }}</span>
-    </div>
+    </div></ng-container>
 
-    <div class="eye-proc-group">Simulation</div>
+    <ng-container *ngIf="worldSub.id === 'simulation'"><!-- Simulation -->
     <div class="scene3d-toggle-row">
         <label title="Update far, off-screen and fogged things less often: walkers, cars, trains, the live crowd, character idles and hair springs. Near and on screen nothing changes. The Play player, the selection and anything being edited always update every frame.">Simulation LOD</label>
         <input type="checkbox" [ngModel]="perfSim.enabled" (ngModelChange)="perfSetSim({ enabled: $event })">
@@ -965,9 +1055,9 @@
         <div class="perf-fam-stats" *ngIf="perfSimLine" title="Things per update band, and how many were updated / skipped in the last frame">
             <div class="perf-fam-stat"><span class="perf-fam-name">{{ perfSimLine }}</span></div>
         </div>
-    </ng-container>
+    </ng-container></ng-container>
 
-    <div class="eye-proc-group">Debug</div>
+    <ng-container *ngIf="worldSub.id === 'debug'"><!-- Debug -->
     <div class="scene3d-toggle-row">
         <label title="Colour every mesh by its LOD family (grey = never hidden). Fly around to see what drops out where. Not saved.">LOD debug tint</label>
         <input type="checkbox" [ngModel]="perfDebugTint" (ngModelChange)="perfSetLod({ debugTint: $event })">
@@ -980,6 +1070,32 @@
     </div>
     <div style="display:flex;gap:4px;padding:6px 0 8px;">
         <button class="scene3d-btn scene3d-btn-sm" style="flex:1;" (click)="perfReset()" title="Resolution scaling off, GPU culling Auto and every LOD setting back to the defaults">Reset to defaults</button>
+    </div></ng-container>
+        <div class="nav-tiles" *ngIf="!worldSub.id">
+        <button class="nav-tile" (click)="worldSub.open('resolution-scaling', 'Resolution scaling')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Resolution scaling</span><span class="nav-tile-hint">Mode · Scale · Target fps · Min scale …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('gpu-culling', 'GPU culling')">
+            <span class="nav-tile-text"><span class="nav-tile-label">GPU culling</span><span class="nav-tile-hint">GPU culling</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('draw-distance-lod', 'Draw distance (LOD)')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Draw distance (LOD)</span><span class="nav-tile-hint">Distance LOD · Everything · Aerial bias</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('zoom-tiers', 'Zoom tiers')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Zoom tiers</span><span class="nav-tile-hint">Zoom tiers</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('near-far-swaps', 'Near / far swaps')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Near / far swaps</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('shadows', 'Shadows')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Shadows</span><span class="nav-tile-hint">Shadow quality · Shadow filter · Cascades · Shadow slack</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('simulation', 'Simulation')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Simulation</span><span class="nav-tile-hint">Simulation LOD · Every frame · Mid range · Mid rate …</span></span><span class="nav-tile-chev">›</span>
+        </button>
+        <button class="nav-tile" (click)="worldSub.open('debug', 'Debug')">
+            <span class="nav-tile-text"><span class="nav-tile-label">Debug</span><span class="nav-tile-hint">LOD debug tint</span></span><span class="nav-tile-chev">›</span>
+        </button>
     </div>
     </ng-container>
 

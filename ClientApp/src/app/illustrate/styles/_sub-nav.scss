@@ -1,0 +1,67 @@
+// ── Drill-down navigation (utils/sub-nav.ts): a menu of buttons -> one group's controls, with a Back header ──
+.nav-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    min-width: 0;
+}
+
+.nav-back {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid #444;
+    border-radius: 3px;
+    color: #aaa;
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    &:hover { background: rgba(255,255,255,0.14); color: #ddd; }
+}
+
+.nav-crumb {
+    font-size: 10px;
+    font-weight: 600;
+    color: #888;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    .nav-crumb-sep { color: #555; margin: 0 4px; }
+    .nav-crumb-here { color: #ccc; }
+}
+
+.nav-tiles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 4px;
+}
+
+.nav-tile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    color: #ccc;
+    cursor: pointer;
+    text-align: left;
+    &:hover { background: rgba(255,255,255,0.11); border-color: #555; color: #fff; }
+    &:hover .nav-tile-chev { color: #ccc; }
+}
+
+.nav-tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.nav-tile-label { font-size: 11px; font-weight: 600; }
+.nav-tile-hint {
+    font-size: 9.5px;
+    color: #777;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nav-tile-chev { color: #666; font-size: 12px; flex-shrink: 0; }

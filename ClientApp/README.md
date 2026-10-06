@@ -14,6 +14,19 @@ Run `ng generate component component-name` to generate a new component. You can 
 
 Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
 
+## Versioning / deploy check
+
+The app shows its version at the bottom of the editor's **File** menu and in the Shell's **Settings** dialog, e.g.
+`Frogmarks v0.01` with `built 2026-10-06 14:03 · Salsa 0.0.1 (dist 2026-10-05 00:53)` under it.
+
+- **Bump before every deploy:** edit `APP_VERSION` in `src/app/app-version.ts` (`'0.01'` → `'0.02'` → …). That is the
+  only place; `package.json` "version" is not used.
+- **Build time + Salsa dist time** are stamped automatically: `npm run build` (= `scripts/build.mjs`, which is what
+  `Frogmarks.csproj` runs on publish) runs `ng build` and then writes `<meta name="fm-build-time">`,
+  `fm-salsa-version` and `fm-salsa-dist-time` into the built `index.html`. `ng serve` / `npm start` show "dev build".
+- **To confirm a deploy** on the tablet: open File (or Shell → Settings) and check the version + build time. If it shows
+  the old one, the browser has a cached `index.html`: reload.
+
 ## Running unit tests
 
 Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).

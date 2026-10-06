@@ -24,8 +24,9 @@
         <span class="brush-row-name create-label">New Brush</span>
       </div>
 
-      <!-- Eraser row -->
-      <div class="brush-row" [class.active]="activeRasterTool === 'eraser'" (click)="selectEraserTool()" title="Eraser">
+      <!-- Eraser row: the eraser TOOL (erases with the current brush tip). The built-in "Eraser" preset is hidden
+           from the list below (HIDDEN_BRUSH_PRESET_IDS) so there is ONE eraser entry. -->
+      <div class="brush-row" [class.active]="eraserActive" (click)="selectEraserTool()" title="Eraser — erase with the current brush (click again to go back to it)">
         <div class="brush-row-preview create-preview">
           <svg width="16" height="16" viewBox="0 -1.04 20.193 20.193" xmlns="http://www.w3.org/2000/svg">
             <g transform="translate(-1.881 -2.881)">
@@ -40,7 +41,7 @@
       <!-- Preset rows -->
       <div *ngFor="let preset of presets"
            class="brush-row"
-           [class.active]="activePresetId === preset.id"
+           [class.active]="isPresetActive(preset.id)"
            (click)="quickSelectBrush(preset.id)">
         <!-- Preview image or stroke placeholder -->
         <div class="brush-row-preview">
@@ -64,6 +65,34 @@
       <!-- Empty state -->
       <div *ngIf="presets.length === 0" class="empty-state-row">
         No brushes yet — click <strong>+</strong> to create one
+      </div>
+    </div>
+
+    <!-- Eraser options (shown while the eraser tool is on) -->
+    <div class="quick-controls eraser-options" *ngIf="eraserActive">
+      <div class="radio-row">
+        <label class="radio-option" [class.active]="eraserStyle === 'fade'" title="Fade — gradual erase">
+          <input type="radio" name="eraserStyle" value="fade"
+                 [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
+          <span>● Fade</span>
+        </label>
+        <label class="radio-option" [class.active]="eraserStyle === 'clear'" title="Clear — hard cutout">
+          <input type="radio" name="eraserStyle" value="clear"
+                 [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
+          <span>● Clear</span>
+        </label>
+      </div>
+      <div class="radio-row" *ngIf="eraserStyle === 'fade'">
+        <label class="radio-option" [class.active]="eraserHardness === 'soft'">
+          <input type="radio" name="eraserHardness" value="soft"
+                 [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
+          <span>● Soft</span>
+        </label>
+        <label class="radio-option" [class.active]="eraserHardness === 'hard'">
+          <input type="radio" name="eraserHardness" value="hard"
+                 [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
+          <span>● Hard</span>
+        </label>
       </div>
     </div>
 
@@ -156,42 +185,8 @@
         </div>
       </div>
 
-      <!-- ── ERASER sub-options ─────────────────────────────── -->
-      <ng-container *ngIf="activeRasterTool === 'eraser'">
-        <div class="section">
-          <label class="section-label">Mode</label>
-          <div class="radio-row">
-            <label class="radio-option" [class.active]="eraserHardness === 'soft'">
-              <input type="radio" name="eraserHardness" value="soft"
-                     [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
-              <span>● Soft</span>
-            </label>
-            <label class="radio-option" [class.active]="eraserHardness === 'hard'">
-              <input type="radio" name="eraserHardness" value="hard"
-                     [(ngModel)]="eraserHardness" (ngModelChange)="onEraserHardnessChange($event)" hidden>
-              <span>● Hard</span>
-            </label>
-          </div>
-        </div>
-        <div class="section">
-          <label class="section-label">Eraser Style</label>
-          <div class="radio-row">
-            <label class="radio-option" [class.active]="eraserStyle === 'fade'">
-              <input type="radio" name="eraserStyle" value="fade"
-                     [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
-              <span>● Fade — gradual</span>
-            </label>
-            <label class="radio-option" [class.active]="eraserStyle === 'clear'">
-              <input type="radio" name="eraserStyle" value="clear"
-                     [(ngModel)]="eraserStyle" (ngModelChange)="onEraserStyleChange($event)" hidden>
-              <span>● Clear — hard cutout</span>
-            </label>
-          </div>
-        </div>
-      </ng-container>
-
       <!-- ── BRUSH / AIRBRUSH editor ──────────────────────── -->
-      <ng-container *ngIf="activeRasterTool !== 'eraser'">
+      <ng-container>
 
         <!-- Color (only when editing an existing brush, not when creating) -->
         <div class="section" *ngIf="!isCreating">
