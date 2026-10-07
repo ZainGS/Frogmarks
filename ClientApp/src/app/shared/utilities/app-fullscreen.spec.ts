@@ -24,6 +24,13 @@ describe('toggleAppFullscreen', () => {
     expect(doc.documentElement.requestFullscreen).not.toHaveBeenCalled();
   });
 
+  it('does nothing when the window is already fullscreen without the API (installed app in display-mode fullscreen)', async () => {
+    const doc = { ...fakeDoc(null), defaultView: { matchMedia: (q: string) => ({ matches: q === '(display-mode: fullscreen)' }) } };
+    await toggleAppFullscreen(doc as unknown as Document);
+    expect(doc.documentElement.requestFullscreen).not.toHaveBeenCalled();
+    expect(doc.exitFullscreen).not.toHaveBeenCalled();
+  });
+
   it('swallows a rejected request (no user gesture / not allowed)', async () => {
     const doc = fakeDoc(null);
     doc.documentElement.requestFullscreen.and.rejectWith(new TypeError('not allowed'));

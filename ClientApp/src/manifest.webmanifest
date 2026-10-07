@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Frogmarks",
+  "short_name": "Frogmarks",
+  "description": "Draw, paint, animate and build 3D scenes in your browser. Works offline; your work is saved on this device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "theme_color": "#080808",
+  "background_color": "#080808",
+  "categories": ["graphics", "design", "productivity"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

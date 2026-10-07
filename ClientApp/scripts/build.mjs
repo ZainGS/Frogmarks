@@ -6,11 +6,13 @@
 //   fm-salsa-dist-time  mtime of the Salsa dist bundle this build bundled
 // index.html is never content-hashed, so the stamp always matches the bundles it loads (Angular 17's CLI has no
 // `--define` flag, and editing a hashed chunk after the build would keep its old file name).
+// Production builds also emit the service worker (ngsw.json): its index.html hash is refreshed after the stamp.
 // Extra arguments go to `ng build`, e.g. `npm run build -- --configuration production` (what Frogmarks.csproj runs).
 // `ng serve` / `npm start` have no stamp; the label then says "dev build".
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const args = process.argv.slice(2);
 const r = spawnSync(process.execPath, ['node_modules/@angular/cli/bin/ng.js', 'build', ...args], { stdio: 'inherit' });
@@ -46,3 +48,19 @@ if (!html.includes('</head>')) { console.warn(`build: ${indexPath} has no </head
 html = html.replace('</head>', `${metas}</head>`);
 writeFileSync(indexPath, html);
 console.log(`build: stamped ${indexPath}: built ${buildTime}, Salsa ${salsaVersion || '?'} (dist ${salsaDistTime || '?'})`);
+
+// Service worker (production builds, angular.json "serviceWorker"): ngsw.json was generated BEFORE the stamp above,
+// so its SHA-1 of /index.html no longer matches the file. The worker checks every prefetched file against that table
+// and would refuse to install the version (and serve nothing offline). Re-hash index.html, and put APP_VERSION + the
+// build time in appData: the update prompt reads them from the VERSION_READY event ("New version: v0.02").
+const ngswPath = join(dirname(indexPath), 'ngsw.json');
+if (existsSync(ngswPath)) {
+  let appVersion = '';
+  try { appVersion = /export const APP_VERSION = '([^']+)'/.exec(readFileSync('src/app/app-version.ts', 'utf8'))?.[1] ?? ''; } catch { /* unreadable */ }
+  const ngsw = JSON.parse(readFileSync(ngswPath, 'utf8'));
+  ngsw.hashTable = ngsw.hashTable ?? {};
+  ngsw.hashTable['/index.html'] = createHash('sha1').update(Buffer.from(html, 'utf8')).digest('hex');
+  ngsw.appData = { ...(ngsw.appData ?? {}), version: appVersion, buildTime };
+  writeFileSync(ngswPath, JSON.stringify(ngsw, null, 2));
+  console.log(`build: ngsw.json re-hashed /index.html, appData v${appVersion || '?'}`);
+}

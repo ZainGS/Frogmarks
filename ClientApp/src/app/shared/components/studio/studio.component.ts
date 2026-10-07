@@ -9,6 +9,9 @@ import { NewIllustrationDialogComponent } from '../new-illustration-dialog/new-i
 import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
 import { preloadIllustrateModule } from '../../../illustrate-loader';
 import { perfMark, shellPerfFlags } from '../../utilities/perf-marks';
+import { AppUpdateService } from '../../services/pwa/app-update.service';
+import { updatePromptFor, updatePromptText } from '../../services/pwa/app-update.logic';
+import { StoragePersistenceService } from '../../services/pwa/storage-persistence.service';
 
 interface AriaSlot { id: string; name: string }
 
@@ -57,7 +60,31 @@ export class StudioComponent implements OnInit, OnDestroy {
     private ngZone: NgZone,
     private dialog: MatDialog,
     private localIllustrationService: LocalIllustrationService,
+    readonly updates: AppUpdateService,
+    readonly storageInfo: StoragePersistenceService,
   ) {}
+
+  // ── PWA: update popup + storage notice (salsa/docs/ui/pwa.md) ────────────
+
+  /** "New version available" popup (never on its own: Reload is the user's). */
+  get showUpdatePopup(): boolean {
+    return updatePromptFor('shell', this.updates.state, this.updates.dismissedOnShell) === 'popup';
+  }
+  get updateText(): string {
+    return updatePromptText(this.updates.state, this.updates.latestVersion, this.updates.currentVersion);
+  }
+  /** Shown under the text when the reload was held back (a document in a background editor is still unsaved). */
+  get updateBlocked(): boolean { return this.updates.blockedByUnsaved; }
+
+  reloadForUpdate(): void { void this.updates.applyUpdate(); }
+  laterForUpdate(): void { this.updates.dismissShellPrompt(); }
+
+  /** Shell › Settings: ask the browser for persistent storage again. */
+  requestPersistentStorage(): void { void this.storageInfo.requestPersistence(); }
+  openStorageSettings(): void {
+    this.showSettingsOverlay = true;
+    void this.storageInfo.refreshEstimate();
+  }
 
   async ngOnInit(): Promise<void> {
     // webgpuCanvas persists in AppComponent but must not intercept shell input.
@@ -245,7 +272,7 @@ export class StudioComponent implements OnInit, OnDestroy {
         }
         break;
       case 'system':
-        if (id === 'system:settings') this.showSettingsOverlay = true;
+        if (id === 'system:settings') this.openStorageSettings();
         break;
     }
   }

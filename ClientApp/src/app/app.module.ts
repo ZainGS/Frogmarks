@@ -10,6 +10,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatOptionModule } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { ServiceWorkerModule } from '@angular/service-worker';
+import { environment } from '../environments/environment';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
@@ -83,6 +85,13 @@ import { loadIllustrateModule } from './illustrate-loader';
     MatTooltipModule,
     MatExpansionModule,
     SharedUiModule,
+    // Offline app shell + update prompt (ngsw-config.json; salsa/docs/ui/pwa.md). Production builds only: `ng serve`
+    // and the unit tests run without it. Registered once the app is stable, at the latest after 30 s, so the worker's
+    // first download doesn't compete with startup.
+    ServiceWorkerModule.register('ngsw-worker.js', {
+      enabled: environment.production,
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
     RouterModule.forRoot([
       { path: '', component: StudioComponent, pathMatch: 'full' },
       { path: 'home', component: HomeComponent },

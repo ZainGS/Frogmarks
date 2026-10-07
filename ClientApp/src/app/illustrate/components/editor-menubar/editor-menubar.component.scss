@@ -306,3 +306,18 @@ a.exp-dialog-btn {
     border-color: #4caf96;
   }
 }
+
+// "Update ready" (AppUpdateService): a small retro-chrome green button, sharp corners, beside the menus.
+.fm-update-btn {
+  font-family: inherit;
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  border: 1px solid var(--rc-green-hi, #4f7a68);
+  border-radius: 0;
+  font-weight: bold;
+  white-space: nowrap;
+
+  &:hover { background: var(--rc-green-hi, #4f7a68); }
+  &[disabled] { opacity: 0.6; cursor: default; }
+  &.fm-update-blocked { background: #5a4a1a; border-color: #8a7020; color: #f0d890; }
+}

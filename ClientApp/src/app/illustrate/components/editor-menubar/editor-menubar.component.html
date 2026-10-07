@@ -1,3 +1,10 @@
+<!-- New app version downloaded (AppUpdateService; salsa/docs/ui/pwa.md). Never reloads by itself: a tap saves the
+     open documents first, then activates the new version and reloads; it stays put if something could not be saved. -->
+<div *ngIf="updatePrompt === 'menubar-button'" class="menubar-item">
+    <button type="button" class="menubar-btn fm-update-btn" [class.fm-update-blocked]="updates.blockedByUnsaved"
+            [disabled]="updates.applying" [title]="updateTitle"
+            (click)="applyUpdate(); $event.stopPropagation()">{{ updateLabel }}</button>
+</div>
 <div class="menubar-item">
     <div class="menubar-btn" [class.active]="editor.showFileMenu"
          (click)="editor.toggleFileMenu(); $event.stopPropagation()">File</div>

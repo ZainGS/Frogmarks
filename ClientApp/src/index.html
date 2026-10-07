@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" style="background:#080808">
   <head>
+    <meta charset="utf-8" />
+    <!-- First: the relative icon / manifest URLs below resolve against it on deep links (/illustration/local/…). -->
+    <base href="/" />
+    <title>Frogmarks</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link rel="apple-touch-icon" sizes="180x180" href="././assets/favicon/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="././assets/favicon/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="././assets/favicon/favicon-16x16.png">
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
-    <link rel="manifest" href="././assets/favicon/site.webmanifest">
-
-    <meta charset="utf-8" />
-    <title>Frogmarks</title>
-    <base href="/" />
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico" />
+    <!-- Installable app (docs: salsa/docs/ui/pwa.md). theme-color = the manifest's theme_color / background_color =
+         the root background on <html> above (#080808), so the splash, the title / status bar and the first paint match. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#080808">
 
     <!-- interactive-widget=resizes-visual: the on-screen keyboard overlays the page instead of shrinking the layout
          viewport (which would resize the WebGPU canvas + reflow the editor every time it opens). -->

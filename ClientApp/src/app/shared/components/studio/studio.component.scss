@@ -120,3 +120,126 @@
   padding: 0;
   pointer-events: none;
 }
+
+// ── PWA: update popup, storage notice, Settings sections (salsa/docs/ui/pwa.md) ──────────────────────────────────
+// Retro-chrome: --rc-* tokens (fallbacks = the theme's values, for when the theme class is off), raised 2 px bevel,
+// green title strip, sharp corners.
+
+.fm-pwa-popups {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(460px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;   // only the popups themselves take input
+}
+
+.fm-pwa-popup {
+  pointer-events: auto;
+  background: var(--rc-panel-bg, #1a1a1a);
+  color: var(--rc-text, #c8c8c8);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.fm-pwa-popup-title {
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-bottom: 2px solid var(--rc-bevel-lt, #6a6a6a);
+}
+
+.fm-pwa-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 10px 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.fm-pwa-popup-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 10px 10px;
+}
+
+.fm-pwa-btn {
+  min-height: 32px;   // finger-sized on the tablet
+  padding: 4px 14px;
+  background: #404040;
+  color: var(--rc-text, #c8c8c8);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+
+  &:hover { background: #555; }
+  &:active { border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111); }
+  &[disabled] { opacity: 0.5; cursor: default; }
+
+  &.fm-pwa-btn-primary {
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+    &:hover { background: var(--rc-green-hi, #4f7a68); }
+  }
+}
+
+.fm-pwa-ok { color: var(--rc-green-txt, #c8ede3); }
+.fm-pwa-warn { color: #e0b050; }
+
+// Inside the Settings dialog
+.fm-pwa-section {
+  margin: 0 0 16px;
+  padding: 8px 10px 10px;
+  background: var(--rc-surface, #242424);
+  border: 2px solid;
+  border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+  border-radius: 0;
+  color: var(--rc-text, #c8c8c8);
+  font-size: 12px;
+}
+
+.fm-pwa-section-title {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--rc-green-hi, #4f7a68);
+  border-left: 3px solid var(--rc-green, #3b6151);
+  padding: 1px 6px;
+  margin-bottom: 6px;
+}
+
+.fm-pwa-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0 0 6px;
+
+  dt { font-weight: normal; color: var(--rc-text-muted, #a8a8a8); }
+  dd { margin: 0; font-family: 'Courier New', Courier, monospace; }
+}
+
+.fm-pwa-note {
+  margin: 4px 0 8px;
+  line-height: 1.4;
+  color: var(--rc-text-muted, #a8a8a8);
+}

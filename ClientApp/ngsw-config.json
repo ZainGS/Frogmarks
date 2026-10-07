@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+  "index": "/index.html",
+  "appData": {
+    "version": "replaced by scripts/build.mjs with APP_VERSION (src/app/app-version.ts)"
+  },
+  "assetGroups": [
+    {
+      "name": "app-shell",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": [
+          "/index.html",
+          "/manifest.webmanifest",
+          "/*.css",
+          "/*.js",
+          "/assets/icons/**",
+          "/assets/favicon/**",
+          "/assets/images/logo.png",
+          "/assets/CornerDecoration.svg",
+          "/assets/cursors/**"
+        ]
+      }
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": [
+          "/assets/**",
+          "!/assets/**/*.py",
+          "/media/**",
+          "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
+        ]
+      }
+    },
+    {
+      "name": "google-fonts",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": {
+        "urls": [
+          "https://fonts.googleapis.com/**",
+          "https://fonts.gstatic.com/**"
+        ]
+      }
+    }
+  ],
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/**/*__*",
+    "!/**/*__*/**",
+    "!/api/**",
+    "!/swagger",
+    "!/swagger/**",
+    "!/Identity/**",
+    "!/connect/**",
+    "!/.well-known/**",
+    "!/_configuration/**",
+    "!/blob-storage/**",
+    "!/Error"
+  ],
+  "navigationRequestStrategy": "performance"
+}

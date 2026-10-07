@@ -7,6 +7,8 @@ import { StorageSettingsService } from '../../services/storage-settings.service'
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
 import { SCREEN_CORNER_MAX_PX, ScreenCornerService } from '../../services/screen-corner.service';
 import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
+import { AppUpdateService } from '../../../shared/services/pwa/app-update.service';
+import { UpdatePromptKind, updateButtonLabel, updatePromptFor, updatePromptText } from '../../../shared/services/pwa/app-update.logic';
 
 /** Exactly the editor members the menubar uses (compile-time checked against the editor). */
 export type EditorMenubarHost = Pick<IllustrationComponent, 'doc' | 'imports' | 'artboard' |
@@ -32,7 +34,20 @@ export class EditorMenubarComponent implements DoCheck {
   /** The Experimental dropdown is open. Kept here (not on the editor) so the editor needs no new member. */
   showExperimentalMenu = false;
   constructor(public files: ProjectFileService, public hud: ViewportHudService, public persist: IllustrationPersistenceService, public storage: StorageSettingsService,
-              public exp: ExperimentalSettingsService, public corners: ScreenCornerService) {}
+              public exp: ExperimentalSettingsService, public corners: ScreenCornerService, public updates: AppUpdateService) {}
+
+  /** The "Update ready" button (never a popup in the editor: app-update.logic.ts). */
+  get updatePrompt(): UpdatePromptKind { return updatePromptFor('editor', this.updates?.state ?? 'none', false); }
+  get updateLabel(): string { return updateButtonLabel(this.updates.state, this.updates.applying, this.updates.blockedByUnsaved); }
+  get updateTitle(): string {
+    if (this.updates.blockedByUnsaved) return 'Some changes could not be saved yet, so the update waits. Save (Ctrl+S), then tap again.';
+    return `${updatePromptText(this.updates.state, this.updates.latestVersion, this.updates.currentVersion)}. Tap to save your work and reload.`;
+  }
+  /** Saves every open document, then activates the new version and reloads (or stays, if something is unsaved). */
+  applyUpdate(): void {
+    this.editor?.closeAllMenus();
+    void this.updates.applyUpdate();
+  }
 
   /** View › Screen corner radius: the slider's upper end (px). */
   readonly cornerMaxPx = SCREEN_CORNER_MAX_PX;

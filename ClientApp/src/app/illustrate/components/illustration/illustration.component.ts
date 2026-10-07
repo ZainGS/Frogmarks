@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, HostListener, ElementRef, NgZone, isDevMode } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, HostListener, ElementRef, NgZone, inject, isDevMode } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
 
@@ -57,6 +57,7 @@ import { aiToolEnabled } from '../../utils/ai-tool-flag';
 import { SidePanelService } from '../../services/side-panel.service';
 import { applyStoredExperiments } from '../../services/experimental-settings.service';
 import { toggleAppFullscreen } from '../../../shared/utilities/app-fullscreen';
+import { AppUpdateService } from '../../../shared/services/pwa/app-update.service';
 import type { OutlinerAction } from '../scene-outliner/scene-outliner.component';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
 import { FillWandService } from '../../services/fill-wand.service';
@@ -308,6 +309,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       event.preventDefault();
     }
   }
+
+  /** App update (salsa/docs/ui/pwa.md): an update never reloads while this document has unsaved changes; the menubar's
+   *  "Update ready" saves it first through this guard. Registered for the editor's whole life (a reused, detached
+   *  editor still holds its document). */
+  private readonly _appUpdate = inject(AppUpdateService);
+  private _unregisterUpdateGuard: (() => void) | null = null;
 
   @HostListener('document:fullscreenchange') onFullscreenChange() {
     this.isFullscreen = !!document.fullscreenElement;
@@ -1634,6 +1641,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   ) { perfMark('editor:ctor'); }
 
   ngOnInit() {
+    this._unregisterUpdateGuard = this._appUpdate.registerDocumentGuard({
+      hasUnsavedChanges: () => this.persist.hasUnsavedChanges,
+      flushPendingSave: () => this.persist.flushPendingSave(),
+    });
     this.ngZone.runOutsideAngular(() => {
       window.addEventListener('scroll', this._onWinScrollOrResize, { passive: true });
       window.addEventListener('resize', this._onWinScrollOrResize);
@@ -2953,6 +2964,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._unregisterUpdateGuard?.();
+    this._unregisterUpdateGuard = null;
     window.removeEventListener('scroll', this._onWinScrollOrResize);
     window.removeEventListener('resize', this._onWinScrollOrResize);
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);

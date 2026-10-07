@@ -19,10 +19,56 @@
   <!-- Settings overlay (placeholder until settings panel is wired) -->
   <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()">
     <h3>Settings</h3>
-    <p class="shell-dialog-sub">Settings coming soon.</p>
+    <p class="shell-dialog-sub">More settings coming soon.</p>
+
+    <!-- Storage (TIER-8): StoragePersistenceService -->
+    <section class="fm-pwa-section" aria-label="Storage on this device">
+      <div class="fm-pwa-section-title">Storage on this device</div>
+      <dl class="fm-pwa-rows">
+        <dt>Used</dt><dd>{{ storageInfo.usageLabel || 'unknown' }}</dd>
+        <dt>Persistent</dt>
+        <dd [class.fm-pwa-ok]="storageInfo.persisted === true" [class.fm-pwa-warn]="storageInfo.persisted === false">{{ storageInfo.persistedLabel }}</dd>
+        <dt>Installed app</dt><dd>{{ storageInfo.installed ? 'yes' : 'no' }}</dd>
+      </dl>
+      <p *ngIf="storageInfo.persisted === false" class="fm-pwa-note">{{ storageInfo.noticeText }}</p>
+      <button *ngIf="storageInfo.supported && storageInfo.persisted === false" class="fm-pwa-btn"
+              [disabled]="storageInfo.requesting" (click)="requestPersistentStorage()">Ask for persistent storage</button>
+    </section>
+
+    <!-- Updates: AppUpdateService -->
+    <section *ngIf="updates.enabled" class="fm-pwa-section" aria-label="Updates">
+      <div class="fm-pwa-section-title">Updates</div>
+      <p class="fm-pwa-note">{{ updates.state === 'none' ? 'Up to date (checks every 30 minutes and when the app comes back).' : updateText }}</p>
+      <button *ngIf="updates.state !== 'none'" class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="updates.applying" (click)="reloadForUpdate()">Reload</button>
+    </section>
+
     <!-- Deploy check: bump APP_VERSION in src/app/app-version.ts -->
     <p class="shell-dialog-version">{{ appVersionLabel }}<br><span>{{ appBuildLabel }}</span></p>
     <button class="shell-btn shell-btn-ghost" (click)="closeSettingsOverlay()">Close</button>
+  </div>
+
+  <!-- PWA popups (salsa/docs/ui/pwa.md): fixed at the bottom, clickable on their own (the overlay itself is not).
+       Hidden while a dialog is open: Settings shows the same storage / update state with its own buttons. -->
+  <div class="fm-pwa-popups" *ngIf="(showUpdatePopup || storageInfo.noticeVisible) && !showSettingsOverlay && !showInstallDialog">
+    <div *ngIf="showUpdatePopup" class="fm-pwa-popup" role="alertdialog" aria-labelledby="fm-update-title">
+      <div class="fm-pwa-popup-title" id="fm-update-title">{{ updates.state === 'unrecoverable' ? 'Reload needed' : 'Update' }}</div>
+      <div class="fm-pwa-popup-body">
+        <span>{{ updateText }}</span>
+        <span *ngIf="updateBlocked" class="fm-pwa-warn">A document is still saving. Try again in a moment.</span>
+      </div>
+      <div class="fm-pwa-popup-actions">
+        <button class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="updates.applying" (click)="reloadForUpdate()">{{ updates.applying ? 'Saving…' : 'Reload' }}</button>
+        <button *ngIf="updates.state === 'ready'" class="fm-pwa-btn" (click)="laterForUpdate()">Later</button>
+      </div>
+    </div>
+    <div *ngIf="storageInfo.noticeVisible" class="fm-pwa-popup" role="status" aria-labelledby="fm-storage-title">
+      <div class="fm-pwa-popup-title" id="fm-storage-title">Storage</div>
+      <div class="fm-pwa-popup-body"><span>{{ storageInfo.noticeText }}</span></div>
+      <div class="fm-pwa-popup-actions">
+        <button class="fm-pwa-btn" (click)="openStorageSettings()">Details</button>
+        <button class="fm-pwa-btn" (click)="storageInfo.dismissNotice()">Dismiss</button>
+      </div>
+    </div>
   </div>
 
   <!-- Offscreen ARIA tree for screen readers -->
