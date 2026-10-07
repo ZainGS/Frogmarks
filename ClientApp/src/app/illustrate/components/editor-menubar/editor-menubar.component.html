@@ -303,6 +303,20 @@
             </span>
             <span class="exp-check">{{ exp.devTools ? '✓' : '' }}</span>
         </div>
+        <div class="edit-menu-item exp-two-line" (click)="exp.toggleClassicMeshEdit()">
+            <span>
+                <span>Classic Edit Mesh panel</span>
+                <span class="exp-hint">The old Edit Mesh side panel instead of the new tool strip and bars</span>
+            </span>
+            <span class="exp-check">{{ exp.classicMeshEdit ? '✓' : '' }}</span>
+        </div>
+        <div class="edit-menu-item exp-two-line" (click)="exp.toggleClassicArmature()">
+            <span>
+                <span>Classic Armature panel</span>
+                <span class="exp-hint">The old Armature side panel instead of Rig / Animate (next time Armature opens)</span>
+            </span>
+            <span class="exp-check">{{ exp.classicArmature ? '✓' : '' }}</span>
+        </div>
     </div>
 </div>
 <!-- Result dialog of the two Experimental actions: selectable text + Copy, sized for a tablet. -->

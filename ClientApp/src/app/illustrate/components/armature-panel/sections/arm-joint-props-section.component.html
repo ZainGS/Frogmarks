@@ -1,0 +1,119 @@
+<ng-container *ngIf="rig.activeSkeleton && rig.selectedJointIdx !== null && rig.joints[rig.selectedJointIdx] as selJoint">
+<div class="ar-section" [class.ar-section-flush]="!chrome">
+
+  <!-- Mode chrome: a titled block with the joint's name (rename in place) -->
+  <ng-container *ngIf="chrome">
+    <div class="ar-section-title">Joint</div>
+    <div class="ar-form-row" style="margin-bottom:6px">
+      <span class="ar-label">Name</span>
+      <input type="text" class="ar-text" [value]="selJoint.name" aria-label="Joint name"
+             (keydown.enter)="rename($any($event.target).value); $any($event.target).blur()"
+             (keydown.escape)="$any($event.target).value = selJoint.name; $any($event.target).blur()"
+             (change)="rename($any($event.target).value)">
+    </div>
+    <div *ngIf="selectionCount > 1" class="ar-hint">{{ selectionCount - 1 }} more joint{{ selectionCount > 2 ? 's' : '' }} selected (the gizmo moves this one).</div>
+  </ng-container>
+
+  <!-- Move mode hint (classic: the rotation fields belong to the Rotate mode) -->
+  <ng-container *ngIf="!chrome && rig.armatureToolMode === 'move'">
+    <div class="ar-hint" style="margin-bottom:4px">Drag joints in the viewport to reposition.</div>
+  </ng-container>
+
+  <!-- Rotation (FK) -->
+  <ng-container *ngIf="chrome || rig.armatureToolMode === 'rotate'">
+    <div class="ar-xyz-row" style="margin-bottom:4px">
+      <span class="ar-label">Rot°</span>
+      <span class="ar-axis ar-axis-x">X</span><input type="number" class="ar-num" step="1" [(ngModel)]="rig.rotX" (change)="rig.applyRotation()">
+      <span class="ar-axis ar-axis-y">Y</span><input type="number" class="ar-num" step="1" [(ngModel)]="rig.rotY" (change)="rig.applyRotation()">
+      <span class="ar-axis ar-axis-z">Z</span><input type="number" class="ar-num" step="1" [(ngModel)]="rig.rotZ" (change)="rig.applyRotation()">
+    </div>
+    <div class="ar-btn-pair" style="margin-top:4px">
+      <button class="ar-op-btn ar-op-secondary" (click)="rig.resetRotation()">Reset Joint</button>
+      <button class="ar-op-btn ar-op-secondary" (click)="rig.resetAllRotations()">Reset All</button>
+    </div>
+  </ng-container>
+
+  <!-- IK section (Case A/B — hidden for intermediate chain members) -->
+  <ng-container *ngIf="!rig.isIKIntermediate">
+    <div class="ar-op-sep"></div>
+    <div class="ar-section-sub">IK</div>
+
+    <!-- Case A — no chain on this joint -->
+    <ng-container *ngIf="!rig.selectedJointIKChain">
+      <button class="ar-op-btn ar-op-secondary ar-op-full" (click)="rig.addIKChain()">+ Set as IK Target</button>
+    </ng-container>
+
+    <!-- Case B — this joint IS an IK end-effector -->
+    <ng-container *ngIf="rig.selectedJointIKChain as ikChain">
+      <!-- Chain length -->
+      <div class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">Length</span>
+        <input type="number" class="ar-num" min="2" step="1"
+               [(ngModel)]="rig.ikChainLength" (change)="rig.setIKLength()"
+               title="Number of bones in the IK chain (min 2)">
+        <span class="ar-hint" style="flex:1;margin:0 0 0 4px;line-height:1.8">bones</span>
+      </div>
+      <!-- Pole joint (mode chrome; Salsa setArmatureIK3D) -->
+      <div *ngIf="chrome" class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">Pole</span>
+        <select class="ar-select" [ngModel]="rig.ikPoleJointIdx" (ngModelChange)="rig.setIKPoleJoint($event)"
+                [disabled]="!rig.hasPoleJointApi"
+                [title]="rig.hasPoleJointApi ? 'The joint the bend points at (its position when picked)' : needsEngine">
+          <option [ngValue]="null">None</option>
+          <option *ngFor="let j of rig.joints; let i = index" [ngValue]="i" [disabled]="i === rig.selectedJointIdx">{{ j.name }}</option>
+        </select>
+        <button class="ar-op-btn ar-op-xs" [class.ar-active]="pick.isArmed('ik-pole')" [disabled]="!rig.hasPoleJointApi"
+                [title]="rig.hasPoleJointApi ? 'Tap the pole joint in the viewport' : needsEngine" (click)="pickPole()">Pick</button>
+      </div>
+      <!-- FK / IK blend -->
+      <div class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">FK→IK</span>
+        <input type="range" class="ar-range" min="0" max="1" step="0.01"
+               [(ngModel)]="rig.ikBlendWeight" (ngModelChange)="rig.onIKBlendChange()">
+        <span class="ar-val">{{ rig.ikBlendWeight | number:'1.2-2' }}</span>
+      </div>
+      <!-- Target XYZ -->
+      <div class="ar-section-sub" style="margin-bottom:3px;margin-top:4px">Target</div>
+      <div class="ar-xyz-row" style="margin-bottom:4px">
+        <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikTargetX" (change)="rig.onIKTargetChange()">
+        <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikTargetY" (change)="rig.onIKTargetChange()">
+        <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikTargetZ" (change)="rig.onIKTargetChange()">
+      </div>
+      <!-- Pole XYZ (shown only when poleTarget is set) -->
+      <ng-container *ngIf="ikChain.poleTarget">
+        <div class="ar-form-row" style="margin-bottom:3px;margin-top:4px">
+          <span class="ar-section-sub" style="margin-bottom:0">Pole position</span>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost" style="margin-left:auto"
+                  (click)="rig.clearPoleTarget()" title="Remove pole vector">✕</button>
+        </div>
+        <div class="ar-xyz-row" style="margin-bottom:4px">
+          <span class="ar-axis">X</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikPoleX" (change)="rig.onIKPoleChange()">
+          <span class="ar-axis">Y</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikPoleY" (change)="rig.onIKPoleChange()">
+          <span class="ar-axis">Z</span><input type="number" class="ar-num" step="0.01" [(ngModel)]="rig.ikPoleZ" (change)="rig.onIKPoleChange()">
+        </div>
+      </ng-container>
+      <!-- Add Pole (shown when no pole set) -->
+      <button *ngIf="!ikChain.poleTarget"
+              class="ar-op-btn ar-op-secondary ar-op-full"
+              style="margin-bottom:4px"
+              (click)="rig.addPoleTarget()"
+              title="Add pole vector to pin the bend direction (cyan sphere)">
+        + Add Pole
+      </button>
+      <!-- Enable / Remove -->
+      <div class="ar-btn-pair" style="margin-top:4px">
+        <button class="ar-op-btn" [class.ar-active]="ikChain.enabled"
+                (click)="rig.setIKEnabled(!ikChain.enabled)">
+          {{ ikChain.enabled ? '✓ Enabled' : 'Disabled' }}
+        </button>
+        <button class="ar-op-btn ar-op-danger" (click)="rig.removeIKChain()">Remove IK</button>
+      </div>
+      <div *ngIf="chrome" class="ar-hint" style="margin-top:4px">IK changes are not undo steps.</div>
+    </ng-container>
+  </ng-container>
+
+  <div *ngIf="pick.pending && pick.pending.id === 'ik-pole'" class="ar-hint ar-hint-active" style="margin-top:4px">
+    {{ pick.missed ? 'No joint there — tap closer to a joint' : pick.pending.label }} (Esc cancels)
+  </div>
+</div>
+</ng-container>

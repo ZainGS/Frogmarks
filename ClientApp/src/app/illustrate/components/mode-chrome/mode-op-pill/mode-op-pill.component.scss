@@ -1,0 +1,146 @@
+@import '../../../styles/mode-chrome-mixins';
+
+// Bottom centre of the free viewport: from the rail's edge (70 px; the colour picker is hidden while a mode with the
+// chrome is active) to the props panel (--fm-modeprops-w) + the zoom widget (~116 px). With the animation timeline
+// open (class="above-timeline") it sits above it. Only the pill itself takes pointer events.
+:host {
+  position: fixed;
+  left: 70px;
+  right: calc(var(--fm-modeprops-w, 0px) + 116px);
+  bottom: 16px;
+  z-index: 950;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  container-type: inline-size;   // the compact layout follows the free width (props panel open or not), not the screen
+}
+:host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
+
+// Phone / narrow: the whole free width, above the zoom widget.
+@media (max-width: 700px) {
+  :host { right: var(--fm-modeprops-w, 0px); bottom: 112px; left: 74px; }
+  :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
+}
+
+.mode-op-pill {
+  @include mode-surface;
+  @include mode-raised;
+  pointer-events: auto;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  user-select: none;
+}
+
+.mop-head {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 4px 0 6px;
+  max-width: 220px;
+}
+.mop-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rc-green-txt, #c8ede3);
+}
+.mop-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--rc-text-muted, #a8a8a8);
+}
+
+// The params wrap inside their block (desktop / tablet); on a phone they are one row that scrolls sideways (below).
+// The pill never grows past the viewport.
+.mop-params {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.mop-params > * { flex-shrink: 0; }
+
+.mop-btn {
+  @include mode-btn;
+  &.on { @include mode-btn-on; }
+}
+.mop-apply { @include mode-btn-primary; min-width: 64px; }
+.mop-actions { flex-shrink: 0; display: flex; gap: 4px; margin-left: 2px; }
+
+// number / int
+.mop-num {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  &.disabled { opacity: 0.45; }
+}
+.mop-scrub {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  min-height: 28px;
+  color: var(--rc-text-label, #c0c0c0);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: ew-resize;
+  touch-action: none;   // a horizontal drag scrubs instead of scrolling
+  @media (pointer: coarse) { min-height: 44px; padding: 0 10px; }
+}
+.mop-num.scrubbing .mop-scrub { color: var(--rc-green-txt, #c8ede3); }
+.mop-value,
+.mop-input {
+  @include mode-sunken;
+  box-sizing: border-box;
+  width: 72px;
+  min-height: 28px;
+  padding: 0 6px;
+  background: var(--rc-canvas-bg, #0a0a0a);
+  color: var(--rc-text, #c8c8c8);
+  font: 600 13px/1 'Courier New', monospace;
+  text-align: right;
+  cursor: text;
+  @media (pointer: coarse) { min-height: 44px; width: 76px; font-size: 15px; }
+}
+.mop-value:focus-visible, .mop-input:focus { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 0; }
+.mop-value:disabled { cursor: default; }
+.mop-step {
+  @include mode-btn;
+  display: none;           // touch only (a mouse scrubs / types / uses ↑ ↓)
+  @media (pointer: coarse) { display: inline-flex; font-size: 18px; }
+}
+
+// axis / choice chips
+.mop-chips { display: flex; align-items: center; gap: 2px; }
+.mop-label { padding: 0 6px 0 4px; color: var(--rc-text-label, #c0c0c0); font-weight: 600; white-space: nowrap; }
+.mop-chip { min-width: 32px; padding: 0 6px; @media (pointer: coarse) { min-width: 44px; } }
+
+// text / select (added for the Armature pills)
+.mop-field { display: flex; align-items: center; gap: 0; &.disabled { opacity: 0.45; } }
+.mop-text { width: 120px; text-align: left; font: 500 13px/1 system-ui, sans-serif; @media (pointer: coarse) { width: 132px; } }
+.mop-select { width: auto; max-width: 160px; text-align: left; font: 500 13px/1 system-ui, sans-serif; cursor: pointer; }
+
+// Narrow (a phone, or a tablet in portrait with the props panel open): at most two rows — title + Apply / Cancel,
+// then the params in one row that scrolls sideways.
+@container (max-width: 600px) {
+  .mode-op-pill { flex-wrap: wrap; row-gap: 4px; width: 100%; }
+  .mop-head { order: 1; flex: 1 1 0; max-width: none; }
+  .mop-actions { order: 2; }
+  .mop-params { order: 3; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .mop-params::-webkit-scrollbar { display: none; }
+}

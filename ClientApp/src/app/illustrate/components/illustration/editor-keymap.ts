@@ -9,7 +9,7 @@ import type { IllustrationComponent } from './illustration.component';
  * dispatcher calls preventDefault. Keys are event.key values, case-sensitive. The cheatsheet
  * (Edit › Keyboard Shortcuts) is generated from the `group` / `help` of these bindings — see cheatsheetColumns().
  */
-export type CheatsheetGroup = 'Tools' | 'Selection' | '3D' | 'Edit' | 'View' | 'File' | 'Edit Mesh';
+export type CheatsheetGroup = 'Tools' | 'Selection' | '3D' | 'Edit' | 'View' | 'File' | 'Edit Mesh' | 'Armature';
 
 export interface KeyBinding {
   keys: string[];

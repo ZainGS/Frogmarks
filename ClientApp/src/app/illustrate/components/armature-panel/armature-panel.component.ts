@@ -1,184 +1,63 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef, NgZone, inject } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { ArmRigService } from './arm-rig.service';
 import { ArmBindingService } from './arm-binding.service';
 import { ArmAnimService } from './arm-anim.service';
 import { ArmLibraryService } from './arm-library.service';
 import { ArmSpringService } from './arm-spring.service';
-import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
+import { ArmPickService } from './arm-pick.service';
+import { ARMATURE_BG_MODES, ArmatureBgMode, ArmatureHost, ArmatureSession } from './arm-session';
 
-export interface ArmatureSkeleton {
-  id: string;
-  name: string;
-}
+// The shapes the arm-* services share (they moved to arm-session.ts; re-exported for older imports).
+export type { ArmatureSkeleton, ArmatureJoint, ArmatureClip, NLASegmentDisplay, NLATrackDisplay } from './arm-session';
 
-export interface ArmatureJoint {
-  name: string;
-  parentIdx: number;
-  x: number;
-  y: number;
-  z: number;
-  tailOffset: [number, number, number];
-  isLeaf: boolean;
-}
+/** The panel-scoped services an Armature host provides (the classic panel and the mode chrome). */
+export const ARMATURE_HOST_PROVIDERS = [ArmRigService, ArmBindingService, ArmAnimService, ArmLibraryService, ArmSpringService, ArmPickService];
 
-export interface ArmatureClip {
-  id: string;
-  name: string;
-}
-
-export interface NLASegmentDisplay {
-  clipId: string;
-  clipName: string;
-  startFrame: number;
-  weight: number;
-  blendMode: 'replace' | 'additive';
-  fadeIn: number;
-  fadeOut: number;
-}
-
-export interface NLATrackDisplay {
-  id: string;
-  name: string;
-  fps: number;
-  loop: boolean;
-  isPlaying: boolean;
-  segments: NLASegmentDisplay[];
-}
-
+/**
+ * The classic Armature panel: one 280 px overlay with every section (Experimental › Classic Armature panel). The mode
+ * chrome (<app-armature-mode>) is the default; both use the same section components and services.
+ */
 @Component({
   selector: 'app-armature-panel',
   templateUrl: './armature-panel.component.html',
   styleUrls: ['./armature-panel.component.scss'],
-  providers: [ArmRigService, ArmBindingService, ArmAnimService, ArmLibraryService, ArmSpringService],
+  providers: ARMATURE_HOST_PROVIDERS,
 })
-export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
+export class ArmaturePanelComponent implements ArmatureHost, OnInit, OnChanges, OnDestroy {
   @Input() shapeManager: ShapeManager = null;
   @Input() initialMeshId: string = '';
+  /** The 3D canvas (one-shot "tap a joint" picks take its presses). */
+  @Input() canvasEl: HTMLElement | null = null;
   @Output() closeRequest = new EventEmitter<void>();
 
-  constructor(public cdr: ChangeDetectorRef, public rig: ArmRigService, public binding: ArmBindingService, public anim: ArmAnimService, public library: ArmLibraryService, public spring: ArmSpringService) {
-    rig.bind(this); binding.bind(this); anim.bind(this); library.bind(this); spring.bind(this);
+  readonly bgModes = ARMATURE_BG_MODES;
+  readonly session: ArmatureSession;
+
+  constructor(public cdr: ChangeDetectorRef, public rig: ArmRigService, public binding: ArmBindingService, public anim: ArmAnimService,
+              public library: ArmLibraryService, public spring: ArmSpringService, public pick: ArmPickService, zone: NgZone) {
+    rig.bind(this); binding.bind(this); anim.bind(this); library.bind(this); spring.bind(this); pick.bind(this);
+    this.session = new ArmatureSession(this, zone);
   }
 
-  private get sm(): ShapeManager { return this.shapeManager; }
-  private _sceneChangeSub: { unsubscribe(): void } | null = null;
-
-  // ── Skeletons ────────────────────────────────────────────────────
-
-  // ── Joints ───────────────────────────────────────────────────────
-
-  // ── IK ───────────────────────────────────────────────────────────
-
-  // ── Bind ─────────────────────────────────────────────────────────
-
-  // ── Weight Paint ─────────────────────────────────────────────────
-
-  // ── Clips ────────────────────────────────────────────────────────
-
-  // ── Background ───────────────────────────────────────────────────
-  /** The calm gradient by default (UI review 2026-10-07 §3 #18); Wavy stays in the list. */
-  bgMode: 'wavy' | 'checkers' | 'gradient' | 'dim' | 'solid' | 'none' = 'gradient';
-
-  /** Experimental › Developer buttons: gates the developer-only tools (Copy pose + body for Claude). */
-  readonly exp = inject(ExperimentalSettingsService);
-
-  // ── Retarget ─────────────────────────────────────────────────────
-
-  // ── Bone Constraints ─────────────────────────────────────────────
-
-  // ── Pose Library ──────────────────────────────────────────────────
-
-  // ── Preset Poses ──────────────────────────────────────────────────
-
-  // ── Spring / Jiggle ───────────────────────────────────────────────
-
-  // ── NLA ───────────────────────────────────────────────────────────
-
-  // ── Animation Library ─────────────────────────────────────────────
-
-  // ── Global Library ────────────────────────────────────────────────
+  /** The background style (the header's dropdown). */
+  get bgMode(): ArmatureBgMode { return this.session.bgMode; }
+  set bgMode(m: ArmatureBgMode) { this.session.bgMode = m; }
 
   ngOnInit(): void {
-    if (this.shapeManager) {
-      if (this.initialMeshId) this.binding.bindMeshId = this.initialMeshId;
-      this._subscribeScene();
-      this.binding.refreshMeshes();
-      this.sm?.enterArmatureMode3D(this.binding.bindMeshId || undefined);
-      this.sm?.setArmatureBgMode3D({ mode: this.bgMode });
-      this.sm?.setArmatureToolMode3D('rotate');
-      this.rig.refreshSkeletons();
-    }
+    this.pick.canvas = this.canvasEl;
+    this.session.start('rotate');
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['shapeManager'] && this.shapeManager) {
-      this._unsubscribeScene();
-      this._subscribeScene();
-      this.sm?.setArmatureBgMode3D({ mode: this.bgMode });
-      this.refreshAll();
-    }
+    if (changes['canvasEl']) this.pick.canvas = this.canvasEl;
+    if (changes['shapeManager'] && !changes['shapeManager'].firstChange && this.shapeManager) this.session.shapeManagerChanged();
   }
 
   /** Every close path (the panel's ✕, the toolbar, Shift+Tab, another 3D mode taking over) removes this panel. */
   ngOnDestroy(): void {
-    this._unsubscribeScene();
-    if (this.binding.wpActive) this.sm?.exitWeightPaintMode3D();
-    this.sm?.exitBonePlacementMode3D();
-    this.sm?.showBoneOverlay3D(null);
-    this.sm?.selectJoint3D(null);
-    this.sm?.setArmatureBgMode3D({ mode: 'none' });
-    // Each service stops its own work (clip / NLA players / polls, library previews) in its ngOnDestroy.
-  }
-
-  private readonly _zone = inject(NgZone);
-  /** Scene-graph changes fire per pointer move from the engine's zoneless listeners (bone placement, weight paint, 2D
-   *  drags): apply them in ONE zone entry per frame. Raised from Angular code (in the zone): applied at once. */
-  private readonly _sceneFrame = new FrameCoalescer(() => this._zone.run(() => this._onSceneGraphChanged()));
-
-  private _subscribeScene(): void {
-    const obs = this.shapeManager?.interactionService?.onSceneGraphChanged;
-    if (obs) {
-      this._sceneChangeSub = obs.subscribe(() => {
-        if (NgZone.isInAngularZone()) this._onSceneGraphChanged();
-        else this._sceneFrame.mark('scene');
-      });
-    }
-  }
-
-  private _onSceneGraphChanged(): void {
-    this.rig.placementModeActive = this.sm?.isBonePlacementModeActive3D() ?? false;
-    this.binding.wpActive = this.sm?.isWeightPainting3D() ?? this.binding.wpActive;
-    this.refreshAll();
-    this._syncViewportSelection();
-    // Detect root bone head→tail phase transition: joint was added but placement still active
-    if (this.rig.placementPhase === 'head' && this.rig.placementModeActive && this.rig.joints.length > this.rig._placementJointCount) {
-      this.rig.placementPhase = 'tail';
-    }
-    if (!this.rig.placementModeActive) {
-      this.rig.placementPhase = null;
-    }
-  }
-
-  private _unsubscribeScene(): void {
-    this._sceneChangeSub?.unsubscribe();
-    this._sceneChangeSub = null;
-    this._sceneFrame.cancel();
-  }
-
-  private _syncViewportSelection(): void {
-    const idx: number | null = this.sm?.getSelectedJointIndex3D() ?? null;
-    this.rig.selectedJointIsTail = this.sm?.getSelectedJointIsTail3D() ?? false;
-    if (idx !== null && idx !== this.rig.selectedJointIdx) {
-      this.rig._applyJointSelection(idx);
-      if (this.binding.wpActive) this.sm?.setWeightPaintJoint3D(idx);   // a joint picked in the viewport paints too
-    } else if (idx !== null && this.rig.armatureToolMode === 'rotate') {
-      this.rig._syncRotationInputs(idx);
-    }
-    // Always sync IK inputs — handles viewport drag updating chain.target/poleTarget
-    this.rig._syncIKInputs();
+    this.pick.cancel();
+    this.session.stop();
   }
 
   /** The editor removes the panel; engine cleanup runs in ngOnDestroy. */
@@ -187,41 +66,10 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   updateBgMode(): void {
-    this.sm?.setArmatureBgMode3D({ mode: this.bgMode });
+    this.session.setBgMode(this.session.bgMode);
   }
 
   refreshAll(): void {
-    this.binding.refreshMeshes();
-    this.rig.refreshSkeletons();
-    this.library.refreshAnimLibrary();
+    this.session.refreshAll();
   }
-
-  // ── Skeleton ops ─────────────────────────────────────────────────
-
-  // ── Joint ops ────────────────────────────────────────────────────
-
-  // ── Mesh / bind ──────────────────────────────────────────────────
-
-  // ── Weight paint ─────────────────────────────────────────────────
-
-  // ── Clips ────────────────────────────────────────────────────────
-
-  // ── IK ops ───────────────────────────────────────────────────────
-
-  // ── Retarget ─────────────────────────────────────────────────────
-
-  // ── NLA ──────────────────────────────────────────────────────────
-
-  // ── Bone Constraints ─────────────────────────────────────────────
-
-  // ── Pose Library ──────────────────────────────────────────────────
-
-  // ── Preset Poses ──────────────────────────────────────────────────
-
-  // ── Spring / Jiggle ──────────────────────────────────────────────
-
-  // ── Animation Library ────────────────────────────────────────────
-
-  // ── Global Library ────────────────────────────────────────────────
-
 }

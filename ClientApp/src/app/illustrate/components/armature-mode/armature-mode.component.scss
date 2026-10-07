@@ -1,0 +1,21 @@
+@import '../../styles/mode-chrome-mixins';
+
+// The chrome pieces are fixed-position components; the host only groups them.
+:host { display: contents; }
+
+// A one-shot "tap a joint" pick is waiting (constraint target / IK pole / weight joint).
+.arm-pick-banner {
+  @include mode-sunken;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  font: $mode-font;
+}

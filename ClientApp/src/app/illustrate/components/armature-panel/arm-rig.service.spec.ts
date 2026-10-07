@@ -1,5 +1,5 @@
 import { ArmRigService } from './arm-rig.service';
-import type { ArmatureJoint } from './armature-panel.component';
+import type { ArmatureJoint } from './arm-session';
 
 /** Armature panel polish (UI review 2026-10-07 §2c): Joints open by default, constraints pick joints by NAME (and never
  *  default to the selected joint itself). */

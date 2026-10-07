@@ -1,0 +1,114 @@
+@import '../../../styles/mode-chrome-mixins';
+
+// The left rail's slot: 70 px wide, full height (the canvas, the top bar and the header bar all start at 70 px, so the
+// strip lines up with them exactly; the rail is hidden while a mode with the chrome is active). z 1000 = the rail's.
+.mode-tool-strip {
+  @include mode-surface;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 70px;
+  z-index: 1000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  background: linear-gradient(180deg, var(--rc-panel-bg, #1a1a1a) 0%, var(--rc-surface, #242424) 100%);
+  border-right: 2px solid var(--rc-bevel-mid, #3a3a3a);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  &::-webkit-scrollbar { display: none; }
+  & > * { flex-shrink: 0; }
+}
+
+.mts-sep {
+  width: 44px;
+  height: 0;
+  margin: 4px 0;
+  border-top: 1px solid var(--rc-bevel-dk, #111);
+  border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
+}
+
+.mts-tool {
+  @include mode-btn;
+  position: relative;
+  flex-direction: column;
+  gap: 2px;
+  width: 60px;
+  min-height: 52px;
+  padding: 4px 2px;
+  font-weight: 600;
+  &.on { @include mode-btn-on; }
+}
+
+.mts-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  font: 700 18px/1 system-ui, sans-serif;
+}
+
+.mts-label {
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 10px/1.1 system-ui, sans-serif;
+}
+
+// Key chip: top-right corner, on desktop hover / keyboard focus only (the tooltip has it too).
+.mts-key {
+  display: none;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 12px;
+  padding: 0 2px;
+  border: 1px solid var(--rc-bevel-mid, #3a3a3a);
+  background: var(--rc-canvas-bg, #0a0a0a);
+  color: var(--rc-text-muted, #a8a8a8);
+  font: 600 9px/12px system-ui, sans-serif;
+  text-align: center;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mts-tool:hover .mts-key,
+  .mts-tool:focus-visible .mts-key { display: block; }
+}
+
+// Very short screens (phone landscape): icons only, smaller buttons (still ≥ 44 px).
+@media (max-height: 560px) {
+  .mts-label { display: none; }
+  .mts-tool { min-height: 44px; }
+  .mode-tool-strip { gap: 2px; padding: 6px 0; }
+}
+
+.mode-tool-hint {
+  position: fixed;
+  left: calc(var(--fm-modestrip-w, 70px) + 8px);
+  top: calc(var(--fm-topbar-h, 40px) + var(--fm-modebar-h, 40px) + 8px);
+  max-width: calc(100vw - var(--fm-modestrip-w, 70px) - var(--fm-modeprops-w, 0px) - 24px);
+  z-index: 950;
+  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
+  padding: 4px 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  background: rgba(26, 26, 26, 0.88);
+  border-left: 3px solid var(--rc-green, #3b6151);
+  color: var(--rc-text, #c8c8c8);
+  font: 500 12px/1.4 system-ui, sans-serif;
+  pointer-events: none;
+
+  @media (pointer: coarse) { font-size: 13px; }
+}
+.mts-hint-tool { flex-shrink: 0; font-weight: 700; color: var(--rc-green-txt, #c8ede3); }
+.mts-hint-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

@@ -1,0 +1,68 @@
+<div class="ar-section" *ngIf="binding.isBound || binding.isProceduralBody">
+  <div class="ar-section-title ar-section-title-toggle" (click)="library.poseLibraryCollapsed = !library.poseLibraryCollapsed">
+    <span class="ar-chevron">{{ library.poseLibraryCollapsed ? '▸' : '▾' }}</span>Pose Library
+  </div>
+
+  <ng-container *ngIf="!library.poseLibraryCollapsed">
+    <!-- Capture row -->
+    <div class="ar-form-row" style="margin-bottom:4px">
+      <input type="text" class="ar-text ar-text-inline" placeholder="Pose name…"
+             [(ngModel)]="library.newPoseName"
+             (keydown.enter)="library.capturePose()">
+      <button class="ar-op-btn" (click)="library.capturePose()">+ Capture</button>
+    </div>
+    <div style="margin-bottom:6px" *ngIf="exp.devTools && !chrome">
+      <button class="ar-op-btn ar-op-secondary" style="width:100%;font-size:11px"
+              (click)="library.exportPoseForClaude()"
+              title="Copy current pose + body proportions to clipboard — paste to Claude with a description to bake into a pose or clip">
+        📋 Copy pose + body for Claude
+      </button>
+    </div>
+
+    <!-- Region filter -->
+    <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">
+      <button *ngFor="let r of ['all','left','right','top','bottom','center']"
+              class="ar-op-btn ar-op-xs"
+              [class.ar-active]="library.poseRegionFilter === r"
+              (click)="library.poseRegionFilter = r">{{ r }}</button>
+    </div>
+
+    <!-- Pose list -->
+    <div class="ar-list">
+      <div *ngFor="let p of library.filteredPoses" class="ar-list-row">
+        <ng-container *ngIf="library.renamingPoseId !== p.id; else poseRenameRow">
+          <span class="ar-clip-name">{{ p.name }}</span>
+          <select class="ar-select-xs" [ngModel]="p.region || ''"
+                  (ngModelChange)="library.setPoseRegion(p.id, $event)"
+                  title="Region tag">
+            <option value="">—</option>
+            <option value="left">L</option>
+            <option value="right">R</option>
+            <option value="top">T</option>
+            <option value="bottom">B</option>
+            <option value="center">C</option>
+          </select>
+          <button class="ar-op-btn ar-op-xs" (click)="library.applyPose(p.id)" title="Apply pose">Apply</button>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                  (click)="library.addPoseToLibrary(p.id, $event)" title="Add to Animation Library">＋</button>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                  (click)="library.globalLibPromotePose(p.id, $event)" title="Promote to Global Library">🌐</button>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                  (click)="library.startRenamePose(p.id, p.name, $event)" title="Rename">✎</button>
+          <button class="ar-op-btn ar-op-xs ar-op-danger"
+                  (click)="library.deletePose(p.id, $event)" title="Delete">✕</button>
+        </ng-container>
+        <ng-template #poseRenameRow>
+          <input type="text" class="ar-text ar-text-inline" [(ngModel)]="library.renamePoseValue"
+                 (keydown.enter)="library.confirmRenamePose()"
+                 (keydown.escape)="library.cancelRenamePose()">
+          <button class="ar-op-btn ar-op-xs" (click)="library.confirmRenamePose()">✓</button>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="library.cancelRenamePose()">✕</button>
+        </ng-template>
+      </div>
+      <div *ngIf="library.filteredPoses.length === 0" class="ar-hint">
+        {{ library.poses.length === 0 ? 'No poses captured yet.' : 'No poses in this region.' }}
+      </div>
+    </div>
+  </ng-container>
+</div>

@@ -5,7 +5,8 @@
     }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=visibility" />
-<body style="background-color: black !important;" class="dark-mode" [class.play-touch-active]="touchUi.coarse && scene3dViewIsPlaying">
+<body style="background-color: black !important;" class="dark-mode" [class.play-touch-active]="touchUi.coarse && scene3dViewIsPlaying"
+      [class.mode-chrome-active]="!!activeModeChrome">
 
     <!-- Fixed info tooltip (escapes overflow:hidden panels) -->
     <div *ngIf="infoTooltipVisible" class="info-tooltip-fixed"
@@ -242,9 +243,9 @@
           </div>
         </div>
 
-        <!-- Mesh Edit Panel overlay -->
+        <!-- Mesh Edit Panel overlay (the classic layout: Experimental › Classic Edit Mesh panel) -->
         <app-mesh-edit-panel
-            *ngIf="meshEdit.scene3dIsEditingMesh && editorState.scene3dSelectedMeshId"
+            *ngIf="!useModeChrome.meshEdit && meshEdit.scene3dIsEditingMesh && editorState.scene3dSelectedMeshId"
             [class.above-timeline]="animationEnabled"
             [shapeManager]="shapeManager"
             [meshId]="editorState.scene3dSelectedMeshId"
@@ -254,14 +255,34 @@
             (toolChange)="meshEdit.scene3dEditTool = $event">
         </app-mesh-edit-panel>
 
-        <!-- Armature Panel overlay -->
+        <!-- Armature Panel overlay (Experimental › Classic Armature panel; else the mode chrome below) -->
         <app-armature-panel
-            *ngIf="scene3dArmaturePanelOpen"
+            *ngIf="scene3dArmaturePanelOpen && !useModeChrome.armature"
             [class.above-timeline]="animationEnabled"
             [shapeManager]="shapeManager"
             [initialMeshId]="editorState.scene3dSelectedMeshId ?? ''"
+            [canvasEl]="canvas"
             (closeRequest)="closeArmaturePanel()">
         </app-armature-panel>
+
+        <!-- Armature on the mode chrome (components/armature-mode): Rig | Animate. Mounted for the whole mode (the
+             engine session); the chrome itself hides with the UI (chromeVisible). -->
+        <app-armature-mode *ngIf="activeModeChrome === 'armature'"
+            [shapeManager]="shapeManager"
+            [initialMeshId]="editorState.scene3dSelectedMeshId ?? ''"
+            [canvasEl]="canvas"
+            [chromeVisible]="modeChromeVisible"
+            [aboveTimeline]="animationEnabled"
+            (undo)="editUndo()" (redo)="editRedo()" (done)="closeArmaturePanel()"
+            (shortcuts)="showShortcutCheatsheet = true" (chromeLayout)="_updateGizmoPosition()">
+        </app-armature-mode>
+
+        <!-- Mode chrome (components/mode-chrome/README.md): while useModeChrome[mode] is on, that mode mounts its
+             <app-mode-header-bar> / <app-mode-tool-strip> / <app-mode-op-pill> / <app-mode-radial-menu> /
+             <app-mode-props-panel> here, under *ngIf="modeChromeVisible && activeModeChrome === '<mode>'", instead of
+             its overlay panel above. -->
+        <!-- Edit Mesh on the mode chrome (components/mesh-edit-chrome) -->
+        <app-mesh-edit-chrome *ngIf="modeChromeVisible && activeModeChrome === 'meshEdit'" [ed]="this"></app-mesh-edit-chrome>
 
         <!-- Grease Pencil Panel overlay -->
         <app-grease-pencil-panel

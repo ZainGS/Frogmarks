@@ -1,0 +1,133 @@
+// Mode chrome look (UI review 2026-10-07 §4: Edit Mesh / Edit Armature redesign). Retro chrome: the --rc-* tokens
+// (they live on body.theme-retro-chrome, so every use has a fallback), square corners, raised / sunken bevels, one
+// font, 44 px touch targets on a coarse pointer.
+//
+// Imported by whatever a mode puts inside <app-mode-props-panel> (its own component scss, or illustration.component.scss
+// — which already imports it — for markup written straight into the editor template). The mixins alone (no CSS
+// output) are in _mode-chrome-mixins.scss, which the chrome components use:
+//
+//   @import '../../styles/mode-chrome';        // from src/app/illustrate/components/<name>/
+//
+// Content classes for the right properties panel:
+//   .mode-props-section          one block of settings (stacked, divider between blocks)
+//   .mode-props-section-title    its heading (small caps, muted)
+//   .mode-card                   a framed card (a modifier: Mirror / Subdiv …); .mode-card-header / -title / -actions
+//   .mode-row                    a label + control row; .mode-row-label
+//   .mode-btn                    bevel button (.on = pressed / green, .primary = green, .danger = red); .mode-btn-sm
+//   .mode-chips                  a row of toggle chips (.mode-btn inside)
+//   .mode-input / .mode-select   sunken field
+//   .mode-muted                  helper text
+
+@import 'mode-chrome-mixins';
+
+// ── Content classes (right properties panel) ────────────────────────────────────────────────────────────────
+
+.mode-props-section {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
+  text-align: left;
+  font: $mode-font;
+  color: var(--rc-text, #c8c8c8);
+
+  &:last-child { border-bottom: 0; }
+}
+
+.mode-props-section-title {
+  margin: 0 0 8px;
+  font: 700 10px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rc-text-muted, #a8a8a8);
+}
+
+.mode-card {
+  @include mode-raised;
+  margin: 0 0 8px;
+  padding: 6px 8px 8px;
+  background: var(--rc-surface, #242424);
+
+  &:last-child { margin-bottom: 0; }
+  &.disabled { opacity: 0.55; }
+}
+
+.mode-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 6px;
+
+  @media (pointer: coarse) { min-height: 44px; }
+}
+
+.mode-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--rc-text-label, #c0c0c0);
+}
+
+.mode-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.mode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+
+  &:last-child { margin-bottom: 0; }
+  @media (pointer: coarse) { min-height: 44px; }
+}
+
+.mode-row-label {
+  flex: 0 0 auto;
+  min-width: 72px;
+  color: var(--rc-text-label, #c0c0c0);
+}
+
+.mode-btn {
+  @include mode-btn;
+  &.on { @include mode-btn-on; }
+  &.primary { @include mode-btn-primary; }
+  &.danger { background: var(--rc-danger, #8b1a1a); color: #fff; }
+  &.danger:hover:not(:disabled) { background: var(--rc-danger-hi, #c0392b); }
+}
+
+.mode-btn-sm {
+  min-height: 22px;
+  min-width: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+
+  @media (pointer: coarse) { min-height: 44px; min-width: 44px; }
+}
+
+.mode-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mode-input,
+.mode-select {
+  @include mode-sunken;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  background: var(--rc-canvas-bg, #0a0a0a);
+  color: var(--rc-text, #c8c8c8);
+  font: $mode-font;
+
+  &:focus { outline: 1px solid var(--rc-green-hi, #4f7a68); }
+  @media (pointer: coarse) { min-height: 44px; font-size: 15px; }
+}
+
+.mode-muted {
+  color: var(--rc-text-muted, #a8a8a8);
+  font-size: 11px;
+}

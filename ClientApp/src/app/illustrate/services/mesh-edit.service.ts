@@ -1,7 +1,12 @@
-import { Injectable, NgZone } from '@angular/core';
+import { Injectable, NgZone, Optional } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { BEVEL_ACTIONS, type BevelState } from '../components/illustration/editor-keymap';
+import {
+  DEFAULT_MESH_TOOL_PARAMS, meshChromeApi, meshChromeCaps, planMeshTool, type MeshBgMode, type MeshToolId, type MeshToolParams,
+} from '../components/mesh-edit-chrome/mesh-edit-chrome.logic';
+import * as ops from './mesh-edit-ops';
+import { NotifyService } from '../../shared/services/notify/notify.service';
 
 import { EditorStateService } from './editor-state.service';
 
@@ -10,7 +15,7 @@ export type MeshEditSelectMode = 'vertex' | 'edge' | 'face';
 /** Exactly the editor state mesh edit mode uses. */
 export type MeshEditHost = Pick<IllustrationComponent, 'shapeManager' |
   '_exitAllScene3dModes' | 'canvasRef' | 'handleCanvasRef'
-> & Partial<Pick<IllustrationComponent, 'scene3dGizmoMode'>>;
+> & Partial<Pick<IllustrationComponent, 'scene3dGizmoMode' | 'activeModeChrome' | 'hud'>>;
 
 /**
  * 3D mesh edit mode: enter / exit (engine edit mode + its pointer controller on the canvas), the edit tool, and the
@@ -21,12 +26,23 @@ export type MeshEditHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class MeshEditService {
   private host!: MeshEditHost;
-  constructor(private editorState: EditorStateService, private ngZone: NgZone) {}
+  constructor(private editorState: EditorStateService, private ngZone: NgZone, @Optional() private notify?: NotifyService) {}
   bind(host: MeshEditHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
   scene3dIsEditingMesh = false;
+  /** Frogmarks' own drag-a-line knife ('knife') — the classic panel, and the chrome on a Salsa without the engine Knife. */
   scene3dEditTool: 'select' | 'knife' = 'select';
+
+  // ── Mode chrome state (UI review 2026-10-07 §4; components/mesh-edit-chrome) ──
+  /** The focus background (both layouts: the classic panel's dropdown, the chrome's ⋯ menu). Calm Gradient by default. */
+  bgMode: MeshBgMode = 'gradient';
+  /** The tool strip's tool (the chrome only; the classic panel has Select / Knife through scene3dEditTool). */
+  tool: MeshToolId = 'select';
+  /** The tools' amounts for their next run (the op pill edits them; the classic panel's fields read them too). */
+  readonly params: MeshToolParams = { ...DEFAULT_MESH_TOOL_PARAMS };
+  /** The Edit Mesh mode chrome is the layout (IllustrationComponent.useModeChrome.meshEdit and Edit Mesh active). */
+  get chromeOn(): boolean { return this.host?.activeModeChrome === 'meshEdit'; }
   /** Vertex / Edge / Face: ONE state for the Mesh Edit panel's tabs and the 1 / 2 / 3 keys (mode-keymap.ts). */
   selectionMode: MeshEditSelectMode = 'face';
   private _knifeStart: { x: number; y: number } | null = null;
@@ -63,6 +79,94 @@ export class MeshEditService {
     if (typeof gizmo.getMeshEditGizmoMode3D === 'function' && 'scene3dGizmoMode' in this.host) {
       this.host.scene3dGizmoMode = gizmo.getMeshEditGizmoMode3D();
     }
+    sm.setMeshEditBgMode3D?.({ mode: this.bgMode });
+    // The chrome's tool strip shows the engine's tool (default 'move' = the selection gizmo); an older dist has no
+    // tool state: Select.
+    const getTool = meshChromeApi(sm).getMeshEditActiveTool3D;
+    this.tool = typeof getTool === 'function' ? (getTool.call(sm) ?? 'select') : 'select';
+  }
+
+  /** Change the focus background (the classic panel's dropdown / the chrome's ⋯ menu). */
+  setBgMode(mode: MeshBgMode): void {
+    this.bgMode = mode;
+    this.shapeManager?.setMeshEditBgMode3D?.({ mode });
+  }
+
+  // ── The tool strip (the chrome; salsa docs/reviews/section4-engine-api.md §D) ──
+
+  private get _caps() { return meshChromeCaps(this.shapeManager); }
+
+  /** The selection of the mesh being edited (arrays; empty outside Edit Mesh). */
+  get selection(): ops.MeshEditSelectionLists { return ops.editSelection(this.shapeManager, this._editId); }
+
+  /**
+   * Pick a tool. A newer Salsa runs it (setMeshEditActiveTool3D: gizmo per tool, Loop Cut / Knife taps); an older one
+   * gets the fallbacks (planMeshTool): Move / Rotate / Scale start the keyboard G / R / S on the selection (or show the
+   * selection gizmo), the Knife is Frogmarks' drag-a-line knife. Bevel starts the Chamfer. Leaving a tool drops what it
+   * had running (the Chamfer, the knife line, a keyboard transform).
+   */
+  setTool(tool: MeshToolId): void {
+    const sm = this.shapeManager;
+    if (!sm) return;
+    const caps = this._caps;
+    if (tool !== 'bevel' && BEVEL_ACTIONS.active(this.host)) BEVEL_ACTIONS.cancel(this.host);
+    if (tool !== 'knife' && this.scene3dEditTool === 'knife') this.cancelKnifeCut();
+    if (sm.isShortcutActive3D) { sm.cancelTransform3D(); this.host.hud?.syncShortcutHud(); }
+    const sel = this.selection;
+    const plan = planMeshTool(tool, caps, sel.vertices.length + sel.edges.length + sel.faces.length > 0);
+    this.tool = tool;
+    const api = meshChromeApi(sm);
+    if (plan.engineTool) api.setMeshEditActiveTool3D?.call(sm, plan.engineTool);
+    if (plan.gizmo !== undefined) api.setMeshEditGizmoMode3D?.call(sm, plan.gizmo);
+    if (plan.beginTransform) { sm.beginTransform3D(plan.beginTransform); this.host.hud?.syncShortcutHud(); }
+    this.scene3dEditTool = plan.legacyKnife ? 'knife' : 'select';
+    if (plan.beginBevel && !BEVEL_ACTIONS.active(this.host)) BEVEL_ACTIONS.begin(this.host);
+    sm.requestRender3D?.();
+  }
+
+  /** E / I: the Extrude / Inset tool (chrome), run at once on the selected faces with the tool's amount. */
+  toolKey(tool: 'extrude' | 'inset'): void {
+    if (this.chromeOn && this.tool !== tool) this.setTool(tool);
+    if (tool === 'extrude') this.runExtrude(); else this.runInset();
+  }
+
+  /** Extrude the selected faces by params.extrudeDistance. False = no face selected. */
+  runExtrude(): boolean {
+    const id = this._editId;
+    const faces = this.selection.faces;
+    if (!id || !faces.length) return false;
+    return ops.extrudeFaces(this.shapeManager, id, faces, this.params.extrudeDistance);
+  }
+
+  /** Inset the selected faces by params.insetAmount (+ depth on a newer Salsa). False = no face selected. */
+  runInset(): boolean {
+    const id = this._editId;
+    const faces = this.selection.faces;
+    if (!id || !faces.length) return false;
+    return ops.insetFaces(this.shapeManager, id, faces, this.params.insetAmount, this._caps.insetDepth ? this.params.insetDepth : 0);
+  }
+
+  /** The Knife's tapped points (a newer Salsa), 0 otherwise. */
+  get knifePointCount(): number {
+    const f = meshChromeApi(this.shapeManager).getMeshEditKnifePointCount3D;
+    return this.scene3dIsEditingMesh && typeof f === 'function' ? f.call(this.shapeManager) : 0;
+  }
+
+  /** Enter / the pill's Cut: cut along the tapped points. False = nothing to cut (Enter falls through). */
+  applyKnifePoints(): boolean {
+    const f = meshChromeApi(this.shapeManager).applyMeshEditKnife3D;
+    if (!this.chromeOn || this.tool !== 'knife' || typeof f !== 'function' || this.knifePointCount < 2) return false;
+    const split = f.call(this.shapeManager);
+    if (!split) this.notify?.error("The knife couldn't cut there. Start and end on an edge, and don't cross a face twice.");
+    return true;
+  }
+
+  /** Esc / the pill's Clear: drop the tapped points. False = none (Esc falls through). */
+  cancelKnifePoints(): boolean {
+    const f = meshChromeApi(this.shapeManager).cancelMeshEditKnife3D;
+    if (!this.chromeOn || typeof f !== 'function' || this.knifePointCount === 0) return false;
+    f.call(this.shapeManager);
+    return true;
   }
 
   exitMeshEditMode(): void {
@@ -154,6 +258,8 @@ export class MeshEditService {
 
   /** Esc in mesh edit mode: drop the knife cut in progress and go back to select. */
   cancelKnifeCut(): void {
+    // The chrome on an older Salsa (the drag knife is its Knife tool): Esc leaves the tool too
+    if (this.scene3dEditTool === 'knife' && this.tool === 'knife' && this.chromeOn) this.tool = 'select';
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
     this._knifePointerId = null;
@@ -235,6 +341,29 @@ export class MeshEditService {
     sm.requestRender3D?.();
   }
 
+  /** Select what is not selected (the current mode's elements; an edge counts once, either half-edge). */
+  invertSelection(): void {
+    const sm = this.shapeManager, id = this._editId;
+    const em = id ? sm.getEditMesh3D(id) : null;
+    if (!id || !em) return;
+    const sel = sm.getEditSelection3D(id);
+    const he = em.halfEdges;
+    let next: number[];
+    if (this.selectionMode === 'vertex') next = em.vertices.map((_, i) => i).filter(i => !sel?.vertices.has(i));
+    else if (this.selectionMode === 'edge') {
+      next = [];
+      for (let i = 0; i < he.length; i++) {
+        if (!(he[i].twin < 0 || i < he[i].twin)) continue;
+        if (!(sel?.edges.has(i) || (he[i].twin >= 0 && sel?.edges.has(he[i].twin)))) next.push(i);
+      }
+    } else next = em.faces.map((_, i) => i).filter(i => !sel?.faces.has(i));
+    sm.clearEditSelection3D(id);
+    const select = this.selectionMode === 'vertex' ? sm.selectVertex3D.bind(sm)
+      : this.selectionMode === 'edge' ? sm.selectEdge3D.bind(sm) : sm.selectFace3D.bind(sm);
+    for (const i of next) select(id, i, true);
+    sm.requestRender3D?.();
+  }
+
   /** Alt+A: deselect everything. */
   deselectAll(): void {
     const id = this._editId;
@@ -277,18 +406,23 @@ export class MeshEditService {
 
   /** Ctrl+R: a loop cut through the (first) selected edge at `t` along it (0.5 = the middle); the selection is cleared
    *  (the cut rebuilds the topology). False = no edge selected. */
-  loopCutSelectedEdge(t = 0.5): boolean {
+  loopCutSelectedEdge(t?: number, count?: number): boolean {
     const sm = this.shapeManager, id = this._editId;
     const sel = id ? sm.getEditSelection3D(id) : null;
     const edge = sel ? [...sel.edges][0] : undefined;
     if (!id || edge === undefined) return false;
-    const ok = sm.loopCut3D(id, edge, t);
+    // The chrome: the Loop Cut tool's cuts / position (several cuts on a newer Salsa: loopCuts3D, the last op)
+    const pos = t ?? (this.chromeOn ? this.params.loopCutPosition : 0.5);
+    const n = count ?? (this.chromeOn ? this.params.loopCutCount : 1);
+    const ok = ops.loopCutAt(sm, id, edge, n, pos);
     sm.clearEditSelection3D(id);
     sm.requestRender3D?.();
     return ok;
   }
 
   toggleKnifeTool(): void {
+    // The chrome: the tool strip's Knife (the engine's tap knife on a newer Salsa, else the drag knife via setTool)
+    if (this.chromeOn) { this.setTool(this.tool === 'knife' ? 'select' : 'knife'); return; }
     if (this.scene3dEditTool !== 'knife') BEVEL_ACTIONS.cancel(this.host);   // one tool at a time
     this.scene3dEditTool = this.scene3dEditTool === 'knife' ? 'select' : 'knife';
     if (this.scene3dEditTool === 'select') this._clearKnifePreview();

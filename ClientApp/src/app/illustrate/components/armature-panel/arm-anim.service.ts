@@ -1,15 +1,16 @@
 import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import type { ArmaturePanelComponent, ArmatureClip, NLATrackDisplay } from './armature-panel.component';
+import type { ArmatureHost, ArmatureClip, NLATrackDisplay } from './arm-session';
 
 /** What ArmAnimService reads / writes on the panel. */
-export type ArmAnimHost = Pick<ArmaturePanelComponent,
+export type ArmAnimHost = Pick<ArmatureHost,
   'shapeManager' | 'cdr' | 'library' | 'rig'
 >;
 
 /**
  * Skeleton animation: clips (record / play / play over idle / delete), NLA tracks + segments + crossfades, retarget.
- * Panel-scoped (provided by ArmaturePanelComponent, bound in its constructor). Bodies moved verbatim from
+ * Panel-scoped (provided by both Armature hosts — the classic ArmaturePanelComponent and the mode chrome's
+ * ArmatureModeComponent — and bound in their constructors). Bodies moved verbatim from
  * armature-panel.component (audit Phase 5.5).
  */
 @Injectable()

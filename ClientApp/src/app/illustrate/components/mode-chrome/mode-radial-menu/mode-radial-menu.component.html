@@ -1,0 +1,29 @@
+<div *ngIf="visible" class="mode-radial" (pointerdown)="onMenuPointerDown()" (contextmenu)="$event.preventDefault()">
+    <div class="mrm-backdrop" (pointerdown)="onBackdropDown($event)"></div>
+
+    <div class="mrm-ring" aria-hidden="true"
+         [style.left.px]="layout.cx - layout.radius" [style.top.px]="layout.cy - layout.radius"
+         [style.width.px]="layout.radius * 2" [style.height.px]="layout.radius * 2"></div>
+
+    <div *ngIf="title" class="mrm-title"
+         [style.left.px]="layout.cx" [style.top.px]="layout.cy - layout.radius - itemH / 2 - titleH">{{ title }}</div>
+
+    <div class="mrm-items" role="menu" [attr.aria-label]="title || 'Actions'">
+        <button *ngFor="let it of items; let i = index; trackBy: trackId" type="button" class="mrm-item" role="menuitem"
+                [class.danger]="it.danger" [class.hover]="i === hoverIndex" [disabled]="it.disabled" [attr.data-id]="it.id"
+                [style.left.px]="(layout.items[i]?.x ?? 0) - itemW / 2" [style.top.px]="(layout.items[i]?.y ?? 0) - itemH / 2"
+                [style.width.px]="itemW" [style.height.px]="itemH" (click)="onItemClick($event, it)">
+            <span *ngIf="it.icon" class="mrm-icon" aria-hidden="true">
+                <svg *ngIf="iconPaths(it) as paths; else glyph" viewBox="0 0 24 24" width="20" height="20">
+                    <path *ngFor="let d of paths" [attr.d]="d" fill="none" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="square" stroke-linejoin="miter"/>
+                </svg>
+                <ng-template #glyph>{{ it.icon }}</ng-template>
+            </span>
+            <span class="mrm-label">{{ it.label }}</span>
+        </button>
+    </div>
+
+    <button type="button" class="mrm-center" aria-label="Close" title="Close (Esc)"
+            [style.left.px]="layout.cx" [style.top.px]="layout.cy" (click)="onCenterClick($event)">✕</button>
+</div>

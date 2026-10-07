@@ -1,15 +1,16 @@
 import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import type { ArmaturePanelComponent } from './armature-panel.component';
+import type { ArmatureHost } from './arm-session';
 
 /** What ArmBindingService reads / writes on the panel. */
-export type ArmBindingHost = Pick<ArmaturePanelComponent,
+export type ArmBindingHost = Pick<ArmatureHost,
   'shapeManager' | 'rig'
 >;
 
 /**
  * Mesh binding + weight paint: the bind target, bind / normalize, weight-paint mode and brush.
- * Panel-scoped (provided by ArmaturePanelComponent, bound in its constructor). Bodies moved verbatim from
+ * Panel-scoped (provided by both Armature hosts — the classic ArmaturePanelComponent and the mode chrome's
+ * ArmatureModeComponent — and bound in their constructors). Bodies moved verbatim from
  * armature-panel.component (audit Phase 5.5).
  */
 @Injectable()
@@ -97,6 +98,18 @@ export class ArmBindingService {
     if (this.wpActive) {
       this.sm?.setWeightPaintBrush(this.wpRadius, this.wpStrength, this.wpTargetWeight);
     }
+  }
+
+  /** The Weight Brush pill's mode, read from the target weight the engine brush has (setWeightPaintBrush): Add paints
+   *  towards full weight, Remove towards none, Set towards the Weight value in between. */
+  get wpMode(): 'add' | 'remove' | 'set' {
+    return this.wpTargetWeight >= 1 ? 'add' : this.wpTargetWeight <= 0 ? 'remove' : 'set';
+  }
+
+  setWpMode(mode: 'add' | 'remove' | 'set'): void {
+    if (mode === this.wpMode) return;
+    this.wpTargetWeight = mode === 'add' ? 1 : mode === 'remove' ? 0 : 0.5;
+    this.onWpBrushChange();
   }
 
   onWpShowSkeletonChange(): void {

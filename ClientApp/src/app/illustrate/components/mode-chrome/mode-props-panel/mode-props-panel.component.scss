@@ -1,0 +1,104 @@
+@import '../../../styles/mode-chrome-mixins';
+
+// The editor's right-column slot (illustration.component.scss .right-column: 280 px + a 4 px green border), below the
+// top bar AND the mode header bar, down to the screen bottom or (class="above-timeline") the animation timeline.
+:host {
+  --mpp-top: calc(var(--fm-topbar-h, 40px) + var(--fm-modebar-h, 40px));
+  --mpp-bottom: 0px;
+}
+:host(.above-timeline) { --mpp-bottom: var(--fm-timeline-h, 204px); }
+
+.mode-props-panel {
+  @include mode-surface;
+  position: fixed;
+  top: var(--mpp-top);
+  right: 0;
+  bottom: var(--mpp-bottom);
+  width: 280px;
+  box-sizing: content-box;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  background: var(--rc-panel-bg, #1a1a1a);
+  border-left: 4px solid var(--rc-green, #3b6151);
+  transition: transform 0.18s ease, visibility 0s linear 0s;
+
+  &.collapsed {
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
+  }
+
+  // Drawer (touch + narrow): an overlay over the canvas, so it gets a shadow.
+  &.drawer:not(.collapsed) { box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5); }
+}
+
+.mpp-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-bottom: 2px solid var(--rc-bevel-dk, #111);
+  background: var(--rc-surface, #242424);
+}
+.mpp-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 11px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rc-text-label, #c0c0c0);
+}
+
+.mpp-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+// Collapse handle: on the panel's left edge when open, on the screen edge when collapsed (like the editor's drawer
+// handle). Vertically centred on the panel.
+.mode-props-handle {
+  position: fixed;
+  right: 0;
+  top: calc((100dvh + var(--mpp-top) - var(--mpp-bottom)) / 2 - 32px);
+  z-index: 999;
+  width: 22px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--rc-green, #3b6151);
+  border-right: none;
+  border-radius: 0;
+  background: var(--rc-panel-bg, #1a1a1a);
+  color: var(--rc-text, #c8c8c8);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: right 0.18s ease;
+
+  &.open { right: 284px; }
+  &:hover { background: var(--rc-surface-hi, #2e2e2e); }
+  &:active { background: var(--rc-surface-hi, #2e2e2e); }
+
+  @media (pointer: coarse) {
+    width: 44px;
+    height: 72px;
+    top: calc((100dvh + var(--mpp-top) - var(--mpp-bottom)) / 2 - 36px);
+    font-size: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-props-panel, .mode-props-panel.collapsed, .mode-props-handle { transition: none; }
+}

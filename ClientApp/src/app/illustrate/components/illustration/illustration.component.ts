@@ -35,6 +35,7 @@ import { ArtboardService } from '../../services/artboard.service';
 import { CanvasAppearanceService } from '../../services/canvas-appearance.service';
 import { EngineStatusService } from '../../services/engine-status.service';
 import { MeshEditService } from '../../services/mesh-edit.service';
+import { followClassicSetting } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 import { ViewportHudService } from '../../services/viewport-hud.service';
 import { RibbonService } from '../../services/ribbon.service';
 import { UvEditorService } from '../../services/uv-editor.service';
@@ -61,7 +62,7 @@ import { TouchUiService } from '../../services/touch-ui.service';
 import { ToolSubpanelCollapse } from '../../utils/tool-subpanel-collapse';
 import { aiToolEnabled } from '../../utils/ai-tool-flag';
 import { SidePanelService } from '../../services/side-panel.service';
-import { applyStoredExperiments } from '../../services/experimental-settings.service';
+import { applyStoredExperiments, ExperimentalSettingsService } from '../../services/experimental-settings.service';
 import { toggleAppFullscreen } from '../../../shared/utilities/app-fullscreen';
 import { AppUpdateService } from '../../../shared/services/pwa/app-update.service';
 import type { OutlinerAction } from '../scene-outliner/scene-outliner.component';
@@ -95,6 +96,9 @@ import { HiddenUiWake } from '../../utils/hidden-ui-wake';
 import { applyStoredRetroTheme, isRetroThemeOn, setRetroTheme } from 'app/shared/services/theme/retro-theme';
 import { OverlayManagerService } from 'app/shared/services/overlay/overlay-manager.service';
 import { installEditorChrome } from './editor-chrome';
+import type { ModeChromeId } from '../mode-chrome/mode-chrome.types';
+import { ArmatureModeComponent } from '../armature-mode/armature-mode.component';
+import { followClassicArmature } from '../armature-mode/armature-mode.logic';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
 import {
@@ -252,6 +256,27 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
   setAnimationEnabled(on: boolean): void { this.animationService.setAnimationEnabled(on); }
 
+  // ── Mode chrome (UI review 2026-10-07 §4; components/mode-chrome/README.md) ──
+  /** Per-mode switch to the new chrome (header bar, tool strip, op pill, props panel). Off = the old overlay panel. */
+  readonly useModeChrome: Record<ModeChromeId, boolean> = { meshEdit: true, armature: false };
+  /** Edit Mesh: useModeChrome.meshEdit follows Experimental › Classic Edit Mesh panel (on there = the classic overlay
+   *  <app-mesh-edit-panel>; flipping the switch flips the setting). */
+  private readonly _meshEditExp = inject(ExperimentalSettingsService);
+  readonly meshEditChromeSwitch = followClassicSetting(this.useModeChrome, 'meshEdit', this._meshEditExp);
+  /** Armature: useModeChrome.armature is ON (<app-armature-mode>: Rig | Animate) unless Experimental › Classic Armature
+   *  panel is on (the old <app-armature-panel> overlay); flipping the switch flips the setting. */
+  readonly armatureChromeSwitch = followClassicArmature(this.useModeChrome, this._meshEditExp);
+  /** The mode whose chrome is showing (its switch is on and the mode is active), else null. While set, the rail, its
+   *  sub-panels, the right column and the colour picker are hidden (<body> .mode-chrome-active). */
+  get activeModeChrome(): ModeChromeId | null {
+    if (this.isViewerMode) return null;
+    if (this.useModeChrome.meshEdit && this.meshEdit.scene3dIsEditingMesh && this.editorState.scene3dSelectedMeshId) return 'meshEdit';
+    if (this.useModeChrome.armature && this.scene3dArmaturePanelOpen) return 'armature';
+    return null;
+  }
+  /** Mount the chrome components: a mode is active and the UI is not hidden (X / Toggle UI). */
+  get modeChromeVisible(): boolean { return !!this.activeModeChrome && !this.uiHidden; }
+
   // ── Auto-save state ───────────────────────────────────────────
   selectedAutoSaveInterval = 30_000;
   showEditMenu = false;
@@ -369,6 +394,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   readonly canvasExtras = new CanvasPointerExtras({
     canvas: () => this.canvas ?? null,
     menuAllowed: () => !this.uiHidden && !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible &&
+      !this.meshEdit.scene3dIsEditingMesh &&   // Edit Mesh: its long-press radial menu
       !this.liveTextOptions?.liveTextIsEditing && !this.shapeManager?.lineDrawingService?.isDrawing,
     openMenu: (x, y) => this.ngZone.run(() => this.openContextMenu(x, y)),
     altSampleAllowed: () => !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible && !this.isPathEditActive,
@@ -569,10 +595,16 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sm.setGizmoMode3D(null);
   }
 
-  /** <app-armature-panel> is *ngIf'd on the flag; its ngOnDestroy exits bone placement / overlay / bg and stops clips. */
+  /** <app-armature-panel> / <app-armature-mode> is *ngIf'd on the flag; its ngOnDestroy exits bone placement / overlay /
+   *  bg and stops clips. If the mode chrome's Animate workspace put the timeline up, it goes back first (before the
+   *  next change detection, so the timeline's *ngIf and the chrome's teardown agree). */
   closeArmaturePanel(): void {
+    this.armatureMode?.restoreTimeline();
     this.scene3dArmaturePanelOpen = false;
   }
+
+  /** The mode chrome's Armature (Rig | Animate), while mounted: the Armature keys drive it (mode-keymap ArmatureKeyTarget). */
+  @ViewChild(ArmatureModeComponent) armatureMode?: ArmatureModeComponent;
 
   /** True while any exclusive 3D sub-mode is active. */
   get scene3dInSubMode(): boolean {
@@ -911,7 +943,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   editDelete(): void { routeDelete(this); }
 
   /** The touch pill for the current modal state (null = none). Shown only under (pointer: coarse), outside Play. */
-  get contextPill(): ContextPillSpec | null { return activeContextPill(this); }
+  get contextPill(): ContextPillSpec | null {
+    if (this.activeModeChrome === 'meshEdit') return null;   // the Edit Mesh op pill replaces the touch pill
+    if (this.activeModeChrome === 'armature') return null;   // so does the Armature one
+    return activeContextPill(this);
+  }
   runContextPill(spec: ContextPillSpec, which: 'apply' | 'cancel'): void {
     // Re-check: the mode may have ended between render and tap (a late tap must not act on a newer mode)
     if (activeContextPill(this) !== spec) return;
@@ -2050,10 +2086,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     clearTimeout(this._gizmoPosTimer);
     this._gizmoPosTimer = setTimeout(() => {
       const panelOpen = this.scene3dWorldPanelOpen || this.arrayTool.scene3dArrayToolActive || this.character.scene3dEditCharPanelOpen || this.procedural.scene3dEditBuildingPanelOpen || this.procedural.scene3dEditFoliagePanelOpen || this.procedural.scene3dEditBlockPanelOpen || this.pkg.scene3dPkgCreatorOpen || this.creator.scene3dCreatorPanelOpen;
+      // Mode chrome: below its header bar and the tool hint line (the chrome calls this when it mounts / unmounts)
+      let chromeY = 0;
+      if (this.activeModeChrome) {
+        try { chromeY = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fm-modebar-h')) || 40) + 30; } catch { chromeY = 70; }
+      }
       this.shapeManager?.setViewGizmoPosition3D({
         corner: 'top-left',
         offsetX: panelOpen ? 355 : 100,
-        offsetY: 52,
+        offsetY: 52 + chromeY,
       });
     }, delayMs);
   }

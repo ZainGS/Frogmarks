@@ -1,0 +1,40 @@
+<div class="ar-section">
+  <div class="ar-section-title ar-section-title-toggle" (click)="rig.skeletonsCollapsed = !rig.skeletonsCollapsed">
+    <span class="ar-chevron">{{ rig.skeletonsCollapsed ? '▸' : '▾' }}</span>Skeletons
+  </div>
+
+  <ng-container *ngIf="!rig.skeletonsCollapsed">
+    <div class="ar-op-inline" style="margin-bottom:6px">
+      <input type="text" class="ar-text" placeholder="Name"
+             [(ngModel)]="rig.newSkeletonName">
+      <button class="ar-op-btn" (click)="rig.createSkeleton()">+ New</button>
+    </div>
+
+    <div class="ar-list" *ngIf="rig.skeletons.length > 0; else noSkeletons">
+      <div *ngFor="let sk of rig.skeletons"
+           class="ar-list-row"
+           [class.active]="rig.activeSkeleton?.id === sk.id"
+           (click)="rig.selectSkeleton(sk)">
+        {{ sk.name }}
+      </div>
+    </div>
+    <ng-template #noSkeletons>
+      <div class="ar-hint">No skeletons — create one above.</div>
+    </ng-template>
+
+    <!-- Bone visibility in the viewport -->
+    <div *ngIf="rig.activeSkeleton" class="ar-vis-row">
+      <span class="ar-label">Show</span>
+      <label class="ar-checkbox-row ar-vis-fk">
+        <input type="checkbox" [(ngModel)]="rig.showFkBones"
+               (ngModelChange)="rig.setBoneVisibility(rig.showSpringBones, $event)">
+        Skeleton
+      </label>
+      <label class="ar-checkbox-row ar-vis-spring">
+        <input type="checkbox" [(ngModel)]="rig.showSpringBones"
+               (ngModelChange)="rig.setBoneVisibility($event, rig.showFkBones)">
+        Spring
+      </label>
+    </div>
+  </ng-container>
+</div>

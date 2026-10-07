@@ -1,0 +1,25 @@
+<div class="ar-section" *ngIf="rig.activeSkeleton && anim.clips.length > 0 && rig.skeletons.length > 1">
+  <div class="ar-section-title ar-section-title-toggle" (click)="anim.retargetCollapsed = !anim.retargetCollapsed">
+    <span class="ar-chevron">{{ anim.retargetCollapsed ? '▸' : '▾' }}</span>Retarget Clip
+  </div>
+
+  <ng-container *ngIf="!anim.retargetCollapsed">
+    <div class="ar-form-row">
+      <span class="ar-label">Clip</span>
+      <select class="ar-select" [(ngModel)]="anim.retargetSrcClipIdx">
+        <option *ngFor="let c of anim.clips; let i = index" [value]="i">{{ c.name }}</option>
+      </select>
+    </div>
+    <div class="ar-form-row" style="margin-top:5px">
+      <span class="ar-label">To rig</span>
+      <select class="ar-select" [(ngModel)]="anim.retargetTgtSkeletonId">
+        <option *ngFor="let sk of rig.skeletons" [value]="sk.id"
+                [disabled]="sk.id === rig.activeSkeleton?.id">{{ sk.name }}</option>
+      </select>
+    </div>
+    <button class="ar-op-btn ar-op-full" style="margin-top:8px"
+            [disabled]="!anim.retargetTgtSkeletonId || anim.retargetTgtSkeletonId === rig.activeSkeleton?.id"
+            (click)="anim.retarget()">Retarget</button>
+    <div class="ar-hint" style="margin-top:4px">Matches joints by name — unmatched joints are skipped.</div>
+  </ng-container>
+</div>

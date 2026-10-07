@@ -1,0 +1,53 @@
+<ng-container *ngIf="chromeVisible">
+  <app-mode-header-bar title="Armature" [subtitle]="subtitle"
+      [segments]="segments" [activeSegment]="segment" (segmentChange)="setSegment($event)"
+      [segments2]="workspaces" [activeSegment2]="workspace" (segment2Change)="setWorkspace($event)"
+      [multiLatch]="multiLatch" (multiLatchChange)="setMulti($event)"
+      [canUndo]="true" [canRedo]="true" (undo)="undo.emit()" (redo)="redo.emit()" (frame)="frame()"
+      [menuItems]="menuItems" (menuAction)="runMenu($event)" (done)="done.emit()"></app-mode-header-bar>
+
+  <app-mode-tool-strip [tools]="tools" [activeTool]="tool" (toolChange)="setTool($event)"></app-mode-tool-strip>
+
+  <app-mode-op-pill *ngIf="opPill as op" [class.above-timeline]="aboveTimeline"
+      [title]="op.title" [params]="op.params" [note]="op.note" [showApplyCancel]="op.showApplyCancel"
+      [applyLabel]="op.applyLabel || 'Apply'"
+      (paramChange)="onParamChange($event)" (apply)="onOpApply()" (cancel)="onOpCancel()" (action)="onOpAction($event)"></app-mode-op-pill>
+
+  <app-mode-props-panel [title]="workspace === 'animate' ? 'Animate' : 'Rig'" [class.above-timeline]="aboveTimeline">
+    <app-arm-sections skin="chrome">
+      <!-- A one-shot "tap a joint" pick is waiting -->
+      <div *ngIf="pick.pending as p" class="arm-pick-banner" role="status">
+        <span>{{ pick.missed ? 'No joint there — tap closer to a joint' : p.label }}</span>
+        <button type="button" class="ar-op-btn ar-op-xs" (click)="pick.cancel()">Cancel</button>
+      </div>
+
+      <ng-container *ngIf="workspace === 'rig'; else animateProps">
+        <app-arm-skeletons-section></app-arm-skeletons-section>
+        <app-arm-joint-props-section [chrome]="true" [selectionCount]="session.selection.length"></app-arm-joint-props-section>
+        <app-arm-joints-section [showAddBone]="false"></app-arm-joints-section>
+        <app-arm-constraints-section></app-arm-constraints-section>
+        <app-arm-bind-section></app-arm-bind-section>
+        <app-arm-weight-section [chrome]="true" (paint)="onWeightPaint($event)"></app-arm-weight-section>
+        <app-arm-spring-section></app-arm-spring-section>
+      </ng-container>
+
+      <ng-template #animateProps>
+        <div *ngIf="rig.activeSkeleton && !binding.isBound && !binding.isProceduralBody" class="ar-section">
+          <div class="ar-hint">Clips, the pose library and NLA need a mesh bound to this skeleton: Rig › Bind Mesh to Skeleton.</div>
+        </div>
+        <div *ngIf="!rig.activeSkeleton" class="ar-section">
+          <div class="ar-hint">No skeleton yet: create one in Rig › Skeletons.</div>
+        </div>
+        <app-arm-poses-section></app-arm-poses-section>
+        <app-arm-pose-library-section [chrome]="true"></app-arm-pose-library-section>
+        <app-arm-clips-section></app-arm-clips-section>
+        <app-arm-nla-section></app-arm-nla-section>
+        <app-arm-libraries-section></app-arm-libraries-section>
+        <app-arm-retarget-section></app-arm-retarget-section>
+      </ng-template>
+    </app-arm-sections>
+  </app-mode-props-panel>
+
+  <app-mode-radial-menu [open]="radial.open" [x]="radial.x" [y]="radial.y" [items]="radial.items" [title]="radial.title"
+      (pick)="runRadial($event)" (closed)="closeRadial()"></app-mode-radial-menu>
+</ng-container>

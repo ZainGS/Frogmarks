@@ -1,0 +1,60 @@
+// Mode chrome mixins (no CSS output): bevels, buttons, surfaces. _mode-chrome.scss imports this and adds the
+// content classes; the mode-chrome components import only this.
+
+$mode-font: 500 12px/1.3 system-ui, sans-serif;
+
+@mixin mode-raised {
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+}
+
+@mixin mode-sunken {
+  border: 2px solid;
+  border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+  border-radius: 0;
+}
+
+@mixin mode-btn {
+  @include mode-raised;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  background: var(--rc-surface, #242424);
+  color: var(--rc-text, #c8c8c8);
+  font: 600 12px/1 system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+
+  &:hover:not(:disabled) { background: var(--rc-surface-hi, #2e2e2e); }
+  &:active:not(:disabled) { @include mode-sunken; background: var(--rc-surface-hi, #2e2e2e); }
+  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+  &:disabled { opacity: 0.4; cursor: default; }
+
+  @media (pointer: coarse) { min-height: 44px; min-width: 44px; font-size: 14px; padding: 0 12px; }
+}
+
+@mixin mode-btn-on {
+  @include mode-sunken;
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  &:hover:not(:disabled) { background: var(--rc-green-hi, #4f7a68); }
+}
+
+@mixin mode-btn-primary {
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  &:hover:not(:disabled) { background: var(--rc-green-hi, #4f7a68); }
+}
+
+@mixin mode-surface {
+  background: var(--rc-panel-bg, #1a1a1a);
+  color: var(--rc-text, #c8c8c8);
+  font: $mode-font;
+}

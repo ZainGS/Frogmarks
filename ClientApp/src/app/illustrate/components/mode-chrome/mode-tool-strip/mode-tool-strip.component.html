@@ -1,0 +1,23 @@
+<nav class="mode-tool-strip" role="toolbar" aria-orientation="vertical" aria-label="Tools">
+    <ng-container *ngFor="let r of rows; trackBy: trackRow">
+        <div *ngIf="r.sepBefore" class="mts-sep" role="separator"></div>
+        <button type="button" class="mts-tool" [class.on]="r.tool.id === activeTool" [disabled]="r.tool.disabled"
+                [attr.aria-pressed]="r.tool.id === activeTool" [attr.data-id]="r.tool.id" [attr.aria-label]="r.tool.label"
+                [title]="toolTitle(r.tool)" (click)="pick(r.tool)">
+            <span class="mts-icon" aria-hidden="true">
+                <svg *ngIf="r.paths; else glyph" viewBox="0 0 24 24" width="22" height="22">
+                    <path *ngFor="let d of r.paths" [attr.d]="d" fill="none" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="square" stroke-linejoin="miter"/>
+                </svg>
+                <ng-template #glyph>{{ r.tool.icon }}</ng-template>
+            </span>
+            <span class="mts-label">{{ r.tool.label }}</span>
+            <span *ngIf="r.tool.key" class="mts-key" aria-hidden="true">{{ r.tool.key }}</span>
+        </button>
+    </ng-container>
+</nav>
+
+<!-- The active tool's one-line hint: beside the strip, just below the header bar (the op pill owns the bottom). -->
+<div *ngIf="active?.hint" class="mode-tool-hint" role="status" aria-live="polite">
+    <span class="mts-hint-tool">{{ active?.label }}</span><span class="mts-hint-text">{{ active?.hint }}</span>
+</div>

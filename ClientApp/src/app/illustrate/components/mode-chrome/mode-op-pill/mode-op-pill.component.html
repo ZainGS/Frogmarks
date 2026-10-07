@@ -1,0 +1,72 @@
+<div #pill class="mode-op-pill" role="group" [attr.aria-label]="title" (keydown)="onKeyDown($event)">
+    <div class="mop-head">
+        <span class="mop-title">{{ title }}</span>
+        <span *ngIf="note" class="mop-note" [title]="note">{{ note }}</span>
+    </div>
+
+    <div *ngIf="params.length" class="mop-params">
+        <ng-container *ngFor="let p of params; trackBy: trackId">
+            <!-- number / int: scrub the label, type the value, − / + on touch -->
+            <div *ngIf="isNumeric(p)" class="mop-num" [class.disabled]="p.disabled" [class.scrubbing]="scrubbingId === p.id"
+                 [attr.data-id]="p.id" [attr.data-kind]="p.kind">
+                <span class="mop-scrub" [title]="p.title || ('Drag sideways to change ' + p.label + ' (Shift: fine); tap to type')"
+                      (pointerdown)="scrubDown($event, p)" (pointermove)="scrubMove($event, p)"
+                      (pointerup)="scrubUp($event, p)" (pointercancel)="scrubCancel()">{{ p.label }}</span>
+                <button type="button" class="mop-step" [disabled]="p.disabled" (click)="step(p, -1)"
+                        [attr.aria-label]="'Less ' + p.label">−</button>
+                <input *ngIf="editingId === p.id; else valueBtn" #edit class="mop-input" type="text" inputmode="decimal"
+                       autocomplete="off" spellcheck="false" [value]="editText" [attr.aria-label]="p.label"
+                       (keydown)="onEditKey($event, p)" (blur)="commitEdit(p, $any($event.target).value)">
+                <ng-template #valueBtn>
+                    <button type="button" class="mop-value" [disabled]="p.disabled" [attr.aria-label]="p.label + ': ' + format(p) + ', tap to type'"
+                            (click)="startEdit(p)" (keydown)="onValueKey($event, p)">{{ format(p) }}</button>
+                </ng-template>
+                <button type="button" class="mop-step" [disabled]="p.disabled" (click)="step(p, 1)"
+                        [attr.aria-label]="'More ' + p.label">+</button>
+            </div>
+
+            <!-- toggle -->
+            <button *ngIf="p.kind === 'toggle'" type="button" class="mop-btn" [class.on]="!!p.value" [disabled]="p.disabled"
+                    [attr.aria-pressed]="!!p.value" [attr.data-id]="p.id" [attr.data-kind]="p.kind" [title]="p.title || p.label"
+                    (click)="toggle(p)">{{ p.label }}</button>
+
+            <!-- axis / choice: chips -->
+            <div *ngIf="p.kind === 'axis' || p.kind === 'choice'" class="mop-chips" role="group" [attr.aria-label]="p.label"
+                 [attr.data-id]="p.id" [attr.data-kind]="p.kind" [title]="p.title || p.label">
+                <span class="mop-label">{{ p.label }}</span>
+                <button *ngFor="let c of chips(p); trackBy: trackId" type="button" class="mop-btn mop-chip"
+                        [class.on]="chipOn(p, c.id)" [attr.aria-pressed]="chipOn(p, c.id)" [disabled]="p.disabled"
+                        (click)="pickChip(p, c.id)">{{ c.label }}</button>
+            </div>
+
+            <!-- button: an action -->
+            <button *ngIf="p.kind === 'button'" type="button" class="mop-btn" [disabled]="p.disabled"
+                    [attr.data-id]="p.id" [attr.data-kind]="p.kind" [title]="p.title || p.label"
+                    (click)="runButton(p)">{{ p.label }}</button>
+
+            <!-- text: a short name (Enter / blur commits, Esc restores) -->
+            <label *ngIf="p.kind === 'text'" class="mop-field" [class.disabled]="p.disabled"
+                   [attr.data-id]="p.id" [attr.data-kind]="p.kind" [title]="p.title || p.label">
+                <span class="mop-label">{{ p.label }}</span>
+                <input class="mop-input mop-text" type="text" autocomplete="off" spellcheck="false" [value]="p.value ?? ''"
+                       [disabled]="p.disabled" [attr.aria-label]="p.label"
+                       (keydown)="onTextKey($event, p)" (change)="commitText(p, $any($event.target).value)">
+            </label>
+
+            <!-- select: a dropdown of options -->
+            <label *ngIf="p.kind === 'select'" class="mop-field" [class.disabled]="p.disabled"
+                   [attr.data-id]="p.id" [attr.data-kind]="p.kind" [title]="p.title || p.label">
+                <span class="mop-label">{{ p.label }}</span>
+                <select class="mop-input mop-select" [disabled]="p.disabled" [attr.aria-label]="p.label"
+                        (change)="pickSelect(p, $any($event.target).value)">
+                    <option *ngFor="let o of p.options ?? []; trackBy: trackId" [value]="o.id" [selected]="o.id === p.value">{{ o.label }}</option>
+                </select>
+            </label>
+        </ng-container>
+    </div>
+
+    <div *ngIf="showApplyCancel" class="mop-actions">
+        <button type="button" class="mop-btn mop-cancel" (click)="cancel.emit()" title="Cancel (Esc)">{{ cancelLabel }}</button>
+        <button type="button" class="mop-btn mop-apply" [disabled]="applyDisabled" (click)="apply.emit()" title="Apply (Enter)">{{ applyLabel }}</button>
+    </div>
+</div>

@@ -9,7 +9,8 @@ import { BEVEL_ACTIONS, chordLabel, cheatsheetColumns, dispatchKey, KeyBinding, 
  *
  * Edit Mesh binds the keys the engine already supports (Blender's): 1 / 2 / 3 vertex / edge / face, A select all
  * (again: deselect), Alt+A deselect, X / Delete delete the selected faces or dissolve the selected edges, Ctrl+R loop
- * cut on the selected edge. Ctrl+B (chamfer), Enter / Esc, K (knife) and Tab stay in the global tables. The keyboard
+ * cut on the selected edge, E / I extrude / inset, K the knife (Enter / Esc apply / drop its tapped points), G / R / S
+ * listed for the hints (the HUD runs them). Ctrl+B (chamfer), Enter / Esc otherwise and Tab stay in the global tables. The keyboard
  * transform (G / R / S, X / Y / Z, digits) is the HUD's (ViewportHudService.handleTransformKey) and runs earlier: a key
  * it claimed (default prevented) is not seen here.
  *
@@ -52,14 +53,79 @@ export const MESH_EDIT_KEYS = {
   // Claimed even with no edge selected: Ctrl+R must never reload the page (nor start the R rotate)
   loopCut: { keys: ['r', 'R'], mod: true, shift: false, alt: false, group: 'Edit Mesh', help: 'Loop cut through the selected edge',
     run: (ed) => { if (!meshEditBusy(ed)) ed.meshEdit.loopCutSelectedEdge(); } },
+  // UI review §4 (keyboard parity with the tool strip). E / I: the Extrude / Inset tool, run at once on the selected
+  // faces (Blender's E / I); the op pill then adjusts it.
+  extrude: { keys: ['e', 'E'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Extrude the selected faces',
+    run: (ed) => { if (meshEditBusy(ed)) return false; ed.meshEdit.toolKey('extrude'); } },
+  inset: { keys: ['i', 'I'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Inset the selected faces',
+    run: (ed) => { if (meshEditBusy(ed)) return false; ed.meshEdit.toolKey('inset'); } },
+  knife: { keys: ['k', 'K'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife tool on / off',
+    run: (ed) => { ed.meshEdit.toggleKnifeTool(); } },   // (as the global K: it ends a running Chamfer / transform)
+  // The Knife's tapped points (a newer Salsa): Enter cuts, Esc drops them. Declined otherwise (the global Enter / Esc).
+  knifeApply: { keys: ['Enter'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife: cut along the tapped points',
+    run: (ed) => ed.meshEdit.applyKnifePoints() },
+  knifeCancel: { keys: ['Escape'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife: drop the tapped points',
+    run: (ed) => ed.meshEdit.cancelKnifePoints() },
+  // G / R / S: run by the HUD's keyboard transform (ViewportHudService.handleTransformKey), which claims the key before
+  // this table. Listed here so the tool strip / cheatsheet show them; declined if it ever gets here.
+  move: { keys: ['g', 'G'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Move the selection (then X / Y / Z, a number, Enter)',
+    run: () => false },
+  rotate: { keys: ['r', 'R'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Rotate the selection (then X / Y / Z, degrees, Enter)',
+    run: () => false },
+  scale: { keys: ['s', 'S'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Scale the selection (then X / Y / Z, a factor, Enter)',
+    run: () => false },
 } satisfies Record<string, KeyBinding>;
 
 export const MESH_EDIT_KEYMAP: KeyBinding[] = Object.values(MESH_EDIT_KEYS);
 
-/** Each mode's own bindings (the armature / UV paint have none yet: their input is the pointer). */
+// ── Armature (the mode chrome's <app-armature-mode>, UI review §4) ─────────────────────────────────────────────
+
+/** What the Armature keys drive: the mode chrome's armature component (IllustrationComponent.armatureMode). Absent
+ *  with the classic panel, so the keys decline there (and are swallowed as before). */
+export interface ArmatureKeyTarget {
+  readonly workspace: 'rig' | 'animate';
+  setTool(id: string): void;
+  setSegment(id: string): void;
+  keyPose(): void;
+}
+function armatureTarget(ed: unknown): ArmatureKeyTarget | null {
+  return (ed as { armatureMode?: ArmatureKeyTarget | null } | null)?.armatureMode ?? null;
+}
+/** A tool key, only in workspace `ws` when given (else declined: B / I / P are Rig tools, I / K Animate's Key). */
+const armTool = (id: string, ws?: 'rig' | 'animate') => (ed: KeymapHost): boolean | void => {
+  const t = armatureTarget(ed);
+  if (!t || (ws && t.workspace !== ws)) return false;
+  t.setTool(id);
+};
+const armSegment = (id: string) => (ed: KeymapHost): boolean | void => {
+  const t = armatureTarget(ed);
+  if (!t || t.workspace !== 'rig') return false;
+  t.setSegment(id);
+};
+
+/** Armature bindings by id (the tool strip's key chips and hints are generated from them: armatureKeyLabels). Q / W /
+ *  E pick the tools (not G / R / S: those start the HUD's keyboard transform of the selected mesh). */
+export const ARMATURE_KEYS = {
+  select: { keys: ['q', 'Q'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Select tool (tap a joint)', run: armTool('select') },
+  move: { keys: ['w', 'W'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Move tool', run: armTool('move') },
+  rotate: { keys: ['e', 'E'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Rotate tool', run: armTool('rotate') },
+  addBone: { keys: ['b', 'B'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Add Bone tool (Rig)', run: armTool('addbone', 'rig') },
+  ik: { keys: ['i', 'I'], mod: false, shift: false, alt: false, group: 'Armature', help: 'IK tool (Rig)', run: armTool('ik', 'rig') },
+  weight: { keys: ['p', 'P'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Weight Brush tool (Rig)', run: armTool('weight', 'rig') },
+  key: { keys: ['i', 'I'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Key tool (Animate)', run: armTool('key', 'animate') },
+  insertKey: { keys: ['k', 'K'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Key the pose into the clip (Animate)',
+    run: (ed) => { const t = armatureTarget(ed); if (!t || t.workspace !== 'animate') return false; t.keyPose(); } },
+  pose: { keys: ['1'], mod: false, alt: false, group: 'Armature', help: 'Pose (Rotate tool)', run: armSegment('pose') },
+  editBones: { keys: ['2'], mod: false, alt: false, group: 'Armature', help: 'Edit Bones (Move tool)', run: armSegment('edit') },
+  weightMode: { keys: ['3'], mod: false, alt: false, group: 'Armature', help: 'Weight (Weight Brush tool)', run: armSegment('weight') },
+} satisfies Record<string, KeyBinding>;
+
+export const ARMATURE_KEYMAP: KeyBinding[] = Object.values(ARMATURE_KEYS);
+
+/** Each mode's own bindings (UV paint has none yet: its input is the pointer; the Armature's drive the mode chrome). */
 export const MODE_KEYMAPS: Readonly<Record<KeymapMode, KeyBinding[]>> = {
   meshEdit: MESH_EDIT_KEYMAP,
-  armature: [],
+  armature: ARMATURE_KEYMAP,
   uvPaint: [],
 };
 
@@ -105,13 +171,18 @@ function chipLabel(b: KeyBinding): string { return chordLabel({ ...b, keys: [b.k
 const globalBinding = (help: string): KeyBinding | undefined => [...MOD_KEYMAP, ...TOOL_KEYMAP].find(b => b.help === help);
 
 /** The Edit Mesh panel's key chips, generated from the real bindings. */
-export function meshEditKeyLabels(): Record<keyof typeof MESH_EDIT_KEYS | 'chamfer' | 'knife', string> {
-  const out = {} as Record<keyof typeof MESH_EDIT_KEYS | 'chamfer' | 'knife', string>;
+/** The Armature tool strip's / header's key chips, generated from the real bindings. */
+export function armatureKeyLabels(): Record<keyof typeof ARMATURE_KEYS, string> {
+  const out = {} as Record<keyof typeof ARMATURE_KEYS, string>;
+  for (const [id, b] of Object.entries(ARMATURE_KEYS)) out[id as keyof typeof ARMATURE_KEYS] = chipLabel(b);
+  return out;
+}
+
+export function meshEditKeyLabels(): Record<keyof typeof MESH_EDIT_KEYS | 'chamfer', string> {
+  const out = {} as Record<keyof typeof MESH_EDIT_KEYS | 'chamfer', string>;
   for (const [id, b] of Object.entries(MESH_EDIT_KEYS)) out[id as keyof typeof MESH_EDIT_KEYS] = chipLabel(b);
   const chamfer = globalBinding('Chamfer / bevel (Edit Mesh)');
-  const knife = globalBinding('Knife (edit mode) / record keyframe');
   out.chamfer = chamfer ? chipLabel(chamfer) : '';
-  out.knife = knife ? chipLabel(knife) : '';
   return out;
 }
 
@@ -119,5 +190,6 @@ export function meshEditKeyLabels(): Record<keyof typeof MESH_EDIT_KEYS | 'chamf
 export function cheatsheetColumnsWithModes(): ReturnType<typeof cheatsheetColumns> {
   const cols = cheatsheetColumns();
   cols[0].push({ title: 'Edit Mesh', rows: MESH_EDIT_KEYMAP.map(b => ({ chord: chordLabel(b), help: b.help })) });
+  cols[0].push({ title: 'Armature', rows: ARMATURE_KEYMAP.map(b => ({ chord: chordLabel(b), help: b.help })) });
   return cols;
 }

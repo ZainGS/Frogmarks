@@ -1192,6 +1192,7 @@ svg {
 
     /* Tool labels */
 @import '../../styles/panel-controls';   // shared with extracted child panels
+@import '../../styles/mode-chrome';      // .mode-props-section / .mode-card … for mode content written in this template
 
     /* Subcontrol */
 
@@ -2782,6 +2783,23 @@ svg {
     .scene3d-stats-toggle,
     .scene3d-stats-hud,
     .animation-timeline-wrapper { display: none !important; }
+}
+
+/* Mode chrome (UI review 2026-10-07 §4; components/mode-chrome/README.md): while a mode with the new chrome is active
+   (activeModeChrome) its tool strip takes the rail's slot and its props panel the right column's, so the rail, its
+   sub-panels, the right column + drawer handle and the colour picker leave (they stay mounted and come back as they
+   were). The canvas does not resize: the strip is exactly the rail's 70 px. */
+.mode-chrome-active {
+    .vertical-control-panel,
+    .tool-subpanel,
+    .toolbar-mode-label,
+    .right-column,
+    .side-drawer-handle,
+    .persistent-color-picker { display: none !important; }
+}
+/* The engine status line ("Preparing shaders…") sits above the mode op pill (bottom 16 px + its height), not on it. */
+@media (min-width: 700.02px) {
+    .mode-chrome-active .engine-status-pill { bottom: 96px; }
 }
 
 /* Vector tool hint (UI review 2026-10-07 §3 #12): one line on how the tool draws (drag / click). */

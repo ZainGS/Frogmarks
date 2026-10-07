@@ -1,0 +1,62 @@
+<div class="ar-section" *ngIf="binding.isBound || binding.isProceduralBody">
+  <div class="ar-section-title ar-section-title-toggle" (click)="binding.weightPaintCollapsed = !binding.weightPaintCollapsed">
+    <span class="ar-chevron">{{ binding.weightPaintCollapsed ? '▸' : '▾' }}</span>Weight Paint
+  </div>
+
+  <ng-container *ngIf="!binding.weightPaintCollapsed">
+    <div class="ar-form-row">
+      <span class="ar-label">Joint</span>
+      <select class="ar-select" [ngModel]="rig.selectedJointIdx" (ngModelChange)="rig.selectJoint(+$event)"
+              title="The joint whose weights you paint (picking one in the Joints list or the viewport does the same)">
+        <option *ngIf="rig.selectedJointIdx === null" [ngValue]="null" disabled>Pick a joint…</option>
+        <option *ngFor="let j of rig.joints; let i = index" [ngValue]="i">{{ j.name }}</option>
+      </select>
+      <button class="ar-op-btn ar-op-xs" [class.ar-active]="pick.isArmed('weight-joint')"
+              title="Tap the joint in the viewport" (click)="pickJoint()">Pick</button>
+    </div>
+    <div *ngIf="pick.pending && pick.pending.id === 'weight-joint'" class="ar-hint ar-hint-active" style="margin-top:4px">
+      {{ pick.missed ? 'No joint there — tap closer to a joint' : pick.pending.label }} (Esc cancels)
+    </div>
+    <div class="ar-form-row" style="margin-top:5px">
+      <span class="ar-label">Radius</span>
+      <input type="range" class="ar-range" min="0.02" max="0.5" step="0.01"
+             [(ngModel)]="binding.wpRadius" (ngModelChange)="binding.onWpBrushChange()">
+      <span class="ar-val">{{ binding.wpRadius | number:'1.2-2' }}</span>
+    </div>
+    <div class="ar-form-row" style="margin-top:5px">
+      <span class="ar-label">Strength</span>
+      <input type="range" class="ar-range" min="0" max="1" step="0.01"
+             [(ngModel)]="binding.wpStrength" (ngModelChange)="binding.onWpBrushChange()">
+      <span class="ar-val">{{ binding.wpStrength | number:'1.2-2' }}</span>
+    </div>
+    <div class="ar-form-row" style="margin-top:5px">
+      <span class="ar-label">Weight</span>
+      <input type="range" class="ar-range" min="0" max="1" step="0.01"
+             [(ngModel)]="binding.wpTargetWeight" (ngModelChange)="binding.onWpBrushChange()">
+      <span class="ar-val">{{ binding.wpTargetWeight | number:'1.2-2' }}</span>
+    </div>
+    <div class="ar-form-row" style="margin-top:6px; gap:14px">
+      <label class="ar-checkbox-row">
+        <input type="checkbox" [(ngModel)]="binding.wpShowSkeleton" (ngModelChange)="binding.onWpShowSkeletonChange()">
+        <span class="ar-label" style="min-width:unset">Show skeleton</span>
+      </label>
+      <label class="ar-checkbox-row">
+        <input type="checkbox" [(ngModel)]="binding.wpUnlit" (ngModelChange)="binding.onWpUnlitChange()">
+        <span class="ar-label" style="min-width:unset">Unlit</span>
+      </label>
+    </div>
+
+    <div class="ar-btn-pair" style="margin-top:8px">
+      <button class="ar-op-btn" [class.ar-active]="binding.wpActive"
+              [disabled]="!binding.wpActive && rig.selectedJointIdx === null"
+              [title]="!binding.wpActive && rig.selectedJointIdx === null ? 'Pick the joint to paint first' : ''"
+              (click)="togglePaint()">
+        {{ binding.wpActive ? '✓ Painting' : 'Enter Paint' }}
+      </button>
+      <button class="ar-op-btn ar-op-secondary" (click)="binding.normalizeWeights()">Normalize</button>
+    </div>
+    <div *ngIf="binding.wpActive" class="ar-hint ar-hint-active" style="margin-top:4px">
+      Paint on mesh · Blue = 0 · Green = 0.5 · Red = full
+    </div>
+  </ng-container>
+</div>

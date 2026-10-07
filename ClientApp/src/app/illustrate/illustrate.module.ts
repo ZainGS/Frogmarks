@@ -11,7 +11,12 @@ import { AnimationExportComponent } from './components/animation-export/animatio
 import { ClothBuilderComponent } from './components/cloth-builder/cloth-builder.component';
 import { ParticleEmittersComponent } from './components/particle-emitters/particle-emitters.component';
 import { MeshEditPanelComponent } from './components/mesh-edit-panel/mesh-edit-panel.component';
+import { MeshEditChromeComponent } from './components/mesh-edit-chrome/mesh-edit-chrome.component';
+import { MeshEditPropsComponent } from './components/mesh-edit-props/mesh-edit-props.component';
 import { ArmaturePanelComponent } from './components/armature-panel/armature-panel.component';
+import { ARMATURE_SECTION_COMPONENTS } from './components/armature-panel/sections/arm-sections.index';
+import { ArmSectionsComponent } from './components/armature-panel/arm-sections.component';
+import { ArmatureModeComponent } from './components/armature-mode/armature-mode.component';
 import { SkinsPanelComponent } from './components/skins-panel/skins-panel.component';
 import { CdDesignerPanelComponent } from './components/cd-designer-panel/cd-designer-panel.component';
 import { UiSystemPanelComponent } from './components/ui-system-panel/ui-system-panel.component';
@@ -73,6 +78,11 @@ import { UvEditorPanelComponent } from './components/uv-editor-panel/uv-editor-p
 import { AuthoringPanelComponent } from './components/authoring-panel/authoring-panel.component';
 import { DetachWhenHiddenDirective } from '../shared/directives/detach-when-hidden.directive';
 import { ConfirmStripComponent } from './components/confirm-strip/confirm-strip.component';
+import { ModeHeaderBarComponent } from './components/mode-chrome/mode-header-bar/mode-header-bar.component';
+import { ModeToolStripComponent } from './components/mode-chrome/mode-tool-strip/mode-tool-strip.component';
+import { ModeOpPillComponent } from './components/mode-chrome/mode-op-pill/mode-op-pill.component';
+import { ModeRadialMenuComponent } from './components/mode-chrome/mode-radial-menu/mode-radial-menu.component';
+import { ModePropsPanelComponent } from './components/mode-chrome/mode-props-panel/mode-props-panel.component';
 
 /** Leaving the editor saves the pending change first (audit Phase 2.3). */
 const flushBeforeLeave = (c: IllustrationComponent) => c.flushBeforeLeave();
@@ -94,7 +104,13 @@ const routes: Routes = [
     ClothBuilderComponent,
     ParticleEmittersComponent,
     MeshEditPanelComponent,
+    MeshEditChromeComponent,
+    MeshEditPropsComponent,
     ArmaturePanelComponent,
+    // Armature: the shared sections (classic panel + mode chrome) and the mode chrome itself (UI review §4)
+    ArmSectionsComponent,
+    ...ARMATURE_SECTION_COMPONENTS,
+    ArmatureModeComponent,
     SkinsPanelComponent,
     CdDesignerPanelComponent,
     UiSystemPanelComponent,
@@ -154,7 +170,14 @@ const routes: Routes = [
     GreasePencilPanelComponent,
     UvEditorPanelComponent,
     AuthoringPanelComponent,
+    // Mode chrome (Edit Mesh / Armature redesign): components/mode-chrome/README.md
+    ModeHeaderBarComponent,
+    ModeToolStripComponent,
+    ModeOpPillComponent,
+    ModeRadialMenuComponent,
+    ModePropsPanelComponent,
   ],
+  exports: [ModeHeaderBarComponent, ModeToolStripComponent, ModeOpPillComponent, ModeRadialMenuComponent, ModePropsPanelComponent],
   imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, SharedUiModule, DetachWhenHiddenDirective, ConfirmStripComponent, RouterModule.forChild(routes)],
 })
 export class IllustrateModule { }

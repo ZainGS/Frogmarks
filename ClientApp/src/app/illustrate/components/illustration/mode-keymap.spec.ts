@@ -1,7 +1,7 @@
 import { MOD_KEYMAP, TOOL_KEYMAP } from './editor-keymap';
 import { keymapMayHandle } from './hotkey-zone-gate';
 import {
-  activeKeymapMode, cheatsheetColumnsWithModes, dispatchModeKey, KeymapMode, MESH_EDIT_KEYMAP, meshEditKeyLabels, PASS_THROUGH,
+  activeKeymapMode, cheatsheetColumnsWithModes, dispatchModeKey, KeymapMode, MESH_EDIT_KEYMAP, MESH_EDIT_KEYS, meshEditKeyLabels, PASS_THROUGH,
 } from './mode-keymap';
 
 function key(k: string, mods: { shift?: boolean; alt?: boolean; ctrl?: boolean; repeat?: boolean } = {}): KeyboardEvent {
@@ -35,6 +35,9 @@ describe('mode keymap', () => {
         loopCutSelectedEdge: jasmine.createSpy('loopCutSelectedEdge'),
         deleteSelectedFaces: jasmine.createSpy('deleteSelectedFaces'),
         toggleKnifeTool: jasmine.createSpy('toggleKnifeTool'),
+        toolKey: jasmine.createSpy('toolKey'),
+        applyKnifePoints: jasmine.createSpy('applyKnifePoints').and.returnValue(false),
+        cancelKnifePoints: jasmine.createSpy('cancelKnifePoints').and.returnValue(false),
       },
       scene3dArmaturePanelOpen: mode === 'armature',
       uv: { uvEditorOpen: mode === 'uvPaint', scene3dClothingPaintActive: null, closeUVEditor: jasmine.createSpy('closeUVEditor') },
@@ -169,6 +172,45 @@ describe('mode keymap', () => {
       expect(ed.selectCursor).toHaveBeenCalledOnceWith('cursor');
     });
 
+    it('E / I run the Extrude / Inset tool (never the eraser / highlighter); K the knife', () => {
+      const ed = editor();
+      expect(run(ed, key('e'))).toBeTrue();
+      expect(run(ed, key('i'))).toBeTrue();
+      expect(ed.meshEdit.toolKey.calls.allArgs()).toEqual([['extrude'], ['inset']]);
+      expect(ed.setActiveTool).not.toHaveBeenCalled();
+      run(ed, key('k'));
+      expect(ed.meshEdit.toggleKnifeTool).toHaveBeenCalledTimes(1);
+      // Shift+E is still swallowed (the raster eraser), not an extrude
+      const shiftE = key('E', { shift: true });
+      expect(run(ed, shiftE)).toBeTrue();
+      expect(ed.meshEdit.toolKey).toHaveBeenCalledTimes(2);
+      // E / I wait for a running Chamfer / keyboard transform
+      const busy = editor({ shortcut: true });
+      run(busy, key('e'));
+      expect(busy.meshEdit.toolKey).not.toHaveBeenCalled();
+    });
+
+    it('Enter / Esc go to the knife points first, and fall through to the global keys when there are none', () => {
+      const ed = editor();
+      run(ed, key('Escape'));
+      expect(ed.meshEdit.cancelKnifePoints).toHaveBeenCalledTimes(1);
+      expect(ed.selectCursor).toHaveBeenCalledOnceWith('cursor');   // declined: the global Esc ran
+      ed.meshEdit.cancelKnifePoints.and.returnValue(true);
+      run(ed, key('Escape'));
+      expect(ed.selectCursor).toHaveBeenCalledTimes(1);   // claimed: the points were dropped
+      ed.meshEdit.applyKnifePoints.and.returnValue(true);
+      const enter = key('Enter');
+      expect(run(ed, enter)).toBeTrue();
+      expect(ed.meshEdit.applyKnifePoints).toHaveBeenCalledTimes(1);
+    });
+
+    it('G / R / S stay the HUD transform: listed, but never claimed here', () => {
+      const ed = editor();
+      expect(run(ed, key('r'))).toBeFalse();
+      expect(run(ed, key('s'))).toBeFalse();
+      expect((MESH_EDIT_KEYS.move.run as () => boolean)()).toBeFalse();
+    });
+
     it('a key no binding knows is left alone (the browser default stays)', () => {
       const ed = editor();
       const e = key('j');
@@ -216,7 +258,8 @@ describe('mode keymap', () => {
     it('the panel chips come from the bindings', () => {
       expect(meshEditKeyLabels()).toEqual({
         vertexMode: '1', edgeMode: '2', faceMode: '3', selectAll: 'A', deselectAll: 'Alt+A', delete: 'X', loopCut: 'Ctrl+R',
-        chamfer: 'Ctrl+B', knife: 'K',
+        extrude: 'E', inset: 'I', knife: 'K', knifeApply: 'Enter', knifeCancel: 'Esc', move: 'G', rotate: 'R', scale: 'S',
+        chamfer: 'Ctrl+B',
       });
     });
 

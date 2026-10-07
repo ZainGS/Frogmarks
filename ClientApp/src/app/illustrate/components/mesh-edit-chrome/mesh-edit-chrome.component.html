@@ -1,0 +1,19 @@
+<app-mode-header-bar title="Edit Mesh" [subtitle]="meshName"
+    [segments]="segments" [activeSegment]="selectMode" (segmentChange)="setSelectMode($event)"
+    [multiLatch]="multi" (multiLatchChange)="setMulti($event)"
+    [canUndo]="true" [canRedo]="true" (undo)="undo()" (redo)="redo()" (frame)="frame()"
+    [menuItems]="menuItems" (menuAction)="runMenu($event)" (done)="done()"></app-mode-header-bar>
+
+<app-mode-tool-strip [tools]="tools" [activeTool]="tool" (toolChange)="setTool($event)"></app-mode-tool-strip>
+
+<app-mode-op-pill *ngIf="op as o" [class.above-timeline]="ed.animationEnabled"
+    [title]="o.title" [params]="o.params" [note]="o.note" [showApplyCancel]="o.showApplyCancel"
+    [applyLabel]="o.applyLabel" [cancelLabel]="o.cancelLabel" [applyDisabled]="o.applyDisabled"
+    (paramChange)="setOpParam($event)" (apply)="applyOp()" (cancel)="cancelOp()" (action)="opAction($event)"></app-mode-op-pill>
+
+<app-mode-props-panel title="Mesh" [class.above-timeline]="ed.animationEnabled">
+    <app-mesh-edit-props [ed]="ed"></app-mesh-edit-props>
+</app-mode-props-panel>
+
+<app-mode-radial-menu [open]="radial.open" [x]="radial.x" [y]="radial.y" [items]="radial.items" [title]="radial.title"
+    (pick)="runRadial($event)" (closed)="closeRadial()"></app-mode-radial-menu>

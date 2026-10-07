@@ -1,0 +1,50 @@
+<div class="ar-section" *ngIf="rig.activeSkeleton">
+  <div class="ar-section-title ar-section-title-toggle" (click)="rig.jointsCollapsed = !rig.jointsCollapsed">
+    <span class="ar-chevron">{{ rig.jointsCollapsed ? '▸' : '▾' }}</span>Joints — {{ rig.activeSkeleton.name }}
+  </div>
+
+  <ng-container *ngIf="!rig.jointsCollapsed">
+
+    <!-- Primary: place in viewport (the mode chrome has the Add Bone tool instead) -->
+    <div *ngIf="showAddBone" style="margin-bottom:6px">
+      <button class="ar-op-btn ar-op-full" [class.ar-active]="rig.placementModeActive"
+              [title]="rig.selectedJointIdx === null ? 'Two clicks on mesh: head then tail' : (rig.selectedJointIsTail ? 'Continues chain from this joint\'s tail' : 'Branches from this joint\'s head')"
+              (click)="rig.placementModeActive ? rig.cancelPlacement() : rig.enterPlacement()">
+        {{ rig.placementModeActive ? '✓ Placing…' : rig.addBoneLabel }}
+      </button>
+    </div>
+
+    <!-- Joint list -->
+    <div class="ar-list">
+      <div *ngFor="let j of rig.joints; let i = index"
+           class="ar-list-row ar-joint-row"
+           [class.active]="rig.selectedJointIdx === i"
+           (click)="rig.selectJoint(i)"
+           (pointerenter)="rig.hoverJointFromPointer(i, $event)"
+           (pointerleave)="rig.hoverJointFromPointer(null, $event)">
+
+        <ng-container *ngIf="rig.renamingIdx === i; else viewJoint">
+          <input type="text" class="ar-text ar-text-inline"
+                 [(ngModel)]="rig.renameValue"
+                 (keyup.enter)="rig.confirmRename()"
+                 (keyup.escape)="rig.cancelRename()"
+                 (click)="$event.stopPropagation()">
+          <button class="ar-op-btn ar-op-xs" (click)="rig.confirmRename(); $event.stopPropagation()">✓</button>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="rig.cancelRename(); $event.stopPropagation()">✕</button>
+        </ng-container>
+
+        <ng-template #viewJoint>
+          <span class="ar-joint-idx">{{ i }}</span>
+          <span class="ar-joint-name"
+                [title]="'par:' + j.parentIdx + ' pos:' + (j.x|number:'1.1-1') + ',' + (j.y|number:'1.1-1') + ',' + (j.z|number:'1.1-1')">
+            {{ j.name }}<span *ngIf="j.isLeaf" class="ar-leaf-tag">leaf</span><span *ngIf="rig.ikEndSet.has(i)" class="ar-ik-badge">&#9670;IK</span>
+          </span>
+          <button class="ar-op-btn ar-op-xs ar-op-ghost" (click)="rig.startRename(i, $event)" title="Rename">✎</button>
+          <button class="ar-op-btn ar-op-xs ar-op-danger" (click)="rig.removeBone(i, $event)" title="Remove + descendants">✕</button>
+        </ng-template>
+      </div>
+      <div *ngIf="rig.joints.length === 0" class="ar-hint">{{ showAddBone ? 'No bones yet — click + Add Bone above.' : 'No bones yet — pick the Add Bone tool.' }}</div>
+    </div>
+
+  </ng-container>
+</div>

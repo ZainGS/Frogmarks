@@ -1,0 +1,14 @@
+<aside class="mode-props-panel" [class.collapsed]="collapsed" [class.drawer]="drawerMode"
+       [attr.aria-label]="title || 'Properties'" [attr.aria-hidden]="collapsed" [attr.inert]="collapsed ? '' : null">
+    <div class="mpp-header">
+        <span class="mpp-title">{{ title }}</span>
+    </div>
+    <div class="mpp-body">
+        <ng-content></ng-content>
+    </div>
+</aside>
+
+<button type="button" class="mode-props-handle" [class.open]="!collapsed"
+        (mousedown)="$event.stopPropagation()" (click)="toggle()" [attr.aria-expanded]="!collapsed"
+        [attr.aria-label]="collapsed ? 'Show the properties' : 'Hide the properties'"
+        [title]="collapsed ? 'Show the properties' : 'Hide the properties'">{{ collapsed ? '‹' : '›' }}</button>

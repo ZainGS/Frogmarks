@@ -1,0 +1,17 @@
+@import '../../styles/mode-chrome';
+
+:host { display: block; }
+
+.mep-selection {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
+  font-size: 12px;
+}
+
+.mep-num { width: 72px; }
+.mep-range { flex: 1; min-width: 80px; accent-color: var(--rc-green, #3d5c50); }
+.mep-val { min-width: 36px; text-align: right; color: var(--rc-text, #c8c8c8); }
+.mep-actions { justify-content: flex-end; }
+.mep-off .mode-row-label { opacity: 0.55; }
+.mep-add { margin-top: 10px; }
+.mep-add-title { margin-bottom: 6px; }

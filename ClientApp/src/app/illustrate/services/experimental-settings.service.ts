@@ -8,6 +8,12 @@ export const EXP_DIRTY_COMPOSITING_KEY = 'fm-exp-dirty-compositing';
 /** localStorage key: '1' = show the developer buttons in the artist panels (e.g. the Armature panel's "Copy pose + body
  *  for Claude"). Off by default (UI review 2026-10-07 §2c: a developer button in the artist UI). */
 export const EXP_DEV_TOOLS_KEY = 'fm-exp-dev-tools';
+/** localStorage key: '1' = Edit Mesh uses the classic overlay panel instead of the mode chrome (header bar, tool strip,
+ *  op pill, properties panel — UI review 2026-10-07 §4). Off by default: a fallback if the new layout breaks. */
+export const EXP_CLASSIC_MESH_EDIT_KEY = 'fm-exp-classic-mesh-edit';
+/** localStorage key: '1' = Armature uses the classic overlay panel instead of the mode chrome (Rig / Animate, tool
+ *  strip, op pill, properties panel — UI review 2026-10-07 §4). Off by default: a fallback if the new layout breaks. */
+export const EXP_CLASSIC_ARMATURE_KEY = 'fm-exp-classic-armature';
 /** Salsa's own keys (salsa/docs/ui/gpu-diagnostics.md): the stored safe mode, and the loss history that
  *  `?salsaSafe=0` clears with it. */
 export const SALSA_SAFE_MODE_KEY = 'salsa.gpu.safeMode';
@@ -346,6 +352,36 @@ export class ExperimentalSettingsService {
       if (this.devTools) localStorage.removeItem(EXP_DEV_TOOLS_KEY);
       else localStorage.setItem(EXP_DEV_TOOLS_KEY, '1');
     } catch { /* storage blocked (private mode): stays off */ }
+  }
+
+  // ── Classic Edit Mesh panel (per machine) ──
+
+  private _classicMeshEdit = readStored(EXP_CLASSIC_MESH_EDIT_KEY) === '1';
+  /** Edit Mesh shows the classic overlay panel instead of the mode chrome (IllustrationComponent.useModeChrome.meshEdit
+   *  follows it). Read once per app start, then kept here (it is read on every change detection). */
+  get classicMeshEdit(): boolean { return this._classicMeshEdit; }
+
+  toggleClassicMeshEdit(): void {
+    this._classicMeshEdit = !this._classicMeshEdit;
+    try {
+      if (this._classicMeshEdit) localStorage.setItem(EXP_CLASSIC_MESH_EDIT_KEY, '1');
+      else localStorage.removeItem(EXP_CLASSIC_MESH_EDIT_KEY);
+    } catch { /* storage blocked (private mode): this session only */ }
+  }
+
+  // ── Classic Armature panel (per machine) ──
+
+  private _classicArmature = readStored(EXP_CLASSIC_ARMATURE_KEY) === '1';
+  /** Armature shows the classic overlay panel instead of the mode chrome (IllustrationComponent.useModeChrome.armature
+   *  follows it each time Armature opens). Read once per app start, then kept here. */
+  get classicArmature(): boolean { return this._classicArmature; }
+
+  toggleClassicArmature(): void {
+    this._classicArmature = !this._classicArmature;
+    try {
+      if (this._classicArmature) localStorage.setItem(EXP_CLASSIC_ARMATURE_KEY, '1');
+      else localStorage.removeItem(EXP_CLASSIC_ARMATURE_KEY);
+    } catch { /* storage blocked (private mode): this session only */ }
   }
 
   // Browser seams (the specs replace them).

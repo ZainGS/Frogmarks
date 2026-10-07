@@ -1,0 +1,123 @@
+<div class="ar-section" *ngIf="binding.isBound || binding.isProceduralBody">
+  <div class="ar-section-title ar-section-title-toggle" (click)="anim.nlaCollapsed = !anim.nlaCollapsed">
+    <span class="ar-chevron">{{ anim.nlaCollapsed ? '▸' : '▾' }}</span>NLA — Multi-Clip Blend
+  </div>
+
+  <ng-container *ngIf="!anim.nlaCollapsed">
+
+    <!-- Create track -->
+    <div class="ar-op-inline" style="margin-bottom:4px">
+      <input type="text" class="ar-text" placeholder="Track name" [(ngModel)]="anim.nlaNewTrackName">
+    </div>
+    <div class="ar-op-inline" style="margin-bottom:6px">
+      <span class="ar-label">FPS</span>
+      <input type="number" class="ar-num ar-num-sm" min="1" [(ngModel)]="anim.nlaNewTrackFps">
+      <label class="ar-checkbox-row">
+        <input type="checkbox" [(ngModel)]="anim.nlaNewTrackLoop">
+        <span class="ar-label" style="min-width:unset">Loop</span>
+      </label>
+      <button class="ar-op-btn" (click)="anim.createNLATrack()">+ Track</button>
+    </div>
+
+    <!-- Track list -->
+    <div class="ar-list">
+      <div *ngFor="let t of anim.nlaTracks; let ti = index"
+           class="ar-list-row ar-nla-track-row"
+           [class.active]="anim.selectedNLATrackIdx === ti"
+           (click)="anim.selectNLATrack(ti)">
+        <span class="ar-clip-name">{{ t.name }}</span>
+        <span class="ar-nla-seg-count">{{ t.segments.length }}seg</span>
+        <button class="ar-op-btn ar-op-xs"
+                [class.ar-active]="t.isPlaying"
+                (click)="t.isPlaying ? anim.stopNLATrack(ti) : anim.playNLATrack(ti); $event.stopPropagation()"
+                title="{{ t.isPlaying ? 'Stop' : 'Play' }}">
+          {{ t.isPlaying ? '⏹' : '▶' }}
+        </button>
+      </div>
+      <div *ngIf="anim.nlaTracks.length === 0" class="ar-hint">No NLA tracks — create one above.</div>
+    </div>
+
+    <!-- Selected track body -->
+    <ng-container *ngIf="anim.selectedNLATrackIdx !== null && anim.nlaTracks[anim.selectedNLATrackIdx] as selTrack">
+      <div class="ar-op-sep"></div>
+      <div class="ar-section-sub">{{ selTrack.name }}</div>
+
+      <!-- Seek -->
+      <div class="ar-form-row" style="margin-bottom:6px">
+        <span class="ar-label">Seek</span>
+        <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="anim.nlaSeekFrame">
+        <button class="ar-op-btn ar-op-xs" (click)="anim.seekNLATrack()">Go</button>
+      </div>
+
+      <!-- Segment list -->
+      <div class="ar-list" style="margin-bottom:6px">
+        <div *ngFor="let seg of selTrack.segments; let si = index"
+             class="ar-list-row ar-seg-row">
+          <span class="ar-seg-blend-badge" [class.additive]="seg.blendMode === 'additive'"
+                [title]="seg.blendMode">{{ seg.blendMode === 'additive' ? '+' : '→' }}</span>
+          <span class="ar-seg-clip-name" [title]="seg.clipName">{{ seg.clipName }}</span>
+          <span class="ar-nla-seg-count">&#64;{{ seg.startFrame }}</span>
+          <input type="range" class="ar-range ar-range-sm" min="0" max="1" step="0.01"
+                 [value]="seg.weight"
+                 (input)="seg.weight = +$any($event.target).value; anim.updateNLASegmentWeight(anim.selectedNLATrackIdx!, si, seg.weight)"
+                 title="Blend weight">
+          <span class="ar-val ar-val-sm">{{ seg.weight | number:'1.1-1' }}</span>
+          <button class="ar-op-btn ar-op-xs ar-op-danger"
+                  (click)="anim.removeNLASegment(si, $event)" title="Remove">✕</button>
+        </div>
+        <div *ngIf="selTrack.segments.length === 0" class="ar-hint">No segments yet.</div>
+      </div>
+
+      <!-- Add segment form -->
+      <div class="ar-section-sub" style="margin-bottom:4px">Add Segment</div>
+      <div class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">Clip</span>
+        <select class="ar-select" [(ngModel)]="anim.nlaNewSegClipIdx">
+          <option *ngFor="let c of anim.clips; let i = index" [value]="i">{{ c.name }}</option>
+        </select>
+      </div>
+      <div class="ar-op-inline" style="margin-bottom:4px">
+        <span class="ar-label">Start</span>
+        <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="anim.nlaNewSegStart">
+        <span class="ar-label">W</span>
+        <input type="number" class="ar-num ar-num-sm" min="0" max="1" step="0.05" [(ngModel)]="anim.nlaNewSegWeight">
+        <select class="ar-select ar-select-sm" [(ngModel)]="anim.nlaNewSegBlendMode">
+          <option value="replace">Replace</option>
+          <option value="additive">Additive</option>
+        </select>
+      </div>
+      <div class="ar-op-inline" style="margin-bottom:6px">
+        <span class="ar-label">In</span>
+        <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="anim.nlaNewSegFadeIn">
+        <span class="ar-label">Out</span>
+        <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="anim.nlaNewSegFadeOut">
+        <button class="ar-op-btn" (click)="anim.addNLASegment()" [disabled]="anim.clips.length === 0">+ Add</button>
+      </div>
+
+      <!-- Crossfade -->
+      <div class="ar-op-sep"></div>
+      <div class="ar-section-sub" style="margin-bottom:4px">Crossfade</div>
+      <div class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">From</span>
+        <select class="ar-select" [(ngModel)]="anim.nlaCfFromSeg" title="The segment that fades out">
+          <option *ngFor="let seg of selTrack.segments; let si = index" [ngValue]="si">{{ si + 1 }} · {{ seg.clipName }}</option>
+        </select>
+      </div>
+      <div class="ar-form-row" style="margin-bottom:4px">
+        <span class="ar-label">To</span>
+        <select class="ar-select" [(ngModel)]="anim.nlaCfToSeg" title="The segment that fades in">
+          <option *ngFor="let seg of selTrack.segments; let si = index" [ngValue]="si"
+                  [disabled]="si === anim.nlaCfFromSeg">{{ si + 1 }} · {{ seg.clipName }}</option>
+        </select>
+      </div>
+      <div class="ar-op-inline" style="margin-bottom:4px">
+        <span class="ar-label">Frames</span>
+        <input type="number" class="ar-num ar-num-sm" min="1" step="1" [(ngModel)]="anim.nlaCfDur"
+               title="Crossfade length in frames">
+        <button class="ar-op-btn" (click)="anim.crossfadeNLA()"
+                [disabled]="selTrack.segments.length < 2 || anim.nlaCfFromSeg === anim.nlaCfToSeg">Fade</button>
+      </div>
+
+    </ng-container><!-- /selTrack -->
+  </ng-container><!-- /nlaCollapsed -->
+</div>

@@ -1,0 +1,15 @@
+<div class="ar-section" *ngIf="rig.activeSkeleton && library.presetPoseNames.length > 0">
+  <div class="ar-section-title ar-section-title-toggle" (click)="library.presetPosesCollapsed = !library.presetPosesCollapsed">
+    <span class="ar-chevron">{{ library.presetPosesCollapsed ? '▸' : '▾' }}</span>Preset Poses
+  </div>
+
+  <ng-container *ngIf="!library.presetPosesCollapsed">
+    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px">
+      <button *ngFor="let p of library.presetPoseNames"
+              class="ar-op-btn ar-op-secondary"
+              style="flex: 1; min-width: 60px"
+              (click)="library.applyPresetPose(p)">{{ p }}</button>
+    </div>
+    <div class="ar-hint">Applies to active skeleton's joints.</div>
+  </ng-container>
+</div>

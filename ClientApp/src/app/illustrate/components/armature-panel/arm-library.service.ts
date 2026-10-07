@@ -1,15 +1,16 @@
 import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import type { ArmaturePanelComponent } from './armature-panel.component';
+import type { ArmatureHost } from './arm-session';
 
 /** What ArmLibraryService reads / writes on the panel. */
-export type ArmLibraryHost = Pick<ArmaturePanelComponent,
+export type ArmLibraryHost = Pick<ArmatureHost,
   'shapeManager' | 'anim' | 'cdr' | 'initialMeshId' | 'refreshAll' | 'rig'
 >;
 
 /**
  * Pose + animation libraries: preset poses, the pose library, the per-scene animation library, and the global (cross-document) library with previews.
- * Panel-scoped (provided by ArmaturePanelComponent, bound in its constructor). Bodies moved verbatim from
+ * Panel-scoped (provided by both Armature hosts — the classic ArmaturePanelComponent and the mode chrome's
+ * ArmatureModeComponent — and bound in their constructors). Bodies moved verbatim from
  * armature-panel.component (audit Phase 5.5).
  */
 @Injectable()

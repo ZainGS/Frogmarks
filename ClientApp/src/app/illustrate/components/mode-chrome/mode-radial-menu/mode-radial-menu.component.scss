@@ -1,0 +1,73 @@
+@import '../../../styles/mode-chrome-mixins';
+
+// Above everything in the editor's chrome (the canvas menu is 1200); positions are client px, so fixed to the viewport.
+.mode-radial {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  user-select: none;
+  touch-action: none;
+  font: 600 11px/1.1 system-ui, sans-serif;
+}
+
+.mrm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mrm-ring {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed rgba(200, 237, 227, 0.25);   // a square guide through the item centres
+  pointer-events: none;
+}
+
+.mrm-title {
+  position: absolute;
+  transform: translateX(-50%);
+  max-width: 240px;
+  padding: 4px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--rc-panel-bg, #1a1a1a);
+  border-left: 3px solid var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  font: 700 12px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.mrm-item {
+  @include mode-btn;
+  position: absolute;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px;
+  min-height: 52px;
+  min-width: 52px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  font-size: 11px;
+
+  &.hover:not(:disabled) { @include mode-btn-on; }
+  &.danger { color: #ffb3a8; }
+  &.danger.hover:not(:disabled) { background: var(--rc-danger, #8b1a1a); color: #fff; }
+  @media (pointer: coarse) { font-size: 12px; }
+}
+
+.mrm-icon { display: flex; align-items: center; justify-content: center; height: 20px; font-size: 18px; }
+.mrm-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mrm-center {
+  @include mode-btn;
+  position: absolute;
+  box-sizing: border-box;
+  width: 52px;
+  height: 52px;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  @media (pointer: coarse) { width: 52px; height: 52px; }
+}

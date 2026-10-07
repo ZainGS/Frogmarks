@@ -154,11 +154,13 @@ export class ArtboardService implements OnDestroy {
     this.updateOverlay();
   }
 
-  /** The editor UI docked over the canvas: rail, top bar, open tool sub-panel(s), right panel, timeline, colour picker. */
+  /** The editor UI docked over the canvas: rail, top bar, open tool sub-panel(s), right panel, timeline, colour picker,
+   *  and a mode's chrome (header bar, tool strip, props panel — components/mode-chrome; collapsed = off-screen). */
   private static readonly DOCKED_UI = '.vertical-control-panel, .left-panel, .tool-subpanel.visible, .right-column, '
-    + '.animation-timeline-wrapper, .persistent-color-picker';
-  /** Small floating UI, avoided only when the page would sit under it: the zoom box, the side drawer's handle. */
-  private static readonly FLOATING_UI = '.zoom-control, .side-drawer-handle';
+    + '.animation-timeline-wrapper, .persistent-color-picker, .mode-header-bar, .mode-tool-strip, .mode-props-panel';
+  /** Small floating UI, avoided only when the page would sit under it: the zoom box, the side drawer's handle, a
+   *  mode's op pill and props-panel handle. */
+  private static readonly FLOATING_UI = '.zoom-control, .side-drawer-handle, .mode-op-pill, .mode-props-handle';
 
   /** On-screen rects of the UI matching `sel`. Hidden ones (display:none) measure 0 × 0 and are dropped by
    *  visibleCanvasInsets. A tool sub-panel is measured where it is going (without its slide transform), so a fit

@@ -1,0 +1,55 @@
+<div class="ar-section" *ngIf="binding.isBound || binding.isProceduralBody">
+  <div class="ar-section-title ar-section-title-toggle" (click)="anim.clipsCollapsed = !anim.clipsCollapsed">
+    <span class="ar-chevron">{{ anim.clipsCollapsed ? '▸' : '▾' }}</span>Animation Clips
+  </div>
+
+  <ng-container *ngIf="!anim.clipsCollapsed">
+    <div class="ar-op-inline" style="margin-bottom:4px">
+      <input type="text" class="ar-text" placeholder="Clip name" [(ngModel)]="anim.newClipName">
+    </div>
+    <div class="ar-op-inline" style="margin-bottom:6px">
+      <span class="ar-label">FPS</span>
+      <input type="number" class="ar-num" min="1" [(ngModel)]="anim.newClipFps">
+      <span class="ar-label">Frames</span>
+      <input type="number" class="ar-num" min="1" [(ngModel)]="anim.newClipEndFrame">
+      <button class="ar-op-btn" (click)="anim.createClip()">+ New</button>
+    </div>
+
+    <div class="ar-list">
+      <div *ngFor="let c of anim.clips; let i = index"
+           class="ar-list-row ar-clip-row"
+           [class.active]="anim.activeClipIdx === i"
+           (click)="anim.selectClip(i)">
+        <span class="ar-clip-name">{{ c.name }}</span>
+        <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                (click)="anim.addClipToLibrary(i, $event)" title="Add to Animation Library">＋</button>
+        <button class="ar-op-btn ar-op-xs ar-op-ghost"
+                (click)="library.globalLibPromoteClip(i, $event)" title="Promote to Global Library">🌐</button>
+        <button class="ar-op-btn ar-op-xs ar-op-danger"
+                (click)="anim.deleteClip(i, $event)" title="Delete clip">✕</button>
+      </div>
+      <div *ngIf="anim.clips.length === 0" class="ar-hint">No clips yet.</div>
+    </div>
+
+    <ng-container *ngIf="anim.activeClipIdx !== null">
+      <div class="ar-op-sep"></div>
+
+      <div class="ar-form-row" style="margin-bottom:6px">
+        <span class="ar-label">Frame</span>
+        <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="anim.recordFrame">
+        <button class="ar-op-btn" (click)="anim.recordPose()">Record Pose</button>
+      </div>
+
+      <div class="ar-btn-pair">
+        <button class="ar-op-btn" [class.ar-active]="anim.isPlaying"
+                (click)="anim.isPlaying ? anim.stopClip() : anim.playClip()">
+          {{ anim.isPlaying ? '⏹ Stop' : '▶ Play' }}
+        </button>
+        <label class="ar-label" style="display:flex;align-items:center;gap:4px;cursor:pointer"
+               title="Play once layered over the idle — breathing and sway continue on everything the clip doesn't animate. Procedural characters only; plays to the end (Stop resets the button).">
+          <input type="checkbox" [(ngModel)]="anim.playWithIdle" [disabled]="anim.isPlaying"> with idle
+        </label>
+      </div>
+    </ng-container>
+  </ng-container>
+</div>

@@ -1,0 +1,53 @@
+<div #bar class="mode-header-bar" role="toolbar" [attr.aria-label]="title">
+    <!-- Row 1 (and the only row on wider screens): title … actions -->
+    <div class="mhb-title" [title]="subtitle ? title + ' · ' + subtitle : title">
+        <span class="mhb-title-main">{{ title }}</span>
+        <span *ngIf="subtitle" class="mhb-title-sub">{{ subtitle }}</span>
+    </div>
+
+    <!-- Selection mode / tabs / Multi: a second row on a phone (.mhb-controls wraps below) -->
+    <div class="mhb-controls">
+        <div *ngIf="segments.length" class="mhb-seg" role="radiogroup" aria-label="Selection mode">
+            <button *ngFor="let s of segments; trackBy: trackId" type="button" class="mhb-seg-btn" role="radio"
+                    [class.on]="s.id === activeSegment" [attr.aria-checked]="s.id === activeSegment"
+                    [attr.data-id]="s.id" [title]="segmentTitle(s)" (click)="pickSegment(s)">{{ s.label }}</button>
+        </div>
+        <button *ngIf="multiLatch !== null" type="button" class="mhb-btn mhb-multi" [class.on]="multiLatch"
+                [attr.aria-pressed]="multiLatch" (click)="toggleMulti()"
+                title="Multi: taps add to the selection instead of replacing it">Multi</button>
+        <div *ngIf="segments2?.length" class="mhb-seg mhb-seg2" role="tablist" aria-label="Workspace">
+            <button *ngFor="let s of segments2; trackBy: trackId" type="button" class="mhb-seg-btn" role="tab"
+                    [class.on]="s.id === activeSegment2" [attr.aria-selected]="s.id === activeSegment2"
+                    [attr.data-id]="s.id" [title]="segmentTitle(s)" (click)="pickSegment2(s)">{{ s.label }}</button>
+        </div>
+    </div>
+
+    <div class="mhb-actions">
+        <button type="button" class="mhb-btn mhb-icon" [disabled]="!canUndo" (click)="undo.emit()" title="Undo" aria-label="Undo">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 7H4V2M4.5 7.5A8.5 8.5 0 1 1 3.6 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+        </button>
+        <button type="button" class="mhb-btn mhb-icon" [disabled]="!canRedo" (click)="redo.emit()" title="Redo" aria-label="Redo">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 7h5V2M19.5 7.5A8.5 8.5 0 1 0 20.4 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+        </button>
+        <button *ngIf="showFrame" type="button" class="mhb-btn mhb-icon" (click)="frame.emit()"
+                title="Frame the selection" aria-label="Frame the selection">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5M10 12h4M12 10v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>
+        </button>
+        <div *ngIf="menuItems.length" class="mhb-menu-wrap">
+            <button type="button" class="mhb-btn mhb-icon mhb-more" [class.on]="menuOpen" (click)="toggleMenu()"
+                    aria-haspopup="menu" [attr.aria-expanded]="menuOpen" title="More options" aria-label="More options">⋯</button>
+            <div *ngIf="menuOpen" class="mhb-menu" role="menu">
+                <ng-container *ngFor="let it of menuItems; trackBy: trackId">
+                    <div *ngIf="it.separatorBefore" class="mhb-menu-sep" role="separator"></div>
+                    <button type="button" class="mhb-menu-item" [attr.role]="it.checked !== undefined ? 'menuitemcheckbox' : 'menuitem'"
+                            [attr.aria-checked]="it.checked !== undefined ? !!it.checked : null" [attr.data-id]="it.id"
+                            [disabled]="it.disabled" (click)="pickMenu(it)">
+                        <span class="mhb-menu-check" aria-hidden="true">{{ it.checked ? '✓' : '' }}</span>
+                        <span class="mhb-menu-label">{{ it.label }}</span>
+                    </button>
+                </ng-container>
+            </div>
+        </div>
+        <button type="button" class="mhb-done" (click)="done.emit()">{{ doneLabel }}</button>
+    </div>
+</div>

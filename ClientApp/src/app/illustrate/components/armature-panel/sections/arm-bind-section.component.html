@@ -1,0 +1,25 @@
+<div class="ar-section" *ngIf="rig.activeSkeleton && !binding.isProceduralBody">
+  <div class="ar-section-title ar-section-title-toggle" (click)="binding.bindCollapsed = !binding.bindCollapsed">
+    <span class="ar-chevron">{{ binding.bindCollapsed ? '▸' : '▾' }}</span>Bind Mesh to Skeleton
+  </div>
+
+  <ng-container *ngIf="!binding.bindCollapsed">
+    <div class="ar-hint" style="margin-bottom:6px">
+      Mesh: <strong>{{ binding.bindMeshName }}</strong>
+      &nbsp;→&nbsp;
+      Skeleton: <strong>{{ rig.activeSkeleton?.name ?? '—' }}</strong>
+    </div>
+    <div class="ar-btn-pair">
+      <button class="ar-op-btn" style="flex:2"
+              [disabled]="!binding.canBind"
+              [title]="rig.joints.length === 0 ? 'Add at least one joint first' : 'Auto-weight vertices to nearest joints'"
+              (click)="binding.bindMesh()">Bind Mesh</button>
+      <button class="ar-op-btn ar-op-secondary" [disabled]="!binding.bindMeshId"
+              (click)="binding.focusMesh()" title="Center camera on mesh">Focus</button>
+    </div>
+    <div *ngIf="rig.joints.length === 0" class="ar-hint" style="margin-top:4px">
+      Add joints to the skeleton before binding.
+    </div>
+    <div *ngIf="binding.bindResult" class="ar-hint ar-hint-ok" style="margin-top:4px">{{ binding.bindResult }}</div>
+  </ng-container>
+</div>

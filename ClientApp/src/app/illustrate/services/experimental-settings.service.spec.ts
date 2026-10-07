@@ -1,5 +1,5 @@
 import {
-  applyStoredExperiments, EXP_DEV_TOOLS_KEY, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
+  applyStoredExperiments, EXP_CLASSIC_MESH_EDIT_KEY, EXP_DEV_TOOLS_KEY, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
   SALSA_LOSS_TIMES_KEY, SALSA_SAFE_MODE_KEY,
 } from './experimental-settings.service';
 
@@ -389,5 +389,18 @@ describe('ExperimentalSettingsService (editor › Experimental menu)', () => {
     expect(new ExperimentalSettingsService().devTools).toBeTrue();
     svc.toggleDevTools();
     expect(svc.devTools).toBeFalse();
+  });
+
+  it('Classic Edit Mesh panel: off by default (the mode chrome), toggled and remembered per machine', () => {
+    localStorage.removeItem(EXP_CLASSIC_MESH_EDIT_KEY);
+    const svc = new ExperimentalSettingsService();
+    expect(svc.classicMeshEdit).toBeFalse();
+    svc.toggleClassicMeshEdit();
+    expect(svc.classicMeshEdit).toBeTrue();
+    expect(localStorage.getItem(EXP_CLASSIC_MESH_EDIT_KEY)).toBe('1');
+    expect(new ExperimentalSettingsService().classicMeshEdit).toBeTrue();
+    svc.toggleClassicMeshEdit();
+    expect(svc.classicMeshEdit).toBeFalse();
+    expect(localStorage.getItem(EXP_CLASSIC_MESH_EDIT_KEY)).toBeNull();
   });
 });

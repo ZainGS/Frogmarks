@@ -1,15 +1,17 @@
 import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import type { ArmaturePanelComponent, ArmatureJoint, ArmatureSkeleton } from './armature-panel.component';
+import type { ArmatureHost, ArmatureJoint, ArmatureSkeleton } from './arm-session';
+import { armApi } from './arm-engine';
 
 /** What ArmRigService reads / writes on the panel. */
-export type ArmRigHost = Pick<ArmaturePanelComponent,
+export type ArmRigHost = Pick<ArmatureHost,
   'shapeManager' | 'anim' | 'binding' | 'initialMeshId' | 'library' | 'spring'
 >;
 
 /**
  * Rig editing: skeletons, joints (select / rename / place / remove / visibility), rotation + tool mode, IK chains + pole targets, bone constraints.
- * Panel-scoped (provided by ArmaturePanelComponent, bound in its constructor). Bodies moved verbatim from
+ * Panel-scoped (provided by both Armature hosts — the classic ArmaturePanelComponent and the mode chrome's
+ * ArmatureModeComponent — and bound in their constructors). Bodies moved verbatim from
  * armature-panel.component (audit Phase 5.5).
  */
 @Injectable()
@@ -124,6 +126,11 @@ export class ArmRigService {
 
   _syncIKInputs(): void {
     const chain = this.selectedJointIKChain;
+    this.ikPoleJointIdx = null;
+    const getIK = armApi(this.sm).getArmatureIK3D;
+    if (chain && this.activeSkeleton && this.selectedJointIdx !== null && typeof getIK === 'function') {
+      this.ikPoleJointIdx = getIK.call(this.sm, this.activeSkeleton.id, this.selectedJointIdx)?.poleJointIndex ?? null;
+    }
     if (!chain) return;
     this.ikChainLength = chain.chainLength ?? 3;
     this.ikBlendWeight = chain.blendWeight ?? 1;
@@ -461,4 +468,136 @@ export class ArmRigService {
     const parent = this.selectedJointIdx !== null ? this.joints[this.selectedJointIdx]?.parentIdx ?? -1 : -1;
     this.newConstraintTarget = parent >= 0 ? parent : (this.selectedJointIdx === 0 && n > 1 ? 1 : 0);
   }
+
+  // ── Mode chrome (UI review 2026-10-07 §4): joint properties, the tool pills, the long-press radial ─────────────
+
+  /** IK pole joint of the selected joint's chain (Salsa getArmatureIK3D; null = none / an older dist). */
+  ikPoleJointIdx: number | null = null;
+
+  /** This Salsa dist can set an IK chain's pole to a joint (setArmatureIK3D). */
+  get hasPoleJointApi(): boolean {
+    return typeof armApi(this.sm).setArmatureIK3D === 'function';
+  }
+
+  /** Rename joint `idx` (the props panel's name field, the radial's Rename). Empty names are ignored. */
+  renameJoint(idx: number, name: string): void {
+    const nm = name.trim();
+    if (!this.activeSkeleton || !this.joints[idx] || !nm || nm === this.joints[idx].name) return;
+    this.sm?.renameBone3D(this.activeSkeleton.id, idx, nm);
+    this.refreshJoints();
+  }
+
+  /**
+   * IK on the chain ending at the selected joint: on / off, chain length (≥ 2) and — with a newer Salsa — the pole
+   * joint (`poleJointIdx` undefined = unchanged, null = none). setArmatureIK3D when present; else the old chain calls
+   * (create with the length, then length / enabled), which have no pole joint.
+   */
+  configureIK(opts: { enabled: boolean; chainLength: number; poleJointIdx?: number | null }): void {
+    if (!this.activeSkeleton || this.selectedJointIdx === null) return;
+    const sk = this.activeSkeleton.id, idx = this.selectedJointIdx;
+    const len = Math.max(2, Math.round(opts.chainLength || 2));
+    const api = armApi(this.sm);
+    if (typeof api.setArmatureIK3D === 'function') {
+      const o: { chainLength: number; enabled: boolean; poleJointIndex?: number | null } = { chainLength: len, enabled: opts.enabled };
+      if (opts.poleJointIdx !== undefined) o.poleJointIndex = opts.poleJointIdx;
+      api.setArmatureIK3D.call(this.sm, sk, idx, o);
+    } else {
+      const chain = this.selectedJointIKChain;
+      if (!chain) {
+        if (opts.enabled) this.sm?.addIKChain3D(sk, idx, len);
+      } else {
+        if ((chain.chainLength ?? 3) !== len) this.sm?.setIKChainLength3D(sk, chain.id, len);
+        if (!!chain.enabled !== opts.enabled) this.sm?.setIKChainEnabled3D(sk, chain.id, opts.enabled);
+      }
+    }
+    this.ikChainLength = len;
+    this.refreshJoints();
+  }
+
+  /** The pole of the selected joint's IK chain is joint `poleIdx` (null = no pole). Needs setArmatureIK3D. */
+  setIKPoleJoint(poleIdx: number | null): void {
+    const chain = this.selectedJointIKChain;
+    if (!chain || !this.hasPoleJointApi) return;
+    this.configureIK({ enabled: !!chain.enabled, chainLength: chain.chainLength ?? this.ikChainLength, poleJointIdx: poleIdx });
+  }
+
+  /**
+   * Add a child joint of `parentIdx` (-1 = a new root), its head at the parent's tail, continuing the parent's bone, and
+   * select it. Salsa's addArmatureChildJoint3D (one undo step) when present; else addBone3D + the tail offset (the
+   * old dist has no undo for it). Returns the new joint index, or -1.
+   */
+  addChildJoint(parentIdx: number, name?: string): number {
+    if (!this.activeSkeleton) return -1;
+    const sk = this.activeSkeleton.id;
+    const nm = name?.trim() || undefined;
+    const api = armApi(this.sm);
+    let idx = -1;
+    if (typeof api.addArmatureChildJoint3D === 'function') {
+      idx = api.addArmatureChildJoint3D.call(this.sm, sk, parentIdx, nm) ?? -1;
+    } else if (this.sm) {
+      const parent = parentIdx >= 0 ? this.joints[parentIdx] : null;
+      const local: [number, number, number] = parent ? [...parent.tailOffset] as [number, number, number] : [0, 0, 0];
+      let tail: [number, number, number] = parent ? [...parent.tailOffset] as [number, number, number] : [0, 0.3, 0];
+      if (!(Math.hypot(tail[0], tail[1], tail[2]) > 1e-6)) tail = [0, 0.3, 0];
+      idx = this.sm.addBone3D(sk, parentIdx, local, nm ?? `joint_${this.joints.length}`);
+      if (idx >= 0) {
+        this.sm.setJointTailOffset3D(sk, idx, tail);
+        this.sm.selectJoint3D(idx);
+      }
+    }
+    this.refreshJoints();
+    if (idx >= 0 && this.joints[idx]) this._applyJointSelection(idx);
+    return idx;
+  }
+
+  /** The joints a pill operation acts on: every selected joint of the active skeleton (primary first), else the
+   *  primary alone. */
+  private _opJoints(selection?: ReadonlyArray<{ skeletonId: string; jointIndex: number }>): number[] {
+    const sk = this.activeSkeleton?.id;
+    const many = (selection ?? []).filter(s => s.skeletonId === sk).map(s => s.jointIndex).filter(i => !!this.joints[i]);
+    if (many.length) return [...new Set(many)];
+    return this.selectedJointIdx !== null && this.joints[this.selectedJointIdx] ? [this.selectedJointIdx] : [];
+  }
+
+  /** Rotate the selected joint(s) by `deg` degrees about their local `axis` (the Rotate tool's typed amount). */
+  rotateSelectedBy(axis: 'x' | 'y' | 'z', deg: number, selection?: ReadonlyArray<{ skeletonId: string; jointIndex: number }>): number {
+    if (!this.activeSkeleton || !Number.isFinite(deg) || deg === 0) return 0;
+    const sk = this.activeSkeleton.id;
+    const d = this._eulerDegToQuat(axis === 'x' ? deg : 0, axis === 'y' ? deg : 0, axis === 'z' ? deg : 0);
+    const ids = this._opJoints(selection);
+    for (const i of ids) {
+      const q: [number, number, number, number] = this.sm?.getJointRotation3D(sk, i) ?? [0, 0, 0, 1];
+      this.sm?.setJointRotation3D(sk, i, quatMul(q, d));
+    }
+    if (this.selectedJointIdx !== null) this._syncRotationInputs(this.selectedJointIdx);
+    return ids.length;
+  }
+
+  /** Move the selected joint(s) by `amount` along their local `axis` (the Move tool's typed amount: the bone itself,
+   *  as a viewport drag in Move does). */
+  moveSelectedBy(axis: 'x' | 'y' | 'z', amount: number, selection?: ReadonlyArray<{ skeletonId: string; jointIndex: number }>): number {
+    if (!this.activeSkeleton || !Number.isFinite(amount) || amount === 0) return 0;
+    const sk = this.activeSkeleton.id;
+    const a = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+    const ids = this._opJoints(selection);
+    for (const i of ids) {
+      const j = this.joints[i];
+      const p: [number, number, number] = [j.x, j.y, j.z];
+      p[a] += amount;
+      this.sm?.moveBone3D(sk, i, p);
+    }
+    this.refreshJoints();
+    return ids.length;
+  }
+}
+
+/** Hamilton product a·b of [x, y, z, w] quaternions (b applied in a's local frame). */
+export function quatMul(a: [number, number, number, number], b: [number, number, number, number]): [number, number, number, number] {
+  const [ax, ay, az, aw] = a, [bx, by, bz, bw] = b;
+  return [
+    aw * bx + ax * bw + ay * bz - az * by,
+    aw * by - ax * bz + ay * bw + az * bx,
+    aw * bz + ax * by - ay * bx + az * bw,
+    aw * bw - ax * bx - ay * by - az * bz,
+  ];
 }

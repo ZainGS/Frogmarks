@@ -1,0 +1,603 @@
+// The Armature sections' look (sections/*.component.html), shared by the classic <app-armature-panel> and the mode
+// chrome's <app-armature-mode>: both wrap their sections in <app-arm-sections> (ViewEncapsulation.None, so ONE copy of
+// these rules serves every section component). Scoped under .arm-sections.
+//   - default: the classic panel's look (moved here from armature-panel.component.scss)
+//   - .arm-chrome: the retro-chrome skin inside the mode chrome's properties panel (UI review 2026-10-07 §4: --rc-*
+//     tokens, square corners, 44 px targets on a coarse pointer)
+@import '../../styles/mode-chrome-mixins';
+
+$accent:  #4caf96;
+$bg:      #1a1a1a;
+$border:  rgba(255, 255, 255, 0.1);
+$text:    rgba(255, 255, 255, 0.85);
+$muted:   rgba(255, 255, 255, 0.45);
+
+app-arm-sections { display: block; }
+
+.arm-sections {
+  // ── Sections ──────────────────────────────────────────────────────
+
+  .ar-section {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+    &:last-child { border-bottom: none; margin-bottom: 0; }
+  }
+
+  .ar-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba($accent, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+
+    &.ar-section-title-toggle {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      &:hover { color: lighten($accent, 10%); }
+    }
+  }
+
+  .ar-chevron {
+    font-size: 9px;
+    flex-shrink: 0;
+  }
+
+  // ── Form primitives ───────────────────────────────────────────────
+
+  .ar-label {
+    font-size: 10px;
+    color: $muted;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 48px;
+  }
+
+  .ar-val {
+    font-size: 9px;
+    color: $muted;
+    min-width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .ar-hint {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 4px;
+  }
+
+  .ar-hint-ok {
+    font-size: 9px;
+    color: rgba(60, 220, 120, 0.8);
+  }
+
+  .ar-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .ar-hint-active {
+    font-size: 9px;
+    color: rgba($accent, 0.85);
+    padding: 3px 6px;
+    background: rgba($accent, 0.08);
+    border: 1px solid rgba($accent, 0.22);
+    border-radius: 3px;
+  }
+
+  .ar-op-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ar-form-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ar-btn-pair {
+    display: flex;
+    gap: 6px;
+
+    .ar-op-btn { flex: 1; }
+  }
+
+  .ar-op-sep {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 8px 0;
+  }
+
+  // ── Buttons ───────────────────────────────────────────────────────
+
+  .ar-op-btn {
+    background: #2a2a2a;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) { background: #383838; color: #fff; }
+    &:disabled { opacity: 0.35; cursor: default; }
+
+    &.ar-active {
+      background: rgba($accent, 0.22);
+      border-color: $accent;
+      color: lighten($accent, 20%);
+      font-weight: 600;
+    }
+  }
+
+  .ar-op-full {
+    width: 100%;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .ar-op-secondary {
+    background: transparent;
+    border-color: #444;
+    color: $muted;
+
+    &:hover:not(:disabled) { background: rgba($accent, 0.15); border-color: $accent; color: #ddd; }
+  }
+
+  .ar-op-xs {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .ar-op-ghost {
+    background: none;
+    border-color: #444;
+    color: $muted;
+
+    &:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  }
+
+  .ar-op-danger {
+    color: #f88;
+    border-color: #844;
+    background: none;
+
+    &:hover { background: rgba(192, 57, 43, 0.2); color: #faa; }
+  }
+
+  // ── Inputs ────────────────────────────────────────────────────────
+
+  .ar-text {
+    flex: 1;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 11px;
+    min-width: 0;
+
+    &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+  }
+
+  .ar-text-inline {
+    flex: 1;
+  }
+
+  .ar-num {
+    width: 52px;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-size: 11px;
+    text-align: right;
+    flex-shrink: 0;
+    -moz-appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button { opacity: 0; }
+
+    &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+  }
+
+  .ar-select {
+    flex: 1;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-size: 11px;
+    cursor: pointer;
+    min-width: 0;
+
+    &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+    option { background: #252525; }
+  }
+
+  .ar-range {
+    flex: 1;
+    accent-color: $accent;
+    height: 14px;
+    min-width: 0;
+  }
+
+  // ── List ──────────────────────────────────────────────────────────
+
+  .ar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ar-list-row {
+    padding: 5px 8px;
+    font-size: 11px;
+    color: #bbb;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 80ms;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); }
+
+    &.active {
+      background: rgba($accent, 0.15);
+      border-color: rgba($accent, 0.4);
+      color: lighten($accent, 20%);
+      font-weight: 600;
+    }
+  }
+
+  .ar-joint-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .ar-joint-idx {
+    font-size: 9px;
+    color: $muted;
+    min-width: 16px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .ar-joint-name {
+    flex: 1;
+    font-size: 11px;
+    color: #ccc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ar-xyz-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .ar-num { width: 42px; }
+    .ar-label { min-width: 32px; }
+    .ar-axis { font-size: 9px; }
+  }
+
+  .ar-axis {
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba($accent, 0.85);
+    flex-shrink: 0;
+  }
+
+  .ar-num-sm {
+    width: 36px;
+  }
+
+  .ar-section-sub {
+    font-size: 9px;
+    color: rgba($accent, 0.75);
+    margin-bottom: 6px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .ar-clip-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .ar-clip-name {
+    flex: 1;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // ── Details/summary (collapsible numeric add) ─────────────────────
+
+  // ── Leaf tag ──────────────────────────────────────────────────────
+
+  .ar-leaf-tag {
+    font-size: 8px;
+    color: rgba($accent, 0.7);
+    border: 1px solid rgba($accent, 0.35);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  // ── IK badge ──────────────────────────────────────────────────────
+
+  .ar-ik-badge {
+    font-size: 8px;
+    color: #f0c040;
+    border: 1px solid rgba(240, 192, 64, 0.45);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+
+  // ── NLA ───────────────────────────────────────────────────────────
+
+  .ar-nla-track-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ar-nla-seg-count {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    flex-shrink: 0;
+    margin: 0 auto 0 4px;
+  }
+
+  .ar-seg-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    color: #bbb;
+    border-radius: 3px;
+    border: 1px solid transparent;
+
+    &:hover { background: rgba(255, 255, 255, 0.04); }
+  }
+
+  .ar-seg-blend-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+
+    &.additive {
+      color: lighten(#e07b30, 20%);
+    }
+  }
+
+  .ar-seg-clip-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .ar-range-sm {
+    width: 48px;
+    flex: none;
+  }
+
+  .ar-val-sm {
+    font-size: 9px;
+    color: $muted;
+    min-width: 22px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .ar-select-xs {
+    flex: none;
+    width: 36px;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 2px 2px;
+    font-size: 10px;
+    cursor: pointer;
+
+    &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+    option { background: #252525; }
+  }
+
+  .ar-select-sm {
+    flex: none;
+    width: 80px;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    border-radius: 3px;
+    padding: 3px 4px;
+    font-size: 10px;
+    cursor: pointer;
+
+    &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+    option { background: #252525; }
+  }
+
+  // ── Animation & Global Library ────────────────────────────────────
+
+  .ar-compat-chip {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+
+    &-ok   { background: rgba(76, 175, 80, 0.2);  color: #81c784; border: 1px solid rgba(76, 175, 80, 0.35); }
+    &-warn { background: rgba(255, 160, 0, 0.2);  color: #ffb74d; border: 1px solid rgba(255, 160, 0, 0.35); }
+    &-bad  { background: rgba(229, 57, 53, 0.2);  color: #e57373; border: 1px solid rgba(229, 57, 53, 0.35); }
+  }
+
+  .ar-lib-entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    &:last-child { border-bottom: none; }
+    &:hover { background: rgba(255, 255, 255, 0.04); border-radius: 4px; }
+  }
+
+  .ar-lib-icon { font-size: 13px; flex: none; }
+  .ar-lib-preview { flex: none; }
+
+  // Touch: 44 px targets for the operation buttons.
+  @media (pointer: coarse) {
+    .ar-op-btn { min-height: 44px; }
+
+    // UI review 2026-10-07 §3 #4: the rest — the row ✎ / ✕ / ▶ / Apply, fields, selects, checkboxes, section headers.
+    .ar-op-xs { min-width: 44px; padding: 0 8px; font-size: 13px; }
+    .ar-text,
+    .ar-num,
+    .ar-select,
+    .ar-select-sm,
+    .ar-select-xs { min-height: 44px; font-size: 14px; }
+    .ar-num { width: 64px; }
+    .ar-num-sm { width: 56px; }
+    .ar-select-xs { width: 52px; }
+    .ar-range { height: 32px; }
+    .ar-checkbox-row { min-height: 44px; }
+    .ar-checkbox-row input[type="checkbox"] { width: 22px; height: 22px; }
+    .ar-section-title.ar-section-title-toggle { min-height: 44px; margin-bottom: 4px; }
+    .ar-list-row { min-height: 44px; display: flex; align-items: center; gap: 4px; }
+    .ar-op-inline,
+    .ar-form-row,
+    .ar-xyz-row { flex-wrap: wrap; row-gap: 6px; }
+  }
+
+
+  .ar-section-flush { margin-top: -6px; }
+  .ar-constraint-name { font-size: 10px; color: #bbb; }
+  .ar-vis-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 0 2px;
+    font-size: 10px;
+    .ar-checkbox-row { gap: 4px; }
+    .ar-vis-fk { color: rgba(255, 255, 255, 0.5); }
+    .ar-vis-spring { color: rgba(76, 175, 150, 0.7); }
+  }
+}
+
+// ── Retro-chrome skin (mode chrome properties panel) ───────────────────────────────────────────────────────
+
+.arm-sections.arm-chrome {
+  font: $mode-font;
+  color: var(--rc-text, #c8c8c8);
+
+  .ar-section {
+    margin: 0;
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
+    &:last-child { border-bottom: 0; }
+  }
+  .ar-section-title {
+    font: 700 10px/1.2 system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    color: var(--rc-text-muted, #a8a8a8);
+    &.ar-section-title-toggle:hover { color: var(--rc-text, #c8c8c8); }
+  }
+  .ar-section-flush { margin-top: 0; }
+  .ar-section-sub, .ar-axis { color: var(--rc-text-label, #c0c0c0); }
+  .ar-label, .ar-val, .ar-val-sm, .ar-joint-idx { color: var(--rc-text-muted, #a8a8a8); }
+  .ar-hint { font-size: 11px; color: var(--rc-text-muted, #a8a8a8); }
+  .ar-hint-ok { color: var(--rc-green-txt, #c8ede3); }
+  .ar-hint-active {
+    @include mode-sunken;
+    color: var(--rc-green-txt, #c8ede3);
+    background: var(--rc-green, #3b6151);
+  }
+  .ar-op-sep { background: var(--rc-bevel-mid, #3a3a3a); }
+
+  .ar-op-btn {
+    @include mode-btn;
+    font-size: 11px;
+    &.ar-active { @include mode-btn-on; font-weight: 700; }
+  }
+  .ar-op-secondary, .ar-op-ghost { color: var(--rc-text, #c8c8c8); }
+  .ar-op-danger { color: #ffb3a8; }
+  .ar-op-danger:hover:not(:disabled) { background: var(--rc-danger, #8b1a1a); color: #fff; }
+  .ar-op-xs { min-height: 22px; min-width: 20px; padding: 0 3px; font-size: 11px; }
+  .ar-select-xs { width: 36px; }
+
+  // List rows lay their name + row buttons out on one line, wrapping only when they must.
+  .ar-list-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 3px 6px;
+  }
+  .ar-list-row > .ar-clip-name { flex: 1 1 36px; min-width: 0; }
+  .ar-list-row { column-gap: 2px; }
+
+  .ar-text, .ar-num, .ar-select, .ar-select-sm, .ar-select-xs {
+    @include mode-sunken;
+    min-height: 26px;
+    background: var(--rc-canvas-bg, #0a0a0a);
+    color: var(--rc-text, #c8c8c8);
+    &:focus { outline: 1px solid var(--rc-green-hi, #4f7a68); }
+    option { background: var(--rc-surface, #242424); }
+  }
+  .ar-range { accent-color: var(--rc-green-hi, #4f7a68); }
+
+  .ar-list-row, .ar-seg-row, .ar-lib-entry {
+    border-radius: 0;
+    color: var(--rc-text, #c8c8c8);
+    &:hover { background: var(--rc-surface-hi, #2e2e2e); border-radius: 0; }
+    &.active {
+      background: var(--rc-green, #3b6151);
+      border-color: var(--rc-green-hi, #4f7a68);
+      color: var(--rc-green-txt, #c8ede3);
+    }
+  }
+  .ar-joint-name { color: inherit; }
+  .ar-leaf-tag, .ar-ik-badge, .ar-compat-chip { border-radius: 0; }
+  .ar-lib-preview img { border-radius: 0 !important; }
+
+  @media (pointer: coarse) {
+    .ar-op-btn, .ar-op-xs { min-height: 44px; min-width: 44px; font-size: 13px; }
+    .ar-text, .ar-num, .ar-select, .ar-select-sm, .ar-select-xs { min-height: 44px; font-size: 15px; }
+  }
+}
