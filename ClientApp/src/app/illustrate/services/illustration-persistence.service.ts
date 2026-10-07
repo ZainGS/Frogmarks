@@ -735,7 +735,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       if (sm.shell?.isSceneActive) sm.shell.destroyScene();
       else if (sm.webgpuRenderer?.isSuspended) sm.webgpuRenderer.resumeRendering();
       requestAnimationFrame(() => {
-        this.shapeManager.fitArtboard();
+        this.artboard.fitArtboard();
         this.host.markLoaded('sceneApplied');
       });
       return;
@@ -780,7 +780,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       console.warn('[V2 Load] local-only OPFS load failed', e);
     }
     requestAnimationFrame(() => {
-      this.shapeManager.fitArtboard();
+      this.artboard.fitArtboard();
       this.host.markLoaded('sceneApplied');
     });
   }
@@ -1107,7 +1107,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     this.s3._loadScene3dGrid();
     console.timeEnd('[V2 Load] total');
     requestAnimationFrame(() => {
-      if (fitArtboard) this.shapeManager.fitArtboard();
+      if (fitArtboard) this.artboard.fitArtboard();
       this.host.markLoaded('sceneApplied');
     });
   }

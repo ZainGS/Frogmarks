@@ -31,6 +31,34 @@ describe('SidePanelService (View › Side Panel)', () => {
     expect(new SidePanelService().visible).toBeTrue();
   });
 
+  describe('drawer mode (touch, narrow: tablet portrait)', () => {
+    it('starts closed when the canvas beside the column would be too small, open when it is roomy', () => {
+      const a = new SidePanelService();
+      a.updateDrawerMode(false, 820);   // whatever the test browser matched: start docked
+      a.updateDrawerMode(true, 820);
+      expect(a.drawerMode).toBeTrue();
+      expect(a.visible).toBeFalse();
+      const b = new SidePanelService();
+      b.updateDrawerMode(false, 1000);
+      b.updateDrawerMode(true, 1000);
+      expect(b.visible).toBeTrue();
+    });
+
+    it('the handle / View menu toggle opens and closes the drawer without touching the stored preference', () => {
+      const a = new SidePanelService();
+      a.updateDrawerMode(false, 820);
+      a.updateDrawerMode(true, 820);
+      a.toggle();
+      expect(a.visible).toBeTrue();
+      a.toggle();
+      expect(a.visible).toBeFalse();
+      expect(localStorage.getItem(SIDE_PANEL_STORAGE_KEY)).toBeNull();
+      a.updateDrawerMode(false, 1180);   // rotate to landscape: the docked column is back
+      expect(a.drawerMode).toBeFalse();
+      expect(a.visible).toBeTrue();
+    });
+  });
+
   it('keeps working when storage throws', () => {
     spyOn(Storage.prototype, 'getItem').and.throwError('blocked');
     spyOn(Storage.prototype, 'setItem').and.throwError('blocked');

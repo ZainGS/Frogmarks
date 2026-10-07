@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone, HostBinding } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import ShapeManager from '@zaings/salsa/shape-manager';
@@ -12,6 +12,9 @@ import { perfMark, shellPerfFlags } from '../../utilities/perf-marks';
 import { AppUpdateService } from '../../services/pwa/app-update.service';
 import { updatePromptFor, updatePromptText } from '../../services/pwa/app-update.logic';
 import { StoragePersistenceService } from '../../services/pwa/storage-persistence.service';
+import { installShellEscapeGuard } from '../../utilities/shell-escape-guard';
+import { PendingProjectDeletes, type PendingProjectDelete } from './pending-project-deletes';
+import { nextShellDeviceBanner, type ShellDeviceBanner, type ShellDeviceStatusLike } from './shell-device-banner';
 
 interface AriaSlot { id: string; name: string }
 
@@ -55,6 +58,19 @@ export class StudioComponent implements OnInit, OnDestroy {
   readonly appVersionLabel = APP_VERSION_LABEL;
   readonly appBuildLabel = APP_BUILD_LABEL;
 
+  /** Card ✕ → hidden at once, deleted after the Undo toast's time unless Undo (pending-project-deletes.ts). */
+  readonly pendingDeletes = new PendingProjectDeletes(
+    (id) => this.localIllustrationService.delete(id),
+    () => { void this.sm?.shell?.refreshProjects(); },
+    undefined, undefined, undefined,
+    (id, err) => console.warn('[Studio] deleting project ' + id + ' failed:', err),
+  );
+
+  /** A modal (Settings / Install) is up: the host layer (Shell canvas + modal) goes above Salsa's top-right cluster
+   *  (z-index 50, on <body>), so the cluster is covered and can't be clicked under the modal. */
+  @HostBinding('class.shell-raised') get raised(): boolean { return this.modalOpen; }
+  get modalOpen(): boolean { return this.showSettingsOverlay || this.showInstallDialog; }
+
   constructor(
     private router: Router,
     private ngZone: NgZone,
@@ -83,6 +99,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   requestPersistentStorage(): void { void this.storageInfo.requestPersistence(); }
   openStorageSettings(): void {
     this.showSettingsOverlay = true;
+    this._syncModalChrome();
     void this.storageInfo.refreshEstimate();
   }
 
@@ -99,6 +116,14 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._holdWarmup = skipWarmup || this._isTouchDevice();
     if (this._holdWarmup) (globalThis as WarmupHoldGlobal).salsaHoldPipelineWarmup = true;
 
+    // Escape in a dialog (Material or the Settings modal) must not also reach the Shell's window-level Escape.
+    this.ngZone.runOutsideAngular(() => {
+      this._escapeGuardOff = installShellEscapeGuard(document, {
+        hostModalOpen: () => this.modalOpen,
+        closeHostModal: () => this.ngZone.run(() => this.closeModal()),
+      });
+    });
+
     // The renderer + Shell rAF loops, pointer listeners and pipeline warm-up run OUTSIDE the Angular zone (as in
     // illustration.component) — inside it every Shell frame triggered app-wide change detection (mobile-parity UI-16).
     // Shell → Angular callbacks below re-enter the zone with ngZone.run.
@@ -108,6 +133,8 @@ export class StudioComponent implements OnInit, OnDestroy {
 
     this.sm = ShapeManager.getInstance();
     await this.sm.whenWebGPUReady();
+    if (this._destroyed) return;
+    this._subscribeDeviceStatus();
     // fire-and-forget: warms all pipelines while user browses shell (at once on desktop; also when this component
     // was already left during the awaits above — nobody else would release the hold)
     if (!this._holdWarmup || (this._destroyed && !skipWarmup)) this._warmNow();
@@ -115,7 +142,8 @@ export class StudioComponent implements OnInit, OnDestroy {
     // Point the shell at our IndexedDB illustration store so project IDs match.
     this.sm.shell?.setDocumentSource({
       listProjects: async () => {
-        const items = await this.localIllustrationService.getAll(false);
+        const items = (await this.localIllustrationService.getAll(false))
+          .filter(i => !this.pendingDeletes.isHidden(i.uuid));   // a ✕'d card stays hidden while its Undo is up
         return items.map(i => ({
           id:               i.uuid,
           name:             i.name,
@@ -149,11 +177,13 @@ export class StudioComponent implements OnInit, OnDestroy {
       if (reason === 'loaded' || reason === 'registry' || reason === 'projects') this._scheduleAriaRefresh();
     });
 
-    this._deleteSub = this.sm.shell?.onProjectDelete?.subscribe(({ id }: { id: string }) => {
-      this.ngZone.run(() => void this.localIllustrationService.delete(id).then(() => {
-        // (notifyProjectsChanged never existed — the shell list never refreshed after a delete)
-        void this.sm.shell?.refreshProjects();
-      }));
+    // Card ✕ (illustration + packaging grids): hide the card and offer Undo; the delete happens when the toast ends.
+    // (It used to delete for good on one tap.)
+    this._deleteSub = this.sm.shell?.onProjectDelete?.subscribe(({ id, dashboardKind }: { id: string; dashboardKind?: string }) => {
+      this.ngZone.run(() => {
+        const name = this.sm?.shell?.getProject?.(id)?.name || 'Untitled';
+        this.pendingDeletes.schedule({ id, name, dashboardKind: dashboardKind === 'packaging' ? 'packaging' : 'illustration' });
+      });
     });
 
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
@@ -175,6 +205,11 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this._destroyed = true;
+    // Leaving the Shell (or the app closing) with an Undo toast up: nothing is deleted — the project comes back.
+    this.pendingDeletes.cancelAll();
+    this._escapeGuardOff?.();
+    this._deviceStatusOff?.();
+    clearTimeout(this._deviceBannerTimer);
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
     this._deleteSub?.unsubscribe();
@@ -269,6 +304,7 @@ export class StudioComponent implements OnInit, OnDestroy {
           }
         } else {
           this.showInstallDialog = true;
+          this._syncModalChrome();
         }
         break;
       case 'system':
@@ -388,10 +424,108 @@ export class StudioComponent implements OnInit, OnDestroy {
   closeInstallDialog(): void {
     this.showInstallDialog = false;
     this.installUrlInput   = '';
+    this._syncModalChrome();
   }
 
   closeSettingsOverlay(): void {
     this.showSettingsOverlay = false;
+    this._syncModalChrome();
+  }
+
+  // ── Settings / Install modal: Esc, backdrop, the Shell chrome under it ──
+
+  private _escapeGuardOff?: () => void;
+  private _backdropPress = false;
+
+  /** Close whichever Shell modal is open (Esc, a backdrop tap). */
+  closeModal(): void {
+    if (this.showSettingsOverlay) this.closeSettingsOverlay();
+    else if (this.showInstallDialog) this.closeInstallDialog();
+  }
+
+  /** A press that STARTS on the backdrop (not one dragged out of the card) closes the modal on release. */
+  onOverlayPointerDown(e: Event): void { this._backdropPress = this.modalOpen && e.target === e.currentTarget; }
+  onOverlayClick(e: Event): void {
+    const close = this._backdropPress && e.target === e.currentTarget;
+    this._backdropPress = false;
+    if (close) this.closeModal();
+  }
+
+  /** Salsa's top-right cluster is not ours (Salsa appends it to <body>): while a modal is open it must not take focus
+   *  or clicks. Newer Salsa builds tag it .salsa-shell-cluster; on older ones the raised host layer covers it. */
+  private _syncModalChrome(): void {
+    const cluster = document.querySelector('.salsa-shell-cluster');
+    if (cluster) cluster.toggleAttribute('inert', this.modalOpen);
+  }
+
+  // ── Undo toast ──
+
+  undoDelete(id: string): void { this.pendingDeletes.undo(id); }
+  trackPendingDelete(_index: number, d: PendingProjectDelete): string { return d.id; }
+
+  // ── GPU device lost → banner + Shell rebuild (same states as the editor's EngineStatusService banner) ──
+
+  deviceBanner: ShellDeviceBanner = null;
+  deviceBannerDetail: string[] = [];
+  private _deviceStatusOff?: () => void;
+  private _deviceBannerTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private _subscribeDeviceStatus(): void {
+    const sm = this.sm;
+    if (!sm || typeof sm.onDeviceStatusChange !== 'function') return;
+    const off = sm.onDeviceStatusChange((info: ShellDeviceStatusLike) => this.ngZone.run(() => this._onDeviceStatus(info)));
+    if (typeof off === 'function') this._deviceStatusOff = off;
+    const now = typeof sm.getDeviceStatus === 'function' ? sm.getDeviceStatus() : null;
+    if (now && now.status !== 'ok' && now.status !== 'initializing') this._onDeviceStatus(now);
+  }
+
+  private _onDeviceStatus(info: ShellDeviceStatusLike): void {
+    if (this._destroyed) return;
+    const step = nextShellDeviceBanner(this.deviceBanner, info);
+    if (!step) return;
+    clearTimeout(this._deviceBannerTimer); this._deviceBannerTimer = undefined;
+    this.deviceBanner = step.banner;
+    this.deviceBannerDetail = step.detail;
+    if (step.autoHideMs) {
+      this._deviceBannerTimer = setTimeout(() => { this.deviceBanner = null; this.deviceBannerDetail = []; }, step.autoHideMs);
+    }
+    if (step.remount) this._remountShellScene();
+  }
+
+  /** The Shell's GPU objects belonged to the lost device: tear the scene down and build it again on the new one. */
+  private _remountShellScene(): void {
+    const shell = this.sm?.shell;
+    const canvas = document.getElementById('shellCanvas') as HTMLCanvasElement | null;
+    if (this._destroyed || !shell || !canvas) return;
+    this.ngZone.runOutsideAngular(() => {
+      try { shell.destroyScene(); } catch (e) { console.warn('[Studio] Shell teardown after a device loss:', e); }
+      shell.initializeScene(canvas).then(() => this._syncModalChrome()).catch((e: unknown) => {
+        console.warn('[Studio] Shell rebuild after a device loss failed:', e);
+        this.ngZone.run(() => {
+          clearTimeout(this._deviceBannerTimer); this._deviceBannerTimer = undefined;
+          this.deviceBanner = 'failed';
+          this.deviceBannerDetail = [e instanceof Error ? e.message : String(e)];
+        });
+      });
+    });
+  }
+
+  /** Banner › Retry: ask the engine for a device again (or, when the device is fine, rebuild the Shell). */
+  retryDevice(): void {
+    const sm = this.sm;
+    if (!sm || typeof sm.recoverDevice !== 'function') { window.location.reload(); return; }
+    this.deviceBanner = 'recovering';
+    this.deviceBannerDetail = [];
+    void sm.recoverDevice().then((ok: boolean) => {
+      // No status event comes when the device was not lost (only the Shell rebuild had failed): rebuild it here.
+      if (ok && this.deviceBanner === 'recovering') this.ngZone.run(() => this._onDeviceStatus({ status: 'ok' }));
+    });
+  }
+
+  deviceBannerReload(): void { window.location.reload(); }
+  deviceBannerDismiss(): void {
+    clearTimeout(this._deviceBannerTimer); this._deviceBannerTimer = undefined;
+    this.deviceBanner = null; this.deviceBannerDetail = [];
   }
 
   async installCartFromUrl(): Promise<void> {

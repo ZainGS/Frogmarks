@@ -47,10 +47,12 @@ import { SceneAddService } from '../../services/scene-add.service';
 import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
 import { rasterLayerSignature } from '../../utils/raster-layer-signature';
+import { vectorLayerToolSwitch } from '../../utils/vector-layer-tools';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
-import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillButton, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete, TOOL3D_ACTIONS,
+import { activeContextPill, canRouteDuplicate, ContextPillButton, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete, TOOL3D_ACTIONS,
   routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
 import { hotkeyNeedsZone } from './hotkey-zone-gate';
+import { activeKeymapMode, cheatsheetColumnsWithModes, dispatchModeKey } from './mode-keymap';
 import { TouchUiService } from '../../services/touch-ui.service';
 import { ToolSubpanelCollapse } from '../../utils/tool-subpanel-collapse';
 import { aiToolEnabled } from '../../utils/ai-tool-flag';
@@ -236,6 +238,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   /** Raster animation mode — read from the engine, the single source of truth (audit Phase 5.2: the editor kept its own
    *  copy and five call sites had to update both). Change it with setAnimationEnabled(). */
   get animationEnabled(): boolean { return !!this.shapeManager?.isAnimationEnabled(); }
+  /** An Edit Mesh / Armature / UV panel covers the right 280 px, side panel or not: the zoom widget and the touch
+   *  pill keep clear of it. */
+  get modePanelOpen(): boolean {
+    return (this.meshEdit.scene3dIsEditingMesh && !!this.editorState.scene3dSelectedMeshId) || this.scene3dArmaturePanelOpen || this.uv.uvEditorOpen;
+  }
   setAnimationEnabled(on: boolean): void { this.animationService.setAnimationEnabled(on); }
 
   // ── Auto-save state ───────────────────────────────────────────
@@ -453,17 +460,20 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   activeVectorLayerId: string | null = null;
   showEphemeraPanel = false;
 
+  /** The raster tool (the brush …) a vector layer pushed out — it comes back on the next raster layer. */
+  private _rasterToolBeforeVector = '';
+
   onVectorLayerSelected(id: string | null): void {
+    // Rail swap: a raster-only tool leaves for a vector layer (remembered), a vector-only one (and its options panel)
+    // leaves with the vector rail and the remembered tool returns (UI review 2026-10-07 #6)
+    const sw = vectorLayerToolSwitch(this.controlPanelActiveTool, !!this.activeVectorLayerId, !!id, this._rasterToolBeforeVector);
+    this._rasterToolBeforeVector = sw.remembered;
     this.activeVectorLayerId = id;
     this.shapeManager?.setActiveVectorLayer(id);
+    if (sw.next !== null && sw.next !== this.controlPanelActiveTool) this.setActiveTool(sw.next);
     if (!id) {
       this.showEphemeraPanel = false;
     } else {
-      // Deactivate 2D brush/drawing tools — they don't apply to vector layers
-      const t = this.controlPanelActiveTool;
-      if (t.startsWith('drawing:') || t.startsWith('raster:') || t === 'fill') {
-        this.setActiveTool('');
-      }
       this.vectorPanel?.refreshVectorShapes();   // a newly shown panel loads itself on its first ngOnChanges
     }
   }
@@ -504,6 +514,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       || this.uv.uvEditorOpen
       || this.uv.scene3dClothingPaintActive !== null
       || this.scene3dWorldPanelOpen;
+  }
+
+  /** Edit Mesh with a Salsa dist that has the selection gizmo (salsa docs/specs/edit-mesh-topology.md §11): the rail's
+   *  Move / Rotate / Scale stay enabled and pick that gizmo's mode (an older dist: disabled, as before). */
+  get scene3dEditGizmoAvailable(): boolean {
+    return this.meshEdit.scene3dIsEditingMesh
+      && typeof (this.shapeManager as unknown as { setMeshEditGizmoMode3D?: unknown })?.setMeshEditGizmoMode3D === 'function';
   }
 
   _exitAllScene3dModes(): void {
@@ -2517,6 +2534,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const isMac = navigator.userAgent.includes('Mac');
     const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
 
+    // Edit Mesh / Armature / UV paint: the mode's keymap; the 2D bindings are swallowed (mode-keymap.ts)
+    const keymapMode = activeKeymapMode(this);
+    if (keymapMode) { dispatchModeKey(keymapMode, this, event, ctrlKey); return; }
+
     if (dispatchKey(MOD_KEYMAP, this, event, ctrlKey)) return;
 
     // Single keys another handler already claimed (the 3D G / R / S / axis keys while a mesh is selected): 3D grab
@@ -2894,7 +2915,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // ── Shortcut cheatsheet ───────────────────────────────────────
   showShortcutCheatsheet = false;
   /** Keyboard Shortcuts dialog sections, generated from the keymap tables. */
-  readonly cheatsheetColumns = cheatsheetColumns();
+  readonly cheatsheetColumns = cheatsheetColumnsWithModes();
 
   // ── Artboard overlay ────────────────────────────────────────
 

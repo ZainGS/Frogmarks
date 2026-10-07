@@ -9,7 +9,7 @@ import type { IllustrationComponent } from './illustration.component';
  * dispatcher calls preventDefault. Keys are event.key values, case-sensitive. The cheatsheet
  * (Edit › Keyboard Shortcuts) is generated from the `group` / `help` of these bindings — see cheatsheetColumns().
  */
-export type CheatsheetGroup = 'Tools' | 'Selection' | '3D' | 'Edit' | 'View' | 'File';
+export type CheatsheetGroup = 'Tools' | 'Selection' | '3D' | 'Edit' | 'View' | 'File' | 'Edit Mesh';
 
 export interface KeyBinding {
   keys: string[];
@@ -201,6 +201,9 @@ export interface MeshEditTools3D {
   setBevelSnap3D?(on: boolean, step?: number): void;
   commitBevel3D?(): boolean;
   cancelBevel3D?(): void;
+  // element transforms: G / R / S + the gizmo move the selected elements (salsa docs/specs/edit-mesh-topology.md §11)
+  getElementTransformState3D?(): { mode: Transform3DMode; source: 'modal' | 'gizmo'; dragging: boolean } | null;
+  setMeshEditGizmoMode3D?(mode: 'move' | 'rotate' | 'scale' | null): void;
 }
 /** The engine's Chamfer tool state (sm.getBevelState3D). */
 export interface BevelState {
@@ -353,6 +356,24 @@ const transformBtn = (mode: Transform3DMode, label: string, key: string): Contex
   run: (ed) => TOOL3D_ACTIONS.begin(ed, mode),
   available: (ed) => !!ed.editorState?.scene3dSelectedMeshId,
 });
+/** Edit Mesh element transforms on a newer dist: G / R / S move the SELECTED vertices / edges / faces (a one-finger
+ *  drag, the axis buttons, the amount, Apply / Cancel). Older dist: the object, as before. */
+const hasElementXf = (ed: Pick<ModeHost, 'shapeManager'>): boolean =>
+  typeof meshEditTools(ed.shapeManager).getElementTransformState3D === 'function';
+const meshXfBtn = (mode: Transform3DMode, label: string, key: string): ContextPillButton => {
+  const b = transformBtn(mode, label, key);
+  return {
+    ...b,
+    title: `${label} the selected elements: drag on the canvas, or pick an axis and type the amount (${key})`,
+    available: (ed) => {
+      if (!hasElementXf(ed)) return b.available!(ed);
+      const id = ed.editorState?.scene3dSelectedMeshId;
+      const sm = ed.shapeManager as unknown as { getEditSelection3D?(id: string): { vertices: Set<number>; edges: Set<number>; faces: Set<number> } | null };
+      const s = id && typeof sm.getEditSelection3D === 'function' ? sm.getEditSelection3D(id) : null;
+      return !!s && s.vertices.size + s.edges.size + s.faces.size > 0;
+    },
+  };
+};
 /** Start the Chamfer / Bevel (on the selection, or wait for a tap on a corner / edge). Hidden on an older dist. */
 const CHAMFER_BTN: ContextPillButton = {
   id: 'chamfer', label: 'Chamfer', title: 'Chamfer / bevel the selected corners or edges, or tap one (Ctrl+B)',
@@ -423,6 +444,11 @@ export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> =
   /** The keyboard 3D transform is running (G / R / S): pick an axis, type the amount, Apply (Enter) / Cancel (Esc). */
   transform3d: {
     mode: 'transform3d',
+    // (Edit Mesh, newer dist: the selection follows a one-finger drag)
+    hintFor: (ed) => {
+      const s = meshEditTools(ed.shapeManager).getElementTransformState3D?.();
+      return s?.source === 'modal' ? `Drag to ${s.mode === 'grab' ? 'move' : s.mode} the selection` : '';
+    },
     buttons: [axisBtn('x'), axisBtn('y'), axisBtn('z')],
     numeric: true,
     apply: { label: 'Apply', run: TOOL3D_ACTIONS.commit },
@@ -432,7 +458,7 @@ export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> =
    *  edges selected) Shade Smooth / Flat and Mark / Clear Sharp. */
   meshEdit: {
     mode: 'meshEdit',
-    buttons: [MULTI_BTN, FRAME_BTN, transformBtn('grab', 'Grab', 'G'), transformBtn('rotate', 'Rotate', 'R'), transformBtn('scale', 'Scale', 'S'),
+    buttons: [MULTI_BTN, FRAME_BTN, meshXfBtn('grab', 'Grab', 'G'), meshXfBtn('rotate', 'Rotate', 'R'), meshXfBtn('scale', 'Scale', 'S'),
       CHAMFER_BTN, shadeBtn(true), shadeBtn(false), sharpBtn(true), sharpBtn(false)],
   },
   /** A 3D object selected (no sub-mode): Shift-select, Ctrl-snap, frame. */

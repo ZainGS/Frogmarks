@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { A11yModule } from '@angular/cdk/a11y';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -79,6 +80,7 @@ import { loadIllustrateModule } from './illustrate-loader';
     MatChipsModule,
     MatMenuModule,
     DragDropModule,
+    A11yModule,   // cdkTrapFocus (Shell Settings / Install modals)
     FormsModule,
     ReactiveFormsModule,
     MatAutocompleteModule,

@@ -1,11 +1,36 @@
 <canvas id="shellCanvas" style="display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;touch-action:none;pointer-events:auto;"></canvas>
 
-<!-- Thin HTML overlay — pointer-events:none except when a dialog is open -->
-<div class="shell-overlay" [class.has-dialog]="showInstallDialog || showSettingsOverlay">
+<!-- Thin HTML overlay — pointer-events:none except when a dialog is open (then it is the dialog's backdrop: a press
+     that starts on it closes the dialog; Esc closes it too — installShellEscapeGuard) -->
+<div class="shell-overlay" [class.has-dialog]="showInstallDialog || showSettingsOverlay"
+     (pointerdown)="onOverlayPointerDown($event)" (click)="onOverlayClick($event)">
+
+  <!-- GPU device-lost banner (Salsa sm.onDeviceStatusChange; same states as the editor's): recovering → recovered |
+       couldn't recover (Retry / Reload). On recovery the Shell scene is rebuilt on the new device. -->
+  <div *ngIf="deviceBanner" class="device-banner" [class.device-banner--failed]="deviceBanner === 'failed'"
+       [class.device-banner--ok]="deviceBanner === 'recovered'" role="status" aria-live="polite">
+    <div class="device-banner-text">
+      <ng-container *ngIf="deviceBanner === 'recovering'"><span class="device-banner-spin" aria-hidden="true"></span>Graphics device was reset — recovering…</ng-container>
+      <ng-container *ngIf="deviceBanner === 'recovered'">
+        <strong>Recovered.</strong>
+        <span *ngIf="deviceBannerDetail.length"> Not restored: {{ deviceBannerDetail.join('; ') }}</span>
+      </ng-container>
+      <ng-container *ngIf="deviceBanner === 'failed'">
+        <strong>Couldn't recover the graphics device.</strong> Your projects are safe. Try again, or reload.
+      </ng-container>
+    </div>
+    <div class="device-banner-actions">
+      <button *ngIf="deviceBanner === 'recovered' && deviceBannerDetail.length" class="device-banner-btn" (click)="deviceBannerDismiss()">Dismiss</button>
+      <button *ngIf="deviceBanner === 'failed'" class="device-banner-btn device-banner-btn--primary" (click)="retryDevice()">Retry</button>
+      <button *ngIf="deviceBanner === 'failed'" class="device-banner-btn" (click)="deviceBannerReload()">Reload</button>
+    </div>
+  </div>
 
   <!-- Install FrogCart dialog -->
-  <div *ngIf="showInstallDialog" class="shell-dialog" (click)="$event.stopPropagation()">
-    <h3>Install FrogCart</h3>
+  <div *ngIf="showInstallDialog" class="shell-dialog" (click)="$event.stopPropagation()"
+       role="dialog" aria-modal="true" aria-labelledby="shell-install-title"
+       cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
+    <h3 id="shell-install-title">Install FrogCart</h3>
     <p class="shell-dialog-sub">Paste a cart URL or choose a .frogcart file.</p>
     <input class="shell-dialog-input" type="url" placeholder="https://…"
            [(ngModel)]="installUrlInput" />
@@ -17,8 +42,10 @@
   </div>
 
   <!-- Settings overlay (placeholder until settings panel is wired) -->
-  <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()">
-    <h3>Settings</h3>
+  <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()"
+       role="dialog" aria-modal="true" aria-labelledby="shell-settings-title"
+       cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
+    <h3 id="shell-settings-title">Settings</h3>
     <p class="shell-dialog-sub">More settings coming soon.</p>
 
     <!-- Storage (TIER-8): StoragePersistenceService -->
@@ -49,7 +76,12 @@
 
   <!-- PWA popups (salsa/docs/ui/pwa.md): fixed at the bottom, clickable on their own (the overlay itself is not).
        Hidden while a dialog is open: Settings shows the same storage / update state with its own buttons. -->
-  <div class="fm-pwa-popups" *ngIf="(showUpdatePopup || storageInfo.noticeVisible) && !showSettingsOverlay && !showInstallDialog">
+  <div class="fm-pwa-popups" *ngIf="(showUpdatePopup || storageInfo.noticeVisible || pendingDeletes.list.length) && !showSettingsOverlay && !showInstallDialog">
+    <!-- Card ✕ → "Deleted … Undo" (the delete happens when the toast ends; leaving the Shell first keeps the project) -->
+    <div *ngFor="let d of pendingDeletes.list; trackBy: trackPendingDelete" class="fm-pwa-popup shell-undo-toast" role="status" aria-live="polite">
+      <span class="shell-undo-text">Deleted “{{ d.name }}”</span>
+      <button class="fm-pwa-btn fm-pwa-btn-primary shell-undo-btn" (click)="undoDelete(d.id)">Undo</button>
+    </div>
     <div *ngIf="showUpdatePopup" class="fm-pwa-popup" role="alertdialog" aria-labelledby="fm-update-title">
       <div class="fm-pwa-popup-title" id="fm-update-title">{{ updates.state === 'unrecoverable' ? 'Reload needed' : 'Update' }}</div>
       <div class="fm-pwa-popup-body">

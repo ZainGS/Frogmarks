@@ -8,10 +8,13 @@ $muted:   rgba(255, 255, 255, 0.45);
 
 .ar-panel {
   position: fixed;
-  top: 0;
+  // Below the editor's top bar (Navigate, the Scene target, Export stay reachable) and, with the animation timeline
+  // open, above it (:host(.above-timeline)); the custom properties come from the editor (illustration.component.scss).
+  top: var(--fm-topbar-h, 40px);
   right: 0;
   bottom: 0;
   width: 280px;
+  box-sizing: border-box;
   background: $bg;
   border-left: 1px solid $border;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.55);
@@ -22,6 +25,8 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: $text;
   user-select: none;
 }
+
+:host(.above-timeline) .ar-panel { bottom: var(--fm-timeline-h, 204px); }
 
 // ── Header ────────────────────────────────────────────────────────
 
@@ -54,6 +59,10 @@ $muted:   rgba(255, 255, 255, 0.45);
 
 .ar-title {
   flex: 1;
+  min-width: 0;            // shrinks (ellipsis) so the ↺ button is never clipped
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
   color: lighten($accent, 15%);
@@ -96,6 +105,7 @@ $muted:   rgba(255, 255, 255, 0.45);
 .ar-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 12px 16px;
 
   &::-webkit-scrollbar { width: 4px; }
@@ -584,3 +594,11 @@ $muted:   rgba(255, 255, 255, 0.45);
 
 .ar-lib-icon { font-size: 13px; flex: none; }
 .ar-lib-preview { flex: none; }
+
+// Touch: 44 px targets for the header (Close, background, ↺) and the operation buttons.
+@media (pointer: coarse) {
+  .ar-exit-btn,
+  .ar-bg-select,
+  .ar-op-btn { min-height: 44px; }
+  .ar-refresh-btn { width: 44px; height: 44px; }
+}

@@ -136,8 +136,9 @@ function makeSwitchService() {
   };
   const animation = { resetForNewDocument: jasmine.createSpy('resetForNewDocument').and.callFake(() => order.push('animation-reset')) };
   const frogFile = { pendingImport: null as any };
+  const artboard = { fitArtboard: jasmine.createSpy('artboard.fitArtboard') };
   const svc = new IllustrationPersistenceService(
-    new EditorStateService(), {} as any, {} as any, {} as any, animation as any, autoSave as any, frogFile as any,
+    new EditorStateService(), artboard as any, {} as any, {} as any, animation as any, autoSave as any, frogFile as any,
     { layerDitherConfigs: new Map(), layerFrameLinkConfigs: new Map() } as any, {} as any,
     {} as any, { error: () => undefined } as any, { write: async () => true, read: async () => null } as any, {} as any,
   );
@@ -154,7 +155,7 @@ function makeSwitchService() {
     applyFrogImport: jasmine.createSpy('applyFrogImport').and.resolveTo(),
   };
   svc.bind(host as any);
-  return { svc, engine, host, autoSave, animation, frogFile, order };
+  return { svc, engine, host, autoSave, animation, frogFile, order, artboard };
 }
 
 describe('IllustrationPersistenceService across a document switch (New / Duplicate / Shell new)', () => {
@@ -245,19 +246,19 @@ describe('IllustrationPersistenceService across a document switch (New / Duplica
       (m.animation as any).endBulkRestore = jasmine.createSpy('endBulkRestore');
       const shell = { isSceneActive: false, destroyScene: jasmine.createSpy('destroyScene') };
       const renderer = { isSuspended: false, resumeRendering: jasmine.createSpy('resumeRendering') };
-      Object.assign(m.engine, { fitArtboard: jasmine.createSpy('fitArtboard'), shell, webgpuRenderer: renderer });
+      Object.assign(m.engine, { shell, webgpuRenderer: renderer });
       return { ...m, loadDocument, shell, renderer };
     }
     const nextFrame = () => new Promise<void>(r => requestAnimationFrame(() => r()));
 
     it('skips the OPFS lookup, stays on the blank engine document, and still finishes the load + binds the autosave', async () => {
-      const { svc, host, autoSave, loadDocument, engine } = makeLocal();
+      const { svc, host, autoSave, loadDocument, artboard } = makeLocal();
       await svc.initWithIllustration({ uuid: 'NEW', name: 'Untitled Illustration', syncMode: 2 } as any, { nothingSavedYet: true });
       expect(loadDocument).not.toHaveBeenCalled();
       expect(autoSave.enable.calls.mostRecent().args[0]).toBe('local-NEW');   // saves go to the new document
       expect(host.markLoaded).toHaveBeenCalledWith('illustration');
       await nextFrame();
-      expect((engine as any).fitArtboard).toHaveBeenCalled();
+      expect(artboard.fitArtboard).toHaveBeenCalled();   // the panel-aware fit (ArtboardService), not the engine's bare one
       expect(host.markLoaded).toHaveBeenCalledWith('sceneApplied');
     });
 

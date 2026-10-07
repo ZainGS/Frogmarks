@@ -223,6 +223,7 @@
         <!-- Mesh Edit Panel overlay -->
         <app-mesh-edit-panel
             *ngIf="meshEdit.scene3dIsEditingMesh && editorState.scene3dSelectedMeshId"
+            [class.above-timeline]="animationEnabled"
             [shapeManager]="shapeManager"
             [meshId]="editorState.scene3dSelectedMeshId"
             [meshName]="editorState.scene3dSelectedMeshName || editorState.scene3dSelectedMeshId || ''"
@@ -234,6 +235,7 @@
         <!-- Armature Panel overlay -->
         <app-armature-panel
             *ngIf="scene3dArmaturePanelOpen"
+            [class.above-timeline]="animationEnabled"
             [shapeManager]="shapeManager"
             [initialMeshId]="editorState.scene3dSelectedMeshId ?? ''"
             (closeRequest)="closeArmaturePanel()">
@@ -249,6 +251,7 @@
         <!-- UV Editor Panel overlay -->
         <app-uv-editor-panel
             *ngIf="uv.uvEditorOpen"
+            [class.above-timeline]="animationEnabled"
             [shapeManager]="shapeManager"
             [meshId]="uv.uvPaintTargetId ?? editorState.scene3dSelectedMeshId"
             [session]="uv.uvSession"
@@ -391,7 +394,7 @@
                                  (stop)="scene3dTogglePlay()"></app-play-touch-controls>
         <ng-container *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying">
             <app-touch-context-pill *ngIf="contextPill as pill" [spec]="pill" [ed]="this"
-                                    [aboveTimeline]="animationEnabled" [sidePanelOpen]="sidePanel.visible"
+                                    [aboveTimeline]="animationEnabled" [sidePanelOpen]="sidePanel.visible || modePanelOpen"
                                     (apply)="runContextPill(pill, 'apply')"
                                     (cancel)="runContextPill(pill, 'cancel')"
                                     (action)="runContextPillButton(pill, $event)"
@@ -570,6 +573,8 @@
                 <app-raster-layers *ngIf="rightPanelTab === 'scene' && editorState.scene3dViewTarget !== 'scene'"
                     [shapeManager]="shapeManager"
                     [hotkeysSuspended]="editorState.playing"
+                    [activeVectorLayerId]="activeVectorLayerId"
+                    [scene3dActive]="!!editorState.scene3dPanelVisible"
                     (scene3dSelected)="onScene3dSelected($event)"
                     (vectorLayerSelected)="onVectorLayerSelected($event)">
                 </app-raster-layers>
@@ -854,6 +859,14 @@
 
         </div> <!-- close .right-column -->
 
+        <!-- Touch + narrow (tablet portrait): the right column is an overlay drawer; this handle opens / closes it -->
+        <button *ngIf="sidePanel.drawerMode && !uiHidden && !isViewerMode" type="button" class="side-drawer-handle"
+                [class.open]="sidePanel.visible" [class.no-timeline]="!animationEnabled"
+                (mousedown)="$event.stopPropagation()" (click)="toggleSidePanel()"
+                [attr.aria-expanded]="sidePanel.visible"
+                [attr.aria-label]="sidePanel.visible ? 'Close the side panel' : 'Open the side panel (layers)'"
+                [title]="sidePanel.visible ? 'Close the side panel' : 'Open the side panel (layers)'">{{ sidePanel.visible ? '›' : '‹' }}</button>
+
         <!-- Always-visible Color Picker (CSP-style) -->
         <app-persistent-color-picker *ngIf="!uiHidden && !isViewerMode" class="persistent-color-picker"
              (mousedown)="$event.stopPropagation()"
@@ -874,7 +887,7 @@
 
         <!-- Zoom Controls -->
         <div *ngIf="!uiHidden && !isViewerMode && sidePanel.zoomControlsVisible" class="zoom-control" [class.zoom-control--timeline-open]="animationEnabled"
-             [class.no-side-panel]="!sidePanel.visible">
+             [class.no-side-panel]="!sidePanel.visible && !modePanelOpen">
             <div class="zoom-percent-display" (click)="artboard.zoomFitClick()" [title]="editorState.scene3dViewCameraMode === 'free3D' ? 'Click to return to the scene view' : 'Current zoom — click to fit artboard'">{{ artboard.currentZoomPercent }}</div>
             <div class="row zoom-control-row">
                 <div class="col-6 zoom-button-left" (click)="artboard.zoomOut()">
@@ -1299,9 +1312,9 @@
             <!-- Move -->
             <div class="vertical-tool-button"
                  [class.selected]="scene3dGizmoMode === 'move' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
                  (click)="scene3dSetGizmoMode('move')"
-                 title="Move mesh (W)">
+                 title="Move gizmo (G: move by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2v20M2 12h20"/>
                     <polyline points="8,4 12,2 16,4"/>
@@ -1313,9 +1326,9 @@
             <!-- Rotate -->
             <div class="vertical-tool-button"
                  [class.selected]="scene3dGizmoMode === 'rotate' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
                  (click)="scene3dSetGizmoMode('rotate')"
-                 title="Rotate mesh (E)">
+                 title="Rotate gizmo (R: rotate by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="23,4 23,10 17,10"/>
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -1324,9 +1337,9 @@
             <!-- Scale -->
             <div class="vertical-tool-button"
                  [class.selected]="scene3dGizmoMode === 'scale' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
                  (click)="scene3dSetGizmoMode('scale')"
-                 title="Scale mesh (R)">
+                 title="Scale gizmo (S: scale by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15,3 21,3 21,9"/>
                     <polyline points="9,21 3,21 3,15"/>

@@ -60,8 +60,10 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   get editingPresetIcon(): string | undefined {
     return this.presets.find(p => p.id === this.editingPresetId)?.icon;
   }
-  /** Snapshot of the preset at the moment the editor was opened — for Reset to Default */
+  /** Snapshot of the preset at the moment the editor was opened — for Revert */
   private _editSnapshot: string | null = null;
+  /** Delete Brush was tapped: the footer asks to confirm (the delete can't be undone). */
+  confirmingDelete = false;
 
   // ── Preset state ──────────────────────────────────────────────
   presets: BrushPreset[] = [];
@@ -233,6 +235,7 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this._fitObserver?.disconnect();
     window.removeEventListener('resize', this._onFitResize);
     if (this._fitRaf) cancelAnimationFrame(this._fitRaf);
+    this.cancelRowLongPress();
   }
 
   // ── Grid view fit (only the brush list scrolls) ───────────────
@@ -313,9 +316,56 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Gear icon clicked — open editor for an existing preset */
-  openEditor(id: string, event: MouseEvent): void {
-    event.stopPropagation(); // don't trigger quickSelect
+  // ── Long-press a brush row → editor (touch has no hover, so the gear is not the only way in) ──
+  /** How long a row must be held to open its editor. */
+  static readonly LONG_PRESS_MS = 500;
+  /** A press that moves further than this (CSS px) is a scroll / drag, not a long-press. */
+  private static readonly LONG_PRESS_SLOP_PX = 10;
+  private _longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _longPressStart: { x: number; y: number } | null = null;
+  /** The last press opened the editor: swallow the click that follows its release (it would pick the brush and, on
+   *  touch, fold the tool panel away). */
+  private _suppressRowClick = false;
+
+  onRowPointerDown(id: string, e: PointerEvent): void {
+    this.cancelRowLongPress();
+    this._suppressRowClick = false;
+    if (e.button !== 0 || (e.target as HTMLElement | null)?.closest?.('.brush-row-gear')) return;
+    this._longPressStart = { x: e.clientX, y: e.clientY };
+    this._longPressTimer = setTimeout(() => {
+      this._longPressTimer = null;
+      this._suppressRowClick = true;
+      this.openEditor(id);
+    }, BrushOptionsComponent.LONG_PRESS_MS);
+  }
+
+  onRowPointerMove(e: PointerEvent): void {
+    if (!this._longPressTimer || !this._longPressStart) return;
+    if (Math.hypot(e.clientX - this._longPressStart.x, e.clientY - this._longPressStart.y) > BrushOptionsComponent.LONG_PRESS_SLOP_PX) {
+      this.cancelRowLongPress();
+    }
+  }
+
+  cancelRowLongPress(): void {
+    if (this._longPressTimer) clearTimeout(this._longPressTimer);
+    this._longPressTimer = null;
+    this._longPressStart = null;
+  }
+
+  /** The OS long-press menu (Android) would pop over the editor: the long-press is ours. */
+  onRowContextMenu(e: Event): void {
+    if (this._longPressTimer || this._suppressRowClick) e.preventDefault();
+  }
+
+  onRowClick(id: string): void {
+    if (this._suppressRowClick) { this._suppressRowClick = false; return; }
+    this.pickBrush(id);
+  }
+
+  /** Gear icon clicked (or a row long-pressed) — open editor for an existing preset */
+  openEditor(id: string, event?: Event): void {
+    event?.stopPropagation(); // don't trigger quickSelect
+    this.cancelRowLongPress();
     this.isCreating = false;
     this.editingPresetId = id;
     this.rasterService.selectBrush(id);   // editing a brush selects it (and leaves the eraser)
@@ -328,6 +378,7 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.editingPresetName = preset?.name ?? 'Brush';
     this._syncFromPreset();
     this.view = 'editor';
+    this._scrollHostToTop();
   }
 
   /** + cell clicked — open editor in create mode */
@@ -338,6 +389,13 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newPresetName = '';
     this._resetEditorDefaults();
     this.view = 'editor';
+    this._scrollHostToTop();
+  }
+
+  /** The editor starts at its top (the host sub-panel may have been scrolled down the brush list). */
+  private _scrollHostToTop(): void {
+    const scroller = this._scrollParent();
+    if (scroller) scroller.scrollTop = 0;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -350,6 +408,7 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.editingPresetId = null;
     this._editSnapshot = null;
     this.showColorPicker = false;
+    this.confirmingDelete = false;
   }
 
   /** Save a brand-new brush built from the editor's current values */
@@ -403,14 +462,14 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.closeEditor();
   }
 
-  /** Save edits to an existing brush */
+  /** Done: close the editor (edits to an existing brush are applied live) */
   saveEdits(): void {
     // Edits are applied live via the service, so just close
     this._editSnapshot = null;
     this.closeEditor();
   }
 
-  /** Reset the currently-editing preset to its snapshot */
+  /** Revert: put the currently-editing preset back to its snapshot from when the editor opened */
   resetToDefault(): void {
     if (!this._editSnapshot || !this.editingPresetId) return;
     this.rasterService.importPreset(this._editSnapshot);
@@ -418,7 +477,12 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this._syncFromPreset();
   }
 
-  /** Delete the currently-editing preset */
+  /** Delete Brush tapped: ask first (the footer turns into a Delete / Cancel confirm). */
+  askDeleteBrush(): void {
+    if (this.editingPresetId) this.confirmingDelete = true;
+  }
+
+  /** Delete the currently-editing preset (confirmed) */
   deleteBrush(): void {
     if (!this.editingPresetId) return;
     this.rasterService.deletePreset(this.editingPresetId);

@@ -387,12 +387,20 @@ canvas {
     padding-right: 40px;
 }
 
+/* The top bar's and the animation timeline's heights, for the fixed overlays that must clear them: the Edit Mesh /
+   Armature / UV panels start below the bar (UI review 2026-10-07 #4: they covered Navigate, the Scene target and
+   Export) and stop above the timeline (200 px + its 4 px border). Same in both themes and on touch (measured). */
+:host {
+    --fm-topbar-h: 40px;
+    --fm-timeline-h: 204px;
+}
+
 .left-panel {
     position: fixed;
     left: 70px;
     right: 0;
     top: 0;
-    height: 40px;
+    height: var(--fm-topbar-h);
     background: rgba(50, 50, 50, 0.975);
     padding: 0 12px 0 8px;
     border-radius: 0;
@@ -2570,6 +2578,34 @@ svg {
 // widgets parked beside it move to the screen edge; the canvas is full-width underneath, so it simply shows.
 .right-column.side-panel-hidden {
     display: none;
+}
+
+/* Touch + narrow (SidePanelService.drawerMode): the handle that opens / closes the right column drawer. It sits on the
+   screen edge when closed and on the drawer's left edge (284 px = 280 column + 4 border) when open. */
+.side-drawer-handle {
+    position: absolute;
+    top: calc(50% - 116px);   /* the middle of the column (top 40, bottom 200) */
+    right: 0;
+    width: 44px;
+    height: 72px;
+    z-index: 601;             /* above the column and the zoom box */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 2px solid var(--rc-green, #3b6151);
+    border-right: none;
+    border-radius: 0;
+    background: var(--rc-panel-bg, #1a1a1a);
+    color: var(--rc-text, #c8c8c8);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+
+    &.open { right: 284px; }
+    &.no-timeline { top: calc(50% - 16px); }
+    &:active { background: var(--rc-surface-hi, #2e2e2e); }
 }
 
 .zoom-control.no-side-panel {

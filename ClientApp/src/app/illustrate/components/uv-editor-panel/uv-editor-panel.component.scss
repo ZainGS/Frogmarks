@@ -6,10 +6,13 @@ $muted:  rgba(255, 255, 255, 0.45);
 
 .uv-panel {
   position: fixed;
-  top: 0;
+  // Below the editor's top bar (Navigate, the Scene target, Export stay reachable) and, with the animation timeline
+  // open, above it (:host(.above-timeline)); the custom properties come from the editor (illustration.component.scss).
+  top: var(--fm-topbar-h, 40px);
   right: 0;
   bottom: 0;
   width: 280px;
+  box-sizing: border-box;
   background: $bg;
   border-left: 1px solid $border;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.55);
@@ -20,6 +23,8 @@ $muted:  rgba(255, 255, 255, 0.45);
   color: $text;
   user-select: none;
 }
+
+:host(.above-timeline) .uv-panel { bottom: var(--fm-timeline-h, 204px); }
 
 .uv-header {
   display: flex;
@@ -167,4 +172,10 @@ $muted:  rgba(255, 255, 255, 0.45);
   &:last-child { margin-bottom: 0; }
 
   input[type='checkbox'] { flex-shrink: 0; accent-color: $accent; cursor: pointer; }
+}
+
+// Touch: 44 px targets for Close and the panel's buttons.
+@media (pointer: coarse) {
+  .uv-exit-btn,
+  .uv-btn { min-height: 44px; }
 }

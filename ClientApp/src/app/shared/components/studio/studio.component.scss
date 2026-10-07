@@ -6,6 +6,13 @@
   pointer-events: none;
 }
 
+// A Settings / Install modal is up: above Salsa's top-right cluster (z-index 50, appended to <body>) so the cluster is
+// covered (by the Shell canvas + the modal's backdrop, which share this layer) and can't be clicked; still under the
+// CDK overlay container (1000).
+:host(.shell-raised) {
+  z-index: 60;
+}
+
 .shell-overlay {
   width: 100%;
   height: 100%;
@@ -24,10 +31,12 @@
   }
 }
 
+// Retro-chrome card: --rc-* tokens (fallbacks = the theme's values), raised 2 px bevel, sharp corners.
 .shell-dialog {
-  background: #1e1e2a;
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: var(--rc-panel-bg, #1a1a1a);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
   padding: 28px 32px;
   min-width: min(340px, calc(100vw - 32px));
   max-width: min(480px, calc(100vw - 32px));
@@ -65,7 +74,7 @@
   box-sizing: border-box;
   background: #111;
   border: 1px solid #444;
-  border-radius: 6px;
+  border-radius: 0;
   color: #fff;
   padding: 8px 10px;
   font-size: 14px;
@@ -73,7 +82,7 @@
 
   &:focus {
     outline: none;
-    border-color: #4a9eff;
+    border-color: var(--rc-green-hi, #4f7a68);
   }
 }
 
@@ -84,24 +93,25 @@
 }
 
 .shell-btn {
-  background: #4a9eff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 7px 18px;
+  min-height: 32px;
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  padding: 5px 18px;
   font-size: 13px;
   cursor: pointer;
 
-  &:hover { background: #6ab0ff; }
+  &:hover { background: var(--rc-green-hi, #4f7a68); }
   &[disabled] { opacity: 0.4; cursor: not-allowed; }
 
   &.shell-btn-ghost {
-    background: transparent;
-    border: 1px solid #555;
-    color: #ccc;
+    background: #404040;
+    color: var(--rc-text, #c8c8c8);
 
     &:hover {
-      border-color: #888;
+      background: #555;
       color: #fff;
     }
   }
@@ -242,4 +252,104 @@
   margin: 4px 0 8px;
   line-height: 1.4;
   color: var(--rc-text-muted, #a8a8a8);
+}
+
+// ── Undo toast (card ✕): one row per pending delete, in the bottom popup column ──
+.shell-undo-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 12px;
+  font-size: 13px;
+}
+
+.shell-undo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-undo-btn { flex-shrink: 0; }
+
+// ── GPU device-lost banner (the editor's .device-banner, retro-chrome corners) ──
+.device-banner {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: min(760px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 16px;
+  background: #1d2433;
+  border: 2px solid #4c7dff;
+  border-radius: 0;
+  color: #dfe6f5;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+  strong { color: #9db8ff; }
+
+  &--ok { border-color: #3fa66b; background: #15281d; strong { color: #8be0ad; } }
+  &--failed { border-color: #d0574a; background: #331a17; color: #f5d6d2; strong { color: #ff9c90; } }
+
+  // Narrow screens: below Salsa's top-right cluster (it stays above this layer) instead of under it.
+  @media (max-width: 720px) {
+    top: calc(72px + env(safe-area-inset-top, 0px));
+  }
+}
+
+.device-banner-text { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.device-banner-spin {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  border: 2px solid rgba(157, 184, 255, 0.35);
+  border-top-color: #9db8ff;
+  border-radius: 50%;
+  animation: shell-device-banner-spin 0.9s linear infinite;
+}
+
+@keyframes shell-device-banner-spin { to { transform: rotate(360deg); } }
+
+.device-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.device-banner-btn {
+  min-height: 32px;
+  background: #2a2a2a;
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  color: inherit;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { background: #3a3a3a; }
+
+  &--primary {
+    background: #d0574a;
+    color: #1a0c0a;
+    font-weight: 600;
+
+    &:hover { background: #e06a5d; }
+  }
+}
+
+// Touch: finger-sized buttons (44 px) on a coarse pointer.
+@media (pointer: coarse) {
+  .shell-btn,
+  .fm-pwa-btn,
+  .device-banner-btn { min-height: 44px; }
 }

@@ -17,15 +17,15 @@
 
   <div class="me-body">
 
-    <!-- Mode toggle: Vertex / Face / Edge -->
+    <!-- Mode toggle: Vertex / Edge / Face (the 1 / 2 / 3 keys; chips generated from the keymap) -->
     <div class="me-mode-row">
       <span class="me-mode-label">Mode</span>
       <button class="me-mode-btn" [class.active]="selectionMode === 'vertex'"
-              (click)="setMode('vertex')">Vertex</button>
-      <button class="me-mode-btn" [class.active]="selectionMode === 'face'"
-              (click)="setMode('face')">Face</button>
+              (click)="setMode('vertex')" [title]="'Vertex select (' + keys.vertexMode + ')'">Vertex <span class="me-kbd">{{ keys.vertexMode }}</span></button>
       <button class="me-mode-btn" [class.active]="selectionMode === 'edge'"
-              (click)="setMode('edge')">Edge</button>
+              (click)="setMode('edge')" [title]="'Edge select (' + keys.edgeMode + ')'">Edge <span class="me-kbd">{{ keys.edgeMode }}</span></button>
+      <button class="me-mode-btn" [class.active]="selectionMode === 'face'"
+              (click)="setMode('face')" [title]="'Face select (' + keys.faceMode + ')'">Face <span class="me-kbd">{{ keys.faceMode }}</span></button>
     </div>
 
     <!-- Selection info -->
@@ -43,8 +43,8 @@
         <button class="me-clear-btn" *ngIf="selectedEdges.length > 0" (click)="clearEdgeSelection()">Clear</button>
       </ng-container>
       <span class="me-sel-hint">
-        <ng-container *ngIf="selectionMode !== 'edge'">Click canvas to select · Shift+click to add</ng-container>
-        <ng-container *ngIf="selectionMode === 'edge'">Click an edge to select · Shift+click to add (or enter a half-edge index below)</ng-container>
+        <ng-container *ngIf="selectionMode !== 'edge'">Click canvas to select · Shift+click to add · {{ keys.selectAll }} all · {{ keys.deselectAll }} none</ng-container>
+        <ng-container *ngIf="selectionMode === 'edge'">Click an edge to select · Shift+click to add · {{ keys.selectAll }} all (or enter a half-edge index below)</ng-container>
       </span>
     </div>
 
@@ -78,7 +78,7 @@
 
         <button class="me-op-btn me-op-full me-op-danger"
                 [disabled]="selectedFaces.length === 0"
-                (click)="deleteSelected()">Delete Face</button>
+                (click)="deleteSelected()">Delete Face <span class="me-kbd">{{ keys.delete }}</span></button>
 
         <div class="me-op-sep"></div>
 
@@ -169,7 +169,7 @@
       <ng-template #bevelIdle>
         <button class="me-op-btn me-op-full" (click)="startBevel()"
                 title="Chamfer the selected corners (Vertex mode) or bevel the selected edges (Edge mode); nothing selected: tap one">
-          Chamfer <span class="me-kbd">Ctrl+B</span>
+          Chamfer <span class="me-kbd">{{ keys.chamfer }}</span>
         </button>
         <div class="me-hint" style="margin-top:4px">Select corners / edges first, or start and tap one. Drag to set the amount.</div>
       </ng-template>
@@ -235,7 +235,7 @@
         <input type="number" class="me-num me-num-wide" min="0" placeholder="half-edge idx"
                [(ngModel)]="halfEdgeInput"
                (change)="selectEdge()">
-        <button class="me-op-btn" (click)="selectEdge()" [disabled]="!halfEdgeInput">Select</button>
+        <button class="me-op-btn" (click)="selectEdge()" [disabled]="!hasHalfEdgeInput">Select</button>
       </div>
 
       <!-- Compact half-edge input for non-edge modes -->
@@ -248,29 +248,27 @@
 
       <div class="me-op-group">
         <div class="me-op-inline">
-          <button class="me-op-btn" [disabled]="!halfEdgeInput" (click)="loopCut()"
-                  title="Insert edge ring across quad faces (Ctrl+R)">Loop Cut</button>
-          <span class="me-label">Position (0–1)</span>
+          <button class="me-op-btn" [disabled]="!canEdgeOp" (click)="loopCut()"
+                  [title]="'Insert an edge ring across quad faces through the selected edge, else the typed half-edge (' + keys.loopCut + ': the selected edge, at the middle)'">Loop Cut <span class="me-kbd">{{ keys.loopCut }}</span></button>
+          <span class="me-label">Position</span>
           <input type="number" class="me-num" min="0" max="1" step="0.05"
-                 [(ngModel)]="loopCutT" title="0=start vertex · 0.5=midpoint · 1=end">
-          <span class="me-kbd">Ctrl+R</span>
+                 [(ngModel)]="loopCutT" title="0–1 along the edge: 0 = start vertex · 0.5 = midpoint · 1 = end">
         </div>
       </div>
 
       <button class="me-op-btn me-op-full me-op-danger"
-              [disabled]="!halfEdgeInput" (click)="dissolveEdge()"
-              title="Remove edge and merge adjacent faces">
-        Dissolve Edge <span class="me-kbd">X</span>
+              [disabled]="!canEdgeOp" (click)="dissolveEdge()"
+              [title]="'Remove the selected edges (else the typed half-edge) and merge their faces (' + keys.delete + ')'">
+        Dissolve Edge <span class="me-kbd">{{ keys.delete }}</span>
       </button>
 
       <div class="me-op-group" style="margin-top:6px">
         <div class="me-op-inline">
-          <button class="me-op-btn" [disabled]="!halfEdgeInput" (click)="bevelEdge()"
-                  title="Chamfer edge into a quad strip (Ctrl+B)">Bevel</button>
+          <button class="me-op-btn" [disabled]="!hasHalfEdgeInput" (click)="bevelEdge()"
+                  title="Chamfer the typed half-edge into a quad strip (for the selection use Chamfer above)">Bevel</button>
           <span class="me-label">Amount</span>
           <input type="number" class="me-num" min="0" max="1" step="0.05"
                  [(ngModel)]="bevelAmount">
-          <span class="me-kbd">Ctrl+B</span>
         </div>
       </div>
 
@@ -291,7 +289,7 @@
               (click)="activateTool(activeTool === 'knife' ? 'select' : 'knife')"
               title="Draw a cut line across faces — drag on canvas to cut">
         {{ activeTool === 'knife' ? '✓ Knife Active — drag canvas' : 'Knife Cut' }}
-        <span class="me-kbd">K</span>
+        <span class="me-kbd">{{ keys.knife }}</span>
       </button>
       <div *ngIf="activeTool === 'knife'" class="me-tool-hint">
         Drag on canvas to draw cut line · Esc to cancel
@@ -301,8 +299,8 @@
               style="margin-top:6px"
               [disabled]="selectedVertices.length < 4"
               (click)="bridgeLoops()"
-              title="Fill gap between two vertex loops with quad faces (B)">
-        Bridge Loops <span class="me-kbd">B</span>
+              title="Fill gap between two vertex loops with quad faces">
+        Bridge Loops
       </button>
       <div class="me-hint" *ngIf="selectedVertices.length > 0 && selectedVertices.length < 4">
         Select the same number of vertices on each open boundary loop.

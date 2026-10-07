@@ -92,9 +92,12 @@ export class ViewportHudService implements OnDestroy {
         return;
       }
 
-      if (key === 'g') { sm.beginTransform3D('grab');   e.preventDefault(); this._syncShortcutHud(); return; }
-      if (key === 'r') { sm.beginTransform3D('rotate');  e.preventDefault(); this._syncShortcutHud(); return; }
-      if (key === 's' && !e.ctrlKey && !e.metaKey) { sm.beginTransform3D('scale'); e.preventDefault(); this._syncShortcutHud(); return; }
+      // Plain G / R / S only: Ctrl+R is Edit Mesh's loop cut (it started a modal Rotate), Ctrl+S saves, Ctrl+G / Alt+… are
+      // not transforms
+      const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (key === 'g' && plain) { sm.beginTransform3D('grab');   e.preventDefault(); this._syncShortcutHud(); return; }
+      if (key === 'r' && plain) { sm.beginTransform3D('rotate');  e.preventDefault(); this._syncShortcutHud(); return; }
+      if (key === 's' && plain) { sm.beginTransform3D('scale'); e.preventDefault(); this._syncShortcutHud(); return; }
 
       if (sm.isShortcutActive3D) {
         if (key === 'x') { sm.constrainAxis3D('x'); e.preventDefault(); this._syncShortcutHud(); return; }
@@ -161,6 +164,9 @@ export class ViewportHudService implements OnDestroy {
     if (snapNow !== this.scene3dSnapActive) {
       this.ngZone.run(() => { this.scene3dSnapActive = snapNow; });
     }
+
+    // Edit Mesh G / R / S ends from the canvas too (left click applies, right click cancels): re-read the readout
+    if (!!sm.isShortcutActive3D !== this.scene3dShortcutActive) this.ngZone.run(() => this._syncShortcutHud());
 
     const info = sm.scene3d?.getDragInfo();
     if (!info?.isDragging || info.angleDeg == null || !info.gizmoCenterWorld) {

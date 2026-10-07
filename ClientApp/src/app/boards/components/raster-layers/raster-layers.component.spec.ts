@@ -152,3 +152,144 @@ describe('RasterLayersComponent touch opacity toggle', () => {
     expect(t.service.selectLayer).toHaveBeenCalledWith('b');
   });
 });
+
+/** UI review 2026-10-07 #2 / #6: the panel with vector layers, an engine stand-in and the editor's inputs bound. */
+async function setupVector(opts: { undoable?: boolean; activeVector?: string | null; scene3dActive?: boolean; engineVectorIds?: string[] } = {}) {
+  const vectorRows = [layer('v1', 1, { type: 'vector' }), layer('v2', 1, { type: 'vector' })];
+  const layers$ = new BehaviorSubject<RasterLayer[]>([layer('bg'), layer('ink'), layer('s3', 1, { type: '3d-scene' }), ...vectorRows]);
+  const activeLayerId$ = new BehaviorSubject<string | null>('bg');   // the engine's selected RASTER layer
+  const service = {
+    layers$, activeLayerId$,
+    refreshLayers: jasmine.createSpy('refreshLayers'),
+    selectLayer: jasmine.createSpy('selectLayer'),
+    setLayerOpacity: jasmine.createSpy('setLayerOpacity'),
+  };
+  let engineVectorIds = opts.engineVectorIds ?? ['v1', 'v2'];
+  const sm = {
+    setActiveVectorLayer: jasmine.createSpy('setActiveVectorLayer'),
+    removeVectorLayer: jasmine.createSpy('removeVectorLayer').and.callFake((id: string) => {
+      engineVectorIds = engineVectorIds.filter(v => v !== id);
+      return true;
+    }),
+    getVectorLayers: () => engineVectorIds.map(id => ({ id })),
+    rasterLayerManager: opts.undoable === false ? {} : { takeVectorLayer: () => null },
+    canUndo2DShapes: true,
+    undoDescription2DShapes: 'Remove vector layer' as string | null,
+    undo2DShapes: jasmine.createSpy('undo2DShapes').and.callFake(() => { engineVectorIds = ['v1', 'v2']; return true; }),
+  };
+  await TestBed.configureTestingModule({
+    declarations: [RasterLayersComponent],
+    imports: [CommonModule, FormsModule],
+    providers: [
+      { provide: RasterBrushService, useValue: service },
+      { provide: TouchUiService, useValue: { coarse: false } },
+    ],
+    schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  }).compileComponents();
+  const fixture = TestBed.createComponent(RasterLayersComponent);
+  fixture.componentRef.setInput('shapeManager', sm);
+  fixture.componentRef.setInput('activeVectorLayerId', opts.activeVector ?? null);
+  fixture.componentRef.setInput('scene3dActive', !!opts.scene3dActive);
+  const comp = fixture.componentInstance;
+  const vectorEmits: Array<string | null> = [];
+  const sceneEmits: boolean[] = [];
+  comp.vectorLayerSelected.subscribe(v => vectorEmits.push(v));
+  comp.scene3dSelected.subscribe(v => sceneEmits.push(v));
+  fixture.detectChanges();
+  const el = fixture.nativeElement as HTMLElement;
+  const nameOf = (x: Element) => (x.querySelector('.rl-name, .rl-scene-label')?.textContent ?? '').trim();
+  const row = (name: string): HTMLElement => {
+    const r = Array.from(el.querySelectorAll<HTMLElement>('.rl-item, .rl-vector-row')).find(x => nameOf(x) === name);
+    if (!r) throw new Error('no row ' + name);
+    return r;
+  };
+  const activeRows = () => Array.from(el.querySelectorAll<HTMLElement>('.rl-item.active, .rl-vector-row.active')).map(nameOf);
+  const tap = (target: HTMLElement) => { target.click(); fixture.detectChanges(); };
+  const settle = async () => { await new Promise(r => setTimeout(r, 0)); fixture.detectChanges(); };
+  return { fixture, comp, el, service, sm, row, activeRows, tap, settle, vectorEmits, sceneEmits };
+}
+
+describe('RasterLayersComponent selection follows the editor (UI review #6)', () => {
+  it('a re-created panel highlights the editor\'s active vector layer, not Background', async () => {
+    const t = await setupVector({ activeVector: 'v2' });
+    await t.settle();
+    expect(t.activeRows()).toEqual(['V2']);
+    expect(t.service.selectLayer).not.toHaveBeenCalled();   // no auto-select over the vector layer
+    expect(t.vectorEmits).toEqual([]);
+  });
+
+  it('a raster pick from that state leaves vector mode (emit null + engine) and selects the layer', async () => {
+    const t = await setupVector({ activeVector: 'v2' });
+    t.tap(t.row('BG'));
+    expect(t.vectorEmits).toEqual([null]);
+    expect(t.sm.setActiveVectorLayer).toHaveBeenCalledWith(null);
+    expect(t.service.selectLayer).toHaveBeenCalledWith('bg');
+    t.fixture.componentRef.setInput('activeVectorLayerId', null);   // the editor confirms
+    t.fixture.detectChanges();
+    expect(t.activeRows()).toEqual(['BG']);
+  });
+
+  it('a raster pick ALWAYS emits "no vector layer" (the editor may be in vector mode whatever the panel thinks)', async () => {
+    const t = await setupVector();
+    t.tap(t.row('INK'));
+    expect(t.vectorEmits).toEqual([null]);
+    expect(t.service.selectLayer).toHaveBeenCalledWith('ink');
+  });
+
+  it('the editor\'s 3D-scene selection survives a re-create, and a raster pick leaves it', async () => {
+    const t = await setupVector({ scene3dActive: true });
+    await t.settle();
+    expect(t.activeRows()).toEqual(['S3']);
+    t.tap(t.row('INK'));
+    expect(t.sceneEmits).toEqual([false]);
+    expect(t.service.selectLayer).toHaveBeenCalledWith('ink');
+  });
+
+  it('an active vector layer that left the engine (a redo of its removal) drops vector mode', async () => {
+    const t = await setupVector({ activeVector: 'v2', engineVectorIds: ['v1'] });
+    await t.settle();
+    expect(t.vectorEmits).toEqual([null]);
+    expect(t.sm.setActiveVectorLayer).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('RasterLayersComponent vector-layer ✕ (UI review #2)', () => {
+  it('removes in one go, drops the row at once, leaves vector mode, and offers Undo (the same 2D undo step)', async () => {
+    const t = await setupVector({ activeVector: 'v1' });
+    t.tap(t.row('V1').querySelector<HTMLElement>('.rl-vector-remove')!);
+    expect(t.sm.removeVectorLayer).toHaveBeenCalledOnceWith('v1');
+    expect(t.vectorEmits).toEqual([null]);
+    expect(() => t.row('V1')).toThrow();   // no ghost row
+    expect(t.service.refreshLayers).toHaveBeenCalled();
+    const toast = t.el.querySelector<HTMLElement>('.rl-undo-toast')!;
+    expect(toast.textContent).toContain('Removed “V1”');
+
+    t.tap(toast.querySelector<HTMLElement>('.rl-undo-btn')!);
+    expect(t.sm.undo2DShapes).toHaveBeenCalledTimes(1);
+    expect(t.vectorEmits).toEqual([null, 'v1']);   // it was active: active again
+    expect(t.el.querySelector('.rl-undo-toast')).toBeNull();
+  });
+
+  it('the toast\'s Undo does nothing when the next undo step is something else', async () => {
+    const t = await setupVector();
+    t.tap(t.row('V2').querySelector<HTMLElement>('.rl-vector-remove')!);
+    t.sm.undoDescription2DShapes = 'Move shapes';
+    t.tap(t.el.querySelector<HTMLElement>('.rl-undo-btn')!);
+    expect(t.sm.undo2DShapes).not.toHaveBeenCalled();
+  });
+
+  it('older engine (removal not undoable): the first ✕ asks, a second removes, a click elsewhere cancels; no toast', async () => {
+    const t = await setupVector({ undoable: false });
+    const x = () => t.row('V2').querySelector<HTMLElement>('.rl-vector-remove')!;
+    t.tap(x());
+    expect(t.sm.removeVectorLayer).not.toHaveBeenCalled();
+    expect(x().textContent!.trim()).toBe('Remove?');
+    document.body.click();
+    t.fixture.detectChanges();
+    expect(x().textContent!.trim()).toBe('✕');
+    t.tap(x());
+    t.tap(x());
+    expect(t.sm.removeVectorLayer).toHaveBeenCalledOnceWith('v2');
+    expect(t.el.querySelector('.rl-undo-toast')).toBeNull();
+  });
+});

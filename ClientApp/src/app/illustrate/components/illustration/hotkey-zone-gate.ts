@@ -1,4 +1,5 @@
 import { KeyBinding, MOD_KEYMAP, TOOL_KEYMAP } from './editor-keymap';
+import { MESH_EDIT_KEYMAP } from './mode-keymap';
 
 /** What the editor's hotkey handler looks at before the keymap tables (IllustrationComponent.handleHotkeys). */
 export interface HotkeyGateState {
@@ -21,8 +22,9 @@ export function isEditableKeyTarget(target: EventTarget | null): boolean {
 
 /** A binding in `tables` would take this key — dispatchKey's match rules, without running anything. A plain key's
  *  auto-repeat matches only `repeat` bindings (dispatchKey skips the others); a held Ctrl chord still matches
- *  (dispatchKey claims its repeats). */
-export function keymapMayHandle(e: KeyboardEvent, mod: boolean, tables: KeyBinding[][] = [MOD_KEYMAP, TOOL_KEYMAP]): boolean {
+ *  (dispatchKey claims its repeats). The default tables include the Edit Mesh mode keys (mode-keymap.ts: 1 / 2 / 3, A,
+ *  Ctrl+R); the other modes only swallow keys of the global tables. */
+export function keymapMayHandle(e: KeyboardEvent, mod: boolean, tables: KeyBinding[][] = [MOD_KEYMAP, TOOL_KEYMAP, MESH_EDIT_KEYMAP]): boolean {
   for (const table of tables) {
     for (const b of table) {
       if (!b.keys.includes(e.key)) continue;

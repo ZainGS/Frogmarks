@@ -4,6 +4,7 @@ import type { IllustrationComponent } from '../components/illustration/illustrat
 
 import { EditorStateService } from './editor-state.service';
 import { FrameCoalescer } from '../../shared/utilities/frame-coalescer';
+import { CanvasInsets, RectLike, computeArtboardFitFallback, fitInsetsWithFloating } from '../utils/artboard-fit-insets';
 /** Exactly the editor state the artboard / zoom controls use. */
 export type ArtboardHost = Pick<IllustrationComponent, 'shapeManager' |
   'canvas' | 'scene3dFrameScene' | 'worldManager'
@@ -77,7 +78,7 @@ export class ArtboardService implements OnDestroy {
     const sm = this.shapeManager;
     if (docSize?.w > 0 && docSize?.h > 0) {
       sm.setDocumentSize(docSize.w, docSize.h);
-      sm.fitArtboard();
+      this.fitArtboard();
     } else {
       sm.clearDocumentSize();
     }
@@ -124,9 +125,56 @@ export class ArtboardService implements OnDestroy {
     }
   }
 
+  /** Fit (button, zoom readout, Ctrl+0, document open / resize): the artboard is centred in, and fills, the part of
+   *  the canvas the editor UI leaves visible (ui-review 2026-10-07 #10), not the whole canvas under the panels. */
   fitArtboard(): void {
     const sm = this.shapeManager;
-    if (!sm.getDocumentSize()) return;
-    sm.fitArtboard();
+    const doc = sm?.getDocumentSize();
+    if (!doc) return;
+    const cv = this.host.canvas;
+    const insets = cv ? fitInsetsWithFloating(cv.getBoundingClientRect(), this._uiRects(ArtboardService.DOCKED_UI),
+      this._uiRects(ArtboardService.FLOATING_UI), doc.w / doc.h) : null;
+    // Salsa's fitArtboard(insets) (2026-10-07); an older linked engine build ignores arguments, so it gets the old fit
+    // and the same math is applied here on top (artboard-fit-insets.ts mirrors salsa artboard-fit.ts).
+    const fit = sm.fitArtboard as (insets?: CanvasInsets | null) => void;
+    if (fit.length >= 1) { fit.call(sm, insets); }
+    else {
+      sm.fitArtboard();
+      const is = sm.interactionService;
+      if (cv && insets && is) {
+        const r = computeArtboardFitFallback({
+          cssWidth: cv.clientWidth, cssHeight: cv.clientHeight, pxWidth: cv.width, pxHeight: cv.height,
+          docWidth: doc.w, docHeight: doc.h, insets,
+        });
+        is.setPanOffset(r.panX, r.panY);
+        is.setZoom(r.zoom);
+        sm.scheduleRender?.();
+      }
+    }
+    this.updateOverlay();
+  }
+
+  /** The editor UI docked over the canvas: rail, top bar, open tool sub-panel(s), right panel, timeline, colour picker. */
+  private static readonly DOCKED_UI = '.vertical-control-panel, .left-panel, .tool-subpanel.visible, .right-column, '
+    + '.animation-timeline-wrapper, .persistent-color-picker';
+  /** Small floating UI, avoided only when the page would sit under it: the zoom box, the side drawer's handle. */
+  private static readonly FLOATING_UI = '.zoom-control, .side-drawer-handle';
+
+  /** On-screen rects of the UI matching `sel`. Hidden ones (display:none) measure 0 × 0 and are dropped by
+   *  visibleCanvasInsets. A tool sub-panel is measured where it is going (without its slide transform), so a fit
+   *  right after it opens is right. */
+  private _uiRects(sel: string): RectLike[] {
+    if (typeof document === 'undefined') return [];
+    const out: RectLike[] = [];
+    document.querySelectorAll<HTMLElement>(sel).forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return;
+      let dx = 0;
+      if (el.classList.contains('tool-subpanel') && typeof DOMMatrixReadOnly !== 'undefined') {
+        try { dx = new DOMMatrixReadOnly(getComputedStyle(el).transform).e; } catch { dx = 0; }
+      }
+      out.push({ left: r.left - dx, right: r.right - dx, top: r.top, bottom: r.bottom });
+    });
+    return out;
   }
 }

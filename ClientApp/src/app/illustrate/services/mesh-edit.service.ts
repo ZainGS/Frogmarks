@@ -4,10 +4,13 @@ import type { IllustrationComponent } from '../components/illustration/illustrat
 import { BEVEL_ACTIONS, type BevelState } from '../components/illustration/editor-keymap';
 
 import { EditorStateService } from './editor-state.service';
+
+export type MeshEditSelectMode = 'vertex' | 'edge' | 'face';
+
 /** Exactly the editor state mesh edit mode uses. */
 export type MeshEditHost = Pick<IllustrationComponent, 'shapeManager' |
-  '_exitAllScene3dModes' | 'canvasRef' | 'handleCanvasRef' 
->;
+  '_exitAllScene3dModes' | 'canvasRef' | 'handleCanvasRef'
+> & Partial<Pick<IllustrationComponent, 'scene3dGizmoMode'>>;
 
 /**
  * 3D mesh edit mode: enter / exit (engine edit mode + its pointer controller on the canvas), the edit tool, and the
@@ -24,6 +27,8 @@ export class MeshEditService {
 
   scene3dIsEditingMesh = false;
   scene3dEditTool: 'select' | 'knife' = 'select';
+  /** Vertex / Edge / Face: ONE state for the Mesh Edit panel's tabs and the 1 / 2 / 3 keys (mode-keymap.ts). */
+  selectionMode: MeshEditSelectMode = 'face';
   private _knifeStart: { x: number; y: number } | null = null;
   /** The pointer drawing the knife line: only it moves the preview and cuts on release (a 2nd finger used to restart
    *  the line at its own position and cut on ITS release). */
@@ -42,6 +47,10 @@ export class MeshEditService {
     const canvas = this.host.canvasRef?.nativeElement;
     sm.enterMeshEditMode3D(meshId);
     this.scene3dIsEditingMesh = true;
+    // Every entry starts in Face mode — the engine's picker too (it kept the last session's mode while the panel showed
+    // Face, so taps picked vertices under a "Face" tab)
+    this.selectionMode = 'face';
+    sm.setMeshEditSelectionMode('face');
     if (canvas) {
       sm.attachMeshEditPointerHandlers(
         canvas,
@@ -49,12 +58,22 @@ export class MeshEditService {
         () => this.ngZone.run(() => { /* trigger change detection so panel re-reads selection */ }),
       );
     }
+    // The selection gizmo (a newer Salsa dist): the rail's Move / Rotate / Scale show (and pick) its mode
+    const gizmo = sm as unknown as { getMeshEditGizmoMode3D?(): 'move' | 'rotate' | 'scale' | null };
+    if (typeof gizmo.getMeshEditGizmoMode3D === 'function' && 'scene3dGizmoMode' in this.host) {
+      this.host.scene3dGizmoMode = gizmo.getMeshEditGizmoMode3D();
+    }
   }
 
   exitMeshEditMode(): void {
     const sm = this.shapeManager;
     sm.detachMeshEditPointerHandlers();
     sm.exitMeshEditMode3D();
+    // (a newer dist: the rail showed the selection gizmo's mode — the object gizmo takes it over, so the rail stays true)
+    if (typeof (sm as unknown as { getMeshEditGizmoMode3D?: unknown }).getMeshEditGizmoMode3D === 'function'
+        && this.host.scene3dGizmoMode !== undefined) {
+      sm.setGizmoMode3D(this.host.scene3dGizmoMode);
+    }
     this.scene3dIsEditingMesh = false;
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
@@ -163,8 +182,110 @@ export class MeshEditService {
     const sm = this.shapeManager;
     const faces = [...(sm.getEditSelection3D(id)?.faces ?? [])];
     if (faces.length === 0) return;
-    for (const fi of faces.sort((a, b) => b - a)) sm.deleteEditFace3D(id, fi);   // highest first: no index shifting
+    // One undo step for the whole selection (A then X deleted a cube face by face: six Ctrl+Z to get it back)
+    if (typeof sm.deleteFaces3D === 'function') sm.deleteFaces3D(id, new Set(faces));
+    else for (const fi of faces.sort((a, b) => b - a)) sm.deleteEditFace3D(id, fi);   // highest first: no index shifting
     sm.clearEditSelection3D(id);
+  }
+
+  // ── Element selection + the Edit Mesh keys (mode-keymap.ts: 1 / 2 / 3, A / Alt+A, X / Delete, Ctrl+R) ──
+
+  /** The mesh being edited (null = not in Edit Mesh). */
+  private get _editId(): string | null {
+    return this.scene3dIsEditingMesh ? this.editorState.scene3dSelectedMeshId : null;
+  }
+
+  /** Vertex / Edge / Face (the panel's tabs, 1 / 2 / 3): the engine's picker switches and the selection is cleared. */
+  setSelectionMode(mode: MeshEditSelectMode): void {
+    this.selectionMode = mode;
+    const sm = this.shapeManager, id = this._editId;
+    sm.setMeshEditSelectionMode(mode);
+    if (id) sm.clearEditSelection3D(id);
+    sm.requestRender3D?.();
+  }
+
+  /** A: select every vertex / edge / face of the current mode; when all of them already are, deselect all. */
+  toggleSelectAll(): void {
+    const sm = this.shapeManager, id = this._editId;
+    const em = id ? sm.getEditMesh3D(id) : null;
+    if (!id || !em) return;
+    const sel = sm.getEditSelection3D(id);
+    const he = em.halfEdges;
+    let all: number[];
+    let isSelected: (i: number) => boolean;
+    if (this.selectionMode === 'vertex') {
+      all = em.vertices.map((_, i) => i);
+      isSelected = i => !!sel?.vertices.has(i);
+    } else if (this.selectionMode === 'edge') {
+      // one half-edge per edge (a boundary edge has no twin); either half counts as the edge selected
+      all = [];
+      for (let i = 0; i < he.length; i++) if (he[i].twin < 0 || i < he[i].twin) all.push(i);
+      isSelected = i => !!sel && (sel.edges.has(i) || (he[i].twin >= 0 && sel.edges.has(he[i].twin)));
+    } else {
+      all = em.faces.map((_, i) => i);
+      isSelected = i => !!sel?.faces.has(i);
+    }
+    const everything = all.length > 0 && all.every(isSelected);
+    sm.clearEditSelection3D(id);
+    if (!everything) {
+      const select = this.selectionMode === 'vertex' ? sm.selectVertex3D.bind(sm)
+        : this.selectionMode === 'edge' ? sm.selectEdge3D.bind(sm) : sm.selectFace3D.bind(sm);
+      for (const i of all) select(id, i, true);
+    }
+    sm.requestRender3D?.();
+  }
+
+  /** Alt+A: deselect everything. */
+  deselectAll(): void {
+    const id = this._editId;
+    if (!id) return;
+    this.shapeManager.clearEditSelection3D(id);
+    this.shapeManager.requestRender3D?.();
+  }
+
+  /** X / Delete: the selected faces are deleted; else the selected edges dissolved (each merges its two faces). The
+   *  engine has no vertex delete yet: a vertex selection does nothing. False = nothing to act on. */
+  deleteSelectedElements(): boolean {
+    const id = this._editId;
+    const sel = id ? this.shapeManager.getEditSelection3D(id) : null;
+    if (!sel) return false;
+    if (sel.faces.size > 0) { this.deleteSelectedFaces(); return true; }
+    if (sel.edges.size > 0) return this.dissolveSelectedEdges() > 0;
+    return false;
+  }
+
+  /** Dissolve each selected interior edge (one undo step each). Every dissolve rebuilds the topology (half-edge
+   *  indices move), so the edges are remembered by their end vertices and looked up again before each one. Returns
+   *  how many were dissolved. */
+  dissolveSelectedEdges(): number {
+    const sm = this.shapeManager, id = this._editId;
+    const em = id ? sm.getEditMesh3D(id) : null;
+    const sel = id ? sm.getEditSelection3D(id) : null;
+    if (!id || !em || !sel || sel.edges.size === 0) return 0;
+    const he0 = em.halfEdges;
+    const pairs = [...sel.edges].filter(i => i >= 0 && i < he0.length).map(i => [he0[he0[i].prev].vertex, he0[i].vertex] as const);
+    sm.clearEditSelection3D(id);
+    let done = 0;
+    for (const [a, b] of pairs) {
+      const hes = sm.getEditMesh3D(id)?.halfEdges ?? [];
+      const idx = hes.findIndex(h => h.twin >= 0 && ((h.vertex === b && hes[h.prev].vertex === a) || (h.vertex === a && hes[h.prev].vertex === b)));
+      if (idx >= 0 && sm.dissolveEdge3D(id, idx)) done++;
+    }
+    sm.requestRender3D?.();
+    return done;
+  }
+
+  /** Ctrl+R: a loop cut through the (first) selected edge at `t` along it (0.5 = the middle); the selection is cleared
+   *  (the cut rebuilds the topology). False = no edge selected. */
+  loopCutSelectedEdge(t = 0.5): boolean {
+    const sm = this.shapeManager, id = this._editId;
+    const sel = id ? sm.getEditSelection3D(id) : null;
+    const edge = sel ? [...sel.edges][0] : undefined;
+    if (!id || edge === undefined) return false;
+    const ok = sm.loopCut3D(id, edge, t);
+    sm.clearEditSelection3D(id);
+    sm.requestRender3D?.();
+    return ok;
   }
 
   toggleKnifeTool(): void {

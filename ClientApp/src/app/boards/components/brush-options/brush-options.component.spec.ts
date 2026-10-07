@@ -192,3 +192,59 @@ describe('BrushOptionsComponent grid fit (only the brush list scrolls)', () => {
     t.scroller.remove();
   });
 });
+
+describe('BrushOptionsComponent editor on touch (ui-review 2026-10-07 #9)', () => {
+  const press = (x = 10, y = 10) => new PointerEvent('pointerdown', { button: 0, clientX: x, clientY: y });
+
+  it('a long-press on a brush row opens its editor and swallows the click that follows the release', () => {
+    jasmine.clock().install();
+    try {
+      const t = setup();
+      const picked: string[] = [];
+      t.panel.brushPicked.subscribe(id => picked.push(id));
+      t.panel.onRowPointerDown('default_hard_pen', press());
+      jasmine.clock().tick(BrushOptionsComponent.LONG_PRESS_MS + 1);
+      expect(t.panel.view).toBe('editor');
+      expect(t.panel.editingPresetId).toBe('default_hard_pen');
+      t.panel.cancelRowLongPress();             // pointerup
+      t.panel.onRowClick('default_hard_pen');   // the click after the release: not a pick (would fold the panel)
+      expect(picked).toEqual([]);
+      t.panel.ngOnDestroy();
+    } finally { jasmine.clock().uninstall(); }
+  });
+
+  it('a short tap picks the brush; a press that moves (a scroll) never opens the editor', () => {
+    jasmine.clock().install();
+    try {
+      const t = setup();
+      t.panel.onRowPointerDown('default_hard_pen', press());
+      jasmine.clock().tick(100);
+      t.panel.cancelRowLongPress();
+      t.panel.onRowClick('default_hard_pen');
+      expect(t.state.active).toBe('default_hard_pen');
+      t.panel.onRowPointerDown('default_round_soft', press(10, 10));
+      t.panel.onRowPointerMove(new PointerEvent('pointermove', { clientX: 10, clientY: 40 }));
+      jasmine.clock().tick(BrushOptionsComponent.LONG_PRESS_MS + 1);
+      expect(t.panel.view).toBe('grid');
+      t.panel.ngOnDestroy();
+    } finally { jasmine.clock().uninstall(); }
+  });
+
+  it('Delete Brush asks first; Cancel keeps the brush, the confirm deletes it', () => {
+    const t = setup();
+    const deleted: string[] = [];
+    t.sm['deleteBrushPreset'] = (id: string) => { deleted.push(id); };
+    t.panel.openEditor('default_hard_pen');
+    t.panel.askDeleteBrush();
+    expect(t.panel.confirmingDelete).toBeTrue();
+    expect(deleted).toEqual([]);
+    t.panel.confirmingDelete = false;           // Cancel
+    expect(t.panel.view).toBe('editor');
+    t.panel.askDeleteBrush();
+    t.panel.deleteBrush();                      // Delete (confirmed)
+    expect(deleted).toEqual(['default_hard_pen']);
+    expect(t.panel.view).toBe('grid');
+    expect(t.panel.confirmingDelete).toBeFalse();
+    t.panel.ngOnDestroy();
+  });
+});

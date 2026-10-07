@@ -45,7 +45,23 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   @Output() vectorLayerSelected = new EventEmitter<string | null>();
 
   vectorLayers: RasterLayer[] = [];
-  activeVectorLayerId: string | null = null;
+  /**
+   * The EDITOR's active vector layer — the single source of truth (UI review 2026-10-07 #6). This panel sits in an
+   * *ngIf, so a right-panel tab switch re-creates it; its own copy used to restart at null while the editor stayed in
+   * vector mode (highlight on Background, vector tools on the rail) and a Background click then did nothing.
+   * Written locally only together with a vectorLayerSelected emit, so the binding confirms the same value.
+   */
+  @Input() activeVectorLayerId: string | null = null;
+  /** The editor's 3D-scene selection (editorState.scene3dPanelVisible) — same reason as activeVectorLayerId. */
+  @Input() scene3dActive = false;
+
+  /** Undo toast for the last vector-layer ✕ (the engine records the removal as one 2D undo step). */
+  removedVectorLayer: { id: string; name: string; wasActive: boolean } | null = null;
+  private _removedToastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Older Salsa dist (a removal it can't undo): the ✕ first turns into "Remove?" for this layer id. */
+  confirmRemoveVectorLayerId: string | null = null;
+  /** How long the Undo toast stays up. */
+  static readonly REMOVED_TOAST_MS = 8000;
 
   /** Track layers by id for stable DOM nodes */
   trackById = (_: number, layer: RasterLayer) => layer.id;
@@ -88,7 +104,8 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
         this.layers = l.filter(x => x.type !== 'vector' && !x.systemOwner);
         this._pruneOpenOpacitySliders();
         setTimeout(() => {
-          if (!this.activeLayerId && !this.selected3DSceneId && !this.activeVectorLayerId) this._autoSelectDefault();
+          this._reconcileActiveVectorLayer();
+          if (!this.activeLayerId && !this.selected3DSceneId && !this.scene3dActive && !this.activeVectorLayerId) this._autoSelectDefault();
         }, 0);
       }),
       this.rasterService.activeLayerId$.subscribe(id => (this.activeLayerId = id))
@@ -102,17 +119,29 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     // fallback: any non-vector layer (3D scene, etc.)
     if (this.layers.length) { this.selectLayer(this.layers[this.layers.length - 1].id); return; }
     // fallback: vector layer
-    if (this.vectorLayers.length) { this.selectLayer(this.vectorLayers[0].id); }
+    if (this.vectorLayers.length) { this.selectVectorLayer(this.vectorLayers[0].id); }
+  }
+
+  /** The active vector layer left the stack (a redo of its removal, another document): leave vector mode, so the
+   *  editor doesn't stay on vector tools for a layer that no longer exists. Checked against the engine, which also
+   *  knows the package-owned vector layers this panel filters out. */
+  private _reconcileActiveVectorLayer(): void {
+    const id = this.activeVectorLayerId;
+    const sm = this.shapeManager as unknown as { getVectorLayers?: () => Array<{ id: string }> } | null;
+    if (!id || typeof sm?.getVectorLayers !== 'function') return;
+    if (!sm.getVectorLayers().some(v => v.id === id)) this.deselectVectorLayer();
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('resize', this._onWinResize);
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
     this.subs.forEach(s => s.unsubscribe());
+    this._clearRemovedToastTimer();
   }
 
-  // A tap / click anywhere else closes the add menu and the blend-mode dropdown (their own clicks stopPropagation).
-  @HostListener('document:click') onDocClick() { this.showAddMenu = false; this.openBlendDropdownId = null; }
+  // A tap / click anywhere else closes the add menu, the blend-mode dropdown and a pending "Remove?" (their own
+  // clicks stopPropagation).
+  @HostListener('document:click') onDocClick() { this.showAddMenu = false; this.openBlendDropdownId = null; this.confirmRemoveVectorLayerId = null; }
   /** Window resize closes the blend dropdown. Listened outside the zone (mobile URL bars fire resizes constantly);
    *  re-enter only when a dropdown is open. */
   private readonly _onWinResize = (): void => {
@@ -242,6 +271,12 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── Selection ─────────────────────────────────────────────────
 
+  /** Is this raster-list row the highlighted one? Only one row (vector, 3D scene or raster) reads as active. */
+  isRowActive(layer: RasterLayer): boolean {
+    if (layer.type === '3d-scene') return this.selected3DSceneId === layer.id || (this.scene3dActive && !this.activeVectorLayerId);
+    return !this.activeVectorLayerId && !this.selected3DSceneId && !this.scene3dActive && this.activeLayerId === layer.id;
+  }
+
   selectLayer(id: string): void {
     const layer = this.layers.find(l => l.id === id);
     // 3D scene: highlight in UI and emit event, but don't select in engine
@@ -249,42 +284,31 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       this.selected3DSceneId = layer.id;
       this.activeLayerId = null;
       // Clear vector layer so only one row appears active at a time
-      if (this.activeVectorLayerId) {
-        this.activeVectorLayerId = null;
-        this.shapeManager?.setActiveVectorLayer(null);
-        this.vectorLayerSelected.emit(null);
-      }
+      this.deselectVectorLayer();
       this.scene3dSelected.emit(true);
       return;
     }
     // Folders are not selectable
     if (layer?.type === 'folder') return;
-    // Deselect 3D scene and vector layer when switching to a raster layer
-    if (this.selected3DSceneId) {
+    this._leave3DAndVector();
+    this.rasterService.selectLayer(id);
+  }
+
+  /** A raster pick ALWAYS takes the editor out of vector / 3D mode — whatever this panel's own copy says (a
+   *  re-created panel used to skip the emit, leaving the editor on vector tools: UI review 2026-10-07 #6). */
+  private _leave3DAndVector(): void {
+    if (this.selected3DSceneId || this.scene3dActive) {
       this.selected3DSceneId = null;
       this.scene3dSelected.emit(false);
     }
-    if (this.activeVectorLayerId) {
-      this.activeVectorLayerId = null;
-      this.shapeManager?.setActiveVectorLayer(null);
-      this.vectorLayerSelected.emit(null);
-    }
-    this.rasterService.selectLayer(id);
+    this.deselectVectorLayer();
   }
 
   // ── Add / Delete ──────────────────────────────────────────────
 
   addLayer(): void {
     // Deselect 3D scene / vector layer so the new 2D layer becomes active
-    if (this.selected3DSceneId) {
-      this.selected3DSceneId = null;
-      this.scene3dSelected.emit(false);
-    }
-    if (this.activeVectorLayerId) {
-      this.activeVectorLayerId = null;
-      this.shapeManager?.setActiveVectorLayer(null);
-      this.vectorLayerSelected.emit(null);
-    }
+    this._leave3DAndVector();
     this.rasterService.addLayer('Layer ' + (this.layers.length + 1));
   }
 
@@ -404,13 +428,67 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     this.vectorLayerSelected.emit(null);
   }
 
-  removeVectorLayer(id: string, e: MouseEvent): void {
+  /** The engine removes a vector layer WITH its shapes + placements as one undoable step (Salsa 2026-10-07). An older
+   *  dist dropped only the entry + placements and recorded nothing, so there the ✕ asks first instead. */
+  get vectorRemovalUndoable(): boolean {
+    const rlm = (this.shapeManager as unknown as { rasterLayerManager?: { takeVectorLayer?: unknown } } | null)?.rasterLayerManager;
+    return typeof rlm?.takeVectorLayer === 'function';
+  }
+
+  /** The row's ✕: removes the layer (Undo toast + Ctrl+Z), or on an older engine first asks "Remove?". */
+  removeVectorLayer(id: string, e: Event): void {
     e.stopPropagation();
-    this.shapeManager?.removeVectorLayer(id);
-    if (this.activeVectorLayerId === id) {
-      this.activeVectorLayerId = null;
-      this.vectorLayerSelected.emit(null);
+    this.showAddMenu = false;
+    this.openBlendDropdownId = null;
+    if (!this.vectorRemovalUndoable && this.confirmRemoveVectorLayerId !== id) {
+      this.confirmRemoveVectorLayerId = id;
+      return;
     }
+    this.confirmRemoveVectorLayerId = null;
+    const name = this.vectorLayers.find(v => v.id === id)?.name ?? 'Vector layer';
+    const wasActive = this.activeVectorLayerId === id;
+    const ok = this.shapeManager?.removeVectorLayer(id) ?? false;
+    if (wasActive) this.deselectVectorLayer();
+    // Drop the row now (no ghost row while the list refresh is pending) and refresh from the engine
+    this.vectorLayers = this.vectorLayers.filter(v => v.id !== id);
+    this.rasterService.refreshLayers();
+    if (ok && this.vectorRemovalUndoable) this._showRemovedToast({ id, name, wasActive });
+  }
+
+  /** The toast's Undo: the same step Ctrl+Z takes — only while that step is still the next undo. */
+  undoRemoveVectorLayer(e: Event): void {
+    e.stopPropagation();
+    const t = this.removedVectorLayer;
+    this.dismissRemovedToast();
+    const sm = this.shapeManager as unknown as {
+      canUndo2DShapes?: boolean; undoDescription2DShapes?: string | null; undo2DShapes?: () => boolean;
+      getVectorLayers?: () => Array<{ id: string }>;
+    } | null;
+    if (!t || !sm?.canUndo2DShapes || sm.undoDescription2DShapes !== 'Remove vector layer') return;
+    if (sm.getVectorLayers?.().some(v => v.id === t.id)) return;   // already back (Ctrl+Z)
+    sm.undo2DShapes?.();
+    this.rasterService.refreshLayers();
+    if (t.wasActive) this.selectVectorLayer(t.id);
+  }
+
+  dismissRemovedToast(e?: Event): void {
+    e?.stopPropagation();
+    this._clearRemovedToastTimer();
+    this.removedVectorLayer = null;
+  }
+
+  private _showRemovedToast(t: { id: string; name: string; wasActive: boolean }): void {
+    this._clearRemovedToastTimer();
+    this.removedVectorLayer = t;
+    this._removedToastTimer = setTimeout(() => {
+      this._removedToastTimer = null;
+      this.removedVectorLayer = null;
+      this.cdr.markForCheck();
+    }, RasterLayersComponent.REMOVED_TOAST_MS);
+  }
+
+  private _clearRemovedToastTimer(): void {
+    if (this._removedToastTimer) { clearTimeout(this._removedToastTimer); this._removedToastTimer = null; }
   }
 
   toggleVectorVisibility(layer: RasterLayer, e: MouseEvent): void {

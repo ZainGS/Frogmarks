@@ -1,6 +1,8 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { meshEditTools, BEVEL_ACTIONS, type BevelState } from '../illustration/editor-keymap';
+import { meshEditKeyLabels } from '../illustration/mode-keymap';
+import { MeshEditService, type MeshEditSelectMode } from '../../services/mesh-edit.service';
 
 export interface MeshModifier {
   type: 'mirror' | 'subdivision' | 'displace';
@@ -28,7 +30,12 @@ export class MeshEditPanelComponent implements OnChanges {
   @Output() exitRequest = new EventEmitter<void>();
   @Output() toolChange = new EventEmitter<'select' | 'knife'>();
 
-  selectionMode: 'vertex' | 'face' | 'edge' = 'face';
+  /** The editor's mesh edit state (the 1 / 2 / 3 keys switch the same mode); absent when the panel is used alone. */
+  private readonly meshEditState = inject(MeshEditService, { optional: true });
+  private _localMode: MeshEditSelectMode = 'face';
+  get selectionMode(): MeshEditSelectMode { return this.meshEditState?.selectionMode ?? this._localMode; }
+  /** The key chips, generated from the Edit Mesh keymap (mode-keymap.ts). */
+  readonly keys = meshEditKeyLabels();
   bgMode: 'wavy' | 'gradient' | 'dim' | 'solid' | 'none' = 'wavy';
 
   extrudeDistance = 0.3;
@@ -77,7 +84,7 @@ export class MeshEditPanelComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['meshId'] && this.meshId) {
       this.refreshModifiers();
-      this.selectionMode = 'face';
+      if (!this.meshEditState) this._localMode = 'face';   // the service resets it on every entry
       this.sm?.setMeshEditBgMode3D({ mode: this.bgMode });
     }
     if (changes['shapeManager'] && this.shapeManager && this.meshId) {
@@ -123,8 +130,9 @@ export class MeshEditPanelComponent implements OnChanges {
     this.toolChange.emit(tool);
   }
 
-  setMode(mode: 'vertex' | 'face' | 'edge'): void {
-    this.selectionMode = mode;
+  setMode(mode: MeshEditSelectMode): void {
+    if (this.meshEditState) { this.meshEditState.setSelectionMode(mode); return; }
+    this._localMode = mode;
     this.sm?.setMeshEditSelectionMode(mode);
     if (this.meshId) this.sm?.clearEditSelection3D(this.meshId);
   }
@@ -138,10 +146,8 @@ export class MeshEditPanelComponent implements OnChanges {
   }
 
   selectEdge(): void {
-    if (!this.meshId || !this.halfEdgeInput) return;
-    const idx = parseInt(this.halfEdgeInput, 10);
-    if (isNaN(idx)) return;
-    this.sm?.selectEdge3D(this.meshId, idx);
+    if (!this.meshId || !this.hasHalfEdgeInput) return;
+    this.sm?.selectEdge3D(this.meshId, parseInt(String(this.halfEdgeInput), 10));
   }
 
   // ── Shading (feature-detected: hidden on a Salsa dist without the API) ──
@@ -313,24 +319,29 @@ export class MeshEditPanelComponent implements OnChanges {
 
   // ── Edge operations ───────────────────────────────────────────────
 
+  /** A typed half-edge index is there (0 is a valid index: `!halfEdgeInput` used to treat it as empty). */
+  get hasHalfEdgeInput(): boolean { return this.halfEdgeInput !== '' && this.halfEdgeInput !== null && !isNaN(parseInt(String(this.halfEdgeInput), 10)); }
+  /** Loop Cut / Dissolve act on the selected edges (what Ctrl+R / X do), else on the typed half-edge index. */
+  get canEdgeOp(): boolean { return this.selectedEdges.length > 0 || this.hasHalfEdgeInput; }
+
   loopCut(): void {
-    if (!this.meshId || !this.halfEdgeInput) return;
-    const idx = parseInt(this.halfEdgeInput, 10);
-    if (isNaN(idx)) return;
+    if (!this.meshId) return;
+    if (this.selectedEdges.length > 0 && this.meshEditState) { this.meshEditState.loopCutSelectedEdge(this.loopCutT); return; }
+    if (!this.hasHalfEdgeInput) return;
+    const idx = parseInt(String(this.halfEdgeInput), 10);
     this.sm?.loopCut3D(this.meshId, idx, this.loopCutT);
   }
 
   bevelEdge(): void {
-    if (!this.meshId || !this.halfEdgeInput) return;
-    const idx = parseInt(this.halfEdgeInput, 10);
-    if (isNaN(idx)) return;
-    this.sm?.bevelEdge3D(this.meshId, idx, this.bevelAmount);
+    if (!this.meshId || !this.hasHalfEdgeInput) return;
+    this.sm?.bevelEdge3D(this.meshId, parseInt(String(this.halfEdgeInput), 10), this.bevelAmount);
   }
 
   dissolveEdge(): void {
-    if (!this.meshId || !this.halfEdgeInput) return;
-    const idx = parseInt(this.halfEdgeInput, 10);
-    if (isNaN(idx)) return;
+    if (!this.meshId) return;
+    if (this.selectedEdges.length > 0 && this.meshEditState) { this.meshEditState.dissolveSelectedEdges(); return; }
+    if (!this.hasHalfEdgeInput) return;
+    const idx = parseInt(String(this.halfEdgeInput), 10);
     this.sm?.dissolveEdge3D(this.meshId, idx);
   }
 

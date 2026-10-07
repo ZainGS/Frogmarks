@@ -1,6 +1,13 @@
+@use '@angular/cdk' as cdk;
 @import './themes.scss';
 @import './retro-chrome-theme.scss';
 @import './screen-corners.scss';
+
+// The CDK overlay's structural CSS (= @angular/cdk/overlay-prebuilt.css). Without it the overlay container was a
+// static block, a dialog's backdrop was 0 px and its pane didn't take input, so a click "outside" a Material dialog
+// went through to the Shell / editor behind it, and backdrop-click close could never fire. First, so the app's own
+// .cdk-* rules below still override it.
+@include cdk.overlay();
 /* You can add global styles to this file, and also import other style files */
 
 /* Provide sufficient contrast against white background */
@@ -762,11 +769,8 @@ mat-error {
   overflow: hidden;
 }*/
 
-.cdk-global-overlay-wrapper {
-  place-self: center;
-  height: 80%;
-  margin-top: 6%;
-}
+// (A `.cdk-global-overlay-wrapper { height: 80%; margin-top: 6% }` hack used to stand in for the missing CDK overlay
+// CSS; with cdk.overlay() above, the wrapper is the CDK's full-viewport flex box that centres a dialog by itself.)
 
 // .cdk-overlay-container {
 //   // position: fixed;
@@ -955,7 +959,10 @@ mat-error {
 }
 
 // ── Responsive dialog shell (panelClass 'fm-dialog'; the New / Import Illustration dialog uses it) ──────────────
-// The CDK overlay's structural CSS (cdk/overlay-prebuilt.css) is not loaded in this app, so MatDialog's pane is NOT
+// (Written while the CDK overlay's structural CSS was not loaded — it is now, cdk.overlay() at the top; these rules
+// still give the card its viewport cap + scrolling body. pointer-events:none on the pane lets a tap beside the card
+// reach the CDK backdrop underneath, which closes the dialog.)
+// Before: MatDialog's pane was NOT
 // a fixed, centred layer: it sat wherever the overlay container landed in the page flow, and the old absolute
 // surface was centred on that point (Studio pushed it to y=420 with position.top:'100%'). On a short / narrow screen
 // (a tablet in landscape with the URL bar, a phone) the card ran off the bottom with no way to scroll to Create.

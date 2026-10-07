@@ -36,15 +36,26 @@
         <mat-icon class="rl-mat-icon">{{ vl.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
       </span>
       <span class="rl-name">{{ vl.name }}</span>
-      <button class="rl-vector-remove" (click)="removeVectorLayer(vl.id, $event)" title="Remove vector layer">✕</button>
+      <button class="rl-vector-remove" type="button"
+              [class.confirming]="confirmRemoveVectorLayerId === vl.id"
+              (click)="removeVectorLayer(vl.id, $event)"
+              [title]="confirmRemoveVectorLayerId === vl.id ? 'Remove this layer and its shapes (cannot be undone)' : 'Remove vector layer'"
+              [attr.aria-label]="(confirmRemoveVectorLayerId === vl.id ? 'Confirm remove ' : 'Remove ') + vl.name">{{ confirmRemoveVectorLayerId === vl.id ? 'Remove?' : '✕' }}</button>
     </div>
+  </div>
+
+  <!-- Undo for the last vector-layer ✕ (the same step Ctrl+Z takes) -->
+  <div *ngIf="removedVectorLayer" class="rl-undo-toast" role="status" (click)="$event.stopPropagation()">
+    <span class="rl-undo-text">Removed “{{ removedVectorLayer.name }}”</span>
+    <button class="rl-undo-btn" type="button" (click)="undoRemoveVectorLayer($event)">Undo</button>
+    <button class="rl-undo-close" type="button" (click)="dismissRemovedToast($event)" aria-label="Dismiss">✕</button>
   </div>
 
   <!-- Layer list -->
   <div class="rl-list">
     <div *ngFor="let layer of filteredLayers; let i = index; trackBy: trackById"
          class="rl-item"
-         [class.active]="activeLayerId === layer.id || selected3DSceneId === layer.id"
+         [class.active]="isRowActive(layer)"
          [class.invisible-layer]="!layer.visible"
          [class.clipped]="layer.clipped && isPaintable(layer)"
          [class.drag-over-before]="dragOverIndex === i && dragOverPosition === 'before'"
