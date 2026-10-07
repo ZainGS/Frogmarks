@@ -109,7 +109,72 @@ export function routeDelete(ed: EditRouteHost, opts: { fromKey?: boolean } = {})
 }
 
 /** The editor members the modal-state actions below use. */
-export type ModeHost = Pick<IllustrationComponent, 'shapeManager' | 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions'>;
+export type ModeHost = Pick<IllustrationComponent, 'shapeManager' | 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions'>
+  & Partial<Pick<IllustrationComponent, 'editorState' | 'hud' | 'scene3dInSubMode'>>;
+
+/**
+ * Engine APIs newer than the Salsa dist Frogmarks may be building against (mobile-parity TOUCH-10, salsa
+ * docs/ui/touch-controls.md §3c). Feature-detected: a button whose API is missing is hidden.
+ */
+interface TouchTools3D {
+  setAdditiveSelect3D?(on: boolean): void;
+  getAdditiveSelect3D?(): boolean;
+  setSnapToggle3D?(on: boolean): void;
+  getSnapToggle3D?(): boolean;
+  frameSelected3D?(padding?: number): boolean;
+}
+function tools3D(ed: Pick<ModeHost, 'shapeManager'>): TouchTools3D { return (ed.shapeManager ?? {}) as unknown as TouchTools3D; }
+/** The keyboard 3D transform (G / R / S, then X / Y / Z, digits, Enter / Esc) — the engine's shortcut state. */
+type Transform3DMode = 'grab' | 'rotate' | 'scale';
+
+/**
+ * The touch equivalents of the 3D modifier keys / shortcuts (TOUCH-10): Shift-select, Ctrl-snap, frame, and the
+ * G / R / S keyboard transform. Each runs the same engine call the key does and re-syncs the HUD readout.
+ */
+export const TOOL3D_ACTIONS = {
+  hasAdditive: (ed: Pick<ModeHost, 'shapeManager'>): boolean => typeof tools3D(ed).setAdditiveSelect3D === 'function',
+  additiveOn: (ed: Pick<ModeHost, 'shapeManager'>): boolean => !!tools3D(ed).getAdditiveSelect3D?.(),
+  /** Multi-select latch: taps add to the selection like Shift (objects, and vertices / edges / faces in Edit Mesh). */
+  toggleAdditive: (ed: Pick<ModeHost, 'shapeManager'>): void => {
+    const t = tools3D(ed);
+    if (typeof t.setAdditiveSelect3D === 'function') t.setAdditiveSelect3D(!t.getAdditiveSelect3D?.());
+  },
+  hasSnap: (ed: Pick<ModeHost, 'shapeManager'>): boolean => typeof tools3D(ed).setSnapToggle3D === 'function',
+  snapOn: (ed: Pick<ModeHost, 'shapeManager'>): boolean => !!tools3D(ed).getSnapToggle3D?.(),
+  /** Snap latch: gizmo drags snap like holding Ctrl. */
+  toggleSnap: (ed: Pick<ModeHost, 'shapeManager'>): void => {
+    const t = tools3D(ed);
+    if (typeof t.setSnapToggle3D === 'function') t.setSnapToggle3D(!t.getSnapToggle3D?.());
+  },
+  /** Frame selected: the engine's mode-aware frame (Edit Mesh: the selected elements) when the dist has it, else the
+   *  selected mesh (or everything). */
+  frameSelected: (ed: Pick<ModeHost, 'shapeManager' | 'editorState'>): void => {
+    const t = tools3D(ed);
+    if (typeof t.frameSelected3D === 'function') { t.frameSelected3D(); return; }
+    const id = ed.editorState?.scene3dSelectedMeshId;
+    if (id) ed.shapeManager.frameMesh3D(id, 1.4); else ed.shapeManager.frameAllMeshes3D(1.4);
+  },
+  begin: (ed: Pick<ModeHost, 'shapeManager' | 'hud'>, mode: Transform3DMode): void => {
+    ed.shapeManager.beginTransform3D(mode);
+    ed.hud?.syncShortcutHud();
+  },
+  axis: (ed: Pick<ModeHost, 'shapeManager' | 'hud'>, axis: 'x' | 'y' | 'z'): void => {
+    ed.shapeManager.constrainAxis3D(axis);
+    ed.hud?.syncShortcutHud();
+  },
+  /** The typed amount (the digits the keys would send): constrainAxis3D clears the buffer, then each character is
+   *  appended like a key press. Needs an axis first (the engine ignores digits without one). */
+  setValue: (ed: Pick<ModeHost, 'shapeManager' | 'hud'>, text: string): void => {
+    const sm = ed.shapeManager;
+    const axis = sm.shortcutAxis3D;
+    if (!sm.isShortcutActive3D || !axis) return;
+    sm.constrainAxis3D(axis);
+    for (const ch of text) if (/^[\d.\-]$/.test(ch)) sm.appendNumericInput(ch);
+    ed.hud?.syncShortcutHud();
+  },
+  commit: (ed: Pick<ModeHost, 'shapeManager' | 'hud'>): void => { ed.shapeManager.commitTransform3D(); ed.hud?.syncShortcutHud(); },
+  cancel: (ed: Pick<ModeHost, 'shapeManager' | 'hud'>): void => { ed.shapeManager.cancelTransform3D(); ed.hud?.syncShortcutHud(); },
+};
 
 /**
  * Leaving the editor's modal states: ONE implementation shared by the keys (Esc / Enter: the tables below and
@@ -132,18 +197,55 @@ export const MODE_ACTIONS = {
   cancelTransform: (ed: Pick<ModeHost, 'rasterSelectionService'>): void => { ed.rasterSelectionService.cancelTransform(); },
 };
 
-export type ContextPillMode = 'liveText' | 'decal' | 'knife' | 'transform';
+export type ContextPillMode = 'liveText' | 'decal' | 'knife' | 'transform' | 'transform3d' | 'meshEdit' | 'object3d';
 
 export interface ContextPillAction { label: string; run: (ed: ModeHost) => void }
+/** A tool button in the pill (TOUCH-10): a one-shot action, or a toggle when it has `pressed`. */
+export interface ContextPillButton {
+  id: string;
+  label: string;
+  /** Tooltip / accessible name (the key it stands for). */
+  title: string;
+  run: (ed: ModeHost) => void;
+  /** A toggle's state (aria-pressed). Absent = a one-shot button. */
+  pressed?: (ed: ModeHost) => boolean;
+  /** False = hidden (the engine API isn't in this Salsa dist yet, or nothing to act on). Absent = always shown. */
+  available?: (ed: ModeHost) => boolean;
+}
 export interface ContextPillSpec {
   mode: ContextPillMode;
   /** Optional hint before the buttons (what the mode is waiting for). */
   hint?: string;
+  /** Tool buttons before Cancel / Apply. */
+  buttons?: readonly ContextPillButton[];
+  /** Show a number field for the typed amount (the keyboard 3D transform's digits). */
+  numeric?: boolean;
   apply?: ContextPillAction;
   cancel?: ContextPillAction;
 }
 
-/** The touch Apply / Cancel pill per mode (mobile-parity TOUCH-10): the Enter / Esc actions above, as buttons. */
+const MULTI_BTN: ContextPillButton = {
+  id: 'multi', label: 'Multi', title: 'Multi-select: taps add to the selection (Shift)',
+  run: TOOL3D_ACTIONS.toggleAdditive, pressed: TOOL3D_ACTIONS.additiveOn, available: TOOL3D_ACTIONS.hasAdditive,
+};
+const SNAP_BTN: ContextPillButton = {
+  id: 'snap', label: 'Snap', title: 'Snap gizmo drags (Ctrl)',
+  run: TOOL3D_ACTIONS.toggleSnap, pressed: TOOL3D_ACTIONS.snapOn, available: TOOL3D_ACTIONS.hasSnap,
+};
+const FRAME_BTN: ContextPillButton = { id: 'frame', label: 'Frame', title: 'Frame the selection', run: TOOL3D_ACTIONS.frameSelected };
+const transformBtn = (mode: Transform3DMode, label: string, key: string): ContextPillButton => ({
+  id: mode, label, title: `${label} the mesh by a typed amount (${key})`,
+  run: (ed) => TOOL3D_ACTIONS.begin(ed, mode),
+  available: (ed) => !!ed.editorState?.scene3dSelectedMeshId,
+});
+const axisBtn = (axis: 'x' | 'y' | 'z'): ContextPillButton => ({
+  id: axis, label: axis.toUpperCase(), title: `Along ${axis.toUpperCase()} (${axis.toUpperCase()})`,
+  run: (ed) => TOOL3D_ACTIONS.axis(ed, axis),
+  pressed: (ed) => ed.shapeManager.shortcutAxis3D === axis,
+});
+
+/** The touch pill per mode (mobile-parity TOUCH-10): the Enter / Esc actions above as Apply / Cancel, and the 3D
+ *  modifier keys / shortcuts as tool buttons. */
 export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> = {
   liveText: { mode: 'liveText', apply: { label: 'Done editing text', run: MODE_ACTIONS.endLiveText } },
   decal: { mode: 'decal', apply: { label: 'Done placing decals', run: MODE_ACTIONS.exitDecalPlacement } },
@@ -153,15 +255,42 @@ export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> =
     apply: { label: 'Apply transform', run: MODE_ACTIONS.commitTransform },
     cancel: { label: 'Cancel', run: MODE_ACTIONS.cancelTransform },
   },
+  /** The keyboard 3D transform is running (G / R / S): pick an axis, type the amount, Apply (Enter) / Cancel (Esc). */
+  transform3d: {
+    mode: 'transform3d',
+    buttons: [axisBtn('x'), axisBtn('y'), axisBtn('z')],
+    numeric: true,
+    apply: { label: 'Apply', run: TOOL3D_ACTIONS.commit },
+    cancel: { label: 'Cancel', run: TOOL3D_ACTIONS.cancel },
+  },
+  /** Edit Mesh (select tool): Shift-select, frame, and the G / R / S keyboard transform. */
+  meshEdit: {
+    mode: 'meshEdit',
+    buttons: [MULTI_BTN, FRAME_BTN, transformBtn('grab', 'Grab', 'G'), transformBtn('rotate', 'Rotate', 'R'), transformBtn('scale', 'Scale', 'S')],
+  },
+  /** A 3D object selected (no sub-mode): Shift-select, Ctrl-snap, frame. */
+  object3d: { mode: 'object3d', buttons: [MULTI_BTN, SNAP_BTN, FRAME_BTN] },
 };
 
+/** The buttons of `spec` the editor can show right now (an engine API the dist lacks hides its button). */
+export function pillButtons(spec: ContextPillSpec, ed: ModeHost): ContextPillButton[] {
+  return (spec.buttons ?? []).filter(b => !b.available || b.available(ed));
+}
+
 /** The modal state the pill is for, in the same priority Esc resolves them (live text first, then the Escape
- *  binding's order: decal tool, knife, selection transform); null = no pill. */
-export function activeContextPill(ed: Pick<ModeHost, 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions'>): ContextPillSpec | null {
+ *  binding's order: decal tool, knife, selection transform), then the 3D keyboard transform, then the 3D tool pills
+ *  (Edit Mesh, a selected object); null = no pill. The armature has none: its joints / gizmo / IK handles take a
+ *  finger directly and have no modifier keys. */
+export function activeContextPill(ed: Pick<ModeHost, 'shapeManager' | 'decal' | 'meshEdit' | 'rasterSelectionService' | 'liveTextOptions' | 'editorState' | 'scene3dInSubMode'>): ContextPillSpec | null {
   if (ed.liveTextOptions?.liveTextIsEditing) return CONTEXT_PILLS.liveText;
   if (ed.decal.scene3dDecalToolActive) return CONTEXT_PILLS.decal;
   if (ed.meshEdit.scene3dIsEditingMesh && ed.meshEdit.scene3dEditTool === 'knife') return CONTEXT_PILLS.knife;
   if (ed.rasterSelectionService.info.isTransforming) return CONTEXT_PILLS.transform;
+  const es = ed.editorState;
+  if (!es?.scene3dPanelVisible) return null;
+  if (ed.shapeManager?.isShortcutActive3D) return CONTEXT_PILLS.transform3d;
+  if (ed.meshEdit.scene3dIsEditingMesh) return CONTEXT_PILLS.meshEdit;
+  if (es.scene3dSelectedMeshId && !ed.scene3dInSubMode) return CONTEXT_PILLS.object3d;
   return null;
 }
 

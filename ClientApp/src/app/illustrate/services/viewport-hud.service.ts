@@ -33,6 +33,9 @@ export class ViewportHudService implements OnDestroy {
   scene3dShortcutAxis: string | null = null;
   scene3dShortcutNumeric = '';
 
+  /** Re-read the keyboard-transform readout after a non-key driver (the touch pill's Grab / X / Apply…) changed it. */
+  syncShortcutHud(): void { this._syncShortcutHud(); }
+
   private _syncShortcutHud(): void {
     const sm = this.shapeManager;
     this.scene3dShortcutActive = sm?.isShortcutActive3D ?? false;

@@ -1,6 +1,7 @@
-// Contextual Apply / Cancel pill (mobile-parity TOUCH-10). The host is the free canvas strip at the bottom (the
-// colour picker ends at 320 px; the zoom widget sits at right 290 px, ~110 px wide, beside the 280 px side panel) and
-// centres the pill in it; only the pill itself takes touches.
+// Contextual touch pill (mobile-parity TOUCH-10). The host is the free canvas strip at the bottom (the colour picker
+// ends at 320 px; the zoom widget sits at right 290 px, ~110 px wide, beside the 280 px side panel) and centres the
+// pill in it; only the pill itself takes touches. Retro chrome: sharp corners, raised bevels (the --rc-* tokens live
+// on body.theme-retro-chrome, so each has a fallback), 44 px touch targets.
 :host {
     position: fixed;
     left: 320px;
@@ -27,40 +28,71 @@
 .pill {
     pointer-events: auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
-    gap: 8px;
-    padding: 5px;
+    gap: 4px;
+    padding: 4px;
     max-width: 100%;
-    background: rgba(20, 20, 20, 0.9);
-    border: 1px solid #555;
-    border-radius: 26px;
+    background: var(--rc-panel-bg, #1a1a1a);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
 }
 
 .pill-hint {
-    padding: 0 6px 0 10px;
-    color: #bbb;
+    padding: 0 6px 0 8px;
+    color: var(--rc-text-muted, #a8a8a8);
     font: 500 13px/1.2 system-ui, sans-serif;
     white-space: nowrap;
 }
 
 .pill-btn {
     min-height: 44px;          // touch target
-    padding: 0 16px;
-    border: 1px solid #555;
-    border-radius: 22px;
-    background: #2b2b2b;
-    color: #eee;
+    min-width: 44px;
+    padding: 0 12px;
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
     font: 600 14px/1 system-ui, sans-serif;
     white-space: nowrap;
     touch-action: manipulation;
 
-    &:active { background: #444; }
+    &:active {
+        background: var(--rc-surface-hi, #2e2e2e);
+        border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+    }
+}
+
+// A toggle that is on (Multi / Snap, the picked axis): sunken + green.
+.pill-tool.on {
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+    border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
 }
 
 .pill-apply {
-    background: #3b6151;
-    border-color: #4caf96;
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
 
-    &:active { background: #4caf96; }
+    &:active { background: var(--rc-green-hi, #4f7a68); }
+}
+
+// The typed amount for the 3D keyboard transform (G / R / S → axis → digits).
+.pill-num {
+    width: 76px;
+    min-height: 44px;
+    padding: 0 8px;
+    border: 2px solid;
+    border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+    border-radius: 0;
+    background: var(--rc-canvas-bg, #0a0a0a);
+    color: var(--rc-text, #c8c8c8);
+    font: 600 15px/1 'Courier New', monospace;
+    text-align: right;
+
+    &:disabled { opacity: 0.45; }
 }

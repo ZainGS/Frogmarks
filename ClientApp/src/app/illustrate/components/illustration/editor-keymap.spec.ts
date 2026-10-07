@@ -1,6 +1,6 @@
 import {
-  activeContextPill, canRouteDuplicate, cheatsheetColumns, chordLabel, CONTEXT_PILLS, dispatchKey, KeyBinding, MOD_KEYMAP, routeDelete,
-  routeDuplicate, routeUndo, TOOL_KEYMAP,
+  activeContextPill, canRouteDuplicate, cheatsheetColumns, chordLabel, CONTEXT_PILLS, dispatchKey, KeyBinding, MOD_KEYMAP, pillButtons,
+  routeDelete, routeDuplicate, routeUndo, TOOL3D_ACTIONS, TOOL_KEYMAP,
 } from './editor-keymap';
 
 function key(k: string, mods: { shift?: boolean; alt?: boolean; repeat?: boolean } = {}): KeyboardEvent {
@@ -424,6 +424,119 @@ describe('editor keymap', () => {
       expect(activeContextPill(host({ liveText: true, decal: true, transforming: true }) as any)!.mode).toBe('liveText');
       expect(activeContextPill(host({ decal: true, editing: true, tool: 'knife', transforming: true }) as any)!.mode).toBe('decal');
       expect(activeContextPill(host({ editing: true, tool: 'knife', transforming: true }) as any)!.mode).toBe('knife');
+    });
+  });
+
+  describe('touch 3D tool pill (TOUCH-10: Multi / Snap / Frame / Grab / Rotate / Scale / X / Y / Z)', () => {
+    /** A host in the 3D view. `engine` = the newer Salsa APIs present (sm.setAdditiveSelect3D ...); off = an old dist. */
+    function host(o: { selected?: string | null; editing?: boolean; tool?: 'select' | 'knife'; subMode?: boolean; shortcut?: boolean;
+                       axis?: 'x' | 'y' | 'z' | null; engine?: boolean; panel?: boolean } = {}) {
+      const latches = { additive: false, snap: false };
+      const sm: any = {
+        isShortcutActive3D: !!o.shortcut,
+        shortcutAxis3D: o.axis ?? null,
+        beginTransform3D: jasmine.createSpy('beginTransform3D'),
+        constrainAxis3D: jasmine.createSpy('constrainAxis3D'),
+        appendNumericInput: jasmine.createSpy('appendNumericInput'),
+        commitTransform3D: jasmine.createSpy('commitTransform3D'),
+        cancelTransform3D: jasmine.createSpy('cancelTransform3D'),
+        frameMesh3D: jasmine.createSpy('frameMesh3D'),
+        frameAllMeshes3D: jasmine.createSpy('frameAllMeshes3D'),
+      };
+      if (o.engine !== false) {
+        sm.setAdditiveSelect3D = jasmine.createSpy('setAdditiveSelect3D').and.callFake((on: boolean) => { latches.additive = on; });
+        sm.getAdditiveSelect3D = () => latches.additive;
+        sm.setSnapToggle3D = jasmine.createSpy('setSnapToggle3D').and.callFake((on: boolean) => { latches.snap = on; });
+        sm.getSnapToggle3D = () => latches.snap;
+        sm.frameSelected3D = jasmine.createSpy('frameSelected3D').and.returnValue(true);
+      }
+      return {
+        shapeManager: sm,
+        decal: { scene3dDecalToolActive: false },
+        meshEdit: { scene3dIsEditingMesh: !!o.editing, scene3dEditTool: o.tool ?? 'select', cancelKnifeCut: jasmine.createSpy('cancelKnife') },
+        rasterSelectionService: { info: { isTransforming: false, hasSelection: false } },
+        liveTextOptions: { liveTextIsEditing: false },
+        editorState: { scene3dPanelVisible: o.panel !== false, scene3dSelectedMeshId: o.selected === undefined ? 'm1' : o.selected },
+        scene3dInSubMode: !!o.subMode || !!o.editing,
+        hud: { syncShortcutHud: jasmine.createSpy('syncShortcutHud') },
+        latches,
+      };
+    }
+    const btn = (ed: any, id: string) => pillButtons(activeContextPill(ed)!, ed).find(b => b.id === id)!;
+
+    it('object mode: Multi / Snap / Frame on a selected mesh; nothing without the 3D view, a selection, or in a sub-mode', () => {
+      const ed = host();
+      const pill = activeContextPill(ed as any)!;
+      expect(pill).toBe(CONTEXT_PILLS.object3d);
+      expect(pillButtons(pill, ed as any).map(b => b.id)).toEqual(['multi', 'snap', 'frame']);
+      expect(activeContextPill(host({ selected: null }) as any)).toBeNull();
+      expect(activeContextPill(host({ panel: false }) as any)).toBeNull();
+      expect(activeContextPill(host({ subMode: true }) as any)).toBeNull();   // armature / UV editor / world panel
+    });
+
+    it('Multi and Snap are latches on the engine (aria-pressed from the engine); hidden on an old Salsa dist', () => {
+      const ed = host();
+      const multi = btn(ed, 'multi'), snap = btn(ed, 'snap');
+      expect(multi.pressed!(ed as any)).toBeFalse();
+      multi.run(ed as any);
+      expect(ed.shapeManager.setAdditiveSelect3D).toHaveBeenCalledOnceWith(true);
+      expect(multi.pressed!(ed as any)).toBeTrue();
+      multi.run(ed as any);
+      expect(ed.latches.additive).toBeFalse();
+      snap.run(ed as any);
+      expect(ed.shapeManager.setSnapToggle3D).toHaveBeenCalledOnceWith(true);
+      expect(snap.pressed!(ed as any)).toBeTrue();
+      const old = host({ engine: false });
+      expect(pillButtons(activeContextPill(old as any)!, old as any).map(b => b.id)).toEqual(['frame']);
+    });
+
+    it('Frame: the engine frame-selected when present, else the selected mesh', () => {
+      const ed = host();
+      btn(ed, 'frame').run(ed as any);
+      expect(ed.shapeManager.frameSelected3D).toHaveBeenCalledTimes(1);
+      const old = host({ engine: false });
+      btn(old, 'frame').run(old as any);
+      expect(old.shapeManager.frameMesh3D).toHaveBeenCalledOnceWith('m1', 1.4);
+    });
+
+    it('Edit Mesh: Multi / Frame / Grab / Rotate / Scale; Grab starts the G transform and syncs the HUD', () => {
+      const ed = host({ editing: true });
+      const pill = activeContextPill(ed as any)!;
+      expect(pill).toBe(CONTEXT_PILLS.meshEdit);
+      expect(pillButtons(pill, ed as any).map(b => b.id)).toEqual(['multi', 'frame', 'grab', 'rotate', 'scale']);
+      btn(ed, 'grab').run(ed as any);
+      btn(ed, 'rotate').run(ed as any);
+      btn(ed, 'scale').run(ed as any);
+      expect(ed.shapeManager.beginTransform3D.calls.allArgs()).toEqual([['grab'], ['rotate'], ['scale']]);
+      expect(ed.hud.syncShortcutHud).toHaveBeenCalledTimes(3);
+      // The knife keeps its own Cancel pill
+      expect(activeContextPill(host({ editing: true, tool: 'knife' }) as any)).toBe(CONTEXT_PILLS.knife);
+    });
+
+    it('during the 3D transform: X / Y / Z pick the axis, the field sends the digits, Apply / Cancel = Enter / Esc', () => {
+      const ed = host({ editing: true, shortcut: true, axis: 'y' });
+      const pill = activeContextPill(ed as any)!;
+      expect(pill).toBe(CONTEXT_PILLS.transform3d);
+      expect(pill.numeric).toBeTrue();
+      expect(pillButtons(pill, ed as any).map(b => b.id)).toEqual(['x', 'y', 'z']);
+      expect(btn(ed, 'y').pressed!(ed as any)).toBeTrue();
+      btn(ed, 'x').run(ed as any);
+      expect(ed.shapeManager.constrainAxis3D).toHaveBeenCalledWith('x');
+      ed.shapeManager.constrainAxis3D.calls.reset();
+      // setValue: re-constrain (clears the engine buffer), then each character like a key press; junk is dropped
+      TOOL3D_ACTIONS.setValue(ed as any, '-1.5m');
+      expect(ed.shapeManager.constrainAxis3D).toHaveBeenCalledOnceWith('y');
+      expect(ed.shapeManager.appendNumericInput.calls.allArgs()).toEqual([['-'], ['1'], ['.'], ['5']]);
+      pill.apply!.run(ed as any);
+      pill.cancel!.run(ed as any);
+      expect(ed.shapeManager.commitTransform3D).toHaveBeenCalledTimes(1);
+      expect(ed.shapeManager.cancelTransform3D).toHaveBeenCalledTimes(1);
+    });
+
+    it('the typed amount waits for an axis (the engine ignores digits without one)', () => {
+      const ed = host({ editing: true, shortcut: true, axis: null });
+      TOOL3D_ACTIONS.setValue(ed as any, '2');
+      expect(ed.shapeManager.appendNumericInput).not.toHaveBeenCalled();
     });
   });
 });

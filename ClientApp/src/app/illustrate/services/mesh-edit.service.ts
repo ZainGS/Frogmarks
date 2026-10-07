@@ -24,6 +24,9 @@ export class MeshEditService {
   scene3dIsEditingMesh = false;
   scene3dEditTool: 'select' | 'knife' = 'select';
   private _knifeStart: { x: number; y: number } | null = null;
+  /** The pointer drawing the knife line: only it moves the preview and cuts on release (a 2nd finger used to restart
+   *  the line at its own position and cut on ITS release). */
+  private _knifePointerId: number | null = null;
 
   enterMeshEditMode(): void {
     if (!this.editorState.scene3dSelectedMeshId) return;
@@ -54,6 +57,7 @@ export class MeshEditService {
     this.scene3dIsEditingMesh = false;
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
+    this._knifePointerId = null;
     this._clearKnifePreview();
   }
 
@@ -91,7 +95,8 @@ export class MeshEditService {
     if (!(this.scene3dIsEditingMesh && this.editorState.scene3dSelectedMeshId)) return false;
     if (this.scene3dEditTool === 'knife') {
       this._knifeStart = { x: event.offsetX, y: event.offsetY };
-      canvas.setPointerCapture(event.pointerId);
+      this._knifePointerId = event.pointerId;
+      try { canvas.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
     }
     return true;
   }
@@ -99,6 +104,7 @@ export class MeshEditService {
   /** Knife drag: draw the cut preview. True = handled. */
   knifePointerMove(event: PointerEvent): boolean {
     if (!(this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart)) return false;
+    if (this._knifePointerId !== null && event.pointerId !== this._knifePointerId) return true;   // another finger
     this._drawKnifePreview(this._knifeStart.x, this._knifeStart.y, event.offsetX, event.offsetY);
     return true;
   }
@@ -106,6 +112,8 @@ export class MeshEditService {
   /** Knife release: cut along the dragged line. True = handled. */
   knifePointerUp(event: PointerEvent): boolean {
     if (!(this.scene3dIsEditingMesh && this.scene3dEditTool === 'knife' && this._knifeStart)) return false;
+    if (this._knifePointerId !== null && event.pointerId !== this._knifePointerId) return true;   // another finger lifted
+    this._knifePointerId = null;
     const canvas = this.host.canvasRef?.nativeElement;
     if (canvas && this.editorState.scene3dSelectedMeshId) {
       // The canvas BACKING ratio, not window.devicePixelRatio: on mobile the backing store is capped (e.g. 1.5 on a DPR-2
@@ -128,7 +136,22 @@ export class MeshEditService {
   cancelKnifeCut(): void {
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
+    this._knifePointerId = null;
     this._clearKnifePreview();
+  }
+
+  /** A second finger landed (pinch / two-finger orbit, TOUCH-5): the line being drawn is dropped — no cut — and the
+   *  knife stays on for the next stroke. */
+  knifeAbortForGesture(): void {
+    if (!this._knifeStart) return;
+    this._knifeStart = null;
+    this._knifePointerId = null;
+    this._clearKnifePreview();
+  }
+
+  /** pointercancel: the line's pointer is gone — drop the line (no cut). */
+  knifePointerCancel(event: PointerEvent): void {
+    if (this._knifeStart && (this._knifePointerId === null || event.pointerId === this._knifePointerId)) this.knifeAbortForGesture();
   }
 
   /** Edit › Delete in mesh edit mode: the selected faces of the mesh being edited (what the Mesh Edit panel's Delete

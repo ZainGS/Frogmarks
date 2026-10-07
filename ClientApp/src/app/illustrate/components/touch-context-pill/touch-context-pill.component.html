@@ -1,6 +1,13 @@
 <!-- pointerdown preventDefault: a tap must not move focus (the LiveText overlay keeps its caret until Done runs) -->
-<div class="pill" role="toolbar" [attr.aria-label]="spec.apply?.label || spec.cancel?.label">
+<div class="pill" role="toolbar" [attr.aria-label]="spec.apply?.label || spec.cancel?.label || 'Touch tools'">
     <span *ngIf="spec.hint" class="pill-hint">{{ spec.hint }}</span>
+    <button *ngFor="let b of buttons; trackBy: trackButton" type="button" class="pill-btn pill-tool"
+            [class.on]="isPressed(b)" [attr.aria-pressed]="b.pressed ? isPressed(b) : null"
+            [attr.data-btn]="b.id" [title]="b.title" [attr.aria-label]="b.title"
+            (pointerdown)="$event.preventDefault()" (click)="onTool(b)">{{ b.label }}</button>
+    <input *ngIf="spec.numeric" #num type="text" inputmode="decimal" class="pill-num" autocomplete="off"
+           placeholder="0" aria-label="Amount" [disabled]="!axisPicked"
+           (input)="numeric.emit(num.value)" (keydown.enter)="apply.emit()">
     <button *ngIf="spec.cancel" type="button" class="pill-btn pill-cancel"
             (pointerdown)="$event.preventDefault()" (click)="cancel.emit()">✕ {{ spec.cancel.label }}</button>
     <button *ngIf="spec.apply" type="button" class="pill-btn pill-apply"

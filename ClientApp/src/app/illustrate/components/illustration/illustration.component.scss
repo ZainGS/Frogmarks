@@ -1466,6 +1466,12 @@ svg {
     backdrop-filter: blur(4px);
 }
 
+// Touch (TOUCH-10): the readout sits at the top — the touch pill's X / Y / Z, amount and Apply / Cancel own the bottom.
+.scene3d-shortcut-hud.scene3d-shortcut-hud--top {
+    top: 64px;
+    bottom: auto;
+}
+
 .scene3d-sh-mode {
     color: #fff;
     letter-spacing: 0.08em;

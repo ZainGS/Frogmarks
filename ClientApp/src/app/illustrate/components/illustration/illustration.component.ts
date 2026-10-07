@@ -48,7 +48,7 @@ import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
 import { rasterLayerSignature } from '../../utils/raster-layer-signature';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
-import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete,
+import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillButton, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete, TOOL3D_ACTIONS,
   routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
 import { hotkeyNeedsZone } from './hotkey-zone-gate';
 import { TouchUiService } from '../../services/touch-ui.service';
@@ -819,6 +819,16 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (activeContextPill(this) !== spec) return;
     spec[which]?.run(this);
   }
+  /** A pill tool button (Multi / Snap / Frame / Grab / Rotate / Scale / X / Y / Z — the 3D modifier keys, TOUCH-10). */
+  runContextPillButton(spec: ContextPillSpec, btn: ContextPillButton): void {
+    if (activeContextPill(this) !== spec || !spec.buttons?.includes(btn)) return;
+    btn.run(this);
+  }
+  /** The pill's number field: the typed amount of the 3D keyboard transform (the digits the keys would send). */
+  runContextPillNumeric(spec: ContextPillSpec, text: string): void {
+    if (activeContextPill(this) !== spec || !spec.numeric) return;
+    TOOL3D_ACTIONS.setValue(this, text);
+  }
 
   /** Brush list auto-close on touch: <app-brush-options> picked a brush; tapping the tool again reopens the panel. */
   readonly toolSubpanel = new ToolSubpanelCollapse(() => this.touchUi.coarse);
@@ -1141,12 +1151,17 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // ── 3D canvas pointer routing (knife, UV stamp, ribbon handles -> RibbonService, picking) ──
   scene3dCanvasPointerDown(event: PointerEvent): void {
     if (!this.editorState.scene3dPanelVisible) return;
+    // mobile-parity 7.3b P5: a second finger is always a camera gesture (pinch / two-finger orbit) — never a pick. It
+    // also takes back what the first finger started here: a pending tap-select and a half-drawn knife cut (TOUCH-5).
+    if (event.pointerType === 'touch' && event.isPrimary === false) {
+      this._touchTap = null;
+      this.meshEdit.knifeAbortForGesture();
+      return;
+    }
     // Plain LEFT click only (2026-09-29). Middle = pan, right = look / pan, Alt+left = orbit — none of them may pick,
     // select, or clear the selection (they did: every orbit / pan start selected the mesh under the cursor, or
     // deselected on empty space). Also covers the knife start, UV stamp and ribbon-handle grab below.
     if (event.button !== 0 || event.altKey) return;
-    // mobile-parity 7.3b P5: a second finger is always a camera gesture (pinch / two-finger orbit) — never a pick.
-    if (event.pointerType === 'touch' && event.isPrimary === false) return;
     const canvas = this.canvasRef?.nativeElement;
     if (!canvas) return;
     const sm = this.shapeManager;
@@ -1175,8 +1190,26 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
     if (this.ribbon.tryBeginHandleDrag(event, canvas)) return;
 
-    // 2. Fall through to viewport picking — click anywhere on canvas to select a mesh
-    const picked = sm.pickFromClient3D(event.clientX, event.clientY, canvas.getBoundingClientRect());
+    // 2. Fall through to viewport picking — click anywhere on canvas to select a mesh. A FINGER picks on a TAP (released
+    // within TOUCH_TAP_SLOP_PX, no second finger — TOUCH-6), so the first finger of a pinch / two-finger orbit never
+    // selects or deselects; and never on a press a 3D tool claimed (an armature joint, a bone placement — TOUCH-9).
+    if (event.pointerType === 'touch') {
+      const claimed = (sm as unknown as { isPointerEventClaimed3D?(e: object): boolean }).isPointerEventClaimed3D;
+      if (typeof claimed === 'function' && claimed.call(sm, event)) return;
+      this._touchTap = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      return;
+    }
+    this._scene3dPickAt(event.clientX, event.clientY, canvas);
+  }
+
+  /** A finger press waiting for its release to select (TOUCH-6): dropped by a 2nd finger, movement or pointercancel. */
+  private _touchTap: { id: number; x: number; y: number } | null = null;
+  private static readonly TOUCH_TAP_SLOP_PX = 8;
+
+  /** Viewport pick at a client point: select the mesh there, or clear the selection (and the character panel). */
+  private _scene3dPickAt(clientX: number, clientY: number, canvas: HTMLCanvasElement): void {
+    const sm = this.shapeManager;
+    const picked = sm.pickFromClient3D(clientX, clientY, canvas.getBoundingClientRect());
     const pickedId = picked?.meshId ?? null;
     if (pickedId) {
       this.scene3dSelectMesh(pickedId);
@@ -1207,6 +1240,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
    *  the stroke draws engine-side and binds nothing per move; the canvas (pointerup) binding runs one change
    *  detection when the stroke ends. */
   private _canvasPointerMoveOutsideZone = (event: PointerEvent): void => {
+    const tap = this._touchTap;
+    if (tap && event.pointerId === tap.id
+        && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > IllustrationComponent.TOUCH_TAP_SLOP_PX) this._touchTap = null;
     const pts = this.ribbon.scene3dRibbonControlPoints;
     this.scene3dCanvasPointerMove(event);
     if (this.ribbon.scene3dRibbonControlPoints !== pts) { this._scheduleZoneTick(); return; }
@@ -1219,6 +1255,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const sm = this.shapeManager;
     if (!sm) return false;
     if (sm.isUVPaintActive3D?.()) return true;
+    // TOUCH-9/10 perf: Edit Mesh and the armature bind nothing per move — vertex / joint / gizmo / IK drags draw
+    // engine-side, the knife preview draws on the handle canvas, and the panels refresh through their own zone entries
+    // (the mesh-edit selection callback, the armature panel's frame-coalesced scene-graph listener).
+    if (this.meshEdit.scene3dIsEditingMesh || this.scene3dArmaturePanelOpen) return true;
     if (event.pointerType !== 'touch') return false;
     const orbit = sm.getOrbitController?.();
     return !!orbit && (orbit.isTouchGesturing || orbit.activeTouchCount >= 2);
@@ -1263,6 +1303,22 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dCanvasPointerUp(event: PointerEvent): void {
     if (this.meshEdit.knifePointerUp(event)) return;
+    this.ribbon.endHandleDrag();
+    const tap = this._touchTap;
+    if (tap && event.pointerId === tap.id) {
+      this._touchTap = null;
+      const canvas = this.canvasRef?.nativeElement;
+      if (canvas && this.editorState.scene3dPanelVisible
+          && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) <= IllustrationComponent.TOUCH_TAP_SLOP_PX) {
+        this._scene3dPickAt(event.clientX, event.clientY, canvas);
+      }
+    }
+  }
+
+  /** The browser took the pointer (a system gesture, a palm reject): nothing it started may stay half-done. */
+  scene3dCanvasPointerCancel(event: PointerEvent): void {
+    if (this._touchTap?.id === event.pointerId) this._touchTap = null;
+    this.meshEdit.knifePointerCancel(event);
     this.ribbon.endHandleDrag();
   }
 

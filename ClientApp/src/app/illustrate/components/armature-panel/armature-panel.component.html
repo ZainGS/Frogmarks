@@ -96,8 +96,8 @@
                class="ar-list-row ar-joint-row"
                [class.active]="rig.selectedJointIdx === i"
                (click)="rig.selectJoint(i)"
-               (mouseenter)="rig.hoverJoint(i)"
-               (mouseleave)="rig.hoverJoint(null)">
+               (pointerenter)="rig.hoverJointFromPointer(i, $event)"
+               (pointerleave)="rig.hoverJointFromPointer(null, $event)">
 
             <ng-container *ngIf="rig.renamingIdx === i; else viewJoint">
               <input type="text" class="ar-text ar-text-inline"
@@ -618,7 +618,7 @@
 
           <!-- Entry list -->
           <div *ngFor="let e of library.filteredGlobalLib" class="ar-lib-entry"
-               (mouseenter)="library.globalLibStartPreview(e)" (mouseleave)="library.globalLibStopPreview(e.id)">
+               (pointerenter)="library.globalLibPointerEnter(e, $event)" (pointerleave)="library.globalLibPointerLeave(e.id, $event)">
 
             <!-- Inline rename -->
             <ng-container *ngIf="library.globalLibRenamingId === e.id; else globalLibDisplay">

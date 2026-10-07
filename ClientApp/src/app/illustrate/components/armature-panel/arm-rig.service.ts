@@ -321,6 +321,13 @@ export class ArmRigService {
     this.sm?.highlightJoint3D(idx);
   }
 
+  /** Joint-list row hover → the viewport joint highlight, for a mouse / pen only: a finger's tap fired the compat
+   *  mouseenter but never the mouseleave, so the highlight stuck on the last tapped row (TOUCH-16). */
+  hoverJointFromPointer(idx: number | null, e: PointerEvent): void {
+    if (e.pointerType === 'touch') return;
+    this.hoverJoint(idx);
+  }
+
   startRename(idx: number, event: Event): void {
     event.stopPropagation();
     this.selectedJointIdx = idx;

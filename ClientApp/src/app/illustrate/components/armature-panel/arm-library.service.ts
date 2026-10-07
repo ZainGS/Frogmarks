@@ -402,6 +402,11 @@ export class ArmLibraryService implements OnDestroy {
     });
   }
 
+  /** Hover preview for a mouse / pen only (TOUCH-16): a finger's tap started a 12 fps preview that never stopped (the
+   *  compat mouseleave never fires). */
+  globalLibPointerEnter(entry: any, e: PointerEvent): void { if (e.pointerType !== 'touch') this.globalLibStartPreview(entry); }
+  globalLibPointerLeave(id: string, e: PointerEvent): void { if (e.pointerType !== 'touch') this.globalLibStopPreview(id); }
+
   globalLibStopPreview(id: string): void {
     if (this._globalLibPreviewTimers[id]) {
       clearInterval(this._globalLibPreviewTimers[id]);

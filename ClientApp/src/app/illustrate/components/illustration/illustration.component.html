@@ -31,6 +31,7 @@
                 (drop)="imports.onCanvasDrop($event)"
                 (pointerdown)="scene3dCanvasPointerDown($event)"
                 (pointerup)="scene3dCanvasPointerUp($event)"
+                (pointercancel)="scene3dCanvasPointerCancel($event)"
                 (pointerleave)="scene3dCanvasPointerLeave()"></canvas>
         <canvas #handleCanvas
                 [style.width]="(uv.uvEditorOpen && uv.showUVPane) || (pkg.scene3dPkgCreatorOpen && pkg.pkgViewMode === 'split') ? '50vw' : ''"
@@ -134,7 +135,8 @@
         </div>
 
         <!-- Viewport transform shortcut HUD (G/R/S state machine) -->
-        <div *ngIf="hud.scene3dShortcutActive" class="scene3d-shortcut-hud">
+        <!-- On touch the readout moves to the top: the touch pill (X / Y / Z, the amount, Apply / Cancel) owns the bottom. -->
+        <div *ngIf="hud.scene3dShortcutActive" class="scene3d-shortcut-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
           <span class="scene3d-sh-mode">{{ hud.scene3dShortcutMode | uppercase }}</span>
           <ng-container *ngIf="hud.scene3dShortcutAxis">
             <span class="scene3d-sh-sep">›</span>
@@ -142,7 +144,7 @@
           </ng-container>
           <span *ngIf="hud.scene3dShortcutNumeric" class="scene3d-sh-value">{{ hud.scene3dShortcutNumeric }}</span>
           <span *ngIf="!hud.scene3dShortcutAxis" class="scene3d-sh-hint">x / y / z to constrain</span>
-          <span class="scene3d-sh-confirm">↵ confirm · Esc cancel</span>
+          <span *ngIf="!touchUi.coarse" class="scene3d-sh-confirm">↵ confirm · Esc cancel</span>
         </div>
 
         <!-- GPU device-lost banner (Salsa sm.onDeviceStatusChange): recovering → recovered | couldn't recover -->
@@ -375,10 +377,12 @@
                                  [rightInset]="(!uiHidden && !isViewerMode && sidePanel.visible) ? 280 : 0"
                                  (stop)="scene3dTogglePlay()"></app-play-touch-controls>
         <ng-container *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying">
-            <app-touch-context-pill *ngIf="contextPill as pill" [spec]="pill"
+            <app-touch-context-pill *ngIf="contextPill as pill" [spec]="pill" [ed]="this"
                                     [aboveTimeline]="animationEnabled" [sidePanelOpen]="sidePanel.visible"
                                     (apply)="runContextPill(pill, 'apply')"
-                                    (cancel)="runContextPill(pill, 'cancel')"></app-touch-context-pill>
+                                    (cancel)="runContextPill(pill, 'cancel')"
+                                    (action)="runContextPillButton(pill, $event)"
+                                    (numeric)="runContextPillNumeric(pill, $event)"></app-touch-context-pill>
         </ng-container>
         <!-- Hidden UI: shown for ~3 s after hiding, then faded; a tap on the canvas fades it back in (any device: a
              touchscreen laptop has no "coarse" pointer). X toggles the UI too. -->
