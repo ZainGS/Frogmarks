@@ -85,6 +85,7 @@ import { RasterSelectionService } from 'app/shared/services/raster/raster-select
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { HiddenUiWake } from '../../utils/hidden-ui-wake';
+import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
 import {
   SelectionTool, CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS, ArrowheadStyle,
   ARROWHEAD_OPTIONS,
@@ -251,6 +252,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   toggleUI(force?: boolean) {
     this.uiHidden = typeof force === 'boolean' ? force : !this.uiHidden;
+    this._syncViewGizmoHidden();   // the 3D nav gizmo is editor chrome too (it lives on document.body, not in the template)
     // No keyboard on a tablet (UI-1): a floating "Show UI" button brings the UI back. It shows for a few seconds after
     // hiding, then fades; a tap on the canvas fades it back in (that tap only wakes it, it doesn't paint: HiddenUiWake).
     // The X key still toggles on any device.
@@ -1927,6 +1929,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     document.addEventListener('paste', this.onPaste);
   }
 
+  /** Hide Salsa's 3D nav gizmo with the rest of the chrome: Toggle UI and the read-only viewer. */
+  private _syncViewGizmoHidden(): void {
+    syncViewGizmoHidden(this.shapeManager as unknown as ViewGizmoEngine, this.uiHidden || this.isViewerMode);
+  }
+
   _updateGizmoPosition(delayMs = 320): void {
     clearTimeout(this._gizmoPosTimer);
     this._gizmoPosTimer = setTimeout(() => {
@@ -2039,6 +2046,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // the 2D illustration camera to the 3D orthographic projection each frame.
     this.shapeManager.enableAutoSyncIllustrationCamera3D();
     this._updateGizmoPosition(0);
+    this._syncViewGizmoHidden();
 
     this._sceneAppliedOnceSub = this.shapeManager.interactionService.onSceneGraphChanged
       .subscribe(() => {
@@ -2960,6 +2968,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     clearTimeout(this._gizmoPosTimer);
     this._scene3dViewportSub?.unsubscribe?.();
     this._scene3dResizeObserver?.disconnect();
+    // Salsa's 3D nav gizmo sits on document.body (outside this template): with a 3D camera mode on it stayed on screen
+    // over the Shell / dashboard / board after leaving. Dispose it with the editor (the next document re-creates it).
+    releaseViewGizmo(this.shapeManager as unknown as ViewGizmoEngine);
     this.autoSaveService.disable();
     // Leaving the route with the UV editor / UV paint open: the engine outlives the editor, so close it fully here
     // (orbit, focus background, paint input, the mobile idle pause) — the panel's own destroy only exits paint.
