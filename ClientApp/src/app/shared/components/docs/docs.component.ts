@@ -545,7 +545,7 @@ export class DocsComponent {
     if (this.embedded) {
       this.closed.emit();
     } else {
-      void this.router.navigate(['/dashboard']);
+      void this.router.navigate(['/']);   // the Shell (the old dashboard doesn't work on a phone)
     }
   }
 }

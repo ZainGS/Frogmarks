@@ -72,6 +72,7 @@ import { GreasePencilPanelComponent } from './components/grease-pencil-panel/gre
 import { UvEditorPanelComponent } from './components/uv-editor-panel/uv-editor-panel.component';
 import { AuthoringPanelComponent } from './components/authoring-panel/authoring-panel.component';
 import { DetachWhenHiddenDirective } from '../shared/directives/detach-when-hidden.directive';
+import { ConfirmStripComponent } from './components/confirm-strip/confirm-strip.component';
 
 /** Leaving the editor saves the pending change first (audit Phase 2.3). */
 const flushBeforeLeave = (c: IllustrationComponent) => c.flushBeforeLeave();
@@ -154,6 +155,6 @@ const routes: Routes = [
     UvEditorPanelComponent,
     AuthoringPanelComponent,
   ],
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, SharedUiModule, DetachWhenHiddenDirective, RouterModule.forChild(routes)],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, SharedUiModule, DetachWhenHiddenDirective, ConfirmStripComponent, RouterModule.forChild(routes)],
 })
 export class IllustrateModule { }

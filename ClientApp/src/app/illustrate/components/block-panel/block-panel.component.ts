@@ -26,6 +26,7 @@ export class BlockPanelComponent implements OnChanges {
   @Output() deleteBlock = new EventEmitter<void>();
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['blockId'] || changes['open']) this.confirming = null;
     if (changes['blockId'] && !this.blockId) { this.blockStats = null; this.blockBuildingList = []; this.blockBuildingIndices = []; return; }
     if ((changes['open'] || changes['blockId']) && this.open && this.blockId) this._refreshBlockStats();
   }
@@ -37,7 +38,10 @@ export class BlockPanelComponent implements OnChanges {
   blockAddArchetype = 'brick-townhouse';
   blockAddX = 0;
   blockAddZ = 0;
-  blockAddRy = 0;
+  /** Rotation of the building to add, in degrees (the engine takes radians). */
+  blockAddRyDeg = 0;
+  /** Which destructive action is asking first: a building row's ✕ (its index) or 'block' (Delete block). */
+  confirming: number | 'block' | null = null;
   /** One block's look (every building in it) — overrides the Environment style for that block. */
   blockStyleRender = '';
   blockStyleToon = false;
@@ -64,9 +68,10 @@ export class BlockPanelComponent implements OnChanges {
     if (!id) return;
     this.shapeManager.addBuildingToBlock3D(id,
       { archetype: this.blockAddArchetype },
-      { x: this.blockAddX, z: this.blockAddZ, ry: this.blockAddRy }
+      { x: this.blockAddX, z: this.blockAddZ, ry: (+this.blockAddRyDeg || 0) * Math.PI / 180 }
     );
     this._refreshBlockStats();
+    this.dirty.emit();
   }
 
   async scene3dRemoveBuildingFromBlock(index: number): Promise<void> {
@@ -75,12 +80,14 @@ export class BlockPanelComponent implements OnChanges {
     if (this.blockBuildingIndex === index) this.exitBuildingEdit.emit();
     this.shapeManager.removeBlockBuilding3D(id, index);
     this._refreshBlockStats();
+    this.dirty.emit();
   }
 
   scene3dApplyBlockScale(): void {
     const id = this.blockId;
     if (!id) return;
     this.shapeManager.setBlockScale3D(id, this.blockScale);
+    this.dirty.emit();
   }
 
   scene3dSetBlockStyleRender(style: string): void {

@@ -5,6 +5,9 @@ import type ShapeManager from '@zaings/salsa/shape-manager';
  *  that switch for the session only (a static on its renderer), so Frogmarks stores it and re-applies it after every
  *  renderer boot (applyStoredExperiments). Absent = off (the engine default). */
 export const EXP_DIRTY_COMPOSITING_KEY = 'fm-exp-dirty-compositing';
+/** localStorage key: '1' = show the developer buttons in the artist panels (e.g. the Armature panel's "Copy pose + body
+ *  for Claude"). Off by default (UI review 2026-10-07 §2c: a developer button in the artist UI). */
+export const EXP_DEV_TOOLS_KEY = 'fm-exp-dev-tools';
 /** Salsa's own keys (salsa/docs/ui/gpu-diagnostics.md): the stored safe mode, and the loss history that
  *  `?salsaSafe=0` clears with it. */
 export const SALSA_SAFE_MODE_KEY = 'salsa.gpu.safeMode';
@@ -331,6 +334,18 @@ export class ExperimentalSettingsService {
       if (typeof sm?.getGpuDiagnostics3D === 'function') return !!sm.getGpuDiagnostics3D().safeMode;
     } catch { /* renderer not ready */ }
     return false;
+  }
+
+  // ── Developer buttons (per machine) ──
+
+  /** The developer buttons are shown in the artist panels (read live: the panels bind to it). */
+  get devTools(): boolean { return readStored(EXP_DEV_TOOLS_KEY) === '1'; }
+
+  toggleDevTools(): void {
+    try {
+      if (this.devTools) localStorage.removeItem(EXP_DEV_TOOLS_KEY);
+      else localStorage.setItem(EXP_DEV_TOOLS_KEY, '1');
+    } catch { /* storage blocked (private mode): stays off */ }
   }
 
   // Browser seams (the specs replace them).

@@ -116,7 +116,7 @@
         </div>
         </ng-container>
         <ng-container *ngIf="scene3dSelectedMeshType === 'box' || scene3dSelectedMeshType === 'plane'">
-        <div class="scene3d-sub-header">Scatter (P5)</div>
+        <div class="scene3d-sub-header">Scatter plants &amp; rocks</div>
         <div class="scene3d-material-row">
             <label>Flowers</label>
             <input type="range" min="0" max="2" step="0.1" [(ngModel)]="groundScatterFlowers">
@@ -157,8 +157,13 @@
                     <input class="scene3d-submesh-label-input" [(ngModel)]="slot.label"
                            (change)="scene3dUpdateSubmeshLabel(i)"
                            [title]="'Slot ' + i + ' label'">
-                    <button class="scene3d-move-btn" (click)="scene3dRemoveSubmesh(i)" title="Remove slot">✕</button>
+                    <button class="scene3d-slot-remove" (click)="confirmMaterial = confirmMaterial === i ? null : i"
+                            [class.scene3d-slot-remove-asking]="confirmMaterial === i"
+                            title="Remove slot" [attr.aria-label]="'Remove ' + (slot.label || 'slot')">✕</button>
                 </div>
+                <fm-confirm-strip *ngIf="confirmMaterial === i" action="Remove"
+                                  [text]="'Remove the slot “' + (slot.label || ('Slot ' + (i + 1))) + '”? Its material settings are lost.'"
+                                  (ok)="confirmMaterial = null; scene3dRemoveSubmesh(i)" (cancel)="confirmMaterial = null"></fm-confirm-strip>
                 <div class="scene3d-material-row">
                     <label>Style</label>
                     <select class="scene3d-select" [(ngModel)]="slot.renderStyle"
@@ -187,10 +192,14 @@
             <button class="scene3d-btn" style="flex:1"
                     (click)="scene3dAddSubmesh()"
                     title="Add a new material slot">+ Add Slot</button>
-            <button class="scene3d-btn" style="flex:1"
-                    (click)="scene3dClearSubmeshes()"
-                    title="Revert to single-material mode">↩ Single</button>
         </div>
+        <!-- Destructive: apart from Add Slot, and it asks first (no undo) -->
+        <button *ngIf="confirmMaterial !== 'single'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:10px"
+                (click)="confirmMaterial = 'single'"
+                title="Remove every slot and go back to one material for the whole mesh">Back to one material…</button>
+        <fm-confirm-strip *ngIf="confirmMaterial === 'single'" action="Remove slots"
+                          [text]="'Remove all ' + scene3dSubmeshes.length + ' material slots and use one material for the whole mesh?'"
+                          (ok)="confirmMaterial = null; scene3dClearSubmeshes()" (cancel)="confirmMaterial = null"></fm-confirm-strip>
     </ng-container>
 
     <!-- Add first slot button (transitions single → multi) -->

@@ -791,10 +791,13 @@
         </div>
     </ng-container>
 
-    <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
-            (click)="hair.scene3dRemoveHair()">Remove Hair</button>
-    <button class="scene3d-btn" style="width:100%;margin-top:4px"
-            (click)="hair.scene3dBakeHair()">Save as Part</button></ng-container>
+    <button class="scene3d-btn" style="width:100%;margin-top:10px"
+            (click)="hair.scene3dBakeHair()">Save as Part</button>
+    <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+    <button *ngIf="!confirmRemove" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+            (click)="confirmRemove = true">Remove Hair…</button>
+    <fm-confirm-strip *ngIf="confirmRemove" text="Remove the hair? Its style settings and paint are lost." action="Remove"
+                      (ok)="confirmRemove = false; hair.scene3dRemoveHair()" (cancel)="confirmRemove = false"></fm-confirm-strip></ng-container>
     <ng-container *ngIf="cp.sub.id === 'texture'"><!-- Texture -->
     <div class="scene3d-material-row">
         <label>Diffuse</label>

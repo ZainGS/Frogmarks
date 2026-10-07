@@ -20,6 +20,10 @@ export class PersistentColorPickerComponent implements OnChanges, AfterViewInit,
   @Output() pickRecent = new EventEmitter<string>();
   @Output() swap = new EventEmitter<void>();
   @Output() resetColors = new EventEmitter<void>();
+  /** The eyedropper is armed: the next canvas tap / click samples a colour (shown pressed). */
+  @Input() eyedropperArmed = false;
+  /** The eyedropper button: arm / disarm the one-shot canvas sample (the editor owns the canvas input). */
+  @Output() eyedropper = new EventEmitter<void>();
   @ViewChild('hueRing') hueRingRef?: ElementRef<HTMLElement>;
   @ViewChild('sbSquare') sbSquareRef?: ElementRef<HTMLElement>;
   @ViewChild('hueThumb') hueThumbRef?: ElementRef<HTMLElement>;

@@ -36,6 +36,11 @@
   </head>
   <body class="base-body theme-retro-chrome">
     <script>
+      // View › Retro Chrome is on by default; localStorage fm-theme = 'plain' turns it off. Applied here, before the
+      // app boots, so the wrong theme never flashes. Same key / value as src/app/shared/services/theme/retro-theme.ts.
+      try { if (localStorage.getItem('fm-theme') === 'plain') document.body.classList.remove('theme-retro-chrome'); } catch (e) {}
+    </script>
+    <script>
       document.addEventListener("contextmenu", function (e) {
         e.preventDefault(); // suppress native browser menu (Angular custom menus still fire)
       });

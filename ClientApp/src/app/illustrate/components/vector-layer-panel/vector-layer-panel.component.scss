@@ -71,8 +71,75 @@
     &:focus-visible { outline: 1px solid var(--rc-green-txt, #9fe0b8); outline-offset: 1px; }
 }
 
+// Shape list rows (the old scene3d-mesh-row classes were never defined for this component: the trash icon sat
+// against the name with no row layout).
+.vector-empty-hint {
+    padding: 6px 4px;
+    font-size: 11px;
+    color: var(--rc-text-muted, #8a8a8a);
+}
+
+.vector-shape-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    padding: 2px 2px 2px 6px;
+    border-bottom: 1px solid var(--rc-bevel-mid, #2a2a2a);
+    font-size: 11px;
+    color: var(--rc-text, #d8d8d8);
+    cursor: pointer;
+
+    &:hover { background: var(--rc-surface-hi, #242424); }
+}
+
+.vector-shape-icon {
+    flex: none;
+    width: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--rc-text-muted, #8a8a8a);
+}
+
+.vector-shape-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vector-shape-type {
+    flex: none;
+    font-size: 9px;
+    color: var(--rc-text-label, #777);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.vector-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--rc-text-muted, #8a8a8a);
+    font-size: 11px;
+    cursor: pointer;
+    flex: none;
+
+    &:hover { color: var(--rc-green-txt, #9fe0b8); border-color: var(--rc-bevel-mid, #333); }
+    &:focus-visible { outline: 1px solid var(--rc-green-txt, #9fe0b8); outline-offset: 1px; }
+}
+
 @media (pointer: coarse) {
+    .vector-shape-row { min-height: 44px; font-size: 13px; }
+    .vector-row-action { width: 44px; height: 44px; font-size: 15px; }
     .vector-tool-btn { width: 36px; height: 36px; svg { width: 18px; height: 18px; } }
     .vector-align-row { gap: 4px; flex-wrap: wrap; }
-    .vector-row-delete { width: 36px; height: 36px; svg { width: 16px; height: 16px; } }
+    .vector-row-delete { width: 44px; height: 44px; svg { width: 16px; height: 16px; } }
 }

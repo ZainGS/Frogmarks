@@ -2,7 +2,7 @@
 
 <!-- Thin HTML overlay — pointer-events:none except when a dialog is open (then it is the dialog's backdrop: a press
      that starts on it closes the dialog; Esc closes it too — installShellEscapeGuard) -->
-<div class="shell-overlay" [class.has-dialog]="showInstallDialog || showSettingsOverlay"
+<div class="shell-overlay" [class.has-dialog]="modalOpen"
      (pointerdown)="onOverlayPointerDown($event)" (click)="onOverlayClick($event)">
 
   <!-- GPU device-lost banner (Salsa sm.onDeviceStatusChange; same states as the editor's): recovering → recovered |
@@ -26,57 +26,101 @@
     </div>
   </div>
 
-  <!-- Install FrogCart dialog -->
-  <div *ngIf="showInstallDialog" class="shell-dialog" (click)="$event.stopPropagation()"
-       role="dialog" aria-modal="true" aria-labelledby="shell-install-title"
+  <!-- FrogCart dialog: a cart tile was opened (double-click, or a tap on the selected cart). Carts can't run yet. -->
+  <div *ngIf="cartDialog as cart" class="shell-dialog" (click)="$event.stopPropagation()"
+       role="dialog" aria-modal="true" aria-labelledby="shell-cart-title" aria-describedby="shell-cart-body"
        cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
-    <h3 id="shell-install-title">Install FrogCart</h3>
-    <p class="shell-dialog-sub">Paste a cart URL or choose a .frogcart file.</p>
-    <input class="shell-dialog-input" type="url" placeholder="https://…"
-           [(ngModel)]="installUrlInput" />
+    <h3 id="shell-cart-title">{{ cart.name }}</h3>
+    <p *ngIf="cart.description" class="shell-dialog-sub">{{ cart.description }}</p>
+    <p id="shell-cart-body" class="shell-dialog-text">
+      FrogCarts can't be opened yet — that comes in a later update. Your cart stays on the home screen until then.
+    </p>
     <div class="shell-dialog-actions">
-      <button class="shell-btn" (click)="installCartFromUrl()"
-              [disabled]="!installUrlInput">Install</button>
-      <button class="shell-btn shell-btn-ghost" (click)="closeInstallDialog()">Cancel</button>
+      <button *ngIf="cart.removable" class="shell-btn shell-btn-danger" [disabled]="cart.removing" (click)="removeCart()">
+        {{ cart.confirmRemove ? 'Remove from this device — sure?' : 'Remove' }}
+      </button>
+      <button class="shell-btn" (click)="closeCartDialog()">Close</button>
     </div>
   </div>
 
-  <!-- Settings overlay (placeholder until settings panel is wired) -->
-  <div *ngIf="showSettingsOverlay" class="shell-dialog" (click)="$event.stopPropagation()"
+  <!-- Settings: the one home for the Shell's settings (theme, storage, install, updates, local AI model) -->
+  <div *ngIf="showSettingsOverlay" class="shell-dialog shell-settings" (click)="$event.stopPropagation()"
        role="dialog" aria-modal="true" aria-labelledby="shell-settings-title"
        cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
-    <h3 id="shell-settings-title">Settings</h3>
-    <p class="shell-dialog-sub">More settings coming soon.</p>
+    <div class="shell-dialog-head">
+      <h3 id="shell-settings-title">Settings</h3>
+      <button class="shell-btn shell-btn-ghost shell-dialog-close" (click)="closeSettingsOverlay()" aria-label="Close Settings">✕</button>
+    </div>
+
+    <!-- Theme (was the cluster's 🎨 panel; now remembered on this device) -->
+    <section class="fm-pwa-section" aria-labelledby="shell-set-theme">
+      <div class="fm-pwa-section-title" id="shell-set-theme">Home screen theme</div>
+      <div class="shell-theme-grid" role="group" aria-labelledby="shell-set-theme">
+        <button *ngFor="let t of themeOptions" type="button" class="shell-theme-swatch"
+                [class.is-active]="t.id === themeId" [attr.aria-pressed]="t.id === themeId"
+                [style.background]="t.bg" [style.color]="t.ink" (click)="pickTheme(t.id)">
+          <span class="shell-theme-dot" aria-hidden="true"></span>{{ t.label }}
+        </button>
+      </div>
+    </section>
 
     <!-- Storage (TIER-8): StoragePersistenceService -->
-    <section class="fm-pwa-section" aria-label="Storage on this device">
-      <div class="fm-pwa-section-title">Storage on this device</div>
+    <section class="fm-pwa-section" aria-labelledby="shell-set-storage">
+      <div class="fm-pwa-section-title" id="shell-set-storage">Storage on this device</div>
       <dl class="fm-pwa-rows">
         <dt>Used</dt><dd>{{ storageInfo.usageLabel || 'unknown' }}</dd>
-        <dt>Persistent</dt>
+        <dt>Kept safe</dt>
         <dd [class.fm-pwa-ok]="storageInfo.persisted === true" [class.fm-pwa-warn]="storageInfo.persisted === false">{{ storageInfo.persistedLabel }}</dd>
-        <dt>Installed app</dt><dd>{{ storageInfo.installed ? 'yes' : 'no' }}</dd>
       </dl>
       <p *ngIf="storageInfo.persisted === false" class="fm-pwa-note">{{ storageInfo.noticeText }}</p>
       <button *ngIf="storageInfo.supported && storageInfo.persisted === false" class="fm-pwa-btn"
-              [disabled]="storageInfo.requesting" (click)="requestPersistentStorage()">Ask for persistent storage</button>
+              [disabled]="storageInfo.requesting" (click)="requestPersistentStorage()">Ask the browser to keep it</button>
+    </section>
+
+    <!-- Install app: the browser's prompt (beforeinstallprompt) where there is one, else the steps -->
+    <section class="fm-pwa-section" aria-labelledby="shell-set-install">
+      <div class="fm-pwa-section-title" id="shell-set-install">Install app</div>
+      <ng-container [ngSwitch]="install.state">
+        <p *ngSwitchCase="'installed'" class="fm-pwa-note fm-pwa-ok">Frogmarks is installed on this device.</p>
+        <ng-container *ngSwitchCase="'prompt'">
+          <p class="fm-pwa-note">Install Frogmarks to open it like an app and to help the browser keep your work.</p>
+          <button class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="install.prompting" (click)="installApp()">Install Frogmarks</button>
+        </ng-container>
+        <p *ngSwitchDefault class="fm-pwa-note">{{ install.instructions }}</p>
+      </ng-container>
     </section>
 
     <!-- Updates: AppUpdateService -->
-    <section *ngIf="updates.enabled" class="fm-pwa-section" aria-label="Updates">
-      <div class="fm-pwa-section-title">Updates</div>
+    <section *ngIf="updates.enabled" class="fm-pwa-section" aria-labelledby="shell-set-updates">
+      <div class="fm-pwa-section-title" id="shell-set-updates">Updates</div>
       <p class="fm-pwa-note">{{ updates.state === 'none' ? 'Up to date (checks every 30 minutes and when the app comes back).' : updateText }}</p>
       <button *ngIf="updates.state !== 'none'" class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="updates.applying" (click)="reloadForUpdate()">Reload</button>
     </section>
 
+    <!-- Local AI model (was the cluster's 🧠 panel; same storage key) -->
+    <section class="fm-pwa-section" aria-labelledby="shell-set-model">
+      <label class="fm-pwa-section-title" id="shell-set-model" for="shell-set-model-url">Local AI model address</label>
+      <p class="fm-pwa-note">For AI features that run on your own computer (for example Ollama). Leave it empty to turn it off.</p>
+      <div class="shell-field-row">
+        <input id="shell-set-model-url" class="shell-dialog-input" type="url" inputmode="url" autocomplete="off"
+               placeholder="http://localhost:11434" [(ngModel)]="localModelUrl" (ngModelChange)="localModelStatus = ''"
+               (keydown.enter)="saveLocalModel()" />
+        <button class="fm-pwa-btn" (click)="saveLocalModel()">Save</button>
+      </div>
+      <p *ngIf="localModelStatus === 'saved'" class="fm-pwa-note fm-pwa-ok" role="status">Saved.</p>
+      <p *ngIf="localModelStatus === 'invalid'" class="fm-pwa-note fm-pwa-warn" role="alert">That isn't a web address — it should start with http:// or https://.</p>
+    </section>
+
     <!-- Deploy check: bump APP_VERSION in src/app/app-version.ts -->
     <p class="shell-dialog-version">{{ appVersionLabel }}<br><span>{{ appBuildLabel }}</span></p>
-    <button class="shell-btn shell-btn-ghost" (click)="closeSettingsOverlay()">Close</button>
+    <div class="shell-dialog-actions">
+      <button class="shell-btn" (click)="closeSettingsOverlay()">Done</button>
+    </div>
   </div>
 
   <!-- PWA popups (salsa/docs/ui/pwa.md): fixed at the bottom, clickable on their own (the overlay itself is not).
        Hidden while a dialog is open: Settings shows the same storage / update state with its own buttons. -->
-  <div class="fm-pwa-popups" *ngIf="(showUpdatePopup || storageInfo.noticeVisible || pendingDeletes.list.length) && !showSettingsOverlay && !showInstallDialog">
+  <div class="fm-pwa-popups" *ngIf="(showUpdatePopup || storageInfo.noticeVisible || pendingDeletes.list.length) && !modalOpen">
     <!-- Card ✕ → "Deleted … Undo" (the delete happens when the toast ends; leaving the Shell first keeps the project) -->
     <div *ngFor="let d of pendingDeletes.list; trackBy: trackPendingDelete" class="fm-pwa-popup shell-undo-toast" role="status" aria-live="polite">
       <span class="shell-undo-text">Deleted “{{ d.name }}”</span>
@@ -97,17 +141,17 @@
       <div class="fm-pwa-popup-title" id="fm-storage-title">Storage</div>
       <div class="fm-pwa-popup-body"><span>{{ storageInfo.noticeText }}</span></div>
       <div class="fm-pwa-popup-actions">
+        <button *ngIf="install.state === 'prompt'" class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="install.prompting" (click)="installApp()">Install</button>
         <button class="fm-pwa-btn" (click)="openStorageSettings()">Details</button>
         <button class="fm-pwa-btn" (click)="storageInfo.dismissNotice()">Dismiss</button>
       </div>
     </div>
   </div>
 
-  <!-- Offscreen ARIA tree for screen readers -->
-  <ul class="shell-aria-tree" aria-label="Frogmarks shell" role="tree">
-    <li *ngFor="let slot of ariaSlots; trackBy: trackAriaSlot" role="treeitem" [attr.aria-label]="slot.name">
-      {{ slot.name }}
-    </li>
-  </ul>
+  <!-- Keyboard path + screen-reader list (shell-keys.ts): one real button per tile / chip / project card. Hidden until
+       it holds focus — Tab from the top of the page shows it; Esc in the project grid goes back home. -->
+  <nav class="shell-keys" aria-label="Frogmarks home" [attr.aria-hidden]="modalOpen ? 'true' : null" [attr.inert]="modalOpen ? '' : null">
+    <button *ngFor="let k of keyItems; trackBy: trackKeyItem" type="button" class="shell-keys-btn" (click)="activateKey(k)">{{ k.label }}</button>
+  </nav>
 
 </div>

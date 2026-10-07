@@ -67,9 +67,13 @@
 </ng-container>
 
 <div style="margin-top:12px;display:flex;gap:6px">
-    <button class="scene3d-btn" style="flex:1" (click)="creator.scene3dCloseCreatorPanel()">Done</button>
-    <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="creator.scene3dDeleteCreator()">Delete</button>
+    <button class="scene3d-btn" style="flex:1" (click)="confirmingDelete = false; creator.scene3dCloseCreatorPanel()">Done</button>
 </div>
 <div style="margin-top:6px;display:flex">
     <button class="scene3d-btn scene3d-btn-primary" style="flex:1" (click)="creator.scene3dCreatorPromoteToLibrary()">Save to Library</button>
 </div>
+<!-- Delete: apart from Done (a one-tap delete sat next to it), and it asks first (no undo) -->
+<button *ngIf="!confirmingDelete" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+        (click)="confirmingDelete = true" title="Remove this object from the scene">Delete…</button>
+<fm-confirm-strip *ngIf="confirmingDelete" text="Delete this object? This can't be undone." action="Delete"
+                  (ok)="confirmingDelete = false; creator.scene3dDeleteCreator()" (cancel)="confirmingDelete = false"></fm-confirm-strip>

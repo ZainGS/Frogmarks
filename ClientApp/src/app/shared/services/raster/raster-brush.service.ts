@@ -16,6 +16,33 @@ import {
 } from '../../../boards/models/brush-preset.model';
 
 /**
+ * A layer the brush paints on: a real pixel layer — not the vector / ephemera entry, a folder or the 3D scene, and not
+ * an engine-owned (package) layer the panel hides. A new document's stack is [Vector, Background]: auto-selecting
+ * `layers[0]` made the VECTOR entry the engine's paint layer, so strokes painted an orphan texture with no undo entry
+ * and Ctrl+Z threw ("reading 'undo'") on a Salsa dist without the hasRasterHistory guard.
+ */
+export function isPaintableRasterLayer(l: Pick<RasterLayer, 'type'> & Partial<Pick<RasterLayer, 'systemOwner' | 'packageOwnerId'>>): boolean {
+  return (l.type ?? 'layer') === 'layer' && !l.systemOwner && !l.packageOwnerId;
+}
+
+/** Types that can never be the selected raster layer (no pixels, and not the 3D-scene row's own selection). */
+function isNeverRasterSelection(l: Pick<RasterLayer, 'type'>): boolean {
+  return l.type === 'vector' || l.type === 'ephemera' || l.type === 'folder';
+}
+
+/**
+ * The paint layer a (fresh / just-loaded) document starts on: the engine's own selection when it is a paint layer
+ * (a new document selects Background, a load its topmost raster layer), else the topmost paint layer (last in the
+ * array = visually highest), else null.
+ */
+export function pickDefaultPaintLayerId(layers: RasterLayer[], engineSelectedId: string | null | undefined): string | null {
+  const engineSel = engineSelectedId ? layers.find(l => l.id === engineSelectedId) : undefined;
+  if (engineSel && isPaintableRasterLayer(engineSel)) return engineSel.id;
+  for (let i = layers.length - 1; i >= 0; i--) if (isPaintableRasterLayer(layers[i])) return layers[i].id;
+  return null;
+}
+
+/**
  * RasterBrushService
  * ------------------
  * Wraps the ShapeManager singleton's raster / brush-preset API so that
@@ -362,13 +389,14 @@ export class RasterBrushService {
       }));
       this._layers$.next(layers);
 
-      // Auto-select a layer if none is selected or the active one was removed
+      // Auto-select a PAINT layer when none is selected, the active one was removed, or the active id is an entry
+      // that can't take paint (never layers[0] blindly: in a new document that is the Vector entry).
       const currentId = this._activeLayerId$.value;
-      const stillExists = layers.some(l => l.id === currentId);
-      if (layers.length > 0 && (!currentId || !stillExists)) {
-        this.selectLayer(layers[0].id);
-      } else if (layers.length === 0) {
-        this._activeLayerId$.next(null);
+      const current = currentId ? layers.find(l => l.id === currentId) : undefined;
+      if (!current || isNeverRasterSelection(current)) {
+        const pick = pickDefaultPaintLayerId(layers, this.engineSelectedLayerId());
+        if (pick) this.selectLayer(pick);
+        else this._activeLayerId$.next(null);
       }
     });
   }
@@ -396,10 +424,15 @@ export class RasterBrushService {
     const layers = this._layers$.value;
     // Block deletion of the last remaining layer
     if (layers.length <= 1) return;
+    // …and of the last PAINT layer (the vector entry alone left nothing to paint on)
+    const target = layers.find(l => l.id === id);
+    if (target && isPaintableRasterLayer(target) && layers.filter(isPaintableRasterLayer).length <= 1) return;
 
-    // Find neighbor to select after deletion
+    // Find the nearest PAINT layer to select after deletion (below first, then above) — a vector / folder / 3D
+    // neighbour can't take the selection.
     const idx = layers.findIndex(l => l.id === id);
-    const neighborId = layers[idx - 1]?.id ?? layers[idx + 1]?.id ?? null;
+    const neighborId = [...layers.slice(0, Math.max(idx, 0))].reverse().find(isPaintableRasterLayer)?.id
+      ?? layers.slice(idx + 1).find(isPaintableRasterLayer)?.id ?? null;
 
     this.sm?.deleteRasterLayer(id);
     this.refreshLayers();
@@ -411,8 +444,18 @@ export class RasterBrushService {
   }
 
   selectLayer(id: string): void {
+    // A vector / ephemera layer or a folder is never the raster (paint) layer. Salsa refuses it since 2026-10-07, but
+    // an older dist accepted it and every stroke / Ctrl+Z then hit a layer with no pixel history: ignore it here.
+    const entry = this._layers$.value.find(l => l.id === id);
+    if (entry && isNeverRasterSelection(entry)) return;
     this.sm?.selectRasterLayer(id);
     this._activeLayerId$.next(id);
+  }
+
+  /** The engine's selected raster layer (null without an engine / layer manager). */
+  private engineSelectedLayerId(): string | null {
+    const rlm = (this.sm as unknown as { rasterLayerManager?: { getSelectedLayerId?: () => string | null } } | null)?.rasterLayerManager;
+    return rlm?.getSelectedLayerId?.() ?? null;
   }
 
   setLayerVisibility(id: string, visible: boolean): void {

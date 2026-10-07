@@ -314,6 +314,7 @@ export class CharClothingService implements OnDestroy {
     else if (slot === 'socks') this.scene3dSockParams = null;
     else if (slot === 'undershirt') this.scene3dUndershirtParams = null;
     else this.scene3dUnderpantsParams = null;
+    this.host.dirty.emit();   // (a removal was only saved by the next unrelated edit)
   }
 
   scene3dBakeClothing(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {

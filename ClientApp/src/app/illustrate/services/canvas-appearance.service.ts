@@ -4,7 +4,7 @@ import type { IllustrationComponent } from '../components/illustration/illustrat
 import { RasterBrushService } from 'app/shared/services/raster/raster-brush.service';
 import { CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS } from 'app/boards/models/brush-preset.model';
 
-import { parseAnyColor } from '../utils/color-utils';
+import { parseAnyColor, withHash } from '../utils/color-utils';
 /** Exactly the editor state the 2D canvas appearance uses. */
 export type CanvasAppearanceHost = Pick<IllustrationComponent, 'shapeManager' |
   '_markStateDirty' | 'bgColorPickerRef' 
@@ -46,9 +46,12 @@ export class CanvasAppearanceService {
     return '#' + [r, g, b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
   }
 
-  getBackgroundColor() { this.bgColor = this.shapeManager.getBackgroundColor(); this.bgHexInputDraft = this.bgColor; }
+  /** The engine reports a bare 'rrggbb'; keep '#rrggbb' here. A bare value used to be SAVED as the document's bgColor
+   *  and read back as white on reload (parseAnyColor took it for a named colour), so a new document's dark
+   *  background flipped to white (UI review 2026-10-07). */
+  getBackgroundColor() { this.bgColor = withHash(this.shapeManager.getBackgroundColor()); this.bgHexInputDraft = this.bgColor.replace('#', ''); }
 
-  getDotColor() { this.dotColor = this.shapeManager.getDotColor(); this.dotHexInputDraft = this.dotColor; }
+  getDotColor() { this.dotColor = withHash(this.shapeManager.getDotColor()); this.dotHexInputDraft = this.dotColor.replace('#', ''); }
 
   onPaperGrainTypeChange(type: CanvasGrainType): void {
     this.paperGrainType = type;

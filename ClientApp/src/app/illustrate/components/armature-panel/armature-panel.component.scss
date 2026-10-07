@@ -601,4 +601,23 @@ $muted:   rgba(255, 255, 255, 0.45);
   .ar-bg-select,
   .ar-op-btn { min-height: 44px; }
   .ar-refresh-btn { width: 44px; height: 44px; }
+
+  // UI review 2026-10-07 §3 #4: the rest — the row ✎ / ✕ / ▶ / Apply, fields, selects, checkboxes, section headers.
+  .ar-op-xs { min-width: 44px; padding: 0 8px; font-size: 13px; }
+  .ar-text,
+  .ar-num,
+  .ar-select,
+  .ar-select-sm,
+  .ar-select-xs { min-height: 44px; font-size: 14px; }
+  .ar-num { width: 64px; }
+  .ar-num-sm { width: 56px; }
+  .ar-select-xs { width: 52px; }
+  .ar-range { height: 32px; }
+  .ar-checkbox-row { min-height: 44px; }
+  .ar-checkbox-row input[type="checkbox"] { width: 22px; height: 22px; }
+  .ar-section-title.ar-section-title-toggle { min-height: 44px; margin-bottom: 4px; }
+  .ar-list-row { min-height: 44px; display: flex; align-items: center; gap: 4px; }
+  .ar-op-inline,
+  .ar-form-row,
+  .ar-xyz-row { flex-wrap: wrap; row-gap: 6px; }
 }

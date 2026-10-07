@@ -3,15 +3,15 @@
     <button class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'ortho2D'"
             (click)="setCameraMode.emit('ortho2D')"
-            title="2D Ortho — locked illustration camera, orthographic">2D Ortho</button>
+            title="2D Ortho — locked illustration camera, orthographic"><span class="svb-long">2D </span>Ortho</button>
     <button class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'perspective2D'"
             (click)="setCameraMode.emit('perspective2D')"
-            title="2D Persp — locked illustration camera, perspective">2D Persp</button>
+            title="2D Persp — locked illustration camera, perspective"><span class="svb-long">2D </span>Persp</button>
     <button class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'free3D'"
             (click)="setCameraMode.emit('free3D')"
-            title="3D Free — orbit (Alt+drag), pan (Shift+drag), dolly (scroll)">3D Free</button>
+            title="3D Free — orbit (Alt+drag), pan (Shift+drag), dolly (scroll)">3D<span class="svb-long"> Free</span></button>
 </div>
 <!-- Target: Illustration ↔ Scene -->
 <div class="scene-view-seg">

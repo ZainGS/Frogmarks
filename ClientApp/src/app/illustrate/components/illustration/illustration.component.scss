@@ -425,6 +425,7 @@ canvas {
     gap: 10px;
     flex: 1;
     min-width: 0;
+    overflow: hidden;   // a long title / the size chip shrink or clip here; they never paint over File / Edit (tablet, Scene target)
 }
 
 .top-toolbar-frog {
@@ -529,6 +530,9 @@ canvas {
     flex-direction: column;
     overflow: hidden;
     border-left: 4px solid #3b6151;
+    /* 280 px of content + the 4 px border (284 in all, what the drawer handle assumes). Bootstrap's border-box made the
+       content 276 px, so the 280 px panels inside overflowed by 4 px and lost their right edge (UI review p01). */
+    box-sizing: content-box;
 
     &.no-timeline {
         bottom: 0;
@@ -536,8 +540,8 @@ canvas {
 }
 
 .right-panel {
-    background: rgba(26, 26, 26, 0.95);
-    backdrop-filter: blur(10px);
+    /* Opaque: at 95 % the white artboard showed through as a grey block (UI review p01); the blur was invisible. */
+    background: #1a1a1a;
     color: white;
     padding: 8px 10px 12px 10px;
     border-radius: 0px;
@@ -615,7 +619,7 @@ svg {
     flex: 1 1 0;
     min-height: 0;   /* allow flex shrink */
     color: white;
-    background: rgba(26, 26, 26, 0.95);
+    background: #1a1a1a;   /* opaque, like .right-panel (UI review p01) */
     padding-right: 8px !important;
     /* NO backdrop-filter here: it makes .layer-panel the containing block of every position:fixed descendant, so the
        Layers blend-mode dropdown (raster-layers .blend-dropdown, placed with viewport coords) opened ~a panel-width
@@ -684,6 +688,9 @@ svg {
 
 .board-title-input {
     width: 200px;
+    min-width: 64px;    // shrinks (down to ~8 characters) when the right group needs the room, instead of overflowing
+    flex: 0 1 auto;
+    text-overflow: ellipsis;
     background-color: transparent;
     color: white;
     border: none;
@@ -853,6 +860,40 @@ svg {
         box-shadow: 2px 0 10px rgba(0,0,0,0.3);
         &::-webkit-scrollbar { display: none; }
         & > * { flex-shrink: 0; }   /* scroll instead of squashing the buttons */
+
+        /* Scroll cue (UI review 2c): on a short screen the lower tools (City Tool …) sat below the fold with no hint and
+           no scrollbar. A fade + chevron pinned to the rail's bottom while there is more below; a scroll-driven
+           animation fades it out at the end. No scroll timeline (rail fits, or an older browser) = hidden. */
+        &::after {
+            content: '\2304';
+            position: sticky;
+            bottom: -10px;          /* the rail's bottom padding: sit on the visible edge */
+            align-self: stretch;
+            height: 30px;
+            margin-top: -30px;      /* overlay the tools, take no space */
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 2px;
+            font-size: 16px;
+            line-height: 1;
+            color: #e8e8e8;
+            background: linear-gradient(to bottom, rgba(26, 26, 26, 0), var(--rc-panel-bg, #2d2d2d) 70%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1;
+        }
+        @supports (animation-timeline: scroll()) {
+            &::after {
+                animation: rail-scroll-cue linear both;
+                animation-timeline: scroll();
+            }
+        }
+    }
+
+    @keyframes rail-scroll-cue {
+        0%, 88% { opacity: 1; }
+        100% { opacity: 0; }
     }
 
     .vertical-tool-button {
@@ -1820,6 +1861,7 @@ svg {
 
 .opfs-size-chip {
   display: inline-block;
+  flex-shrink: 0;
   margin-left: 6px;
   padding: 1px 5px;
   font-size: 10px;
@@ -1833,27 +1875,126 @@ svg {
   letter-spacing: 0.02em;
 }
 
-/* ── Auto-save indicator ────────────────────────────────────── */
+/* Narrow top bar (a tablet, the Scene target's longer view bar): the size chip goes first, then the title shrinks
+   (clipped inside its own box, so it never runs under Undo / Redo or the menus). */
+@media (max-width: 1280px) {
+  .opfs-size-chip { display: none; }
+  .top-toolbar-title { overflow: hidden; gap: 2px; }
+  .board-title-input { min-width: 36px; padding: 4px; }
+  .top-toolbar-left { gap: 6px; }
+}
 
-.autosave-indicator {
-  display: inline-block;
+/* ── Save status (persist.saveStatus: Saved ✓ / Saving… / Not saved) ── */
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   margin-left: 6px;
-  font-size: 12px;
-  vertical-align: middle;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 0;
   cursor: default;
   user-select: none;
 
-  &.error { cursor: pointer; }
+  &--saved     { color: var(--rc-green-txt, #9fd9b8); }
+  &--saving    { color: var(--rc-text-muted, #a8a8a8); }
+  &--not-saved {
+    color: #ffd0c8;
+    background: rgba(139, 26, 26, 0.45);
+    border-color: var(--rc-danger-hi, #c0392b);
+  }
+  &[role='button'] { cursor: pointer; text-decoration: underline; }
+  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+  @media (pointer: coarse) { &[role='button'] { position: relative; min-height: 36px; &::after { content: ''; position: absolute; inset: -4px 0; } } }
+}
 
-  .spin {
-    display: inline-block;
-    animation: autosave-spin 1s linear infinite;
+/* ── Undo / Redo (top bar) ── */
+
+.top-toolbar-history {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.top-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rc-bevel-mid, #555);
+  border-radius: 0;
+  background: var(--rc-surface, #3a3a3a);
+  color: var(--rc-text, #e0e0e0);
+  cursor: pointer;
+  svg { transform: none; }
+  &:hover { background: var(--rc-surface-hi, #4a4a4a); }
+  &:active { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #fff); }
+  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+  /* Touch: 44 px wide; the 40 px top bar caps the height at 36, a hit area 4 px past each edge makes it 44. */
+  @media (pointer: coarse) {
+    position: relative; width: 44px; height: 36px;
+    &::after { content: ''; position: absolute; inset: -4px 0; }
   }
 }
 
-@keyframes autosave-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+/* ── Document not found (persist.documentMissing) — covers the whole editor ── */
+
+.doc-missing {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.doc-missing-card {
+  width: min(440px, 100%);
+  padding: 18px 18px 16px;
+  background: var(--rc-panel-bg, #1a1a1a);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  color: var(--rc-text, #c8c8c8);
+}
+
+.doc-missing-title {
+  margin: -18px -18px 14px;
+  padding: 6px 12px;
+  background: var(--rc-green, #3b6151);
+  color: var(--rc-green-txt, #c8ede3);
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.doc-missing-body { margin: 0 0 16px; font-size: 13px; line-height: 1.5; }
+
+.doc-missing-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.doc-missing-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  background: var(--rc-surface, #242424);
+  color: var(--rc-text, #c8c8c8);
+  font-weight: bold;
+  cursor: pointer;
+  &:hover { background: var(--rc-surface-hi, #2e2e2e); }
+  &--primary { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #c8ede3); }
+  &--primary:hover { background: var(--rc-green-hi, #4f7a68); }
+  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+  @media (pointer: coarse) { min-height: 44px; }
 }
 
 /* ── Menu bar buttons ───────────────────────────────────────── */
@@ -2372,6 +2513,11 @@ svg {
     gap: 4px;
     padding: 0 0 4px 0;
     background: #3b6151;
+    /* Stay at the top of the scrolling .layer-panel (they scrolled away with a long Scene tab) */
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    flex-shrink: 0;
 }
 
 .rp-tab {
@@ -2621,3 +2767,66 @@ svg {
 .vertical-control-panel.rail-hidden {
     display: none !important;
 }
+
+/* Play on a touch screen (UI review 2026-10-07 §3 #21): the on-screen controls own the view. The rail, its sub-panels,
+   the right column, the colour picker, the zoom box, the stats buttons and the timeline leave while playing (they stay
+   mounted, so Stop brings them back as they were). The top bar stays: its ⏹ and Play settings. */
+.play-touch-active {
+    .vertical-control-panel,
+    .tool-subpanel,
+    .toolbar-mode-label,
+    .right-column,
+    .side-drawer-handle,
+    .persistent-color-picker,
+    .zoom-control,
+    .scene3d-stats-toggle,
+    .scene3d-stats-hud,
+    .animation-timeline-wrapper { display: none !important; }
+}
+
+/* Vector tool hint (UI review 2026-10-07 §3 #12): one line on how the tool draws (drag / click). */
+.tool-hint {
+    padding: 4px 8px 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--rc-text-muted, #a8a8a8);
+}
+
+/* Canvas context menu (right-click / long-press; canvas-context-menu.ts). Retro chrome: sharp corners, raised bevel,
+   44 px rows on a coarse pointer. */
+.canvas-menu {
+    position: fixed;
+    z-index: 1200;
+    min-width: 200px;
+    padding: 4px;
+    background: var(--rc-panel-bg, #1a1a1a);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    user-select: none;
+}
+.canvas-menu--coarse { min-width: 220px; }
+.canvas-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--rc-text, #c8c8c8);
+    font: 500 13px/1 system-ui, sans-serif;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+
+    &:hover:not(:disabled), &:focus-visible { background: var(--rc-surface-hi, #2e2e2e); outline: none; }
+    &:disabled { opacity: 0.4; cursor: default; }
+}
+.canvas-menu--coarse .canvas-menu-item { min-height: 44px; font-size: 15px; }
+.canvas-menu-keys { color: var(--rc-text-muted, #8a8a8a); font-size: 11px; }
+.canvas-menu-divider { height: 1px; margin: 4px 2px; background: var(--rc-bevel-dk, #333); }

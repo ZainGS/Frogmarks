@@ -1,6 +1,10 @@
 <div class="fd-docs" [class.fd-docs--embedded]="embedded">
 
-  <button *ngIf="!embedded" class="fd-back-btn" (click)="goBack()">← Dashboard</button>
+  <!-- Its own bar (was absolutely placed over the nav's first section heading) -->
+  <div *ngIf="!embedded" class="fd-topbar">
+    <button type="button" class="fd-back-btn" (click)="goBack()" title="Back to Frogmarks">← Back</button>
+    <span class="fd-topbar-title">Docs</span>
+  </div>
 
   <div class="fd-layout">
 

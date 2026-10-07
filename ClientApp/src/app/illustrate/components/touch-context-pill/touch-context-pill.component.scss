@@ -25,6 +25,10 @@
     :host(.above-timeline.side-panel-open) { right: 400px; }
 }
 
+// Anchored next to the LiveText box (the host sets `top`): the full width between the rail and the side panel.
+:host(.anchored),
+:host(.anchored.above-timeline) { bottom: auto; }
+
 .pill {
     pointer-events: auto;
     display: flex;

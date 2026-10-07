@@ -978,24 +978,78 @@ svg {
   z-index: 9999;
 }
 .loading-card {
-  background: #3c2f68;
-  color: #e5e7eb;
+  background: var(--rc-panel-bg, #1a1a1a);
+  color: var(--rc-text, #c8c8c8);
   padding: 20px 24px;
-  border-radius: 16px;
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
   box-shadow: 0 10px 30px rgba(0,0,0,.35);
   display: grid;
   gap: 12px;
   min-width: 240px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
   justify-items: center;
   font-weight: 500;
 }
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid #ffffff;
-  border-top-color: #bc60fa;
-  border-radius: 50%;
+  border: 3px solid var(--rc-bevel-mid, #3a3a3a);
+  border-top-color: var(--rc-green-hi, #4f7a68);
+  border-radius: 0;
   animation: spin 0.9s linear infinite;
+}
+
+// ── Board load / save errors ────────────────────────────────────────
+.board-error-card {
+  width: 380px;
+  justify-items: stretch;
+  text-align: left;
+}
+.board-error-title { font-size: 15px; font-weight: 700; color: #fff; }
+.board-error-msg { font-size: 13px; line-height: 1.45; color: var(--rc-text, #c8c8c8); }
+.board-error-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.board-error-btn {
+  min-height: 36px;
+  padding: 6px 14px;
+  background: var(--rc-surface, #242424);
+  color: var(--rc-text, #c8c8c8);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { background: var(--rc-surface-hi, #2e2e2e); }
+  &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
+  &--primary {
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+    &:hover { background: var(--rc-green-hi, #4f7a68); }
+  }
+  @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 18px; }
+}
+.board-save-failed {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 6px 8px 6px 14px;
+  background: var(--rc-danger, #8b1a1a);
+  border: 2px solid var(--rc-danger-hi, #c0392b);
+  border-radius: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0,0,0,.45);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 

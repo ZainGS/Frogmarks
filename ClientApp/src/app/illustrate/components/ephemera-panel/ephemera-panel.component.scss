@@ -1,38 +1,41 @@
+// Ephemera panel — retro-chrome tokens (--rc-*) with fallbacks, sharp corners, 44 px targets on coarse pointers.
 $accent:  #3dbfa8;
-$bg:      #1a1a1a;
 $border:  rgba(255, 255, 255, 0.1);
-$text:    rgba(255, 255, 255, 0.85);
-$muted:   rgba(255, 255, 255, 0.45);
+$muted:   rgba(255, 255, 255, 0.5);
 
-// ── Panel shell ──────────────────────────────────────────────
+// ── Panel shell: header / scrolling body / sticky footer ─────
 
 .ep-panel {
   position: fixed;
   top: 40px;
   right: 0;
   bottom: 0;
-  width: 280px;
-  background: $bg;
+  width: min(280px, 100vw);
+  background: var(--rc-panel-bg, #1a1a1a);
   border-left: 1px solid $border;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
   z-index: 10052;
   font-size: 12px;
-  color: $text;
+  color: var(--rc-text, #d8d8d8);
   user-select: none;
+  border-radius: 0;
 }
 
-// ── Header ───────────────────────────────────────────────────
+// Beside the right column (Layers stays visible) when there is room for both and the canvas.
+@media (min-width: 900px) {
+  .ep-panel.ep-beside { right: 284px; }   // 280 column + its 4 px border
+}
 
 .ep-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid $border;
   flex-shrink: 0;
-  background: lighten($bg, 3%);
+  background: var(--rc-surface, #242424);
 }
 
 .ep-exit-btn {
@@ -40,7 +43,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   border: 1px solid rgba($accent, 0.45);
   color: lighten($accent, 15%);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
@@ -63,7 +66,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: $muted;
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 13px;
   cursor: pointer;
   display: flex;
@@ -73,24 +76,49 @@ $muted:   rgba(255, 255, 255, 0.45);
   &:hover { color: #fff; border-color: #888; }
 }
 
-// ── Body ─────────────────────────────────────────────────────
-
 .ep-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 8px 12px 16px;
+  overflow-x: hidden;
+  padding: 8px 10px 12px;
 
   &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-  }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
+}
+
+// Preview + Place: never scrolls away.
+.ep-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  padding: 8px 10px;
+  border-top: 1px solid $border;
+  background: var(--rc-surface, #242424);
+}
+
+.ep-footer-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ep-footer-name {
+  font-size: 11px;
+  color: var(--rc-text, #d8d8d8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // ── Sections ─────────────────────────────────────────────────
 
 .ep-section {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 
@@ -98,83 +126,76 @@ $muted:   rgba(255, 255, 255, 0.45);
 }
 
 .ep-section-title {
+  display: block;
   font-size: 10px;
   font-weight: 700;
   color: rgba($accent, 0.9);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-// ── Tabs ─────────────────────────────────────────────────────
+.ep-field {
+  display: block;
+  margin: 0 0 8px;
+}
 
-.ep-tab-row {
-  display: flex;
-  flex-wrap: wrap;
+.ep-select { width: 100%; }
+
+// ── Generator grid (2 columns) ───────────────────────────────
+
+.ep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-bottom: 8px;
 }
 
-.ep-tab {
-  background: #2a2a2a;
-  border: 1px solid #555;
-  color: $muted;
-  padding: 3px 8px;
-  border-radius: 3px;
-  font-size: 10px;
-  cursor: pointer;
-
-  &:hover { color: #ddd; }
-  &.active {
-    background: rgba($accent, 0.2);
-    border-color: $accent;
-    color: lighten($accent, 10%);
-    font-weight: 600;
-  }
-}
-
-// ── List ─────────────────────────────────────────────────────
-
-.ep-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ep-list-row {
-  padding: 4px 8px;
+.ep-grid-item {
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
   font-size: 11px;
+  line-height: 1.2;
+  text-align: left;
   color: #bbb;
-  border-radius: 4px;
-  border: 1px solid transparent;
+  background: var(--rc-surface, #242424);
+  border: 1px solid #3a3a3a;
+  border-radius: 0;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 
-  &:hover { background: rgba(255, 255, 255, 0.05); }
+  &:hover { background: rgba(255, 255, 255, 0.06); color: #ddd; }
   &.active {
     background: rgba($accent, 0.15);
-    border-color: rgba($accent, 0.4);
+    border-color: rgba($accent, 0.6);
     color: lighten($accent, 15%);
     font-weight: 600;
   }
+  &:focus-visible { outline: 1px solid $accent; outline-offset: 1px; }
 }
 
 // ── Preview ──────────────────────────────────────────────────
 
 .ep-preview {
+  width: 96px;
+  height: 72px;
+  flex-shrink: 0;
   background: #252525;
   border: 1px solid #444;
-  border-radius: 4px;
-  padding: 8px;
-  min-height: 60px;
-  max-height: 140px;
+  border-radius: 0;
+  padding: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 
-  svg, img {
+  ::ng-deep svg, ::ng-deep img {
     max-width: 100%;
-    max-height: 120px;
+    max-height: 100%;
+    width: auto;
+    height: auto;
   }
 }
 
@@ -184,6 +205,17 @@ $muted:   rgba(255, 255, 255, 0.45);
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.ep-indent { padding-left: 18px; }
+
+.ep-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
 }
 
 .ep-label {
@@ -192,14 +224,19 @@ $muted:   rgba(255, 255, 255, 0.45);
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 38px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
 }
+
+.ep-unit { font-size: 10px; color: $muted; }
 
 .ep-text {
   flex: 1;
   background: #252525;
   border: 1px solid #555;
   color: #ddd;
-  border-radius: 3px;
+  border-radius: 0;
   padding: 3px 6px;
   font-size: 11px;
   min-width: 0;
@@ -208,11 +245,11 @@ $muted:   rgba(255, 255, 255, 0.45);
 }
 
 .ep-num {
-  width: 56px;
+  width: 64px;
   background: #252525;
   border: 1px solid #555;
   color: #ddd;
-  border-radius: 3px;
+  border-radius: 0;
   padding: 3px 5px;
   font-size: 11px;
   text-align: right;
@@ -232,7 +269,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: $muted;
   text-align: right;
   flex-shrink: 0;
-  min-width: 24px;
+  min-width: 30px;
 }
 
 .ep-color {
@@ -240,15 +277,28 @@ $muted:   rgba(255, 255, 255, 0.45);
   height: 22px;
   padding: 1px 2px;
   border: 1px solid #555;
-  border-radius: 3px;
+  border-radius: 0;
   background: #252525;
   cursor: pointer;
   flex-shrink: 0;
 }
 
+// A checkbox with its text inside one <label>: the whole row is the target.
+.ep-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--rc-text, #d8d8d8);
+  cursor: pointer;
+
+  input[type="checkbox"] { margin: 0; accent-color: $accent; cursor: pointer; flex-shrink: 0; }
+}
+
 .ep-hint {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 // ── Buttons ──────────────────────────────────────────────────
@@ -258,7 +308,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   border: 1px solid #555;
   color: #ccc;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11px;
   cursor: pointer;
 
@@ -279,6 +329,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   background: transparent;
   border-color: #444;
   color: $muted;
+  margin-top: 8px;
 
   &:hover:not(:disabled) { border-color: $accent; color: #ddd; }
 }
@@ -288,7 +339,7 @@ $muted:   rgba(255, 255, 255, 0.45);
   border-color: #444;
   color: $muted;
 
-  &:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  &:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 }
 
 .ep-btn-danger {
@@ -296,15 +347,32 @@ $muted:   rgba(255, 255, 255, 0.45);
   border-color: #844;
   background: none;
 
-  &:hover { background: rgba(192,57,43,0.2); color: #faa; }
+  &:hover { background: rgba(192, 57, 43, 0.2); color: #faa; }
 }
 
-.ep-btn-xs { padding: 2px 6px; font-size: 10px; }
+.ep-btn-xs { padding: 2px 6px; font-size: 10px; min-width: 24px; min-height: 22px; }
 .ep-btn-full { width: 100%; text-align: center; }
+.ep-btn-place { width: 100%; padding: 6px 8px; }
 
 .ep-btn-pair {
   display: flex;
   gap: 6px;
+  margin-top: 8px;
+}
+
+.ep-seg { display: inline-flex; }
+
+.ep-seg-btn {
+  border: 1px solid #555;
+  background: #333;
+  color: #e0e0e0;
+  padding: 2px 8px;
+  font-size: 10px;
+  border-radius: 0;
+  cursor: pointer;
+
+  & + & { border-left: none; }
+  &.active { background: var(--rc-green, #3b6151); }
 }
 
 // ── Placement rows ───────────────────────────────────────────
@@ -314,24 +382,24 @@ $muted:   rgba(255, 255, 255, 0.45);
   align-items: center;
   gap: 5px;
   padding: 4px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   margin-bottom: 3px;
 
-  &:hover { background: rgba(255,255,255,0.03); }
+  &:hover { background: rgba(255, 255, 255, 0.03); }
 }
 
 .ep-placement-name {
   flex: 1;
-  font-size: 10px;
-  color: #bbb;
+  min-width: 0;
+  font-size: 11px;
+  color: #ccc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ep-placement-info {
-  font-size: 9px;
+  font-size: 10px;
   color: $muted;
   white-space: nowrap;
   flex-shrink: 0;
@@ -340,4 +408,23 @@ $muted:   rgba(255, 255, 255, 0.45);
 .ep-edit-block {
   width: 100%;
   padding: 4px 0;
+}
+
+.ep-edit-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: lighten($accent, 10%);
+  margin-bottom: 2px;
+}
+
+// ── Touch: 44 px targets, 24 px checkboxes ───────────────────
+
+@media (pointer: coarse) {
+  .ep-exit-btn, .ep-refresh-btn, .ep-btn, .ep-btn-xs, .ep-seg-btn { min-height: 44px; min-width: 44px; }
+  .ep-text, .ep-num { min-height: 44px; font-size: 13px; }
+  .ep-grid-item { min-height: 44px; font-size: 12px; }
+  .ep-color { width: 44px; height: 44px; }
+  .ep-check { min-height: 44px; margin-top: 0; font-size: 13px; }
+  .ep-check input[type="checkbox"] { width: 24px; height: 24px; }
+  .ep-range { min-height: 32px; }
 }

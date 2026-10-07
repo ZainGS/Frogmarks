@@ -25,6 +25,7 @@ import { CanvasAppearanceService } from './canvas-appearance.service';
 import { ArtboardService } from './artboard.service';
 import { EditorStateService } from './editor-state.service';
 import { startBlankEngineDocument } from '../utils/blank-engine-document';
+import { SaveStatus, saveStatusOf } from './save-status';
 import { cloudSceneGraphJSON, toVectorSceneGraphJSON } from '../utils/cloud-scene-graph';
 import { celExporter, CloudUploadVersions, contentVersionsDiffer, hasContentVersionApi, readContentVersions, type RasterContentVersions } from '../utils/cloud-pixel-versions';
 
@@ -233,6 +234,23 @@ export class IllustrationPersistenceService implements OnDestroy {
   isLocalMode = false;
 
   noCloudEmptyState = false;
+
+  /** The document in the URL could not be opened (UI review d27 / d30): 'local' = not in this browser's storage,
+   *  'cloud' = the server has no such document or could not be reached. Nothing is bound, so nothing would save: the
+   *  editor shows a "Document not found" screen instead of an editable page that silently drops the work. */
+  documentMissing: 'local' | 'cloud' | null = null;
+
+  /** The top bar's save status (save-status.ts). */
+  get saveStatus(): SaveStatus {
+    return saveStatusOf({
+      autoSave: this.autoSaveState,
+      pending: this.hasUnsavedChanges,
+      loading: !!this.host?.isLoading,
+      missing: this.documentMissing !== null || (!this.illustration && !this.host?.isLoading),
+      paused: !!this.saveBlockedReason || this._cloudConflict,
+      syncMode: this.syncMode,
+    });
+  }
 
   // (kept for future websocket flow; renamed)
   saveIllustrationIfChanged() {

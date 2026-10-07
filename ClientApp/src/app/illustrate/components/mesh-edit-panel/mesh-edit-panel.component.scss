@@ -461,7 +461,8 @@ $danger:  #c0392b;
   &:hover { color: rgba(255,255,255,0.8); }
 }
 
-// Touch: 44 px targets for the header, the mode tabs and the operation buttons.
+// Touch: 44 px targets for the header, the mode tabs and the operation buttons — and (UI review 2026-10-07 §3 #4)
+// the number fields, selects, the modifier row's ● / Apply / ✕ and the Displace / Decimate disclosures.
 @media (pointer: coarse) {
   .me-exit-btn,
   .me-bg-select,
@@ -469,4 +470,14 @@ $danger:  #c0392b;
   .me-op-btn,
   .me-clear-btn,
   .me-chip { min-height: 44px; }
+
+  .me-num,
+  .me-select { min-height: 44px; font-size: 14px; }
+  .me-num { width: 72px; }
+  .me-mod-toggle,
+  .me-mod-apply,
+  .me-mod-remove { min-width: 44px; min-height: 44px; font-size: 14px; }
+  .me-displace-summary { min-height: 44px; display: flex; align-items: center; font-size: 13px; }
+  .me-op-inline,
+  .me-mod-add-row { flex-wrap: wrap; }
 }

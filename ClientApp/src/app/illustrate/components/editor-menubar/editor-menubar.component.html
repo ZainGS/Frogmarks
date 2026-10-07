@@ -104,8 +104,10 @@
         <div class="edit-menu-item" (click)="editor.rasterSelectionService.selectAll(); editor.closeAllMenus()">
             <span>Select All</span><span class="shortcut">Ctrl+A</span>
         </div>
-        <div class="edit-menu-item" (click)="editor.rasterSelectionService.deselectAll(); editor.closeAllMenus()">
-            <span>Deselect</span><span class="shortcut">Ctrl+D</span>
+        <!-- Ctrl+D is Duplicate (above); it deselects only when there is nothing to duplicate, so no shortcut here. -->
+        <div class="edit-menu-item" (click)="editor.rasterSelectionService.deselectAll(); editor.closeAllMenus()"
+             title="Ctrl+D also deselects when nothing is selected to duplicate">
+            <span>Deselect</span>
         </div>
         <div class="edit-menu-item" (click)="editor.rasterSelectionService.invertSelection(); editor.closeAllMenus()">
             <span>Invert Selection</span><span class="shortcut">Ctrl+Shift+I</span>
@@ -293,6 +295,13 @@
                 <span class="exp-hint">{{ exp.safeMode ? 'Turning off reloads (same as ?salsaSafe=0)' : 'Turning on reloads (same as ?salsaSafe=1)' }}</span>
             </span>
             <span class="exp-check">{{ exp.safeMode ? '✓' : '' }}</span>
+        </div>
+        <div class="edit-menu-item exp-two-line" (click)="exp.toggleDevTools()">
+            <span>
+                <span>Developer buttons</span>
+                <span class="exp-hint">Shows tools like Armature › Copy pose + body for Claude</span>
+            </span>
+            <span class="exp-check">{{ exp.devTools ? '✓' : '' }}</span>
         </div>
     </div>
 </div>

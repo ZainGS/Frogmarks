@@ -35,3 +35,22 @@
 
     &:focus { border-bottom-color: #6C63FF; }
 }
+
+// A slot's ✕: always visible (it used .scene3d-move-btn, which only shows on an outliner-row hover — never here)
+.scene3d-slot-remove {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 0;
+    color: #aaa;
+    font-size: 12px;
+    line-height: 1;
+    padding: 3px 6px;
+    cursor: pointer;
+
+    &:hover, &.scene3d-slot-remove-asking { color: #f77; border-color: #844; }
+}
+
+@media (pointer: coarse) {
+    .scene3d-slot-remove { min-width: 44px; min-height: 44px; font-size: 15px; }
+}

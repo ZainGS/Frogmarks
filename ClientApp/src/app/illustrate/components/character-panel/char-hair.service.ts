@@ -17,7 +17,7 @@ const HAIR_TAIL_STYLES: { value: string; label: string }[] = [
 
 /** What CharHairService reads / writes on the panel. */
 export type CharHairHost = Pick<CharacterPanelComponent,
-  'shapeManager' | 'scene3dEditCharBodyId'
+  'shapeManager' | 'scene3dEditCharBodyId' | 'dirty'
 >;
 
 /**
@@ -122,5 +122,6 @@ export class CharHairService implements OnDestroy {
     if (!id) return;
     sm.removeHair3D(id);
     this.scene3dHairParams = null;
+    this.host.dirty.emit();   // (a removal was only saved by the next unrelated edit)
   }
 }

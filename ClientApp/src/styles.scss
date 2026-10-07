@@ -958,6 +958,22 @@ mat-error {
   background-color: var(--primary-color) !important;
 }
 
+// ── Toasts (NotifyService panel classes fm-toast--success / --error): an error must not look like a success ─────────
+.mdc-snackbar.fm-toast { border-radius: 0 !important; }
+.mdc-snackbar.fm-toast .mdc-snackbar__surface { border-radius: 0 !important; }
+.mdc-snackbar.fm-toast--error,
+.mdc-snackbar.fm-toast--error .mdc-snackbar__surface {
+  background-color: var(--rc-danger, #8b1a1a) !important;
+  color: #fff !important;
+}
+.mdc-snackbar.fm-toast--error .mdc-snackbar__surface { border-left: 6px solid var(--rc-danger-hi, #c0392b) !important; }
+.mdc-snackbar.fm-toast--error .mat-mdc-snack-bar-action { color: #fff !important; font-weight: 700; }
+.mdc-snackbar.fm-toast--error .mdc-snackbar__label::before { content: '\26A0\FE0E  '; }
+
+// The editor's GPU device banner ("Recovered." — markup in illustration.component) sat at top:12px, over the File /
+// Edit menus of the 36 px top bar: it goes just below the bar.
+app-illustration .device-banner { top: calc(44px + env(safe-area-inset-top, 0px)) !important; }
+
 // ── Responsive dialog shell (panelClass 'fm-dialog'; the New / Import Illustration dialog uses it) ──────────────
 // (Written while the CDK overlay's structural CSS was not loaded — it is now, cdk.overlay() at the top; these rules
 // still give the card its viewport cap + scrolling body. pointer-events:none on the pane lets a tap beside the card

@@ -39,8 +39,63 @@
     opacity: 0;
     transition: opacity 0.15s;
 
-    .scene3d-mesh-item:hover & { opacity: 1; }
+    .scene3d-mesh-item:hover &, .scene3d-mesh-item.active &, .scene3d-mesh-item:focus-within &, &:focus-visible { opacity: 1; }
     &:hover { color: #f77; }
+    &.scene3d-mesh-delete-asking { opacity: 1; color: #f77; }
+}
+
+// Touch has no hover: the row actions were invisible but still tappable (a blind ✕). Always shown, finger-sized.
+@media (hover: none), (pointer: coarse) {
+    .scene3d-mesh-list { max-height: 264px; }
+    .scene3d-mesh-item { min-height: 44px; padding: 0 0 0 8px; font-size: 12px; }
+    .scene3d-mesh-delete, .scene3d-move-btn, .scene3d-eye-btn {
+        opacity: 1;
+        min-width: 40px;
+        min-height: 44px;
+        font-size: 15px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    // The ✕ sits apart from the other actions so a tap meant for ⧉ / 🕹 doesn't delete
+    .scene3d-mesh-delete { margin-left: 6px; }
+}
+
+// Undo toast after a row ✕ (retro-chrome look; fallbacks for the other themes)
+.scene3d-undo-toast {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 3px 3px 3px 8px;
+    border-radius: 0;
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
+    font-size: 11px;
+}
+
+.scene3d-undo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.scene3d-undo-btn, .scene3d-undo-close {
+    flex-shrink: 0;
+    min-height: 24px;
+    border-radius: 0;
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    background: var(--rc-surface-hi, #2e2e2e);
+    color: var(--rc-text, #c8c8c8);
+    font: inherit;
+    cursor: pointer;
+}
+.scene3d-undo-btn { padding: 0 10px; background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #c8ede3); font-weight: 600; }
+.scene3d-undo-close { padding: 0 6px; }
+
+@media (pointer: coarse) {
+    .scene3d-undo-toast { font-size: 13px; }
+    .scene3d-undo-btn, .scene3d-undo-close { min-height: 44px; min-width: 44px; }
 }
 
 // Outliner enhancements

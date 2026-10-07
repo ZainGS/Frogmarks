@@ -11,6 +11,26 @@ import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosav
 import { PackagingStateDto } from 'app/shared/services/illustrate/illustration.service';
 import { startBlankEngineDocument } from 'app/illustrate/utils/blank-engine-document';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
+import { cleanPackageName, defaultNameForNewPackage } from '../package-naming';
+
+/** Box dimension limits (mm) — the sliders' and number fields' min / max. */
+export const PKG_DIM_LIMITS = {
+  width:  { min: 20, max: 400 },
+  height: { min: 20, max: 400 },
+  depth:  { min: 10, max: 300 },
+  bleed:  { min: 0,  max: 10 },
+} as const;
+
+/** A typed / dragged dimension inside its limits (a cleared or out-of-range number field used to reach the engine as
+ *  null / 0 / 9999). Falls back to `fallback` for anything that isn't a number. */
+export function clampDimension(value: unknown, limits: { min: number; max: number }, fallback: number): number {
+  const n = typeof value === 'number' ? value : parseFloat(String(value ?? ''));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(limits.max, Math.max(limits.min, n));
+}
+
+/** How long after the last edit the package's card picture (the Shell's project thumbnail) is refreshed. */
+const THUMBNAIL_DEBOUNCE_MS = 2500;
 
 /**
  * Document isolation (mobile-parity 7.2), like the illustration editor's load: the engine outlives every document, so
@@ -50,6 +70,13 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   private _foldTweenRaf?: number;
   private _lastDocW = 0;
   private _lastDocH = 0;
+  private _uuid = '';
+  private _savedName = '';
+  private _liveDimRaf: number | null = null;
+  private _thumbTimer: ReturnType<typeof setTimeout> | null = null;
+  private _destroyed = false;
+
+  readonly dimLimits = PKG_DIM_LIMITS;
 
   isLoading = true;
   projectName = 'Package';
@@ -88,10 +115,13 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._destroyed = true;
     this._routeSub?.unsubscribe();
     this._strokeSub?.unsubscribe?.();
     if (this._saveDebounce) clearTimeout(this._saveDebounce);
     if (this._dimDebounce)  clearTimeout(this._dimDebounce);
+    if (this._thumbTimer)   clearTimeout(this._thumbTimer);
+    if (this._liveDimRaf != null) cancelAnimationFrame(this._liveDimRaf);
     if (this._foldTweenRaf != null) cancelAnimationFrame(this._foldTweenRaf);
     // Disarm 3D painting + orbit; box, fold state and layer link persist.
     if (this._pkgId && this._sm?.packaging) this._sm.packaging.exitEditor(this._pkgId);
@@ -104,10 +134,13 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     await this._leaveCurrentPackage();
     this.isLocalMode = this.route.snapshot.data?.['local'] === true;
     this._docId = `local-${uuid}`;
+    this._uuid = uuid;
 
     // Load project name
     const local = await this.localIllustrationService.getByUuid(uuid);
     if (local) this.projectName = local.name;
+    this._savedName = this.projectName;
+    const hasThumbnail = !!local?.thumbnailDataUrl;
 
     // ── WebGPU bootstrap ────────────────────────────────────────
     // OUTSIDE Angular's zone (H8, zone audit), like the illustration editor: the engine's frame loop and timers must not
@@ -155,7 +188,9 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
       if (h?.canvasHeight) this._lastDocH = h.canvasHeight;
       this._drawGuides(h?.guides);
     } else {
-      // Brand new packaging project.
+      // Brand new packaging project. The Shell names every new package "Product Packaging": give it the next free
+      // "Package N" instead (the header renames it).
+      await this._applyDefaultName(uuid);
       const params = { width: this.boxWidth, height: this.boxHeight, depth: this.boxDepth, bleed: this.bleed };
       const state  = pkg.create('simpleBox', params);
       this._pkgId  = state.id;
@@ -181,9 +216,70 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     // 3D-surface strokes sync automatically; flat raster strokes need an explicit call.
     this._strokeSub = this._sm.onRasterStrokeEnd(() => {
       this._sm.syncLiveTextures3D();
+      this._scheduleThumbnail();
     });
 
     this.isLoading = false;
+    // A package without a card picture (every package until now) gets one once the box has rendered
+    if (!hasThumbnail) this._scheduleThumbnail();
+  }
+
+  // ── Name ─────────────────────────────────────────────────────
+
+  private async _applyDefaultName(uuid: string): Promise<void> {
+    try {
+      const others = (await this.localIllustrationService.getAll(true))
+        .filter(i => i.kind === 'packaging' && i.uuid !== uuid)
+        .map(i => i.name);
+      const name = defaultNameForNewPackage(this.projectName, others);
+      if (name === this.projectName) return;
+      await this.localIllustrationService.rename(uuid, name);
+      this.projectName = this._savedName = name;
+    } catch (e) {
+      console.warn('[PackageEditor] default name failed', e);
+    }
+  }
+
+  /** The header's name field: Enter / leaving it renames the package (its Shell card too). Empty = keep the old name. */
+  async commitRename(): Promise<void> {
+    const name = cleanPackageName(this.projectName);
+    if (!name) { this.projectName = this._savedName; return; }
+    this.projectName = name;
+    if (name === this._savedName || !this._uuid) return;
+    try {
+      await this.localIllustrationService.rename(this._uuid, name);
+      this._savedName = name;
+      if (this.autoSaveService.docId === this._docId) this.autoSaveService.setDocumentName(name);
+    } catch (e) {
+      console.error('[PackageEditor] rename failed', e);
+      this.projectName = this._savedName;
+    }
+  }
+
+  // ── Card picture (the Shell's project thumbnail) ─────────────
+
+  private _scheduleThumbnail(): void {
+    if (this._thumbTimer) clearTimeout(this._thumbTimer);
+    this._thumbTimer = setTimeout(() => { this._thumbTimer = null; void this._saveThumbnail(); }, THUMBNAIL_DEBOUNCE_MS);
+  }
+
+  private async _saveThumbnail(): Promise<void> {
+    const sm = this._sm as any;
+    const uuid = this._uuid;
+    if (this._destroyed || !uuid || !sm || typeof sm.captureThumbnailBlob !== 'function') return;
+    try {
+      const blob: Blob | null = await sm.captureThumbnailBlob(300);
+      if (!blob || this._destroyed || uuid !== this._uuid) return;
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      await this.localIllustrationService.updateThumbnail(uuid, dataUrl);
+    } catch (e) {
+      console.warn('[PackageEditor] thumbnail failed', e);
+    }
   }
 
   /** Before opening another package on this (reused) component: write the open one's pending metadata + pixels, then
@@ -201,11 +297,39 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
   // ── Dimension change ─────────────────────────────────────────
 
+  /** Slider drag (every `input` event): the box follows the slider live, once per frame. The engine's setDimensions
+   *  has an in-place fast path for this; the dieline canvas resize waits for the release (onDimensionChanged).
+   *  (The sliders used to update only on release.) */
+  onDimensionInput(): void {
+    if (this._liveDimRaf != null) return;
+    this._liveDimRaf = requestAnimationFrame(() => {
+      this._liveDimRaf = null;
+      if (!this._pkgId || !this._sm?.packaging) return;
+      this._clampDimensions();
+      const state = this._sm.packaging.setDimensions(this._pkgId, this._dimParams());
+      this._drawGuides(state?.guides);
+    });
+  }
+
+  private _dimParams() {
+    return { width: this.boxWidth, height: this.boxHeight, depth: this.boxDepth, bleed: this.bleed };
+  }
+
+  private _clampDimensions(): void {
+    const L = PKG_DIM_LIMITS;
+    this.boxWidth  = clampDimension(this.boxWidth,  L.width,  80);
+    this.boxHeight = clampDimension(this.boxHeight, L.height, 60);
+    this.boxDepth  = clampDimension(this.boxDepth,  L.depth,  40);
+    this.bleed     = clampDimension(this.bleed,     L.bleed,  3);
+  }
+
+  /** Slider release / number field change: the full update (dieline canvas size, guides, save). */
   onDimensionChanged(): void {
     if (this._dimDebounce) clearTimeout(this._dimDebounce);
     this._dimDebounce = setTimeout(() => {
       if (!this._pkgId || !this._sm.packaging) return;
-      const params = { width: this.boxWidth, height: this.boxHeight, depth: this.boxDepth, bleed: this.bleed };
+      this._clampDimensions();
+      const params = this._dimParams();
       const state = this._sm.packaging.setDimensions(this._pkgId, params);
       if (state?.canvasWidth && state?.canvasHeight &&
           (state.canvasWidth !== this._lastDocW || state.canvasHeight !== this._lastDocH)) {
@@ -252,7 +376,8 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
         still = 0;
       } else still++;
-      this._foldTweenRaf = still >= 10 ? undefined : requestAnimationFrame(tick);
+      if (still >= 10) { this._foldTweenRaf = undefined; this._debounceSave(); return; }   // settled: save the fold
+      this._foldTweenRaf = requestAnimationFrame(tick);
     };
     this._foldTweenRaf = requestAnimationFrame(tick);
   }
@@ -337,6 +462,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   private _debounceSave(): void {
     if (this._saveDebounce) clearTimeout(this._saveDebounce);
     this._saveDebounce = setTimeout(() => this._saveState(), 500);
+    this._scheduleThumbnail();
   }
 
   private async _saveState(): Promise<void> {

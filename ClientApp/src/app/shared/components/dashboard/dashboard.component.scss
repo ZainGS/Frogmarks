@@ -3334,3 +3334,46 @@ img:active:not(.selected)
   &:hover { background: rgba(70,70,180,.5); }
 }
 
+// ── Narrow screens (UI review 2026-10-07 §2d: broken at phone width) ──────────────────────────────────────────────
+// Below 992 px the sidenav is a fixed overlay, but the work pane still kept "100 % − 250 px" (the desktop rule above is
+// !important), so on a phone everything lived in a ~140 px strip. The pane now takes the whole width.
+@media (max-width: 991.98px) {
+  .row.flex-nowrap .base-work-pane,
+  .row.flex-nowrap:has(.base-sidenav-column.frogmarks-galaxy-compact) .base-work-pane {
+    flex: 1 1 auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    min-width: 0;
+  }
+  // The open-sidenav tab: square, dark (was a white box), a 24 x 100 px target
+  .sidenav-toggle-button {
+    max-width: none;
+    width: 24px;
+    border-radius: 0 !important;
+    background-color: var(--rc-surface, #242424) !important;
+    border: 1px solid var(--rc-bevel-lt, #6a6a6a) !important;
+    border-left: 0 !important;
+    box-shadow: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--rc-text, #c8c8c8);
+  }
+  .sidenav-toggle-button-icon { top: 0; margin-left: 0; }
+}
+
+@media (max-width: 675px) {
+  // Search on its own line, the action buttons under it (they overlapped the search field)
+  .header-row {
+    row-gap: 6px;
+    > .col-6 { flex: 0 0 100%; max-width: 100%; }
+    > .col-6.text-end { justify-content: flex-start !important; padding-left: 36px; }
+  }
+  .search-wrapper { margin-left: 32px !important; }
+  // The three "New …" cards: one per line with readable text (were three ~30 px columns)
+  .new-file-row {
+    flex-direction: column;
+    padding-left: 36px !important;
+    > .new-design-item-container { flex: 0 0 auto; width: 100%; }
+  }
+}

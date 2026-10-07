@@ -2,20 +2,20 @@
     <summary>Transform</summary>
     <div class="scene3d-vec3-row">
         <span class="scene3d-vec3-label">Pos</span>
-        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosX" (input)="scene3dUpdateMeshPosition()" title="X">
-        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosY" (input)="scene3dUpdateMeshPosition()" title="Y">
-        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosZ" (input)="scene3dUpdateMeshPosition()" title="Z">
+        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosX" (input)="scene3dUpdateMeshPosition()" (blur)="onFieldBlur()" title="X">
+        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosY" (input)="scene3dUpdateMeshPosition()" (blur)="onFieldBlur()" title="Y">
+        <input type="number" step="0.1" [(ngModel)]="scene3dMeshPosZ" (input)="scene3dUpdateMeshPosition()" (blur)="onFieldBlur()" title="Z">
     </div>
     <div class="scene3d-vec3-row">
         <span class="scene3d-vec3-label">Rot</span>
-        <input type="number" step="5" [(ngModel)]="scene3dMeshRotX" (input)="scene3dUpdateMeshRotation()" title="X°">
-        <input type="number" step="5" [(ngModel)]="scene3dMeshRotY" (input)="scene3dUpdateMeshRotation()" title="Y°">
-        <input type="number" step="5" [(ngModel)]="scene3dMeshRotZ" (input)="scene3dUpdateMeshRotation()" title="Z°">
+        <input type="number" step="5" [(ngModel)]="scene3dMeshRotX" (input)="scene3dUpdateMeshRotation()" (blur)="onFieldBlur()" title="X°">
+        <input type="number" step="5" [(ngModel)]="scene3dMeshRotY" (input)="scene3dUpdateMeshRotation()" (blur)="onFieldBlur()" title="Y°">
+        <input type="number" step="5" [(ngModel)]="scene3dMeshRotZ" (input)="scene3dUpdateMeshRotation()" (blur)="onFieldBlur()" title="Z°">
     </div>
     <div class="scene3d-vec3-row">
         <span class="scene3d-vec3-label">Scale</span>
-        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleX" (input)="scene3dUpdateMeshScale()" title="X">
-        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleY" (input)="scene3dUpdateMeshScale()" title="Y">
-        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleZ" (input)="scene3dUpdateMeshScale()" title="Z">
+        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleX" (input)="scene3dUpdateMeshScale()" (blur)="onFieldBlur()" title="X">
+        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleY" (input)="scene3dUpdateMeshScale()" (blur)="onFieldBlur()" title="Y">
+        <input type="number" step="0.1" min="0.01" [(ngModel)]="scene3dMeshScaleZ" (input)="scene3dUpdateMeshScale()" (blur)="onFieldBlur()" title="Z">
     </div>
 </details>

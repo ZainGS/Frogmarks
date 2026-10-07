@@ -1,10 +1,10 @@
 <div class="tool-label">CITY TOOL</div>
 <div style="padding: 4px 8px;">
 
-    <!-- City actions: build / clear, then the camera shortcuts (two rows so nothing clips in a narrow panel) -->
+    <!-- City actions: build, then the camera shortcuts (two rows so nothing clips in a narrow panel). Clear city is
+         at the bottom of the menu, away from Regenerate, and asks first (no undo). -->
     <div style="display:flex;gap:4px;padding:0 0 4px;">
         <button class="scene3d-btn" style="flex:1;" (click)="worldGenerate()">Regenerate</button>
-        <button class="scene3d-btn" style="flex:1;" (click)="worldClear()" [disabled]="!worldHasWorld">Clear</button>
     </div>
     <div style="display:flex;gap:4px;padding:0 0 8px;">
         <button class="scene3d-btn" style="flex:1;" (click)="worldHeroView()" [disabled]="!worldHasWorld" title="Frame the city from a low, street-canyon angle">Hero view</button>
@@ -43,6 +43,12 @@
             <span class="nav-tile-text"><span class="nav-tile-label">Performance</span><span class="nav-tile-hint">Resolution · culling · LOD · shadows</span></span><span class="nav-tile-chev">›</span>
         </button>
     </div>
+    <ng-container *ngIf="!worldNav.id && worldHasWorld">
+        <button *ngIf="!confirmingClear" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirmingClear = true" title="Remove the whole city from the scene">Clear city…</button>
+        <fm-confirm-strip *ngIf="confirmingClear" text="Remove the whole city from the scene? This can't be undone (Regenerate builds a new one)."
+                          action="Clear city" (ok)="confirmingClear = false; worldClear()" (cancel)="confirmingClear = false"></fm-confirm-strip>
+    </ng-container>
 
     <!-- ── Presets ── -->
     <ng-container *ngIf="worldNav.id === 'presets'">
@@ -478,17 +484,17 @@
         <div *ngIf="worldStreamFollow && worldTileDetail === 'full'" class="scene3d-material-row scene3d-indent">
             <label>Outside tiles</label>
             <select class="scene3d-select" [ngModel]="worldStreamOutside" (ngModelChange)="worldSetStreamOutside($event)"
-                    title="What is drawn beyond the active window. HLOD = merged distant buildings out to the Skyline distance (the default). Flat = the cheap flat map (building boxes once zoomed far out). Massing = building boxes at every zoom. None = nothing.">
-                <option value="hlod">HLOD (distant buildings)</option>
+                    title="What is drawn beyond the active window. Distant skyline = merged distant buildings out to the Skyline distance (the default). Flat = the cheap flat map (building boxes once zoomed far out). Massing = building boxes at every zoom. None = nothing.">
+                <option value="hlod">Distant skyline</option>
                 <option value="none">None</option>
                 <option value="flat">Flat</option>
                 <option value="massing">Massing</option>
             </select>
         </div>
         <div *ngIf="worldStreamFollow && worldTileDetail === 'full' && worldStreamOutside === 'hlod'" class="scene3d-material-row scene3d-indent">
-            <label title="How far the HLOD skyline streams, in tiles from the camera's tile. Further = a longer skyline (more tiles to build and draw).">Skyline distance</label>
+            <label title="How far the distant skyline streams, in tiles from the camera's tile. Further = a longer skyline (more tiles to build and draw).">Skyline distance</label>
             <input type="range" min="2" max="24" step="1" [ngModel]="worldHlodSkyline" (ngModelChange)="worldSetHlodSkyline($event)"
-                   title="How far the HLOD skyline streams, in tiles from the camera's tile. Further = a longer skyline (more tiles to build and draw).">
+                   title="How far the distant skyline streams, in tiles from the camera's tile. Further = a longer skyline (more tiles to build and draw).">
             <span class="scene3d-val">{{ worldHlodSkyline }}</span>
         </div>
         <div *ngIf="worldStreamFollow && worldStreamStats" class="scene3d-material-row scene3d-indent" style="font-size:10px;color:#888;">
@@ -520,7 +526,7 @@
     <ng-container *ngIf="worldSub.id === 'roads'"><ng-container *ngIf="worldPattern === 'radial'">
         <!-- Roads -->
         <div class="scene3d-material-row">
-            <label>Arterials</label>
+            <label title="Arterials: the big roads running out from the centre">Main roads</label>
             <input type="range" min="3" max="16" step="1" [(ngModel)]="worldSpokeCount" (ngModelChange)="worldParamChanged()">
             <span class="scene3d-val">{{ worldSpokeCount }}</span>
         </div>
@@ -617,7 +623,7 @@
             <span class="nav-tile-text"><span class="nav-tile-label">Shape &amp; size</span><span class="nav-tile-hint">Tile radius · Stream to camera · Outside tiles · Skyline distance …</span></span><span class="nav-tile-chev">›</span>
         </button>
         <button class="nav-tile" *ngIf="worldPattern === 'radial'" (click)="worldSub.open('roads', 'Roads')">
-            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Arterials · Rings</span></span><span class="nav-tile-chev">›</span>
+            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Main roads · Rings</span></span><span class="nav-tile-chev">›</span>
         </button>
         <button class="nav-tile" *ngIf="worldPattern === 'grid'" (click)="worldSub.open('roads-2', 'Roads')">
             <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Columns · Rows · Street W · Plaza</span></span><span class="nav-tile-chev">›</span>

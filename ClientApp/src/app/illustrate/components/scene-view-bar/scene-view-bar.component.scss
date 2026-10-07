@@ -67,3 +67,12 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
         color: #ffb0a0;
     }
 }
+
+// Narrow screens (a tablet in landscape with the Scene target's extra buttons): tighter buttons so the top bar's
+// title and menus keep their room (UI review 2026-10-07 §2c, t-14-topbar-scene).
+@media (max-width: 1280px) {
+    .svb-long { display: none; }   // "2D Ortho / 2D Persp / 3D Free" → "Ortho / Persp / 3D" (the tooltips keep the full names)
+    .scene-view-btn { padding: 0 6px; }
+    .scene-view-icon-btn { padding: 0 5px; }
+    .scene-view-play-btn { padding: 0 8px; min-width: 30px; }
+}

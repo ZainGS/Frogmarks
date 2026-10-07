@@ -140,6 +140,12 @@ export class SceneOutlinerService {
     this._collapseNewCharacter(bodyId);
   }
 
+  /** The 3D undo step Ctrl+Z would take next (null = nothing to undo) — the row ✕'s Undo toast checks it. */
+  get nextUndo3D(): string | null {
+    const sm = this.shapeManager;
+    return sm?.canUndo3D ? (sm.undoDescription3D ?? null) : null;
+  }
+
   scene3dSetHovered(id: string | null): void {
     this.shapeManager.setHoveredMesh3D(id);
   }

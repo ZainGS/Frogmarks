@@ -1,6 +1,29 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
+/** Icon per engine shape type. The engine's getType() names are 'Rectangle', 'Circle', 'Line', 'Speech Balloon',
+ *  'Sticky Note', … — the old inline map checked 'rect' / 'ellipse' / 'line', so no icon ever matched (UI review
+ *  2026-10-07). Keys are the type lower-cased with spaces / dashes removed. */
+const SHAPE_ICONS: Record<string, string> = {
+  rect: '▭', rectangle: '▭',
+  circle: '◯', ellipse: '◯',
+  line: '╱', arrow: '➝',
+  triangle: '△', invertedtriangle: '▽', diamond: '◇',
+  polygon: '⬠', path: '✒',
+  balloon: '💬', speechballoon: '💬', stickynote: '📝',
+  text: 'T', sdftext: 'T', livetext: 'T',
+  scribble: '〰', highlight: '▬', pattern: '▦', stamp: '◈',
+  section: '▢', panel: '▤', group: '▣',
+};
+
+function shapeKey(type: string): string { return (type || '').toLowerCase().replace(/[\s_-]+/g, ''); }
+
+export function vectorShapeIcon(type: string): string { return SHAPE_ICONS[shapeKey(type)] ?? '◻'; }
+
+/** The editable-path row actions key off the engine's exact names ('Path', and 'Polygon' — formerly 'polygon'). */
+export function isPathShape(type: string): boolean { return shapeKey(type) === 'path'; }
+export function isPolygonShape(type: string): boolean { return shapeKey(type) === 'polygon'; }
+
 /** Vector layer panel: shape list (select / path edit / convert), align / distribute / flip, SVG path import,
  *  2D shape undo / redo. Extracted from illustration.component (refactor-plan 2.10b). */
 @Component({
@@ -28,6 +51,12 @@ export class VectorLayerPanelComponent implements OnChanges {
   svgImportD = '';
 
   svgImportWidth = 0.5;
+
+  readonly shapeIcon = vectorShapeIcon;
+  readonly isPath = isPathShape;
+  readonly isPolygon = isPolygonShape;
+
+  trackShape(_i: number, s: { id: string }): string { return s.id; }
 
   refreshVectorShapes(): void {
     this.vectorShapes = this.shapeManager?.getVectorShapes(this.activeVectorLayerId) ?? [];

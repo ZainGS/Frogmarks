@@ -98,7 +98,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
       this.ngZone.runOutsideAngular(() => resetEngineTo2DView(this._sm));
 
       const result = await this.ngZone.runOutsideAngular(() => this._sm.importFrogcart(blob));
-      if (!result) throw new Error('importFrogcart returned null');
+      if (!result) throw new Error("it isn't a valid .frogcart file");
 
       this.cartTitle  = result.manifest?.title  ?? '';
       this.cartAuthor = result.manifest?.author  ?? '';
@@ -118,7 +118,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
       this._postToParent({ type: 'ready', title: this.cartTitle, author: this.cartAuthor });
     } catch (e: any) {
       console.error('[Player] load failed', e);
-      this.errorMsg = e?.message ?? 'Failed to load .frogcart';
+      this.errorMsg = e?.message || "it couldn't be loaded";
     }
     this.isLoading = false;
   }

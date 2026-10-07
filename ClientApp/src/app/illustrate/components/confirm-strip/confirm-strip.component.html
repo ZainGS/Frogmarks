@@ -1,0 +1,7 @@
+<div class="fm-confirm" role="alertdialog" [attr.aria-label]="text" (click)="$event.stopPropagation()">
+    <span class="fm-confirm-text">{{ text }}</span>
+    <div class="fm-confirm-actions">
+        <button type="button" class="fm-confirm-btn fm-confirm-ok" (click)="confirm($event)">{{ action }}</button>
+        <button #cancelBtn type="button" class="fm-confirm-btn" (click)="dismiss($event)">Cancel</button>
+    </div>
+</div>

@@ -1,5 +1,5 @@
 import {
-  applyStoredExperiments, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
+  applyStoredExperiments, EXP_DEV_TOOLS_KEY, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
   SALSA_LOSS_TIMES_KEY, SALSA_SAFE_MODE_KEY,
 } from './experimental-settings.service';
 
@@ -37,7 +37,7 @@ function makeService(url = 'https://app.test/illustrate/5?x=1') {
 }
 
 describe('ExperimentalSettingsService (editor › Experimental menu)', () => {
-  const KEYS = [EXP_DIRTY_COMPOSITING_KEY, SALSA_SAFE_MODE_KEY, SALSA_LOSS_TIMES_KEY];
+  const KEYS = [EXP_DIRTY_COMPOSITING_KEY, SALSA_SAFE_MODE_KEY, SALSA_LOSS_TIMES_KEY, EXP_DEV_TOOLS_KEY];
   let saved: Array<string | null>;
   beforeEach(() => { saved = KEYS.map((k) => localStorage.getItem(k)); KEYS.forEach((k) => localStorage.removeItem(k)); });
   afterEach(() => KEYS.forEach((k, i) => {
@@ -378,5 +378,16 @@ describe('ExperimentalSettingsService (editor › Experimental menu)', () => {
       expect(svc.dialog?.text).toContain('no frame was rendered within 5 s');
       expect(svc.dialog?.busy).toBeFalse();
     });
+  });
+
+  it('Developer buttons: off by default, toggled and remembered per machine', () => {
+    const { svc } = makeService();
+    expect(svc.devTools).toBeFalse();
+    svc.toggleDevTools();
+    expect(svc.devTools).toBeTrue();
+    expect(localStorage.getItem(EXP_DEV_TOOLS_KEY)).toBe('1');
+    expect(new ExperimentalSettingsService().devTools).toBeTrue();
+    svc.toggleDevTools();
+    expect(svc.devTools).toBeFalse();
   });
 });

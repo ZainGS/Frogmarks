@@ -37,7 +37,8 @@ export class ArmRigService {
 
   skeletonsCollapsed = false;
 
-  jointsCollapsed = true;
+  /** Open by default: the section only shows once a skeleton exists, and it is where rigging starts. */
+  jointsCollapsed = false;
 
   armatureToolMode: 'move' | 'rotate' = 'rotate';
 
@@ -118,6 +119,7 @@ export class ArmRigService {
     this._syncRotationInputs(idx);
     this._syncIKInputs();
     this.refreshConstraints();
+    this.defaultConstraintTarget();
   }
 
   _syncIKInputs(): void {
@@ -439,9 +441,24 @@ export class ArmRigService {
   }
 
   constraintLabel(c: any): string {
-    if (c.type === 'lookAt')       return `Look At → j${c.targetJointIdx} (${c.axis?.toUpperCase()})`;
-    if (c.type === 'copyRotation') return `Copy Rot ← j${c.sourceJointIdx}`;
-    if (c.type === 'stretchTo')    return `Stretch → j${c.targetJointIdx}`;
+    if (c.type === 'lookAt')       return `Look At → ${this.jointName(c.targetJointIdx)} (${c.axis?.toUpperCase()})`;
+    if (c.type === 'copyRotation') return `Copy Rot ← ${this.jointName(c.sourceJointIdx)}`;
+    if (c.type === 'stretchTo')    return `Stretch → ${this.jointName(c.targetJointIdx)}`;
     return c.type;
+  }
+
+  /** A joint's name for the UI (the index only when the joint is gone). */
+  jointName(idx: number | null | undefined): string {
+    if (idx === null || idx === undefined) return '—';
+    return this.joints[idx]?.name ?? `#${idx}`;
+  }
+
+  /** Each newly selected joint's constraint form starts at its PARENT (else the first other joint) — the old default,
+   *  joint 0, could be the selected joint itself. */
+  defaultConstraintTarget(): void {
+    const n = this.joints.length;
+    if (n === 0) return;
+    const parent = this.selectedJointIdx !== null ? this.joints[this.selectedJointIdx]?.parentIdx ?? -1 : -1;
+    this.newConstraintTarget = parent >= 0 ? parent : (this.selectedJointIdx === 0 && n > 1 ? 1 : 0);
   }
 }

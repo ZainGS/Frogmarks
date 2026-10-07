@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { colorToHex, hexToRgba01Obj } from '../../utils/color-utils';
+import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 
 /**
  * Edit Foliage panel: type, seed, shape, blades/branches/flowers/ivy params, colours, delete, save-to-library.
@@ -18,8 +19,19 @@ export class FoliagePanelComponent implements OnChanges {
   @Input() open = false;
   /** Delete clicked — the editor removes it and clears selection. */
   @Output() delete = new EventEmitter<void>();
+  /** A param changed — the editor marks the document for autosave. */
+  @Output() dirty = new EventEmitter<void>();
+
+  /** Drill-down (utils/sub-nav.ts): null = Type + the menu of groups, else the open group. */
+  readonly nav = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
+  /** Delete plant is asking first. */
+  confirmingDelete = false;
+
+  constructor(private el: ElementRef<HTMLElement>) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['foliageId'] || changes['open']) this.confirmingDelete = false;
+    if (changes['foliageId'] && !changes['foliageId'].firstChange) this.nav.reset();
     // Load params whenever the panel opens or starts editing a different foliage object
     if ((changes['open'] || changes['foliageId']) && this.open && this.foliageId) this._initFoliageParams();
   }
@@ -140,6 +152,7 @@ export class FoliagePanelComponent implements OnChanges {
       ? (() => { const c = hexToRgba01Obj(value); return [c.r, c.g, c.b]; })()
       : value;
     this.shapeManager.setFoliageParams3D(id, { [field]: v });
+    this.dirty.emit();
   }
 
   scene3dRandomizeFoliageSeed(): void {

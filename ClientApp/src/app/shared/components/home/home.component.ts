@@ -96,7 +96,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
     if (this.animationType === 2) {
       this.exitOverlayActive = true;
-      setTimeout(() => this.router.navigate(['/dashboard']), 450);
+      setTimeout(() => this.router.navigate(['/']), 450);   // the Shell (was the old dashboard)
       return;
     }
 
@@ -104,7 +104,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const freeze = this.showFrog ? 325 : 0;
     setTimeout(() => {
       this.isTransitioning = true;
-      setTimeout(() => this.router.navigate(['/dashboard']), 420);
+      setTimeout(() => this.router.navigate(['/']), 420);
     }, freeze);
   }
 

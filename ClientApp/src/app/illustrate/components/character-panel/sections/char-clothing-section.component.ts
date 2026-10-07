@@ -10,5 +10,8 @@ import { CharClothingService } from '../char-clothing.service';
   styleUrls: ['./char-clothing-section.component.scss'],
 })
 export class CharClothingSectionComponent {
+  /** Which garment's Remove is asking first (no undo). */
+  confirmRemove: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants' | null = null;
+
   constructor(public cp: CharacterPanelComponent, public clothing: CharClothingService) {}
 }

@@ -95,6 +95,18 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
     // Re-enter with/without renderer so Salsa adjusts immediately
     this.sm?.exitUVPaintMode3D();
     this.sm?.enterUVPaintMode3D(this.meshId, this.showUVPane ? this.uvRenderer : null);
+    this._reframeAfterSplit();
+  }
+
+  /** The 3D view just split in half (or went back to full width): once the canvas has its new size (two frames:
+   *  change detection, then the renderer's resize), re-frame the mesh to ~60 % of the NEW view — it used to stay at
+   *  the full-width framing, cut off by the pane (UI review 2026-10-07 §3 #17). */
+  private _reframeAfterSplit(): void {
+    const id = this.meshId;
+    if (!id || typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (this.meshId === id) this.sm?.frameMesh3D?.(id, 1.7);
+    }));
   }
 
   // ── Export ─────────────────────────────────────────────────────

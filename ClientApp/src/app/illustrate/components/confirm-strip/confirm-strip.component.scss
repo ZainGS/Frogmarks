@@ -1,0 +1,50 @@
+// Retro-chrome look (sharp corners, bevelled border); the fallbacks keep it readable on the other themes.
+:host { display: block; }
+
+.fm-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0;
+    padding: 6px 8px;
+    border-radius: 0;
+    border: 2px solid;
+    border-color: var(--rc-danger-hi, #c0392b);
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.fm-confirm-text { white-space: normal; overflow-wrap: anywhere; }
+
+.fm-confirm-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.fm-confirm-btn {
+    flex: 1;
+    min-height: 26px;
+    border-radius: 0;
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    background: var(--rc-surface-hi, #2e2e2e);
+    color: var(--rc-text, #c8c8c8);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover { filter: brightness(1.2); }
+    &:focus-visible { outline: 2px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+}
+
+.fm-confirm-ok {
+    background: var(--rc-danger, #8b1a1a);
+    border-color: var(--rc-danger-hi, #c0392b);
+    color: #ffdada;
+}
+
+@media (pointer: coarse) {
+    .fm-confirm { font-size: 13px; }
+    .fm-confirm-btn { min-height: 44px; }
+}

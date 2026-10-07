@@ -15,8 +15,18 @@ import { StoragePersistenceService } from '../../services/pwa/storage-persistenc
 import { installShellEscapeGuard } from '../../utilities/shell-escape-guard';
 import { PendingProjectDeletes, type PendingProjectDelete } from './pending-project-deletes';
 import { nextShellDeviceBanner, type ShellDeviceBanner, type ShellDeviceStatusLike } from './shell-device-banner';
+import { AppInstallService } from '../../services/pwa/app-install.service';
+import {
+  SHELL_THEME_OPTIONS, DEFAULT_SHELL_THEME, readSavedShellTheme, saveShellTheme, readLocalModelUrl, normalizeLocalModelUrl,
+  saveLocalModelUrl, type ShellThemeId,
+} from './shell-settings';
+import { shellKeyItems, shellKeySignature, type ShellKeyItem } from './shell-keys';
 
-interface AriaSlot { id: string; name: string }
+/** A FrogCart tile was opened: what its dialog shows. */
+interface CartDialog { id: string; name: string; description: string; removable: boolean; confirmRemove: boolean; removing: boolean }
+
+/** The Salsa Shell APIs added after the dist Frogmarks may still be built against (typeof-guarded at each use). */
+type ShellNewer = { importCart?: () => void };
 
 /** What the New Illustration dialog closes with (null / undefined = cancelled). */
 interface NewIllustrationResult { name?: string; docW?: number | null; docH?: number | null; bounded?: boolean }
@@ -50,10 +60,17 @@ export class StudioComponent implements OnInit, OnDestroy {
   private _pendingNewProjectResult: any = null;
   private _destroyed = false;
 
-  showInstallDialog  = false;
   showSettingsOverlay = false;
-  installUrlInput    = '';
-  ariaSlots: AriaSlot[] = [];
+  /** A cart tile was opened (carts can't run yet: the dialog says so and offers Remove). */
+  cartDialog: CartDialog | null = null;
+  /** The keyboard / screen-reader strip (shell-keys.ts): one real button per tile, chip or project card. */
+  keyItems: ShellKeyItem[] = [];
+
+  // ── Settings: theme, local model, install (one home for the Shell's settings) ──
+  readonly themeOptions = SHELL_THEME_OPTIONS;
+  themeId: ShellThemeId = DEFAULT_SHELL_THEME;
+  localModelUrl = '';
+  localModelStatus: '' | 'saved' | 'invalid' = '';
   /** Shown in the Settings dialog (deploy check; bump APP_VERSION in app-version.ts). */
   readonly appVersionLabel = APP_VERSION_LABEL;
   readonly appBuildLabel = APP_BUILD_LABEL;
@@ -69,7 +86,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   /** A modal (Settings / Install) is up: the host layer (Shell canvas + modal) goes above Salsa's top-right cluster
    *  (z-index 50, on <body>), so the cluster is covered and can't be clicked under the modal. */
   @HostBinding('class.shell-raised') get raised(): boolean { return this.modalOpen; }
-  get modalOpen(): boolean { return this.showSettingsOverlay || this.showInstallDialog; }
+  get modalOpen(): boolean { return this.showSettingsOverlay || !!this.cartDialog; }
 
   constructor(
     private router: Router,
@@ -78,6 +95,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     private localIllustrationService: LocalIllustrationService,
     readonly updates: AppUpdateService,
     readonly storageInfo: StoragePersistenceService,
+    readonly install: AppInstallService,
   ) {}
 
   // ── PWA: update popup + storage notice (salsa/docs/ui/pwa.md) ────────────
@@ -98,9 +116,53 @@ export class StudioComponent implements OnInit, OnDestroy {
   /** Shell › Settings: ask the browser for persistent storage again. */
   requestPersistentStorage(): void { void this.storageInfo.requestPersistence(); }
   openStorageSettings(): void {
+    this.cartDialog = null;
     this.showSettingsOverlay = true;
+    this.themeId = this._currentThemeId();
+    this.localModelUrl = readLocalModelUrl(this._storage());
+    this.localModelStatus = '';
     this._syncModalChrome();
     void this.storageInfo.refreshEstimate();
+  }
+
+  // ── Settings › Theme ──
+
+  pickTheme(id: ShellThemeId): void {
+    this.themeId = id;
+    saveShellTheme(this._storage(), id);
+    const shell = this.sm?.shell;
+    if (shell && typeof shell.setTheme === 'function') this.ngZone.runOutsideAngular(() => shell.setTheme(id));
+  }
+
+  private _currentThemeId(): ShellThemeId {
+    const shell = this.sm?.shell;
+    const now = shell && typeof shell.getThemeName === 'function' ? shell.getThemeName() : null;
+    return (SHELL_THEME_OPTIONS.some(o => o.id === now) ? now : readSavedShellTheme(this._storage()) ?? DEFAULT_SHELL_THEME) as ShellThemeId;
+  }
+
+  /** The theme saved in Settings, applied before the Shell scene is built (no flash of the default theme). */
+  private _applySavedTheme(): void {
+    const saved = readSavedShellTheme(this._storage());
+    const shell = this.sm?.shell;
+    if (saved && shell && typeof shell.setTheme === 'function') shell.setTheme(saved);
+  }
+
+  // ── Settings › Local AI model ──
+
+  saveLocalModel(): void {
+    const url = normalizeLocalModelUrl(this.localModelUrl);
+    if (url === null) { this.localModelStatus = 'invalid'; return; }
+    saveLocalModelUrl(this._storage(), url);
+    this.localModelUrl = url;
+    this.localModelStatus = 'saved';
+  }
+
+  // ── Settings › Install app ──
+
+  installApp(): void { void this.install.install(); }
+
+  private _storage(): Storage | null {
+    try { return window.localStorage; } catch { return null; }
   }
 
   async ngOnInit(): Promise<void> {
@@ -163,6 +225,7 @@ export class StudioComponent implements OnInit, OnDestroy {
       newProjectId: () => crypto.randomUUID(),
     });
 
+    this._applySavedTheme();
     await this.sm.shell?.load();
     this.sm.setShellLogo('assets/images/logo.png');
 
@@ -174,7 +237,7 @@ export class StudioComponent implements OnInit, OnDestroy {
       // Only a change of the slot / project LIST concerns Angular (the offscreen ARIA tree). Hover, selection and the
       // mode flip (which fires in the middle of the cross-fade) never re-enter the zone: no change detection there.
       if (reason === 'mode') { this._onShellModeChanged(); return; }
-      if (reason === 'loaded' || reason === 'registry' || reason === 'projects') this._scheduleAriaRefresh();
+      if (reason === 'loaded' || reason === 'registry' || reason === 'projects') this._scheduleKeysRefresh();
     });
 
     // Card ✕ (illustration + packaging grids): hide the card and offer Undo; the delete happens when the toast ends.
@@ -189,7 +252,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
     await this.ngZone.runOutsideAngular(() => this.sm.shell?.initializeScene(shellCanvas));
     if (this._destroyed) return;
-    this.ngZone.run(() => this._refreshAria());
+    this.ngZone.run(() => this._refreshKeys());
 
     this.ngZone.runOutsideAngular(() => {
       if (this._holdWarmup && !skipWarmup) this._warmWhenShellIsSmooth();
@@ -215,7 +278,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._deleteSub?.unsubscribe();
     clearTimeout(this._idlePreloadTimer);
     clearTimeout(this._gridPreloadTimer);
-    clearTimeout(this._ariaTimer);
+    clearTimeout(this._keysTimer);
     if (this._warmRaf) cancelAnimationFrame(this._warmRaf);
     if (this._shellCanvas && this._onCanvasPointerDown) this._shellCanvas.removeEventListener('pointerdown', this._onCanvasPointerDown);
     // destroyScene restarts the editor loop (play()) — keep that rAF loop outside the zone too.
@@ -279,6 +342,8 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   /** The Shell flipped home ↔ Illustrations (called outside the zone, in the middle of the cross-fade). */
   private _onShellModeChanged(): void {
+    // The keyboard strip follows the view (home tiles <-> Back / New / project cards) — after the cross-fade.
+    this._scheduleKeysRefresh(GRID_PRELOAD_MS);
     clearTimeout(this._gridPreloadTimer);
     if (this.sm?.shell?.getViewState().mode !== 'illustrations') return;
     // The grid is where an illustration gets opened: have the editor chunk ready — once the fade has finished.
@@ -303,14 +368,61 @@ export class StudioComponent implements OnInit, OnDestroy {
             this._initiateNewProject();
           }
         } else {
-          this.showInstallDialog = true;
-          this._syncModalChrome();
+          this.importCart();
         }
         break;
       case 'system':
         if (id === 'system:settings') this.openStorageSettings();
         break;
+      case 'local':
+      case 'remote':
+        // A cart tile opened (double-click, or a tap on the selected cart). Carts can't run yet (Salsa launchSlot is
+        // Phase 6) — it used to do nothing at all; now it says so, and an installed cart can be removed.
+        this.openCartDialog(id);
+        break;
     }
+  }
+
+  // ── FrogCarts ──
+
+  openCartDialog(id: string): void {
+    const slot = this.sm?.shell?.getSlot?.(id) ?? null;
+    this.showSettingsOverlay = false;
+    this.cartDialog = {
+      id,
+      name: slot?.name || (id === '__demo_cart__' ? 'Demo Cart' : 'FrogCart'),
+      description: slot?.description || (id === '__demo_cart__' ? 'A sample cart that shows how installed FrogCarts look on the home screen.' : ''),
+      removable: !!slot && slot.type !== 'system',
+      confirmRemove: false,
+      removing: false,
+    };
+    this._syncModalChrome();
+  }
+
+  closeCartDialog(): void {
+    this.cartDialog = null;
+    this._syncModalChrome();
+  }
+
+  /** Remove asks once ("Remove — sure?"), then deletes the cart's tile and its file from this device. */
+  async removeCart(): Promise<void> {
+    const d = this.cartDialog;
+    const shell = this.sm?.shell;
+    if (!d || !d.removable || !shell || d.removing) return;
+    if (!d.confirmRemove) { d.confirmRemove = true; return; }
+    d.removing = true;
+    try {
+      await this.ngZone.runOutsideAngular(() => shell.removeCartSlot(d.id));
+    } catch (e) {
+      console.warn('[Studio] removing cart ' + d.id + ' failed:', e);
+    }
+    if (this.cartDialog === d) this.closeCartDialog();
+  }
+
+  /** Open the .frogcart picker (the Import tile's action; newer Salsa builds only — it is in a click handler). */
+  importCart(): void {
+    const shell = this.sm?.shell as unknown as ShellNewer | undefined;
+    if (shell && typeof shell.importCart === 'function') shell.importCart();
   }
 
   private _openProject(projectId: string, dashboardKind?: string): void {
@@ -384,47 +496,69 @@ export class StudioComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── offscreen ARIA tree ──────────────────────────────────────────────────
+  // ── keyboard / screen-reader strip (shell-keys.ts) ──────────────────────
 
-  private _ariaTimer: ReturnType<typeof setTimeout> | undefined;
-  private _ariaSignature = '';
+  private _keysTimer: ReturnType<typeof setTimeout> | undefined;
+  private _keysSignature = '';
+  /** A strip button changed the view: focus the new view's first button once it is there. */
+  private _refocusKeys = false;
 
-  /** The list changed: refresh the ARIA tree a little later, once (called outside the zone; a burst of changes — a
-   *  refresh after a save, an optimistic patch — becomes one zone entry instead of one per change). */
-  private _scheduleAriaRefresh(): void {
-    if (this._ariaTimer !== undefined) return;
-    this._ariaTimer = setTimeout(() => {
-      this._ariaTimer = undefined;
+  /** The list or the view changed: rebuild the strip a little later, once (called outside the zone; a burst of
+   *  changes — a refresh after a save, an optimistic patch — becomes one zone entry instead of one per change). */
+  private _scheduleKeysRefresh(delayMs = 250): void {
+    if (this._keysTimer !== undefined) clearTimeout(this._keysTimer);
+    this._keysTimer = setTimeout(() => {
+      this._keysTimer = undefined;
       if (this._destroyed) return;
-      const next = this._buildAria();
-      if (next.signature === this._ariaSignature) return;   // same ids + names: nothing for Angular to do
-      this.ngZone.run(() => { this.ariaSlots = next.slots; this._ariaSignature = next.signature; });
-    }, 250);
+      const next = this._buildKeys();
+      const sig = shellKeySignature(next);
+      if (sig !== this._keysSignature) this.ngZone.run(() => { this.keyItems = next; this._keysSignature = sig; });
+      if (this._refocusKeys) {
+        this._refocusKeys = false;
+        setTimeout(() => (document.querySelector('.shell-keys button') as HTMLElement | null)?.focus(), 0);
+      }
+    }, delayMs);
   }
 
-  private _buildAria(): { slots: AriaSlot[]; signature: string } {
-    const slots    = this.sm?.shell?.getSlots()    ?? [];
-    const projects = this.sm?.shell?.getProjects() ?? [];
-    const out: AriaSlot[] = [
-      ...slots.map((s: any)    => ({ id: s.id,   name: s.name  ?? s.id })),
-      ...projects.map((p: any) => ({ id: p.id,   name: p.name  ?? 'Untitled' })),
-    ];
-    return { slots: out, signature: out.map(s => s.id + '\u0001' + s.name).join('\u0002') };
+  private _buildKeys(): ShellKeyItem[] {
+    const shell = this.sm?.shell;
+    if (!shell) return [];
+    const view = shell.getViewState?.();
+    return shellKeyItems({
+      mode: view?.mode ?? 'shell',
+      dashboardKind: shell.getDashboardKind?.(),
+      slots: shell.getSlots?.() ?? [],
+      projects: view?.mode === 'illustrations' ? (shell.getProjects?.() ?? []) : [],
+      canImport: typeof (shell as unknown as ShellNewer).importCart === 'function',
+    });
   }
 
-  private _refreshAria(): void {
-    const next = this._buildAria();
-    this.ariaSlots = next.slots;
-    this._ariaSignature = next.signature;
+  private _refreshKeys(): void {
+    this.keyItems = this._buildKeys();
+    this._keysSignature = shellKeySignature(this.keyItems);
   }
 
   /** ngFor identity: a refreshed list keeps the DOM nodes of the entries that are still there. */
-  trackAriaSlot(_index: number, slot: AriaSlot): string { return slot.id; }
+  trackKeyItem(_index: number, item: ShellKeyItem): string { return item.key; }
 
-  closeInstallDialog(): void {
-    this.showInstallDialog = false;
-    this.installUrlInput   = '';
-    this._syncModalChrome();
+  /** A strip button: do what tapping that tile / chip / card does. */
+  activateKey(item: ShellKeyItem): void {
+    const shell = this.sm?.shell;
+    if (!shell) return;
+    const a = item.action;
+    const kind = shell.getDashboardKind?.() ?? 'illustration';
+    switch (a.type) {
+      case 'system':
+        if (a.systemKey === 'illustrator') { this._refocusKeys = true; this.ngZone.runOutsideAngular(() => shell.openIllustratorDashboard()); }
+        else if (a.systemKey === 'packageDesigner') { this._refocusKeys = true; this.ngZone.runOutsideAngular(() => shell.openPackageDashboard()); }
+        else this._handleActivation(a.id, 'system');
+        break;
+      case 'import': this.importCart(); break;
+      case 'cart': this.openCartDialog(a.id); break;
+      case 'back': this._refocusKeys = true; this.ngZone.runOutsideAngular(() => shell.closeIllustratorDashboard()); break;
+      case 'new': this._handleActivation('__new_project__', 'empty', kind); break;
+      case 'project': this._openProject(a.id, kind); break;
+    }
   }
 
   closeSettingsOverlay(): void {
@@ -432,7 +566,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._syncModalChrome();
   }
 
-  // ── Settings / Install modal: Esc, backdrop, the Shell chrome under it ──
+  // ── Settings / cart modal: Esc, backdrop, the Shell chrome under it ──
 
   private _escapeGuardOff?: () => void;
   private _backdropPress = false;
@@ -440,7 +574,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   /** Close whichever Shell modal is open (Esc, a backdrop tap). */
   closeModal(): void {
     if (this.showSettingsOverlay) this.closeSettingsOverlay();
-    else if (this.showInstallDialog) this.closeInstallDialog();
+    else if (this.cartDialog) this.closeCartDialog();
   }
 
   /** A press that STARTS on the backdrop (not one dragged out of the card) closes the modal on release. */
@@ -526,10 +660,5 @@ export class StudioComponent implements OnInit, OnDestroy {
   deviceBannerDismiss(): void {
     clearTimeout(this._deviceBannerTimer); this._deviceBannerTimer = undefined;
     this.deviceBanner = null; this.deviceBannerDetail = [];
-  }
-
-  async installCartFromUrl(): Promise<void> {
-    // Phase 4 — wire when Salsa cart install APIs land
-    this.closeInstallDialog();
   }
 }

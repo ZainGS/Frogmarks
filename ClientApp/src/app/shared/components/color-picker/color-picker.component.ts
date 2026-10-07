@@ -242,31 +242,22 @@ private sbYToLightness(sbY: number, s: number): number {
       return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
   }
 
-    // openEyedropper() {
-    //     if (!window.Eyedropper) {
-    //         alert("Eyedropper API not supported");
-    //         return;
-    //     }
-    //     const eyeDropper = new EyeDropper();
-    //     eyeDropper.open().then(result => {
-    //         this.hexColor = result.sRGBHex;
-    //     });
-    // }
-
   onOpacityInput(event: Event): void {
     const val = Math.min(100, Math.max(0, +(event.target as HTMLInputElement).value));
     this.opacity = val;
     this.opacityChange.emit(val);
   }
 
-  openEyedropper() {
-      if (!(window as any).Eyedropper) {
-          alert("Eyedropper API not supported in this browser.");
-          return;
-      }
-      const eyeDropper = new (window as any).Eyedropper();
-      eyeDropper.open().then((result: { sRGBHex: string }) => {
-          this.hexColor = result.sRGBHex;
-      });
+  /** The browser's screen eyedropper (window.EyeDropper — Chromium only; it was checked as `Eyedropper`, which never
+   *  exists, so this always bailed). Not wired to a button: the editor's canvas eyedropper is the persistent picker's. */
+  get hasEyeDropper(): boolean { return typeof (window as any).EyeDropper === 'function'; }
+
+  openEyedropper(): void {
+      const Ctor = (window as any).EyeDropper;
+      if (typeof Ctor !== 'function') return;
+      new Ctor().open().then((result: { sRGBHex: string }) => {
+          this.setColor(result.sRGBHex);
+          this.colorSelected.emit(result.sRGBHex);
+      }).catch(() => { /* cancelled (Esc) */ });
   }
 }

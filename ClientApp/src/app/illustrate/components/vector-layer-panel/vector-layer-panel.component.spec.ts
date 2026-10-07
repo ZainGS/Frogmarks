@@ -1,5 +1,5 @@
 import ShapeManager from '@zaings/salsa/shape-manager';
-import { VectorLayerPanelComponent } from './vector-layer-panel.component';
+import { VectorLayerPanelComponent, vectorShapeIcon, isPathShape, isPolygonShape } from './vector-layer-panel.component';
 
 /** A stand-in for the engine calls the row delete makes: selection + deleteSelectedShapes + the shape list. */
 function fakeEngine(initialSelection: string[]) {
@@ -50,5 +50,24 @@ describe('VectorLayerPanelComponent row delete', () => {
     const stop = spyOn(e, 'stopPropagation').and.callThrough();
     t.panel.deleteVectorShape('a', e);
     expect(stop).toHaveBeenCalled();
+  });
+});
+
+describe('vector shape list icons (UI review 2026-10-07)', () => {
+  it('match the engine type names', () => {
+    expect(vectorShapeIcon('Circle')).toBe('◯');
+    expect(vectorShapeIcon('Line')).toBe('╱');
+    expect(vectorShapeIcon('Rectangle')).toBe('▭');
+    expect(vectorShapeIcon('Speech Balloon')).toBe('💬');
+    expect(vectorShapeIcon('Sticky Note')).toBe('📝');
+    expect(vectorShapeIcon('Inverted Triangle')).toBe('▽');
+    expect(vectorShapeIcon('Path')).toBe('✒');
+    expect(vectorShapeIcon('SomethingNew')).toBe('◻');
+  });
+
+  it('path / polygon row actions key off the engine names', () => {
+    expect(isPathShape('Path')).toBeTrue();
+    expect(isPolygonShape('Polygon')).toBeTrue();
+    expect(isPolygonShape('Path')).toBeFalse();
   });
 });

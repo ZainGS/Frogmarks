@@ -1,14 +1,21 @@
 .player-shell {
     position: fixed;
     inset: 0;
-    background: #000;
+    background: var(--rc-canvas-bg, #0a0a0a);
+    color: var(--rc-text, #c8c8c8);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    padding: 16px;
+    box-sizing: border-box;
 }
 
+// Absolutely placed: as a flex item, the hidden canvas (visibility:hidden still takes space) was 100 % wide and pushed
+// the drop zone off the right edge at every screen size.
 .player-canvas {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
@@ -17,27 +24,55 @@
     &.hidden { visibility: hidden; pointer-events: none; }
 }
 
+// ── Buttons (retro chrome: square, bevelled; 44 px on touch) ──────
+.player-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 4px 14px;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover { background: var(--rc-surface-hi, #2e2e2e); color: #fff; }
+    &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
+
+    @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 18px; font-size: 13px; }
+}
+
 // ── Header bar ───────────────────────────────────────────────────
 .player-header {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 36px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 12px;
-    background: rgba(0,0,0,.55);
+    padding: 4px 8px 4px 12px;
+    padding-top: max(4px, env(safe-area-inset-top, 0px));
+    background: rgba(0,0,0,.6);
+    border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
     backdrop-filter: blur(6px);
     z-index: 100;
+    box-sizing: border-box;
 }
 
 .player-header-title {
     font-size: 12px;
     font-weight: 600;
-    color: rgba(255,255,255,.8);
+    color: rgba(255,255,255,.85);
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -45,58 +80,57 @@
 
 .player-header-author {
     font-size: 11px;
-    color: rgba(255,255,255,.4);
+    color: var(--rc-text-muted, #a8a8a8);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 30vw;
 }
 
-.player-exit-btn {
-    background: rgba(255,255,255,.08);
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 5px;
-    color: rgba(255,255,255,.6);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 10px;
-    cursor: pointer;
-    white-space: nowrap;
-    &:hover { background: rgba(255,255,255,.15); color: #fff; }
+.player-back-btn {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: 12px;
+    z-index: 100;
 }
 
 // ── Drop zone ────────────────────────────────────────────────────
 .player-drop-zone {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    padding: 40px 32px;
-    border-radius: 16px;
-    border: 2px dashed rgba(255,255,255,.12);
+    width: 100%;
+    max-width: 420px;
+    padding: 40px 24px;
+    box-sizing: border-box;
+    text-align: center;
+    background: var(--rc-panel-bg, #1a1a1a);
+    border: 2px dashed var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
     transition: border-color 120ms, background 120ms;
 
     &.drag-over {
-        border-color: rgba(100,100,255,.6);
-        background: rgba(80,80,200,.08);
+        border-color: var(--rc-green-txt, #c8ede3);
+        background: var(--rc-green, #3b6151);
     }
-}
-
-.player-drop-icon {
-    font-size: 52px;
-    opacity: .5;
 }
 
 .player-drop-heading {
     font-size: 18px;
-    font-weight: 600;
-    color: rgba(255,255,255,.7);
+    font-weight: 700;
+    color: #fff;
 }
 
 .player-drop-sub {
     font-size: 13px;
-    color: rgba(255,255,255,.35);
+    color: var(--rc-text-muted, #a8a8a8);
     code {
         font-family: monospace;
-        background: rgba(255,255,255,.06);
-        border-radius: 3px;
+        background: var(--rc-surface, #242424);
+        color: var(--rc-green-txt, #c8ede3);
+        border-radius: 0;
         padding: 1px 5px;
         font-size: 12px;
     }
@@ -104,22 +138,17 @@
 
 .player-file-btn {
     margin-top: 4px;
-    background: rgba(80,80,200,.35);
-    border: 1px solid rgba(100,100,255,.3);
-    border-radius: 7px;
-    color: rgba(200,200,255,.9);
-    font-size: 13px;
-    font-weight: 600;
-    padding: 8px 22px;
-    cursor: pointer;
-    &:hover { background: rgba(80,80,200,.55); }
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+    &:hover { background: var(--rc-green-hi, #4f7a68); }
 }
 
 .player-error {
     font-size: 12px;
-    color: #ff6666;
+    color: #ff9c90;
     text-align: center;
     max-width: 320px;
+    overflow-wrap: anywhere;
 }
 
 // ── Loading ──────────────────────────────────────────────────────
@@ -131,17 +160,17 @@
 }
 
 .player-loading-spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid rgba(255,255,255,.1);
-    border-top-color: rgba(120,120,255,.8);
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--rc-bevel-mid, #3a3a3a);
+    border-top-color: var(--rc-green-hi, #4f7a68);
+    border-radius: 0;
     animation: player-spin 0.8s linear infinite;
 }
 
 .player-loading-label {
     font-size: 13px;
-    color: rgba(255,255,255,.4);
+    color: var(--rc-text-muted, #a8a8a8);
 }
 
 @keyframes player-spin {

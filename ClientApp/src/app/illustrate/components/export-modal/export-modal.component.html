@@ -1,8 +1,8 @@
 <div class="export-modal-overlay" (click)="close.emit()">
-  <div class="export-modal" (click)="$event.stopPropagation()">
+  <div class="export-modal" role="dialog" aria-modal="true" aria-label="Export" (click)="$event.stopPropagation()">
     <div class="export-modal-header">
       <span class="export-modal-title">Export</span>
-      <button class="export-modal-close" (click)="close.emit()">✕</button>
+      <button type="button" class="export-modal-close" aria-label="Close" title="Close (Esc)" (click)="close.emit()">✕</button>
     </div>
     <div class="export-modal-body">
       <nav class="export-modal-nav">
@@ -28,8 +28,40 @@
         <!-- Image panel -->
         <ng-container *ngIf="tab === 'image'">
           <div class="export-modal-panel-title">Export Image</div>
-          <p class="export-modal-panel-desc">Download a PNG snapshot of the current canvas view.</p>
-          <button class="export-modal-action-btn" (click)="exportImage()">Download PNG</button>
+          <p class="export-modal-panel-desc">Download the artboard as an image.</p>
+          <div class="export-modal-field">
+            <span class="export-modal-field-label" id="exp-bg-label">Background</span>
+            <div class="export-seg" role="radiogroup" aria-labelledby="exp-bg-label">
+              <button type="button" class="export-seg-btn" role="radio" [class.active]="imageBackground === 'canvas'"
+                      [attr.aria-checked]="imageBackground === 'canvas'" (click)="setImageBackground('canvas')">Canvas</button>
+              <button type="button" class="export-seg-btn" role="radio" [class.active]="imageBackground === 'transparent'"
+                      [attr.aria-checked]="imageBackground === 'transparent'" [disabled]="!hasDocSize"
+                      [title]="hasDocSize ? 'See-through where nothing is drawn' : 'Needs a canvas size: Edit › Resize Canvas…'"
+                      (click)="setImageBackground('transparent')">Transparent</button>
+            </div>
+            <span class="export-modal-hint">{{ imageBackground === 'canvas'
+              ? 'Everything on the artboard, on its background (3D included).'
+              : 'Drawings, shapes and ephemera only: empty areas stay see-through (no background, no 3D).' }}</span>
+          </div>
+          <div class="export-modal-field">
+            <span class="export-modal-field-label" id="exp-fmt-label">Format</span>
+            <div class="export-seg" role="radiogroup" aria-labelledby="exp-fmt-label">
+              <button type="button" class="export-seg-btn" role="radio" [class.active]="imageFormat === 'png'"
+                      [attr.aria-checked]="imageFormat === 'png'" (click)="imageFormat = 'png'">PNG</button>
+              <button type="button" class="export-seg-btn" role="radio" [class.active]="imageFormat === 'jpeg'"
+                      [attr.aria-checked]="imageFormat === 'jpeg'" [disabled]="imageBackground === 'transparent'"
+                      [title]="imageBackground === 'transparent' ? 'JPEG has no transparency: choose the Canvas background' : 'Smaller file, no transparency'"
+                      (click)="imageFormat = 'jpeg'">JPEG</button>
+            </div>
+          </div>
+          <div class="export-modal-field">
+            <span class="export-modal-field-label">Size</span>
+            <span class="export-modal-size">{{ imageSizeLabel }}</span>
+          </div>
+          <p *ngIf="imageError" class="export-modal-error" role="alert">{{ imageError }}</p>
+          <button class="export-modal-action-btn" [disabled]="imageBusy" (click)="exportImage()">
+            {{ imageBusy ? 'Exporting…' : 'Download ' + (imageBackground === 'transparent' || imageFormat === 'png' ? 'PNG' : 'JPEG') }}
+          </button>
         </ng-container>
 
         <!-- Scene panel -->

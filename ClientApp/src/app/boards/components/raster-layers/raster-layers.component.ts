@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter, NgZone, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter, NgZone, ChangeDetectorRef, inject } from '@angular/core';
+import { OverlayManagerService, insideElement } from '../../../shared/services/overlay/overlay-manager.service';
 import { Subscription } from 'rxjs';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import {
@@ -105,19 +106,39 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
         this._pruneOpenOpacitySliders();
         setTimeout(() => {
           this._reconcileActiveVectorLayer();
-          if (!this.activeLayerId && !this.selected3DSceneId && !this.scene3dActive && !this.activeVectorLayerId) this._autoSelectDefault();
+          if (!this._hasRasterRowSelection() && !this.selected3DSceneId && !this.scene3dActive && !this.activeVectorLayerId) this._autoSelectDefault();
         }, 0);
       }),
       this.rasterService.activeLayerId$.subscribe(id => (this.activeLayerId = id))
     );
+    // "+ Add" and the blend-mode dropdown join the overlay manager: Esc / a tap outside the panel closes them (the
+    // canvas swallows the click the document listener below waits for), one overlay at a time (UI review §3 item 2).
+    this._unregisterOverlay = this.overlays.register({
+      id: 'raster-layers',
+      isOpen: () => this.showAddMenu || this.openBlendDropdownId !== null,
+      close: () => { this.showAddMenu = false; this.openBlendDropdownId = null; },
+      contains: insideElement(() => this.elRef.nativeElement as HTMLElement),
+    });
+  }
+
+  private readonly overlays = inject(OverlayManagerService);
+  private _unregisterOverlay: (() => void) | null = null;
+
+  /** The service's active layer is one of this panel's rows. An id it doesn't list (the Vector entry an older
+   *  RasterBrushService auto-picked as `layers[0]` in a new document) highlighted nothing and painted nowhere. */
+  private _hasRasterRowSelection(): boolean {
+    if (!this.activeLayerId) return false;
+    return !this.layers.length || this.layers.some(l => l.id === this.activeLayerId);
   }
 
   private _autoSelectDefault(): void {
-    // topmost 2D layer (last in array = visually highest)
-    const raster2d = this.layers.filter(l => l.type === 'layer' || l.type === 'folder');
-    if (raster2d.length) { this.selectLayer(raster2d[raster2d.length - 1].id); return; }
-    // fallback: any non-vector layer (3D scene, etc.)
-    if (this.layers.length) { this.selectLayer(this.layers[this.layers.length - 1].id); return; }
+    // topmost PAINT layer (last in array = visually highest). Never a folder: selectLayer ignores folders, so
+    // picking one selected nothing and left no row highlighted.
+    const paintable = this.layers.filter(l => this.isPaintable(l));
+    if (paintable.length) { this.selectLayer(paintable[paintable.length - 1].id); return; }
+    // fallback: any other non-vector, non-folder entry (3D scene, reference)
+    const other = this.layers.filter(l => l.type !== 'folder');
+    if (other.length) { this.selectLayer(other[other.length - 1].id); return; }
     // fallback: vector layer
     if (this.vectorLayers.length) { this.selectVectorLayer(this.vectorLayers[0].id); }
   }
@@ -137,6 +158,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
     this.subs.forEach(s => s.unsubscribe());
     this._clearRemovedToastTimer();
+    this._unregisterOverlay?.(); this._unregisterOverlay = null;
   }
 
   // A tap / click anywhere else closes the add menu, the blend-mode dropdown and a pending "Remove?" (their own

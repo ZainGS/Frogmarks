@@ -203,6 +203,15 @@ export class DrawingOptionsService {
     this.rasterBrushColor = c;
     this.shapeManager.setRasterBrushColor(c);
     this.shapeManager.setStrokeColor(c);
+    this.syncLineColor();
+  }
+
+  /** Arrows / lines and the shape tools draw in the pen colour (arrows were a fixed grey; a shape tool only took the
+   *  colour when it was picked). setLineColor is newer than some Salsa dists: skipped there. */
+  syncLineColor(): void {
+    const sm = this.shapeManager as unknown as { setLineColor?(c: string): void; setShapeColor?(c: string): void } | undefined;
+    if (typeof sm?.setLineColor === 'function') sm.setLineColor(this.selectedPenColor);
+    sm?.setShapeColor?.(this.selectedPenColor);
   }
 
   swapColors(): void {
@@ -222,6 +231,7 @@ export class DrawingOptionsService {
     this.rasterBrushColor = hex;
     this.shapeManager?.setRasterBrushColor(hex);
     this.shapeManager?.setStrokeColor(hex);
+    this.syncLineColor();
   }
 
   setShapeColor(c: string) { this.selectedShapeColor = c; this.shapeManager.setShapeColor(c); }

@@ -21,6 +21,7 @@ import {
   BrushBleed,
   BrushSmudge,
 } from '../../models/brush-preset.model';
+import { SIZE_SLIDER_STEPS, sizeFromSlider, sliderFromSize } from './brush-size-slider';
 
 export type BrushPanelView = 'grid' | 'editor';
 
@@ -531,6 +532,11 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.rasterService.updatePresetSize(this.minSize, this.maxSize);
     this.rasterService.setSize(this.maxSize);
   }
+
+  /** Grid-view quick Size slider: non-linear (brush-size-slider.ts) so small sizes get most of the travel. */
+  readonly sizeSliderSteps = SIZE_SLIDER_STEPS;
+  get sizeSliderPos(): number { return sliderFromSize(this.maxSize); }
+  onSizeSliderInput(pos: number | string): void { this.onMaxSizeChange(sizeFromSlider(+pos)); }
 
   onOpacityChange(v: number): void {
     this.opacity = v;

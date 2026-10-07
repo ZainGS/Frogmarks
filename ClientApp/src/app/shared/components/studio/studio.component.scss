@@ -45,18 +45,96 @@
   box-sizing: border-box;
   pointer-events: auto;
 
+  color: var(--rc-text, #c8c8c8);
+
   h3 {
     margin: 0 0 6px;
     font-size: 18px;
     font-weight: 600;
-    color: #fff;
+    color: var(--rc-green-txt, #c8ede3);
+  }
+
+  // Settings: a narrow phone gets the whole width (the sections stack), less padding.
+  @media (max-width: 480px) {
+    padding: 18px 16px;
   }
 }
 
 .shell-dialog-sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--rc-text-muted, #a8a8a8);
+}
+
+.shell-dialog-text {
   margin: 0 0 18px;
   font-size: 13px;
-  color: #aaa;
+  line-height: 1.5;
+}
+
+// Title row with a ✕ (Settings): the title left, the close button right.
+.shell-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h3 { margin: 0; }
+}
+
+.shell-dialog-close {
+  min-width: 36px;
+  padding: 4px 10px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+// Settings › Home screen theme: six swatches in the theme's own colours (the active one pressed in).
+.shell-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.shell-theme-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 6px;
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+
+  &.is-active {
+    border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+    box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.5);
+    outline: 2px solid var(--rc-green-hi, #4f7a68);
+    outline-offset: 1px;
+  }
+  &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
+}
+
+.shell-theme-dot {
+  width: 10px;
+  height: 10px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+// Label + input + Save on one line (the input takes the room).
+.shell-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+
+  .shell-dialog-input { margin-bottom: 0; flex: 1; min-width: 0; }
 }
 
 // App version (deploy check) under the Settings text.
@@ -115,20 +193,75 @@
       color: #fff;
     }
   }
+
+  &.shell-btn-danger {
+    background: var(--rc-danger, #8b1a1a);
+    color: #f5d6d2;
+
+    &:hover { background: var(--rc-danger-hi, #c0392b); }
+  }
+
+  &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
 }
 
-// Visually hidden but readable by screen readers
-.shell-aria-tree {
-  position: absolute;
+// ── Keyboard path (shell-keys.ts): visually hidden until a button in it has focus, then a retro-chrome strip ──
+.shell-keys {
+  position: fixed;
+  // Top-left (over the greeting / the Back + New chips it mirrors) — the bottom belongs to the update / storage popups.
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  z-index: 6;
+  // hidden but focusable / readable (no display:none — Tab must reach the buttons)
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
-  list-style: none;
-  margin: 0;
-  padding: 0;
   pointer-events: none;
+
+  &:focus-within {
+    width: auto;
+    height: auto;
+    max-width: calc(100vw - 24px);
+    max-height: 50vh;
+    overflow-y: auto;
+    clip-path: none;
+    white-space: normal;
+    pointer-events: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    box-sizing: border-box;
+    background: var(--rc-panel-bg, #1a1a1a);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.shell-keys-btn {
+  min-height: 36px;
+  padding: 4px 12px;
+  background: #404040;
+  color: var(--rc-text, #c8c8c8);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  font-size: 13px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover { background: #555; }
+  &:focus-visible {
+    outline: 2px solid var(--rc-green-txt, #c8ede3);
+    outline-offset: 1px;
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+  }
 }
 
 // ── PWA: update popup, storage notice, Settings sections (salsa/docs/ui/pwa.md) ──────────────────────────────────
@@ -351,5 +484,9 @@
 @media (pointer: coarse) {
   .shell-btn,
   .fm-pwa-btn,
-  .device-banner-btn { min-height: 44px; }
+  .device-banner-btn,
+  .shell-keys-btn,
+  .shell-theme-swatch { min-height: 44px; }
+  .shell-dialog-close { min-width: 44px; }
+  .shell-dialog-input { min-height: 44px; }
 }

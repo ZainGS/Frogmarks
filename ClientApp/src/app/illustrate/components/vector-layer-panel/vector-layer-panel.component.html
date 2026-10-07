@@ -20,21 +20,21 @@
 </div>
 <details class="scene3d-details" open>
   <summary>Shapes</summary>
-  <div *ngIf="vectorShapes.length === 0" class="scene3d-empty-hint">No shapes on this layer</div>
-  <div *ngFor="let shape of vectorShapes"
-       class="scene3d-mesh-row"
+  <div *ngIf="vectorShapes.length === 0" class="vector-empty-hint">No shapes on this layer</div>
+  <div *ngFor="let shape of vectorShapes; trackBy: trackShape"
+       class="vector-shape-row"
        (click)="selectVectorShape(shape.id, $event)">
-    <span class="scene3d-node-icon">{{ shape.type === 'rect' ? '▭' : shape.type === 'ellipse' ? '◯' : shape.type === 'line' ? '╱' : shape.type === 'balloon' || shape.type === 'speech-balloon' ? '💬' : shape.type === 'sticky-note' ? '📝' : shape.type === 'Path' || shape.type === 'polygon' ? '✒' : '◻' }}</span>
-    <span class="scene3d-mesh-name" style="flex:1">{{ shape.name || shape.type }}</span>
-    <span class="scene3d-mesh-type" *ngIf="shape.name">{{ shape.type }}</span>
-    <button *ngIf="shape.type === 'Path'"
-            class="scene3d-icon-btn"
+    <span class="vector-shape-icon" aria-hidden="true">{{ shapeIcon(shape.type) }}</span>
+    <span class="vector-shape-name">{{ shape.name || shape.type }}</span>
+    <span class="vector-shape-type" *ngIf="shape.name">{{ shape.type }}</span>
+    <button *ngIf="isPath(shape.type)"
+            class="vector-row-action"
             (click)="enterPathEdit(shape.id); $event.stopPropagation()"
-            title="Edit path anchors">✏</button>
-    <button *ngIf="shape.type === 'polygon'"
-            class="scene3d-icon-btn"
+            title="Edit path anchors" aria-label="Edit path anchors">✏</button>
+    <button *ngIf="isPolygon(shape.type)"
+            class="vector-row-action"
             (click)="convertPolygonToPath(shape.id); $event.stopPropagation()"
-            title="Convert to editable path">✒</button>
+            title="Convert to editable path" aria-label="Convert to editable path">✒</button>
     <button class="vector-row-delete" (click)="deleteVectorShape(shape.id, $event)"
             [attr.aria-label]="'Delete ' + (shape.name || shape.type)" title="Delete shape (undo with Ctrl+Z / ↩)">
       <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">

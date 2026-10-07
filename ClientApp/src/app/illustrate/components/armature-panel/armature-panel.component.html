@@ -6,9 +6,9 @@
     <span class="ar-title">Armature</span>
     <select class="ar-bg-select" [(ngModel)]="bgMode" (change)="updateBgMode()"
             title="Background style">
+      <option value="gradient">Gradient</option>
       <option value="wavy">Wavy</option>
       <option value="checkers">Clover Picnic</option>
-      <option value="gradient">Gradient</option>
       <option value="dim">Dim</option>
       <option value="solid">Solid</option>
       <option value="none">None</option>
@@ -240,8 +240,12 @@
               </select>
             </div>
             <div class="ar-form-row" style="margin-bottom:3px">
-              <span class="ar-label">{{ rig.newConstraintType === 'copyRotation' ? 'Source' : 'Target' }} j#</span>
-              <input type="number" class="ar-num" min="0" step="1" [(ngModel)]="rig.newConstraintTarget">
+              <span class="ar-label">{{ rig.newConstraintType === 'copyRotation' ? 'Source' : 'Target' }}</span>
+              <select class="ar-select" [(ngModel)]="rig.newConstraintTarget"
+                      [title]="rig.newConstraintType === 'copyRotation' ? 'The joint whose rotation is copied' : 'The joint to aim at / stretch to'">
+                <option *ngFor="let j of rig.joints; let i = index" [ngValue]="i"
+                        [disabled]="i === rig.selectedJointIdx">{{ j.name }}</option>
+              </select>
               <ng-container *ngIf="rig.newConstraintType === 'lookAt'">
                 <span class="ar-label" style="min-width:24px">Axis</span>
                 <select class="ar-select-sm" [(ngModel)]="rig.newConstraintAxis">
@@ -320,10 +324,12 @@
 
       <ng-container *ngIf="!binding.weightPaintCollapsed">
         <div class="ar-form-row">
-          <span class="ar-label">Joint #</span>
-          <input type="number" class="ar-num" readonly
-                 [value]="rig.selectedJointIdx ?? 0"
-                 title="Select a joint in the Joints list above">
+          <span class="ar-label">Joint</span>
+          <select class="ar-select" [ngModel]="rig.selectedJointIdx" (ngModelChange)="rig.selectJoint(+$event)"
+                  title="The joint whose weights you paint (picking one in the Joints list or the viewport does the same)">
+            <option *ngIf="rig.selectedJointIdx === null" [ngValue]="null" disabled>Pick a joint…</option>
+            <option *ngFor="let j of rig.joints; let i = index" [ngValue]="i">{{ j.name }}</option>
+          </select>
         </div>
         <div class="ar-form-row" style="margin-top:5px">
           <span class="ar-label">Radius</span>
@@ -356,6 +362,8 @@
 
         <div class="ar-btn-pair" style="margin-top:8px">
           <button class="ar-op-btn" [class.ar-active]="binding.wpActive"
+                  [disabled]="!binding.wpActive && rig.selectedJointIdx === null"
+                  [title]="!binding.wpActive && rig.selectedJointIdx === null ? 'Pick the joint to paint first' : ''"
                   (click)="binding.wpActive ? binding.exitWeightPaint() : binding.enterWeightPaint()">
             {{ binding.wpActive ? '✓ Painting' : 'Enter Paint' }}
           </button>
@@ -438,7 +446,7 @@
                  (keydown.enter)="library.capturePose()">
           <button class="ar-op-btn" (click)="library.capturePose()">+ Capture</button>
         </div>
-        <div style="margin-bottom:6px">
+        <div style="margin-bottom:6px" *ngIf="exp.devTools">
           <button class="ar-op-btn ar-op-secondary" style="width:100%;font-size:11px"
                   (click)="library.exportPoseForClaude()"
                   title="Copy current pose + body proportions to clipboard — paste to Claude with a description to bake into a pose or clip">
@@ -494,8 +502,8 @@
       </ng-container>
     </div>
 
-    <!-- ── Animation Library ──────────────────────────────────── -->
-    <div class="ar-section">
+    <!-- ── Animation Library (only with a skeleton: every entry applies to one) ── -->
+    <div class="ar-section" *ngIf="rig.activeSkeleton">
       <div class="ar-section-title ar-section-title-toggle" (click)="library.animLibCollapsed = !library.animLibCollapsed">
         <span class="ar-chevron">{{ library.animLibCollapsed ? '▸' : '▾' }}</span>Animation Library
         <span *ngIf="library.animLibrary.length > 0" style="margin-left:auto;font-size:10px;opacity:0.55">{{ library.animLibrary.length }}</span>
@@ -585,8 +593,8 @@
       </ng-container>
     </div>
 
-    <!-- ── Global Library ────────────────────────────────────── -->
-    <div class="ar-section">
+    <!-- ── Global Library (only with a skeleton, like the Animation Library) ── -->
+    <div class="ar-section" *ngIf="rig.activeSkeleton">
       <div class="ar-section-title ar-section-title-toggle"
            (click)="library.globalLibCollapsed = !library.globalLibCollapsed; !library.globalLibCollapsed && library.globalLibOpen()">
         <span class="ar-chevron">{{ library.globalLibCollapsed ? '▸' : '▾' }}</span>Global Library
@@ -796,17 +804,26 @@
           <!-- Crossfade -->
           <div class="ar-op-sep"></div>
           <div class="ar-section-sub" style="margin-bottom:4px">Crossfade</div>
-          <div class="ar-op-inline" style="margin-bottom:4px">
+          <div class="ar-form-row" style="margin-bottom:4px">
             <span class="ar-label">From</span>
-            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="anim.nlaCfFromSeg">
-            <span class="ar-label">To</span>
-            <input type="number" class="ar-num ar-num-sm" min="0" step="1" [(ngModel)]="anim.nlaCfToSeg">
-            <span class="ar-label">Dur</span>
-            <input type="number" class="ar-num ar-num-sm" min="1" step="1" [(ngModel)]="anim.nlaCfDur">
-            <button class="ar-op-btn" (click)="anim.crossfadeNLA()"
-                    [disabled]="selTrack.segments.length < 2">Fade</button>
+            <select class="ar-select" [(ngModel)]="anim.nlaCfFromSeg" title="The segment that fades out">
+              <option *ngFor="let seg of selTrack.segments; let si = index" [ngValue]="si">{{ si + 1 }} · {{ seg.clipName }}</option>
+            </select>
           </div>
-          <div class="ar-hint">Segment indices (0-based). Duration in frames.</div>
+          <div class="ar-form-row" style="margin-bottom:4px">
+            <span class="ar-label">To</span>
+            <select class="ar-select" [(ngModel)]="anim.nlaCfToSeg" title="The segment that fades in">
+              <option *ngFor="let seg of selTrack.segments; let si = index" [ngValue]="si"
+                      [disabled]="si === anim.nlaCfFromSeg">{{ si + 1 }} · {{ seg.clipName }}</option>
+            </select>
+          </div>
+          <div class="ar-op-inline" style="margin-bottom:4px">
+            <span class="ar-label">Frames</span>
+            <input type="number" class="ar-num ar-num-sm" min="1" step="1" [(ngModel)]="anim.nlaCfDur"
+                   title="Crossfade length in frames">
+            <button class="ar-op-btn" (click)="anim.crossfadeNLA()"
+                    [disabled]="selTrack.segments.length < 2 || anim.nlaCfFromSeg === anim.nlaCfToSeg">Fade</button>
+          </div>
 
         </ng-container><!-- /selTrack -->
       </ng-container><!-- /nlaCollapsed -->

@@ -1,47 +1,51 @@
 <div class="pkg-shell dark-mode">
 
   <!-- Loading overlay -->
-  <div class="pkg-loading" *ngIf="isLoading">
+  <div class="pkg-loading" *ngIf="isLoading" role="status">
     <div class="pkg-loading-label">Loading…</div>
   </div>
 
   <!-- Header -->
   <header class="pkg-header">
-    <button class="pkg-back-btn" (click)="goBack()">← Back</button>
-    <span class="pkg-title">{{ projectName }}</span>
-    <button class="pkg-export-btn" (click)="exportDielinePng()">Export PNG</button>
+    <button type="button" class="pkg-btn pkg-back-btn" (click)="goBack()" title="Back to Frogmarks">← Back</button>
+    <!-- The package's name: click to rename (Enter / leaving the field saves; was a fixed "Product Packaging") -->
+    <input #nameInput class="pkg-title-input" type="text" maxlength="80" spellcheck="false"
+           aria-label="Package name" title="Rename this package"
+           [(ngModel)]="projectName" (keyup.enter)="nameInput.blur()" (keyup.escape)="nameInput.blur()" (blur)="commitRename()">
+    <button type="button" class="pkg-btn pkg-export-btn" (click)="exportDielinePng()">Export PNG</button>
   </header>
 
   <div class="pkg-body">
 
-    <!-- Left sidebar -->
+    <!-- Left sidebar (below the 3D view on a phone) -->
     <aside class="pkg-sidebar">
 
       <section class="pkg-section">
         <div class="pkg-section-label">Box Dimensions (mm)</div>
 
+        <!-- Sliders update the box live while dragging (input); release / typing does the full update (change) -->
         <label class="pkg-row">
           <span class="pkg-row-label">Width</span>
-          <input type="range" min="20" max="400" step="1" [(ngModel)]="boxWidth" (change)="onDimensionChanged()">
-          <input type="number" class="pkg-num" min="20" max="400" [(ngModel)]="boxWidth" (change)="onDimensionChanged()">
+          <input type="range" [min]="dimLimits.width.min" [max]="dimLimits.width.max" step="1" [(ngModel)]="boxWidth" (input)="onDimensionInput()" (change)="onDimensionChanged()" aria-label="Width (mm)">
+          <input type="number" class="pkg-num" [min]="dimLimits.width.min" [max]="dimLimits.width.max" [(ngModel)]="boxWidth" (change)="onDimensionChanged()" aria-label="Width in mm">
         </label>
 
         <label class="pkg-row">
           <span class="pkg-row-label">Height</span>
-          <input type="range" min="20" max="400" step="1" [(ngModel)]="boxHeight" (change)="onDimensionChanged()">
-          <input type="number" class="pkg-num" min="20" max="400" [(ngModel)]="boxHeight" (change)="onDimensionChanged()">
+          <input type="range" [min]="dimLimits.height.min" [max]="dimLimits.height.max" step="1" [(ngModel)]="boxHeight" (input)="onDimensionInput()" (change)="onDimensionChanged()" aria-label="Height (mm)">
+          <input type="number" class="pkg-num" [min]="dimLimits.height.min" [max]="dimLimits.height.max" [(ngModel)]="boxHeight" (change)="onDimensionChanged()" aria-label="Height in mm">
         </label>
 
         <label class="pkg-row">
           <span class="pkg-row-label">Depth</span>
-          <input type="range" min="10" max="300" step="1" [(ngModel)]="boxDepth" (change)="onDimensionChanged()">
-          <input type="number" class="pkg-num" min="10" max="300" [(ngModel)]="boxDepth" (change)="onDimensionChanged()">
+          <input type="range" [min]="dimLimits.depth.min" [max]="dimLimits.depth.max" step="1" [(ngModel)]="boxDepth" (input)="onDimensionInput()" (change)="onDimensionChanged()" aria-label="Depth (mm)">
+          <input type="number" class="pkg-num" [min]="dimLimits.depth.min" [max]="dimLimits.depth.max" [(ngModel)]="boxDepth" (change)="onDimensionChanged()" aria-label="Depth in mm">
         </label>
 
         <label class="pkg-row">
           <span class="pkg-row-label">Bleed</span>
-          <input type="range" min="0" max="10" step="0.5" [(ngModel)]="bleed" (change)="onDimensionChanged()">
-          <input type="number" class="pkg-num" min="0" max="10" step="0.5" [(ngModel)]="bleed" (change)="onDimensionChanged()">
+          <input type="range" [min]="dimLimits.bleed.min" [max]="dimLimits.bleed.max" step="0.5" [(ngModel)]="bleed" (input)="onDimensionInput()" (change)="onDimensionChanged()" aria-label="Bleed (mm)">
+          <input type="number" class="pkg-num" [min]="dimLimits.bleed.min" [max]="dimLimits.bleed.max" step="0.5" [(ngModel)]="bleed" (change)="onDimensionChanged()" aria-label="Bleed in mm">
         </label>
       </section>
 
@@ -49,13 +53,13 @@
         <div class="pkg-section-label">Fold Preview</div>
 
         <div class="pkg-btn-row">
-          <button class="pkg-btn" (click)="unfold()" title="Animate flat (dieline view)">Unfold</button>
-          <button class="pkg-btn" (click)="fold()"   title="Animate to closed box">Fold</button>
+          <button type="button" class="pkg-btn" (click)="unfold()" title="Animate flat (dieline view)">Unfold</button>
+          <button type="button" class="pkg-btn" (click)="fold()"   title="Animate to closed box">Fold</button>
         </div>
 
         <label class="pkg-row">
           <span class="pkg-row-label">Scrub</span>
-          <input type="range" min="0" max="1" step="0.01" [(ngModel)]="foldAmount" (input)="onFoldChanged()">
+          <input type="range" min="0" max="1" step="0.01" [(ngModel)]="foldAmount" (input)="onFoldChanged()" aria-label="Fold amount">
           <span class="pkg-val">{{ foldAmount | number:'1.2-2' }}</span>
         </label>
       </section>

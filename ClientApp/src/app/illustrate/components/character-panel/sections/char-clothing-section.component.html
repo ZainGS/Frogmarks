@@ -140,10 +140,13 @@
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
         </div>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
-                (click)="clothing.scene3dRemoveClothing('top')">Remove Top</button>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                (click)="clothing.scene3dBakeClothing('top')">Save as Part</button></ng-container>
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                (click)="clothing.scene3dBakeClothing('top')">Save as Part</button>
+        <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+        <button *ngIf="confirmRemove !== 'top'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirmRemove = 'top'">Remove Top…</button>
+        <fm-confirm-strip *ngIf="confirmRemove === 'top'" text="Remove the top? Its settings and paint are lost." action="Remove"
+                          (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('top')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
         <ng-container *ngIf="cp.sub.id === 'texture'"><!-- Texture -->
         <div class="scene3d-material-row">
             <label>Diffuse</label>
@@ -260,10 +263,13 @@
                        (ngModelChange)="clothing.scene3dClothingParamChanged('undershirt')">
             </div>
 
-            <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
-                    (click)="clothing.scene3dRemoveClothing('undershirt')">Remove Undershirt</button>
-            <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                    (click)="clothing.scene3dBakeClothing('undershirt')">Save as Part</button></ng-container>
+            <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                    (click)="clothing.scene3dBakeClothing('undershirt')">Save as Part</button>
+            <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+            <button *ngIf="confirmRemove !== 'undershirt'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                    (click)="confirmRemove = 'undershirt'">Remove Undershirt…</button>
+            <fm-confirm-strip *ngIf="confirmRemove === 'undershirt'" text="Remove the undershirt? Its settings and paint are lost." action="Remove"
+                              (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('undershirt')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
 
             <!-- Pattern -->
             <ng-container *ngIf="cp.sub.id === 'pattern-2'"><!-- Pattern -->
@@ -442,10 +448,13 @@
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
         </div>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
-                (click)="clothing.scene3dRemoveClothing('bottom')">Remove Bottom</button>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                (click)="clothing.scene3dBakeClothing('bottom')">Save as Part</button></ng-container>
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                (click)="clothing.scene3dBakeClothing('bottom')">Save as Part</button>
+        <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+        <button *ngIf="confirmRemove !== 'bottom'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirmRemove = 'bottom'">Remove Bottom…</button>
+        <fm-confirm-strip *ngIf="confirmRemove === 'bottom'" text="Remove the bottom? Its settings and paint are lost." action="Remove"
+                          (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('bottom')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
         <ng-container *ngIf="cp.sub.id === 'texture-2'"><!-- Texture -->
         <div class="scene3d-material-row">
             <label>Diffuse</label>
@@ -534,10 +543,13 @@
                        (ngModelChange)="clothing.scene3dClothingParamChanged('underpants')">
             </div>
 
-            <button class="scene3d-btn" style="width:100%;margin-top:10px;color:#f08080"
-                    (click)="clothing.scene3dRemoveClothing('underpants')">Remove Underpants</button>
-            <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                    (click)="clothing.scene3dBakeClothing('underpants')">Save as Part</button></ng-container>
+            <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                    (click)="clothing.scene3dBakeClothing('underpants')">Save as Part</button>
+            <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+            <button *ngIf="confirmRemove !== 'underpants'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                    (click)="confirmRemove = 'underpants'">Remove Underpants…</button>
+            <fm-confirm-strip *ngIf="confirmRemove === 'underpants'" text="Remove the underpants? Its settings and paint are lost." action="Remove"
+                              (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('underpants')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
 
             <!-- Pattern -->
             <ng-container *ngIf="cp.sub.id === 'pattern-4'"><!-- Pattern -->
@@ -687,10 +699,13 @@
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
         </div>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
-                (click)="clothing.scene3dRemoveClothing('shoes')">Remove Shoes</button>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                (click)="clothing.scene3dBakeClothing('shoes')">Save as Part</button></ng-container>
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                (click)="clothing.scene3dBakeClothing('shoes')">Save as Part</button>
+        <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+        <button *ngIf="confirmRemove !== 'shoes'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirmRemove = 'shoes'">Remove Shoes…</button>
+        <fm-confirm-strip *ngIf="confirmRemove === 'shoes'" text="Remove the shoes? Its settings and paint are lost." action="Remove"
+                          (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('shoes')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
         <ng-container *ngIf="cp.sub.id === 'texture-3'"><!-- Texture -->
         <div class="scene3d-material-row">
             <label>Diffuse</label>
@@ -803,10 +818,13 @@
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='clean'" (click)="clothing.scene3dSetEraseStyle('clean')" title="Hard white dab, no border">Clean</button>
             <button class="scene3d-btn" style="flex:1" [class.scene3d-btn-active]="clothing.scene3dEraseStyle==='cutout'" (click)="clothing.scene3dSetEraseStyle('cutout')" title="Alpha hole — body shows through">Cutout</button>
         </div>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px;color:#f08080"
-                (click)="clothing.scene3dRemoveClothing('socks')">Remove Socks</button>
-        <button class="scene3d-btn" style="width:100%;margin-top:4px"
-                (click)="clothing.scene3dBakeClothing('socks')">Save as Part</button></ng-container>
+        <button class="scene3d-btn" style="width:100%;margin-top:10px"
+                (click)="clothing.scene3dBakeClothing('socks')">Save as Part</button>
+        <!-- Remove: apart from Save as Part, and it asks first (no undo) -->
+        <button *ngIf="confirmRemove !== 'socks'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirmRemove = 'socks'">Remove Socks…</button>
+        <fm-confirm-strip *ngIf="confirmRemove === 'socks'" text="Remove the socks? Its settings and paint are lost." action="Remove"
+                          (ok)="confirmRemove = null; clothing.scene3dRemoveClothing('socks')" (cancel)="confirmRemove = null"></fm-confirm-strip></ng-container>
         <ng-container *ngIf="cp.sub.id === 'texture-4'"><!-- Texture -->
         <div class="scene3d-material-row">
             <label>Diffuse</label>

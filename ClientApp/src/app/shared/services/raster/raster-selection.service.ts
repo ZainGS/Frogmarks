@@ -92,12 +92,18 @@ export class RasterSelectionService {
 
   // ── Pixel operations ──────────────────────────────────────────
 
+  /** Pixels were cut / copied this session (the engine's clipboard is not readable): Paste is worth offering. */
+  get hasClipboard(): boolean { return this._hasClipboard; }
+  private _hasClipboard = false;
+
   async cut(): Promise<void> {
+    if (this.info.hasSelection) this._hasClipboard = true;
     await this.sm?.rasterCutSelection();
     this.refreshInfo();
   }
 
   async copy(): Promise<void> {
+    if (this.info.hasSelection) this._hasClipboard = true;
     await this.sm?.rasterCopySelection();
   }
 

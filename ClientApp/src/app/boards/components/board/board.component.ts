@@ -11,7 +11,8 @@ import WorldManager from "@zaings/salsa/world-manager";
 //import startWebGPURendering from "@zaings/salsa";
 import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from "@zaings/salsa";
 import { ShapeType } from '../../../shared/enums/shape-type';
-import { auditTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription } from 'rxjs';
+import { auditTime, distinctUntilChanged, filter, firstValueFrom, map, Subject, Subscription, timeout } from 'rxjs';
+import { BOARD_LOAD_TIMEOUT_MS, BoardLoadError, BoardSaveStatus, boardLoadErrorFromHttp, boardLoadErrorFromResult, isBoardSaveRejected } from './board-errors';
 import { ColorPickerComponent } from 'app/shared/components/color-picker/color-picker.component';
 import { LayerTreeNode } from 'app/boards/models/layer-tree-node.model';
 import { AuthService } from 'app/shared/services/auth/auth.service';
@@ -746,6 +747,11 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
   private async initForBoard(boardUid: string) {
     this.isLoading = true;
+    this.boardLoadError = null;
+    // A board switch reuses this instance: without this reset the first markLoaded() of the next board ended the
+    // loading screen (every flag was still true from the previous board).
+    this.loadingState = { renderer: false, board: false, sceneApplied: false };
+    this.saveStatus.reset();
     this.boardUid = boardUid;
 
     // IMPORTANT: clean up prior board state when switching ids in-place
@@ -762,13 +768,20 @@ onNodeFillColorSelected(layerId: string, color: string) {
     // Ensure WebGPU only initializes if not already running. The boot runs OUTSIDE Angular's zone (H8, zone audit): the
     // engine's frame loop / timers it starts would otherwise stay zoned and run an app change detection every frame.
     // The post-boot state (loading flags, subscriptions) is applied back inside the zone, like the illustration editor.
-    if (!isRendererLive) {
-      await this.ngZone.runOutsideAngular(() => startWebGPURendering("webgpuCanvas"));
-    } else {
-      await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering("webgpuCanvas"));
+    try {
+      if (!isRendererLive) {
+        await this.ngZone.runOutsideAngular(() => startWebGPURendering("webgpuCanvas"));
+      } else {
+        await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering("webgpuCanvas"));
+      }
+      // Before afterRendererBoot subscribes: the blank-document reset's scene-changed event is not this board's load
+      await this.ngZone.runOutsideAngular(() => startCleanBoardEngine(ShapeManager.getInstance()));
+    } catch (e) {
+      // Without this the loading screen stayed up forever (initForBoard is fire-and-forget)
+      console.error('[Board] engine start failed', e);
+      this.ngZone.run(() => this._showBoardLoadError({ message: "The drawing engine couldn't start on this device.", retryable: true }));
+      return;
     }
-    // Before afterRendererBoot subscribes: the blank-document reset's scene-changed event is not this board's load
-    await this.ngZone.runOutsideAngular(() => startCleanBoardEngine(ShapeManager.getInstance()));
     this.ngZone.run(() => this.afterRendererBoot());
 
     this.canvas = this.canvasRef.nativeElement;
@@ -776,54 +789,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
     this.boardUid = this.route.snapshot.paramMap.get('id');
     if (this.boardUid) {
-      this.boardService.getBoardByUid(this.boardUid).subscribe(async res => {
-        if (res.resultType === ResultType.Success) {
-          this.board = res.resultObject;
-          this.boardTitle = res.resultObject.name;
-          // Ensure previous data is cleared
-          this.resetSceneState();
-
-          if(this.board.sceneGraphData && this.board.sceneGraphData.length > 0) {
-            // Await the scene loading so textures are loaded before proceeding
-            await this.setBoardSceneGraph(this.board.sceneGraphData);
-            
-            const rawSceneGraph = JSON.parse(this.board.sceneGraphData);
-            this.layerTree = this.buildLayerTree(rawSceneGraph.root); // Top-level
-
-            // Fallback: if no event within a frame, consider applied
-            requestAnimationFrame(() => this.markLoaded('sceneApplied'));
-          } else {
-            // No scene → still mark as applied
-            requestAnimationFrame(() => this.markLoaded('sceneApplied'));
-          }
-          
-
-          // Initialize autosave:
-          this.autoSaveSubscription = this.sceneChanged$
-            .pipe(
-              auditTime(1000),
-              distinctUntilChanged()
-            )
-            .subscribe(json => { 
-              if (!this.board) return;
-              if (json !== this.lastSavedJSON) {
-                this.lastSavedJSON = json;
-                this.boardService.saveBoard(this.board!.id, json).subscribe();
-              }
-            });
-
-          // thumbnail: at most once per 60s if changed
-          this.thumbnailSaveSubscription = this.sceneChanged$
-            .pipe(auditTime(5000))
-            .subscribe(() => {
-              if(!this.board.isCustomThumbnail) {
-                this.saveThumbnailIfChanged();
-              }
-            });
-
-          this.markLoaded('board');
-        }
-      });
+      this._loadBoardData(this.boardUid);
 
       // Set initial SDF text properties after shapeManager is initialized
       if (this.shapeManager) {
@@ -1285,9 +1251,128 @@ onNodeFillColorSelected(layerId: string, color: string) {
     const currentJSON = this.shapeManager.getSceneGraphJSON();
     if (!this.board) return;
     if (currentJSON !== this.lastSavedJSON) {
-      this.lastSavedJSON = currentJSON; // Update last saved JSON
-      this.boardService.saveBoard(this.board.id, currentJSON).subscribe();
+      this._saveBoardJSON(currentJSON);
     }
+  }
+
+  // ── Load / save errors ───────────────────────────────────────
+
+  /** Set when the board can't be opened: the loading screen turns into an error card with Retry / Back. */
+  boardLoadError: BoardLoadError | null = null;
+  /** "A save failed" until one succeeds — shows the "Not saved" bar with Retry. */
+  readonly saveStatus = new BoardSaveStatus();
+  private _boardLoadSub?: Subscription;
+
+  /** Fetch the board and apply it. On failure (server down, timeout, not found, unreadable data) the loading screen
+   *  shows why, with Retry / Back — it used to stay on "Loading your board…" forever. */
+  private _loadBoardData(boardUid: string): void {
+    this._boardLoadSub?.unsubscribe();
+    this.board = null;
+    this.boardLoadError = null;
+    this.isLoading = true;
+    this.loadingState.board = false;
+    this.loadingState.sceneApplied = false;
+    this._boardLoadSub = this.boardService.getBoardByUid(boardUid).pipe(timeout(BOARD_LOAD_TIMEOUT_MS)).subscribe({
+      next: (res) => { void this._applyLoadedBoard(boardUid, res); },
+      error: (err) => {
+        console.error('[Board] load failed', err);
+        if (boardUid === this.boardUid) this._showBoardLoadError(boardLoadErrorFromHttp(err));
+      },
+    });
+  }
+
+  private async _applyLoadedBoard(boardUid: string, res: any): Promise<void> {
+    if (boardUid !== this.boardUid) return;   // the user moved on to another board meanwhile
+    if (res?.resultType !== ResultType.Success || !res.resultObject) {
+      this._showBoardLoadError(boardLoadErrorFromResult(res?.resultType));
+      return;
+    }
+    try {
+      this.board = res.resultObject;
+      this.boardTitle = this.board.name;
+      // Ensure previous data is cleared
+      this.resetSceneState();
+
+      if (this.board.sceneGraphData && this.board.sceneGraphData.length > 0) {
+        // Await the scene loading so textures are loaded before proceeding
+        await this.setBoardSceneGraph(this.board.sceneGraphData);
+
+        const rawSceneGraph = JSON.parse(this.board.sceneGraphData);
+        this.layerTree = this.buildLayerTree(rawSceneGraph.root); // Top-level
+      }
+      // Fallback: if no event within a frame, consider applied (no scene → still applied)
+      requestAnimationFrame(() => this.markLoaded('sceneApplied'));
+    } catch (e) {
+      console.error('[Board] applying the board failed', e);
+      // No board = no autosave (armed below, and every save checks this.board): unreadable data is never saved over
+      this.board = null;
+      this._showBoardLoadError({ message: "This board's contents couldn't be read.", retryable: true });
+      return;
+    }
+
+    // Initialize autosave:
+    this.autoSaveSubscription?.unsubscribe();
+    this.autoSaveSubscription = this.sceneChanged$
+      .pipe(
+        auditTime(1000),
+        distinctUntilChanged()
+      )
+      .subscribe(json => {
+        if (!this.board) return;
+        if (json !== this.lastSavedJSON) this._saveBoardJSON(json);
+      });
+
+    // thumbnail: at most once per 60s if changed
+    this.thumbnailSaveSubscription?.unsubscribe();
+    this.thumbnailSaveSubscription = this.sceneChanged$
+      .pipe(auditTime(5000))
+      .subscribe(() => {
+        if (this.board && !this.board.isCustomThumbnail) {
+          this.saveThumbnailIfChanged();
+        }
+      });
+
+    this.markLoaded('board');
+  }
+
+  private _showBoardLoadError(error: BoardLoadError): void {
+    this.boardLoadError = error;
+    this.isLoading = false;
+  }
+
+  /** Retry on the board error card. */
+  retryBoardLoad(): void {
+    if (!this.boardUid) return;
+    // The engine never started: run the whole open again. Otherwise only the board request.
+    if (!this.shapeManager) { void this.initForBoard(this.boardUid); return; }
+    this._loadBoardData(this.boardUid);
+  }
+
+  /** Save the board's scene. A failure is no longer silent: the "Not saved" bar + one error toast per failure streak,
+   *  and the next change (or Retry) saves again. */
+  private _saveBoardJSON(json: string): void {
+    if (!this.board) return;
+    const boardId = this.board.id;
+    this.lastSavedJSON = json;
+    this.boardService.saveBoard(boardId, json).subscribe({
+      next: (res) => this._onBoardSaveResult(boardId, !isBoardSaveRejected(res)),
+      error: (err) => { console.error('[Board] save failed', err); this._onBoardSaveResult(boardId, false); },
+    });
+  }
+
+  private _onBoardSaveResult(boardId: number, ok: boolean): void {
+    if (this.board?.id !== boardId) return;
+    if (!ok) this.lastSavedJSON = '';   // not saved: the next change (or Retry) sends it again
+    if (this.saveStatus.record(ok)) {
+      this.notifyService.error("Your board couldn't be saved. Your changes are still here.", 'Retry')
+        .onAction().subscribe(() => this.retryBoardSave());
+    }
+  }
+
+  /** Retry on the "Not saved" bar / the error toast. */
+  retryBoardSave(): void {
+    if (!this.board || !this.shapeManager) return;
+    this._saveBoardJSON(this.shapeManager.getSceneGraphJSON());
   }
 
   loadBoardSceneGraph() {
@@ -1331,7 +1416,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
     async saveThumbnail() {
       if (!this.boardUid) return;
       const blob = await this.shapeManager.captureThumbnailBlob(300);
-      this.boardService.uploadThumbnail(this.boardUid, blob).subscribe();
+      // Background upload: a failure only means an older card picture (no toast), but it must not be an unhandled error
+      this.boardService.uploadThumbnail(this.boardUid, blob).subscribe({ error: (e) => console.warn('[Board] thumbnail upload failed', e) });
     }
 
   private async getThumbnailBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -1373,8 +1459,9 @@ onNodeFillColorSelected(layerId: string, color: string) {
     });
   }
 
-  returnToDashboard() {
-    void this.router.navigate(['/dashboard']);
+  /** Back (the frog, the error card): to the Shell — the old dashboard doesn't work on a phone (UI review 2026-10-07). */
+  returnToShell() {
+    void this.router.navigate(['/']);
   }
 
   resetSceneState() {
@@ -1404,7 +1491,13 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
   boardTitle: string = '';
   updateBoardTitle() {
-    this.boardService.renameBoard(this.board.id, this.boardTitle).subscribe(() => {});
+    if (!this.board) return;   // (threw on a board that failed to load)
+    const board = this.board;
+    if (this.boardTitle === board.name) return;
+    this.boardService.renameBoard(board.id, this.boardTitle).subscribe({
+      next: () => { board.name = this.boardTitle; },
+      error: (e) => { console.error('[Board] rename failed', e); this.notifyService.error("The board couldn't be renamed."); },
+    });
   }
 
   trackById(index: number, item: LayerTreeNode): string {
@@ -1413,6 +1506,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
   ngOnDestroy(): void {
     this.routeSub?.unsubscribe();
+    this._boardLoadSub?.unsubscribe();
 
     if (this.autoSaveSubscription) {
       this.autoSaveSubscription.unsubscribe();

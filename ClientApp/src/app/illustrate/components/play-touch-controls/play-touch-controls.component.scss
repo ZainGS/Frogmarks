@@ -24,6 +24,34 @@
     color: rgba(255, 255, 255, 0.55);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
     pointer-events: none;
+    animation: ptc-hint-fade 0.6s ease 3s forwards;   // shown for 3 s, then gone (it only explains the two halves)
+}
+
+@keyframes ptc-hint-fade {
+    to { opacity: 0; visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ptc-hint { animation-duration: 0.01s; }
+}
+
+// Stop: alone at the top right under the top bar, away from Sneak / Run (UI review 2026-10-07 §3 #21).
+.ptc-stop {
+    position: fixed;
+    top: calc(var(--fm-topbar-h, 40px) + 12px);
+    pointer-events: auto;
+    touch-action: manipulation;
+    min-width: 88px;
+    min-height: 48px;
+    padding: 0 16px;
+    border: 2px solid var(--rc-danger-hi, #c0392b);
+    border-radius: 0;
+    background: rgba(20, 20, 20, 0.7);
+    color: #fff;
+    font: 600 14px/1 system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+
+    &:active { background: var(--rc-danger, #8b1a1a); }
 }
 
 .ptc-stick-base {
@@ -84,13 +112,15 @@
 }
 
 .ptc-btn-sm {
-    width: 54px;
-    height: 40px;
-    border-radius: 20px;
+    width: 64px;                  // ≥ 44 px touch target (was 54 × 40)
+    height: 48px;
+    border-radius: 24px;
     font-size: 12px;
 }
 
-// Second row: Use + Jump under Sneak / Run.
+// Row 1: Sneak / Run over row 2: Use / Jump (Stop is on its own at the top right).
+.ptc-btn-sm:first-child { grid-column: 2; }
+.ptc-btn-sm + .ptc-btn-sm { grid-column: 3; }
 .ptc-btn:not(.ptc-btn-sm) { grid-row: 2; }
 .ptc-btn:not(.ptc-btn-sm):not(.ptc-btn-jump) { grid-column: 2; }
 

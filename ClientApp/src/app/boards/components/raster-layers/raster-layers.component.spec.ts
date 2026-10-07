@@ -293,3 +293,58 @@ describe('RasterLayersComponent vector-layer ✕ (UI review #2)', () => {
     expect(t.el.querySelector('.rl-undo-toast')).toBeNull();
   });
 });
+
+/** Fresh document (2026-10-07): the stack is [Vector, Background]; an older RasterBrushService auto-picked layers[0]
+ *  (the Vector entry) as its raster layer, so no row was highlighted and strokes had no paint layer. */
+async function setupFresh(layers: RasterLayer[], active: string | null) {
+  const layers$ = new BehaviorSubject<RasterLayer[]>(layers);
+  const activeLayerId$ = new BehaviorSubject<string | null>(active);
+  const service = {
+    layers$, activeLayerId$,
+    refreshLayers: jasmine.createSpy('refreshLayers'),
+    selectLayer: jasmine.createSpy('selectLayer').and.callFake((id: string) => activeLayerId$.next(id)),
+    setLayerOpacity: jasmine.createSpy('setLayerOpacity'),
+  };
+  await TestBed.configureTestingModule({
+    declarations: [RasterLayersComponent],
+    imports: [CommonModule, FormsModule],
+    providers: [
+      { provide: RasterBrushService, useValue: service },
+      { provide: TouchUiService, useValue: { coarse: false } },
+    ],
+    schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  }).compileComponents();
+  const fixture = TestBed.createComponent(RasterLayersComponent);
+  const vectorEmits: Array<string | null> = [];
+  fixture.componentInstance.vectorLayerSelected.subscribe(v => vectorEmits.push(v));
+  fixture.detectChanges();
+  const el = fixture.nativeElement as HTMLElement;
+  const activeRows = () => Array.from(el.querySelectorAll<HTMLElement>('.rl-item.active, .rl-vector-row.active'))
+    .map(x => (x.querySelector('.rl-name, .rl-scene-label')?.textContent ?? '').trim());
+  const settle = async () => { await new Promise(r => setTimeout(r, 0)); fixture.detectChanges(); };
+  return { fixture, service, activeRows, settle, vectorEmits };
+}
+
+describe('RasterLayersComponent fresh-document auto-select (a PAINT layer, highlighted)', () => {
+  it('the service\'s active id is the Vector entry (older service): selects Background and highlights it, not vector mode', async () => {
+    const t = await setupFresh([layer('vec', 1, { type: 'vector' }), layer('bg')], 'vec');
+    await t.settle();
+    expect(t.service.selectLayer).toHaveBeenCalledOnceWith('bg');
+    expect(t.activeRows()).toEqual(['BG']);
+    expect(t.vectorEmits.filter(v => v !== null)).toEqual([]);   // never entered vector mode
+  });
+
+  it('nothing selected: the topmost PAINT layer, never a folder on top', async () => {
+    const t = await setupFresh([layer('bg'), layer('ink'), layer('grp', 1, { type: 'folder' }), layer('vec', 1, { type: 'vector' })], null);
+    await t.settle();
+    expect(t.service.selectLayer).toHaveBeenCalledOnceWith('ink');
+    expect(t.activeRows()).toEqual(['INK']);
+  });
+
+  it('a selected paint layer is kept (no re-pick)', async () => {
+    const t = await setupFresh([layer('vec', 1, { type: 'vector' }), layer('bg'), layer('ink')], 'bg');
+    await t.settle();
+    expect(t.service.selectLayer).not.toHaveBeenCalled();
+    expect(t.activeRows()).toEqual(['BG']);
+  });
+});

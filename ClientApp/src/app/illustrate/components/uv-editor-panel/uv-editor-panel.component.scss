@@ -178,4 +178,11 @@ $muted:  rgba(255, 255, 255, 0.45);
 @media (pointer: coarse) {
   .uv-exit-btn,
   .uv-btn { min-height: 44px; }
+
+  // UI review 2026-10-07 §3 #4: checkbox rows, fields and the section headers too.
+  .uv-check-row { min-height: 44px; font-size: 13px; }
+  .uv-check-row input[type="checkbox"] { width: 22px; height: 22px; }
+  .uv-select { min-height: 44px; font-size: 14px; }
+  .uv-section-toggle { min-height: 44px; display: flex; align-items: center; }
+  .uv-field-row input[type="range"] { height: 32px; }
 }

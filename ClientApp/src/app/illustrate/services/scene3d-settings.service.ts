@@ -348,6 +348,17 @@ export class Scene3dSettingsService {
     this.host.markDirty();
   }
 
+  /** Environment / IBL "Intensity": the diffuse IBL strength, applied live (it used to take effect only on the next
+   *  HDR upload). Same engine value as the sky's diffuse IBL. */
+  scene3dSetIblIntensity(v: number): void {
+    const n = +v;
+    if (!Number.isFinite(n)) return;
+    this.scene3dIblIntensity = n;
+    this.scene3dDiffuseIBL = n;
+    this.shapeManager.setIBLDiffuseIntensity3D(n);
+    this.host.markDirty();
+  }
+
   async scene3dUploadEnvironmentMap(event: Event): Promise<void> {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;

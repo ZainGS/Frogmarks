@@ -1,10 +1,11 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
 /** Bucket types taken from the engine's signatures so they track Salsa. */
 type AdvertBucket = Parameters<ShapeManager['addSignageImage3D']>[0];   // includes 'auto' (engine picks the sign)
 type ShopBucket = Parameters<ShapeManager['addShopImage3D']>[0];
 import { NotifyService } from 'app/shared/services/notify/notify.service';
+import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 
 /**
  * Skins panel: GARP skin variants, vending can designs, city adverts and shop windows.
@@ -37,7 +38,12 @@ export class SkinsPanelComponent {
   @Output() paintEnd = new EventEmitter<void>();
   @Output() regenerateCity = new EventEmitter<void>();
 
-  constructor(private notifyService: NotifyService) {}
+  /** Drill-down (utils/sub-nav.ts): null = the menu, 'props' / 'adverts' / 'shops' = that kind's controls. */
+  readonly nav = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
+  /** Which destructive action is asking first: 'skin:<name>' (a variant's ✕), 'adverts' or 'shops' (Clear all). */
+  confirming: string | null = null;
+
+  constructor(private notifyService: NotifyService, private el: ElementRef<HTMLElement>) {}
 
   refresh(): void {
     this._refreshGarpPools();
@@ -299,8 +305,8 @@ export class SkinsPanelComponent {
     }
   }
 
+  /** Delete a variant (the row's ✕ asks first, in the panel). */
   async garpDeleteSkin(poolId: string, skinName: string): Promise<void> {
-    if (!confirm(`Delete skin "${skinName}"?`)) return;
     const sm = this.shapeManager;
     await sm.removeGarpSkin3D(poolId, skinName);
     this._refreshGarpPools();

@@ -155,7 +155,44 @@
     &:disabled { opacity: .5; cursor: default; }
 }
 
+// ── Image options (Background / Format segments, size, error) ─────────────────────────────────────────────────
+.export-seg {
+    display: flex;
+    gap: 0;
+    align-self: flex-start;
+    border: 1px solid var(--rc-bevel-mid, #3a3a5c);
+}
+.export-seg-btn {
+    min-width: 92px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 0;
+    background: var(--rc-surface, #12121e);
+    color: var(--rc-text-muted, #a0a0c0);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    & + & { border-left: 1px solid var(--rc-bevel-mid, #3a3a5c); }
+    &:hover:not(:disabled):not(.active) { background: var(--rc-surface-hi, #28283e); color: var(--rc-text, #e0e0ff); }
+    &.active { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #fff); font-weight: 600; }
+    &:disabled { opacity: .45; cursor: not-allowed; }
+    &:focus-visible { outline: 1px solid var(--rc-green-hi, #6666cc); outline-offset: 1px; }
+}
+.export-modal-hint { font-size: 11px; line-height: 1.4; color: var(--rc-text-muted, #8888aa); }
+.export-modal-size { font-size: 12px; color: var(--rc-text, #d0d0f0); font-family: monospace; }
+.export-modal-error {
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: #ffb4a8;
+    background: rgba(139, 26, 26, .35);
+    border-left: 3px solid var(--rc-danger-hi, #c0392b);
+}
+
 // ── Fit (both themes) ──────────────────────────────────────────────────────────────────────────────────────────
+// One card height for every tab (UI review d32: the card re-centred and jumped vertically when a tab changed its
+// content height). The panel scrolls when a tab needs more; a short screen still caps the card (modal-shell).
+.export-modal { height: min(500px, calc(100dvh - 32px)); }
 // Fields can shrink with the card (no input min-content overflow), and at phone width the side nav becomes a row
 // of three tabs above the panel so the panel keeps the full card width.
 .export-modal-panel { min-width: 0; min-height: 0; }
@@ -191,6 +228,7 @@
     .export-modal-nav-item { min-height: 44px; }
     .export-modal-field-input:not(textarea) { min-height: 44px; }
     .export-modal-action-btn { min-height: 44px; }
+    .export-seg-btn { min-height: 44px; }
 }
 
 // ── Retro Chrome (body.theme-retro-chrome) ─────────────────────────────────────────────────────────────────────

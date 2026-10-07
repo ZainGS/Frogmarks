@@ -35,6 +35,16 @@
     border-top: 1px solid rgba(255,255,255,0.1);
     padding: 8px 10px 6px;
     background: #202020;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    flex: 1 0 100%;   // its own line in the outliner's actions row
+    order: 10;
+
+    // A range's intrinsic ~130 px width + label + value pushed the rows (Character form) past the panel's edge:
+    // let the controls shrink instead.
+    .scene3d-qf-row { min-width: 0; }
+    .scene3d-qf-row > input[type="range"], .scene3d-qf-row > select { min-width: 0; width: auto; flex: 1 1 0; }
 }
 
 .scene3d-quick-form-title {
@@ -153,4 +163,12 @@
     flex-shrink: 0;
     &:hover:not(:disabled) { color: #f77; }
     &:disabled { opacity: 0.3; cursor: default; }
+}
+
+@media (pointer: coarse) {
+    .scene3d-add-mesh-dropdown { max-height: min(60vh, 520px); min-width: 180px; }
+    .scene3d-add-mesh-item { min-height: 44px; display: flex; align-items: center; font-size: 13px; }
+    .scene3d-qf-btn { min-height: 44px; font-size: 13px; }
+    .scene3d-qf-row { min-height: 44px; }
+    .scene3d-qf-label { font-size: 12px; }
 }

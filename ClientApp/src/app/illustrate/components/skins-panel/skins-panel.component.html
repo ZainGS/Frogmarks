@@ -1,254 +1,288 @@
 <div class="tool-label">SKINS</div>
 
-<ng-container *ngIf="garpPools.length === 0">
-    <div style="font-size:11px;opacity:0.5;padding:6px 0">No pools registered.</div>
-</ng-container>
-
-<ng-container *ngIf="garpPools.length > 0">
-
-    <!-- Pool selector — only shown when multiple pools exist -->
-    <div class="scene3d-material-row" *ngIf="garpPools.length > 1">
-        <label>Pool</label>
-        <select class="scene3d-select" [(ngModel)]="garpActivePoolId">
-            <option *ngFor="let p of garpPools" [value]="p.id">{{ p.name }}</option>
-        </select>
-    </div>
-
-    <!-- Existing variants list -->
-    <div class="scene3d-array-strip-label" style="margin-top:4px">
-        {{ garpActivePool?.name }} variants
-    </div>
-    <ng-container *ngFor="let skin of garpActivePool?.skins">
-        <div class="scene3d-row" style="justify-content:space-between;align-items:center;padding:2px 0">
-            <span style="font-size:11px">{{ skin.name }}</span>
-            <button class="scene3d-btn scene3d-btn-sm"
-                    (click)="garpDeleteSkin(garpActivePoolId, skin.name)">✕</button>
-        </div>
-    </ng-container>
-    <div *ngIf="!garpActivePool?.skins?.length"
-         style="font-size:11px;opacity:0.4;padding:2px 0">No user variants yet.</div>
-
-    <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
-
-    <!-- Add new variant -->
-    <div class="scene3d-array-strip-label">Add variant</div>
-
-    <div class="scene3d-material-row">
-        <label>Name</label>
-        <input type="text" class="scene3d-select"
-               [(ngModel)]="garpNewSkinName"
-               placeholder="e.g. coke"
-               style="flex:1;min-width:0">
-    </div>
-
-    <!-- Per-slot authoring areas -->
-    <ng-container *ngFor="let slot of garpActivePool?.slots">
-      <ng-container *ngIf="slot.name !== 'labels'">
-        <div class="scene3d-array-strip-label" style="margin-top:8px;display:flex;align-items:center;gap:6px">
-            {{ slot.name }}
-            <span *ngIf="!slot.live"
-                  style="font-size:9px;font-weight:400;opacity:0.45;text-transform:none">
-                (not shown in-city yet)
-            </span>
-        </div>
-
-        <!-- UV region overlay — only for multi-region slots (e.g. body's 6-face unwrap) -->
-        <svg *ngIf="garpGetSlotRegions(slot.name).length > 1"
-             viewBox="0 0 1 1"
-             style="width:100%;aspect-ratio:1;display:block;background:#0d0d0d;border-radius:3px;margin-bottom:6px">
-            <ng-container *ngFor="let r of garpGetSlotRegions(slot.name)">
-                <rect [attr.x]="r.u0" [attr.y]="r.v0"
-                      [attr.width]="r.u1 - r.u0" [attr.height]="r.v1 - r.v0"
-                      fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.3)" stroke-width="0.006"/>
-                <text [attr.x]="(r.u0 + r.u1) / 2" [attr.y]="(r.v0 + r.v1) / 2 + 0.025"
-                      font-size="0.065" text-anchor="middle"
-                      fill="rgba(255,255,255,0.55)">{{ r.label }}</text>
-            </ng-container>
-        </svg>
-
-        <!-- Action buttons: Upload / Use canvas / Paint -->
-        <div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">
-            <label class="scene3d-btn scene3d-btn-sm"
-                   style="cursor:pointer;flex:1;text-align:center;display:flex;align-items:center;justify-content:center">
-                Upload
-                <input type="file" accept="image/*" style="display:none"
-                       (change)="garpUploadSlotImage(slot.name, $event)">
-            </label>
-            <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
-                    (click)="garpUseCanvas(slot.name)">Use canvas</button>
-            <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
-                    (click)="garpStartPaint(slot.name)"
-                    title="Open UV Paint on the body shell — paint, then click 'Use painted texture'">Paint</button>
-        </div>
-
-        <!-- Save from UV Paint — visible after Paint is clicked for this slot -->
-        <ng-container *ngIf="garpPaintMeshId && garpPaintSlot === slot.name">
-            <div class="scene3d-material-row" style="margin-bottom:4px">
-                <label>Name</label>
-                <input type="text" class="scene3d-select"
-                       [(ngModel)]="garpPaintSkinName"
-                       placeholder="e.g. coke"
-                       style="flex:1;min-width:0">
-            </div>
-            <div style="display:flex;gap:4px;margin-bottom:6px">
-                <button class="scene3d-btn" style="flex:1"
-                        [disabled]="!garpPaintSkinName.trim() || garpSaving"
-                        (click)="garpSaveFromPaint()">
-                    {{ garpSaving ? 'Saving…' : 'Save as variant' }}
-                </button>
-                <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
-                        (click)="garpCancelPaint()">Cancel</button>
-            </div>
-        </ng-container>
-
-        <img *ngIf="garpSlotSources[slot.name]" [src]="garpSlotSources[slot.name]"
-             style="width:100%;max-height:80px;object-fit:contain;border-radius:3px;background:#111;margin-bottom:4px">
-        <div *ngIf="!garpSlotSources[slot.name]"
-             style="width:100%;height:44px;border:1px dashed rgba(255,255,255,0.18);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;opacity:0.35;margin-bottom:4px">
-            No image
-        </div>
-      </ng-container>
-    </ng-container>
-
-    <button class="scene3d-btn" style="width:100%;margin-top:8px"
-            [disabled]="!garpCanSave"
-            (click)="garpSaveSkin()">
-        {{ garpSaving ? 'Saving…' : 'Save Variant' }}
+<!-- ── Drill-down (utils/sub-nav.ts): a menu of the three kinds of skin, one kind's controls at a time ── -->
+<div *ngIf="nav.id" class="nav-header">
+    <button class="nav-back" (click)="nav.close()">← Back</button>
+    <span class="nav-crumb"><span>Skins</span><span class="nav-crumb-sep">›</span><span class="nav-crumb-here">{{ nav.label }}</span></span>
+</div>
+<div class="nav-tiles" *ngIf="!nav.id">
+    <button class="nav-tile" (click)="nav.open('props', 'Prop skins')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Prop skins</span><span class="nav-tile-hint">Vending machines and other props · variants · can designs</span></span><span class="nav-tile-chev">›</span>
     </button>
+    <button class="nav-tile" (click)="nav.open('adverts', 'Adverts')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Adverts</span><span class="nav-tile-hint">Your images on the city's signs</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('shops', 'Shop windows')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Shop windows</span><span class="nav-tile-hint">Interiors and posters behind shop glass</span></span><span class="nav-tile-chev">›</span>
+    </button>
+</div>
 
-    <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
+<ng-container *ngIf="nav.id === 'props'">
+    <ng-container *ngIf="garpPools.length === 0">
+        <div style="font-size:11px;opacity:0.5;padding:6px 0">No pools registered.</div>
+    </ng-container>
 
-    <!-- Vending can designs: separate PNGs packed by Salsa into the skin's label sheet -->
-    <ng-container *ngIf="garpActivePoolId === GARP_VENDING_POOL && garpActivePool?.skins?.length">
-        <div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
-            Can designs
-            <span *ngIf="garpCanPacking" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">packing...</span>
-        </div>
-        <div class="scene3d-material-row">
-            <label>Skin</label>
-            <select class="scene3d-select" [(ngModel)]="garpCanSkin">
-                <option *ngFor="let s of garpActivePool?.skins" [value]="s.name">{{ s.name }}</option>
+    <ng-container *ngIf="garpPools.length > 0">
+
+        <!-- Pool selector — only shown when multiple pools exist -->
+        <div class="scene3d-material-row" *ngIf="garpPools.length > 1">
+            <label>Pool</label>
+            <select class="scene3d-select" [(ngModel)]="garpActivePoolId">
+                <option *ngFor="let p of garpPools" [value]="p.id">{{ p.name }}</option>
             </select>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-            <div *ngFor="let url of garpCanList; let i = index"
-                 style="position:relative;width:38px;display:flex;flex-direction:column;align-items:center;gap:2px">
-                <img [src]="url" style="width:38px;height:76px;object-fit:fill;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
-                <div style="display:flex;gap:1px">
-                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [disabled]="i === 0" (click)="garpMoveCanDesign(i, -1)" title="Move left">&#9664;</button>
-                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="garpRemoveCanDesign(i)" title="Remove">&#10005;</button>
-                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [disabled]="i === garpCanList.length - 1" (click)="garpMoveCanDesign(i, 1)" title="Move right">&#9654;</button>
-                </div>
-            </div>
-            <div *ngIf="!garpCanList.length" style="font-size:10px;opacity:0.4;padding:2px 0">
-                No custom designs - this skin uses its current sheet.
-            </div>
+
+        <!-- Existing variants list -->
+        <div class="scene3d-array-strip-label" style="margin-top:4px">
+            {{ garpActivePool?.name }} variants
         </div>
-        <div style="display:flex;gap:4px;margin-bottom:4px">
-            <label class="scene3d-btn scene3d-btn-sm"
-                   style="cursor:pointer;flex:1;text-align:center;display:flex;align-items:center;justify-content:center"
-                   [style.opacity]="garpCanList.length >= GARP_MAX_CANS ? 0.4 : 1"
-                   title="One PNG per can front, 1-8 per skin. Any size works; 1:2 portrait (e.g. 256x512) avoids distortion.">
-                + Add PNG
-                <input type="file" accept="image/png,image/*" multiple style="display:none"
-                       [disabled]="garpCanList.length >= GARP_MAX_CANS || garpCanPacking"
-                       (change)="garpAddCanDesigns($event)">
-            </label>
-            <button class="scene3d-btn scene3d-btn-sm" style="flex:1" (click)="garpDownloadCanTemplate()"
-                    title="Download the label-sheet layout guide">Template</button>
-        </div>
-        <div class="scene3d-hint">Fewer than 8 designs repeat. Regenerate the city to see changes.</div>
+        <ng-container *ngFor="let skin of garpActivePool?.skins">
+            <div class="scene3d-row" style="justify-content:space-between;align-items:center;padding:2px 0">
+                <span style="font-size:11px">{{ skin.name }}</span>
+                <button class="scene3d-btn scene3d-btn-sm" [class.scene3d-btn-active]="confirming === 'skin:' + skin.name"
+                        (click)="confirming = confirming === 'skin:' + skin.name ? null : 'skin:' + skin.name"
+                        title="Delete this variant" [attr.aria-label]="'Delete ' + skin.name">✕</button>
+            </div>
+            <fm-confirm-strip *ngIf="confirming === 'skin:' + skin.name" action="Delete"
+                              [text]="'Delete the skin “' + skin.name + '”? This can’t be undone.'"
+                              (ok)="confirming = null; garpDeleteSkin(garpActivePoolId, skin.name)" (cancel)="confirming = null"></fm-confirm-strip>
+        </ng-container>
+        <div *ngIf="!garpActivePool?.skins?.length"
+             style="font-size:11px;opacity:0.4;padding:2px 0">No user variants yet.</div>
 
         <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
+
+        <!-- Add new variant -->
+        <div class="scene3d-array-strip-label">Add variant</div>
+
+        <div class="scene3d-material-row">
+            <label>Name</label>
+            <input type="text" class="scene3d-select"
+                   [(ngModel)]="garpNewSkinName"
+                   placeholder="e.g. coke"
+                   style="flex:1;min-width:0">
+        </div>
+
+        <!-- Per-slot authoring areas -->
+        <ng-container *ngFor="let slot of garpActivePool?.slots">
+          <ng-container *ngIf="slot.name !== 'labels'">
+            <div class="scene3d-array-strip-label" style="margin-top:8px;display:flex;align-items:center;gap:6px">
+                {{ slot.name }}
+                <span *ngIf="!slot.live"
+                      style="font-size:9px;font-weight:400;opacity:0.45;text-transform:none">
+                    (not shown in-city yet)
+                </span>
+            </div>
+
+            <!-- UV region overlay — only for multi-region slots (e.g. body's 6-face unwrap) -->
+            <svg *ngIf="garpGetSlotRegions(slot.name).length > 1"
+                 viewBox="0 0 1 1"
+                 style="width:100%;aspect-ratio:1;display:block;background:#0d0d0d;border-radius:3px;margin-bottom:6px">
+                <ng-container *ngFor="let r of garpGetSlotRegions(slot.name)">
+                    <rect [attr.x]="r.u0" [attr.y]="r.v0"
+                          [attr.width]="r.u1 - r.u0" [attr.height]="r.v1 - r.v0"
+                          fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.3)" stroke-width="0.006"/>
+                    <text [attr.x]="(r.u0 + r.u1) / 2" [attr.y]="(r.v0 + r.v1) / 2 + 0.025"
+                          font-size="0.065" text-anchor="middle"
+                          fill="rgba(255,255,255,0.55)">{{ r.label }}</text>
+                </ng-container>
+            </svg>
+
+            <!-- Action buttons: Upload / Use canvas / Paint -->
+            <div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">
+                <label class="scene3d-btn scene3d-btn-sm"
+                       style="cursor:pointer;flex:1;text-align:center;display:flex;align-items:center;justify-content:center">
+                    Upload
+                    <input type="file" accept="image/*" style="display:none"
+                           (change)="garpUploadSlotImage(slot.name, $event)">
+                </label>
+                <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
+                        (click)="garpUseCanvas(slot.name)">Use canvas</button>
+                <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
+                        (click)="garpStartPaint(slot.name)"
+                        title="Open UV Paint on the body shell — paint, then click 'Use painted texture'">Paint</button>
+            </div>
+
+            <!-- Save from UV Paint — visible after Paint is clicked for this slot -->
+            <ng-container *ngIf="garpPaintMeshId && garpPaintSlot === slot.name">
+                <div class="scene3d-material-row" style="margin-bottom:4px">
+                    <label>Name</label>
+                    <input type="text" class="scene3d-select"
+                           [(ngModel)]="garpPaintSkinName"
+                           placeholder="e.g. coke"
+                           style="flex:1;min-width:0">
+                </div>
+                <div style="display:flex;gap:4px;margin-bottom:6px">
+                    <button class="scene3d-btn" style="flex:1"
+                            [disabled]="!garpPaintSkinName.trim() || garpSaving"
+                            (click)="garpSaveFromPaint()">
+                        {{ garpSaving ? 'Saving…' : 'Save as variant' }}
+                    </button>
+                    <button class="scene3d-btn scene3d-btn-sm" style="flex:1"
+                            (click)="garpCancelPaint()">Cancel</button>
+                </div>
+            </ng-container>
+
+            <img *ngIf="garpSlotSources[slot.name]" [src]="garpSlotSources[slot.name]"
+                 style="width:100%;max-height:80px;object-fit:contain;border-radius:3px;background:#111;margin-bottom:4px">
+            <div *ngIf="!garpSlotSources[slot.name]"
+                 style="width:100%;height:44px;border:1px dashed rgba(255,255,255,0.18);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;opacity:0.35;margin-bottom:4px">
+                No image
+            </div>
+          </ng-container>
+        </ng-container>
+
+        <button class="scene3d-btn" style="width:100%;margin-top:8px"
+                [disabled]="!garpCanSave"
+                (click)="garpSaveSkin()">
+            {{ garpSaving ? 'Saving…' : 'Save Variant' }}
+        </button>
+
+        <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
+
+        <!-- Vending can designs: separate PNGs packed by Salsa into the skin's label sheet -->
+        <ng-container *ngIf="garpActivePoolId === GARP_VENDING_POOL && garpActivePool?.skins?.length">
+            <div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
+                Can designs
+                <span *ngIf="garpCanPacking" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">packing...</span>
+            </div>
+            <div class="scene3d-material-row">
+                <label>Skin</label>
+                <select class="scene3d-select" [(ngModel)]="garpCanSkin">
+                    <option *ngFor="let s of garpActivePool?.skins" [value]="s.name">{{ s.name }}</option>
+                </select>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+                <div *ngFor="let url of garpCanList; let i = index"
+                     style="position:relative;width:38px;display:flex;flex-direction:column;align-items:center;gap:2px">
+                    <img [src]="url" style="width:38px;height:76px;object-fit:fill;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
+                    <div style="display:flex;gap:1px">
+                        <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [disabled]="i === 0" (click)="garpMoveCanDesign(i, -1)" title="Move left">&#9664;</button>
+                        <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="garpRemoveCanDesign(i)" title="Remove">&#10005;</button>
+                        <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [disabled]="i === garpCanList.length - 1" (click)="garpMoveCanDesign(i, 1)" title="Move right">&#9654;</button>
+                    </div>
+                </div>
+                <div *ngIf="!garpCanList.length" style="font-size:10px;opacity:0.4;padding:2px 0">
+                    No custom designs - this skin uses its current sheet.
+                </div>
+            </div>
+            <div style="display:flex;gap:4px;margin-bottom:4px">
+                <label class="scene3d-btn scene3d-btn-sm"
+                       style="cursor:pointer;flex:1;text-align:center;display:flex;align-items:center;justify-content:center"
+                       [style.opacity]="garpCanList.length >= GARP_MAX_CANS ? 0.4 : 1"
+                       title="One PNG per can front, 1-8 per skin. Any size works; 1:2 portrait (e.g. 256x512) avoids distortion.">
+                    + Add PNG
+                    <input type="file" accept="image/png,image/*" multiple style="display:none"
+                           [disabled]="garpCanList.length >= GARP_MAX_CANS || garpCanPacking"
+                           (change)="garpAddCanDesigns($event)">
+                </label>
+                <button class="scene3d-btn scene3d-btn-sm" style="flex:1" (click)="garpDownloadCanTemplate()"
+                        title="Download the label-sheet layout guide">Template</button>
+            </div>
+            <div class="scene3d-hint">Fewer than 8 designs repeat. Regenerate the city to see changes.</div>
+
+            <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
+        </ng-container>
+
+        <button class="scene3d-btn" style="width:100%" (click)="garpRegenerateCity()">
+            Regenerate City
+        </button>
+
     </ng-container>
-
-    <button class="scene3d-btn" style="width:100%" (click)="garpRegenerateCity()">
-        Regenerate City
-    </button>
-
 </ng-container>
-<!-- ── Adverts (Salsa polish round 3 T2): your images on the city's signs, by shape ── -->
-<div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
-<div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
-    Adverts
-    <span *ngIf="advertBusy" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">updating...</span>
-</div>
-<div class="scene3d-hint" style="margin:0 0 6px">Images show on the city's signs of the matching shape, cropped to fit. Lit = backlit (glows at night). No images = the usual procedural signs.</div>
-<ng-container *ngFor="let b of advertBuckets">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 3px">
-        <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8">{{ b.label }}</span>
-        <span style="font-size:9px;opacity:0.45">{{ b.recommendedPx }}</span>
+
+<ng-container *ngIf="nav.id === 'adverts'">
+    <!-- ── Adverts (Salsa polish round 3 T2): your images on the city's signs, by shape ── -->
+    <div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
+        Adverts
+        <span *ngIf="advertBusy" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">updating...</span>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
-        <div *ngFor="let img of advertImagesIn(b.bucket)"
-             style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <img [src]="img.dataUrl" [title]="img.name || ''"
-                 [style.width.px]="advertThumbW(b.bucket)" [style.height.px]="advertThumbH(b.bucket)"
-                 style="object-fit:cover;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
-            <div style="display:flex;gap:2px;align-items:center">
-                <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px"
-                        [style.opacity]="img.lit ? 1 : 0.4"
-                        (click)="advertToggleLit(img.id, !img.lit)"
-                        [title]="img.lit ? 'Lit (glows at night) - click for unlit poster' : 'Unlit poster - click to make it lit'">&#9728;</button>
-                <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="advertRemove(img.id)" title="Remove">&#10005;</button>
-            </div>
+    <div class="scene3d-hint" style="margin:0 0 6px">Images show on the city's signs of the matching shape, cropped to fit. Lit = backlit (glows at night). No images = the usual procedural signs.</div>
+    <ng-container *ngFor="let b of advertBuckets">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 3px">
+            <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8">{{ b.label }}</span>
+            <span style="font-size:9px;opacity:0.45">{{ b.recommendedPx }}</span>
         </div>
-        <label class="scene3d-btn scene3d-btn-sm"
-               style="cursor:pointer;display:flex;align-items:center;justify-content:center"
-               [style.min-width.px]="advertThumbW(b.bucket)" [style.height.px]="advertThumbH(b.bucket)"
-               title="Add images for this sign shape">
-            +
-            <input type="file" accept="image/*" multiple style="display:none"
-                   [disabled]="advertBusy" (change)="advertAdd(b.bucket, $event)">
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+            <div *ngFor="let img of advertImagesIn(b.bucket)"
+                 style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <img [src]="img.dataUrl" [title]="img.name || ''"
+                     [style.width.px]="advertThumbW(b.bucket)" [style.height.px]="advertThumbH(b.bucket)"
+                     style="object-fit:cover;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
+                <div style="display:flex;gap:2px;align-items:center">
+                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px"
+                            [style.opacity]="img.lit ? 1 : 0.4"
+                            (click)="advertToggleLit(img.id, !img.lit)"
+                            [title]="img.lit ? 'Lit (glows at night) - click for unlit poster' : 'Unlit poster - click to make it lit'">&#9728;</button>
+                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="advertRemove(img.id)" title="Remove">&#10005;</button>
+                </div>
+            </div>
+            <label class="scene3d-btn scene3d-btn-sm"
+                   style="cursor:pointer;display:flex;align-items:center;justify-content:center"
+                   [style.min-width.px]="advertThumbW(b.bucket)" [style.height.px]="advertThumbH(b.bucket)"
+                   title="Add images for this sign shape">
+                +
+                <input type="file" accept="image/*" multiple style="display:none"
+                       [disabled]="advertBusy" (change)="advertAdd(b.bucket, $event)">
+            </label>
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" style="margin-top:6px">
+        <label title="Share of the city's signs that show your images (the rest keep procedural signs)">Share</label>
+        <input type="range" min="0" max="1" step="0.05" [ngModel]="advertShare" (ngModelChange)="advertSetShare(+$event)">
+        <span class="scene3d-val">{{ advertShare * 100 | number:'1.0-0' }}%</span>
+    </div>
+    <div style="display:flex;gap:4px;margin:4px 0">
+        <label class="scene3d-btn scene3d-btn-sm" style="cursor:pointer;flex:1;text-align:center"
+               title="Add images of any shape - each goes to the bucket matching its proportions">
+            + Add any (auto-sort)
+            <input type="file" accept="image/*" multiple style="display:none" [disabled]="advertBusy" (change)="advertAdd('auto', $event)">
         </label>
     </div>
+    <button *ngIf="confirming !== 'adverts'" class="scene3d-btn scene3d-btn-sm scene3d-btn-danger" style="width:100%;margin-top:12px"
+            [disabled]="!advertImages.length || advertBusy" (click)="confirming = 'adverts'">Clear all adverts…</button>
+    <fm-confirm-strip *ngIf="confirming === 'adverts'" action="Clear all"
+                      [text]="'Remove all ' + advertImages.length + ' advert images? The signs go back to procedural.'"
+                      (ok)="confirming = null; advertClear()" (cancel)="confirming = null"></fm-confirm-strip>
+    <div *ngIf="advertError" class="scene3d-hint" style="color:#e88;margin:0">{{ advertError }}</div>
 </ng-container>
-<div class="scene3d-material-row" style="margin-top:6px">
-    <label title="Share of the city's signs that show your images (the rest keep procedural signs)">Share</label>
-    <input type="range" min="0" max="1" step="0.05" [ngModel]="advertShare" (ngModelChange)="advertSetShare(+$event)">
-    <span class="scene3d-val">{{ advertShare * 100 | number:'1.0-0' }}%</span>
-</div>
-<div style="display:flex;gap:4px;margin:4px 0">
-    <label class="scene3d-btn scene3d-btn-sm" style="cursor:pointer;flex:1;text-align:center"
-           title="Add images of any shape - each goes to the bucket matching its proportions">
-        + Add any (auto-sort)
-        <input type="file" accept="image/*" multiple style="display:none" [disabled]="advertBusy" (change)="advertAdd('auto', $event)">
-    </label>
-    <button class="scene3d-btn scene3d-btn-sm" style="flex:1" [disabled]="!advertImages.length || advertBusy" (click)="advertClear()">Clear all</button>
-</div>
-<div *ngIf="advertError" class="scene3d-hint" style="color:#e88;margin:0">{{ advertError }}</div>
 
-<!-- ── Shop windows (Salsa persona polish C4): interior + poster images behind / on shop glass ── -->
-<div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0"></div>
-<div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
-    Shop windows
-    <span *ngIf="shopBusy" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">updating...</span>
-</div>
-<div class="scene3d-hint" style="margin:0 0 6px">Interior = a shelf / room image seen through shop glass (with depth). Poster = stuck on the inside of the glass. No images = procedural shops.</div>
-<ng-container *ngFor="let b of shopBuckets">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 3px">
-        <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8">{{ b.label }}</span>
-        <span style="font-size:9px;opacity:0.45">{{ b.recommendedPx }}</span>
+<ng-container *ngIf="nav.id === 'shops'">
+    <!-- ── Shop windows (Salsa persona polish C4): interior + poster images behind / on shop glass ── -->
+    <div class="scene3d-array-strip-label" style="display:flex;align-items:center;gap:6px">
+        Shop windows
+        <span *ngIf="shopBusy" style="font-size:9px;font-weight:400;opacity:0.5;text-transform:none">updating...</span>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
-        <div *ngFor="let img of shopImagesIn(b.bucket)" style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <img [src]="img.dataUrl" [title]="img.name || ''" style="width:48px;height:36px;object-fit:cover;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
-            <div style="display:flex;gap:2px;align-items:center">
-                <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [style.opacity]="img.lit ? 1 : 0.4"
-                        (click)="shopToggleLit(img.id, !img.lit)" [title]="img.lit ? 'Lit (glows at night)' : 'Unlit (dark at night)'">&#9728;</button>
-                <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="shopRemove(img.id)" title="Remove">&#10005;</button>
-            </div>
+    <div class="scene3d-hint" style="margin:0 0 6px">Interior = a shelf / room image seen through shop glass (with depth). Poster = stuck on the inside of the glass. No images = procedural shops.</div>
+    <ng-container *ngFor="let b of shopBuckets">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 3px">
+            <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8">{{ b.label }}</span>
+            <span style="font-size:9px;opacity:0.45">{{ b.recommendedPx }}</span>
         </div>
-        <label class="scene3d-btn scene3d-btn-sm" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:48px;height:36px" title="Add images">
-            +
-            <input type="file" accept="image/*" multiple style="display:none" [disabled]="shopBusy" (change)="shopAdd(b.bucket, $event)">
-        </label>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+            <div *ngFor="let img of shopImagesIn(b.bucket)" style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <img [src]="img.dataUrl" [title]="img.name || ''" style="width:48px;height:36px;object-fit:cover;border-radius:3px;background:#111;border:1px solid rgba(255,255,255,0.15)">
+                <div style="display:flex;gap:2px;align-items:center">
+                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" [style.opacity]="img.lit ? 1 : 0.4"
+                            (click)="shopToggleLit(img.id, !img.lit)" [title]="img.lit ? 'Lit (glows at night)' : 'Unlit (dark at night)'">&#9728;</button>
+                    <button class="scene3d-icon-btn" style="padding:0 3px;font-size:9px" (click)="shopRemove(img.id)" title="Remove">&#10005;</button>
+                </div>
+            </div>
+            <label class="scene3d-btn scene3d-btn-sm" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:48px;height:36px" title="Add images">
+                +
+                <input type="file" accept="image/*" multiple style="display:none" [disabled]="shopBusy" (change)="shopAdd(b.bucket, $event)">
+            </label>
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" style="margin-top:6px">
+        <label title="Share of shop bays that use your images">Share</label>
+        <input type="range" min="0" max="1" step="0.05" [ngModel]="shopShare" (ngModelChange)="shopSetShare(+$event)">
+        <span class="scene3d-val">{{ shopShare * 100 | number:'1.0-0' }}%</span>
     </div>
+    <button *ngIf="confirming !== 'shops'" class="scene3d-btn scene3d-btn-sm scene3d-btn-danger" style="width:100%;margin-top:12px"
+            [disabled]="!shopImages.length || shopBusy" (click)="confirming = 'shops'">Clear all shop images…</button>
+    <fm-confirm-strip *ngIf="confirming === 'shops'" action="Clear all"
+                      [text]="'Remove all ' + shopImages.length + ' shop window images? The shops go back to procedural.'"
+                      (ok)="confirming = null; shopClear()" (cancel)="confirming = null"></fm-confirm-strip>
+    <div *ngIf="shopError" class="scene3d-hint" style="color:#e88;margin:0">{{ shopError }}</div>
 </ng-container>
-<div class="scene3d-material-row" style="margin-top:6px">
-    <label title="Share of shop bays that use your images">Share</label>
-    <input type="range" min="0" max="1" step="0.05" [ngModel]="shopShare" (ngModelChange)="shopSetShare(+$event)">
-    <span class="scene3d-val">{{ shopShare * 100 | number:'1.0-0' }}%</span>
-</div>
-<button class="scene3d-btn scene3d-btn-sm" style="width:100%;margin:4px 0" [disabled]="!shopImages.length || shopBusy" (click)="shopClear()">Clear all</button>
-<div *ngIf="shopError" class="scene3d-hint" style="color:#e88;margin:0">{{ shopError }}</div>

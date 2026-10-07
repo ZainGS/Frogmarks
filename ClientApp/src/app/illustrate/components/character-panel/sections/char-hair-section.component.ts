@@ -10,5 +10,8 @@ import { CharHairService } from '../char-hair.service';
   styleUrls: ['./char-hair-section.component.scss'],
 })
 export class CharHairSectionComponent {
+  /** Remove Hair is asking first (no undo). */
+  confirmRemove = false;
+
   constructor(public cp: CharacterPanelComponent, public hair: CharHairService) {}
 }

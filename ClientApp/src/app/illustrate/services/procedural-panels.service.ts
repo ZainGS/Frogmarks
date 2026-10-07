@@ -5,12 +5,13 @@ import type { IllustrationComponent } from '../components/illustration/illustrat
 import { EditorStateService } from './editor-state.service';
 /** Exactly the editor state the building / foliage / block panels use. */
 export type ProceduralPanelsHost = Pick<IllustrationComponent, 'shapeManager' |
-  '_updateGizmoPosition' | 'scene3dRefreshMeshes' | 'scene3dSelectMesh' | 'clearMeshSelection' 
+  '_updateGizmoPosition' | 'scene3dRefreshMeshes' | 'scene3dSelectMesh' | 'clearMeshSelection' | 'scene3dMarkDirty'
 >;
 
 /**
  * Procedural building / foliage / block (city block) editing: add, the selection flags, which editor panel is open and
- * for which id (the panel follows the selection or closes), editing a building inside a block, delete.
+ * for which id (the panel follows the selection or closes), editing a building inside a block, delete. Every add /
+ * delete marks the document dirty (an add / delete raised no save of its own — it waited for an unrelated edit).
  * Component-scoped (provided by IllustrationComponent). Bodies moved verbatim from illustration.component
  * (refactor-plan 2.9H).
  */
@@ -51,6 +52,7 @@ export class ProceduralPanelsService {
     if (!result?.id) return;
     this.host.scene3dRefreshMeshes();
     this.host.scene3dSelectMesh(result.id);
+    this.host.scene3dMarkDirty();
   }
 
   scene3dToggleEditBuildingPanel(): void {
@@ -71,6 +73,7 @@ export class ProceduralPanelsService {
     this.scene3dSelectedIsBuilding = false;
     this.host.scene3dRefreshMeshes();
     this.host._updateGizmoPosition();
+    this.host.scene3dMarkDirty();
   }
 
   async scene3dAddFoliage(): Promise<void> {
@@ -79,6 +82,7 @@ export class ProceduralPanelsService {
     if (!result?.id) return;
     this.host.scene3dRefreshMeshes();
     this.host.scene3dSelectMesh(result.id);
+    this.host.scene3dMarkDirty();
   }
 
   scene3dToggleEditFoliagePanel(): void {
@@ -99,6 +103,7 @@ export class ProceduralPanelsService {
     this.scene3dSelectedIsFoliage = false;
     this.host.scene3dRefreshMeshes();
     this.host._updateGizmoPosition();
+    this.host.scene3dMarkDirty();
   }
 
   async scene3dCreateBlock(): Promise<void> {
@@ -107,6 +112,7 @@ export class ProceduralPanelsService {
     if (!id) return;
     this.host.scene3dRefreshMeshes();
     this.host.scene3dSelectMesh(id);
+    this.host.scene3dMarkDirty();
   }
 
   scene3dToggleEditBlockPanel(): void {
@@ -155,6 +161,7 @@ export class ProceduralPanelsService {
     this.scene3dSelectedIsBlock = false;   // <app-block-panel> clears itself when the id goes null
     this.host.scene3dRefreshMeshes();
     this.host._updateGizmoPosition();
+    this.host.scene3dMarkDirty();
   }
 
   /** Building / foliage / block: set the selection flag; an open editor panel follows the selection or closes. */

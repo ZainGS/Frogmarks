@@ -323,6 +323,8 @@ export class WorldPanelComponent implements OnDestroy {
   //    (Replaced the collapsible accordion sections, which put every control on screen at once.) ──
   readonly worldSub = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
   readonly worldNav = new SubNav(() => { this.worldSub.reset(); scrollPanelToTop(this.el.nativeElement); this._perfSyncPoll(); });
+  /** Clear city is asking first (no undo). */
+  confirmingClear = false;
 
   worldBack(): void {
     if (this.worldSub.id) this.worldSub.close();

@@ -26,6 +26,11 @@ export class TouchContextPillComponent {
   @Input() @HostBinding('class.above-timeline') aboveTimeline = false;
   /** The right panel column is showing: keep clear of it. */
   @Input() @HostBinding('class.side-panel-open') sidePanelOpen = true;
+  /** A viewport `top` (px) to sit at instead of the bottom strip — LiveText editing puts the pill just above / below
+   *  the text box, so it never covers the text being typed (the on-screen keyboard owns the bottom). null = bottom. */
+  @Input() anchorTop: number | null = null;
+  @HostBinding('class.anchored') get anchored(): boolean { return this.anchorTop !== null; }
+  @HostBinding('style.top.px') get topPx(): number | null { return this.anchorTop; }
   @Output() apply = new EventEmitter<void>();
   @Output() cancel = new EventEmitter<void>();
   /** A tool button was tapped. */

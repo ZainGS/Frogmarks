@@ -1,6 +1,10 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, AfterViewInit, SimpleChanges, NgZone, HostListener, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import {
+  ephemeraPlacementLabels, formatEphemeraSize, clampEphemeraSize, placementOriginForCentre, visibleCanvasCentre,
+  EPHEMERA_MIN_SIZE,
+} from './ephemera-panel.util';
 
 /** Placement blend mode, derived from the engine's updateEphemeraPlacement signature. */
 type EphemeraBlendMode = NonNullable<Parameters<ShapeManager['updateEphemeraPlacement']>[2]['blendMode']>;
@@ -61,17 +65,57 @@ export interface EphemeraPlacement {
   feather?: EphemeraFeather | null;
 }
 
+/** Glow + feather controls (shared by "place" and "edit"): `enabled` flags + values. */
+export interface EphemeraFxState {
+  glowEnabled: boolean;
+  glowRadius: number;
+  glowColor: string;
+  glowOpacity: number;
+  featherEnabled: boolean;
+  featherMode: 'radial' | 'linear';
+  featherStart: number;
+  featherEnd: number;
+  featherAngle: number;
+}
+
+function defaultFx(): EphemeraFxState {
+  return {
+    glowEnabled: false, glowRadius: 6, glowColor: '#ffffff', glowOpacity: 0.8,
+    featherEnabled: false, featherMode: 'radial', featherStart: 0.6, featherEnd: 1.0, featherAngle: 0,
+  };
+}
+
+function fxGlow(fx: EphemeraFxState): EphemeraGlow | null {
+  return fx.glowEnabled ? { radius: fx.glowRadius, color: fx.glowColor, opacity: fx.glowOpacity } : null;
+}
+
+function fxFeather(fx: EphemeraFxState): EphemeraFeather | null {
+  if (!fx.featherEnabled) return null;
+  return { mode: fx.featherMode, start: fx.featherStart, end: fx.featherEnd, ...(fx.featherMode === 'linear' ? { angle: fx.featherAngle } : {}) };
+}
+
+/** Engine calls newer than the Salsa dist this host may be built against (each is optional — feature-detected). */
+interface EphemeraEngineExtras {
+  onEphemeraPlacementsChanged?: { subscribe(cb: (layerId: string) => void): { unsubscribe(): void } };
+  interactionService?: { toWorldCoordsFromCanvas?(x: number, y: number): { x: number; y: number }; canvas?: HTMLCanvasElement };
+}
+
 @Component({
   selector: 'app-ephemera-panel',
   templateUrl: './ephemera-panel.component.html',
   styleUrls: ['./ephemera-panel.component.scss'],
 })
-export class EphemeraPanel implements OnInit, OnChanges {
+export class EphemeraPanel implements OnInit, OnChanges, OnDestroy, AfterViewInit {
   @Input() shapeManager: ShapeManager = null;
   @Input() vectorLayerId = '';
+  /** Dock beside the right column (Layers stays visible) instead of over it — wide screens only (see the SCSS). */
+  @Input() besideRightPanel = false;
   @Output() closeRequest = new EventEmitter<void>();
 
   private get sm(): ShapeManager { return this.shapeManager; }
+  private get engine(): EphemeraEngineExtras { return (this.shapeManager ?? {}) as unknown as EphemeraEngineExtras; }
+
+  readonly minSize = EPHEMERA_MIN_SIZE;
 
   // ── Browse ───────────────────────────────────────────────────
   categories: EphemeraCategory[] = [];
@@ -94,35 +138,25 @@ export class EphemeraPanel implements OnInit, OnChanges {
   params: Record<string, any> = {};
   paramSchemaList: EphemeraParamSchemaEntry[] = [];
   previewSvg: SafeHtml = '';
-  placeX = 0;
-  placeY = 0;
-  placeWidth = 200;
-  placeHeight = 100;
+  placeWidth = 0.5;
+  placeHeight = 0.5;
   placeRotation = 0;
   placeOpacity = 1;
   placeBlendMode: EphemeraBlendMode = 'source-over';
+  placeFx: EphemeraFxState = defaultFx();
 
   // ── Existing placements ──────────────────────────────────────
   placements: EphemeraPlacement[] = [];
+  placementLabels: string[] = [];
   editingPlacementId: string | null = null;
   editParams: Record<string, any> = {};
   editParamSchemaList: EphemeraParamSchemaEntry[] = [];
   editBlendMode: EphemeraBlendMode = 'source-over';
+  editFx: EphemeraFxState = defaultFx();
 
-  // ── Edit glow ────────────────────────────────────────────────
-  editGlowEnabled = false;
-  editGlowRadius = 6;
-  editGlowColor = '#ffffff';
-  editGlowOpacity = 0.8;
+  private _placementsSub: { unsubscribe(): void } | null = null;
 
-  // ── Edit feather ─────────────────────────────────────────────
-  editFeatherEnabled = false;
-  editFeatherMode: 'radial' | 'linear' = 'radial';
-  editFeatherStart = 0.6;
-  editFeatherEnd = 1.0;
-  editFeatherAngle = 0;
-
-  constructor(private sanitizer: DomSanitizer) {}
+  constructor(private sanitizer: DomSanitizer, private zone: NgZone, private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.refresh();
@@ -132,6 +166,52 @@ export class EphemeraPanel implements OnInit, OnChanges {
     if (changes['shapeManager'] || changes['vectorLayerId']) {
       this.refresh();
     }
+    if (changes['shapeManager']) this._subscribePlacements();
+    if (changes['besideRightPanel'] && !changes['besideRightPanel'].firstChange) this._scheduleMeasure();
+  }
+
+  ngAfterViewInit(): void {
+    this._scheduleMeasure();   // after the first layout (and outside this change-detection pass)
+  }
+
+  private _destroyed = false;
+  private _scheduleMeasure(): void { setTimeout(() => { if (!this._destroyed) this._measureDock(); }); }
+
+  /** Viewport px from the right edge to dock at: the right column's real left edge (its width varies with the theme
+   *  and drawer mode). null = the stylesheet's position (over the column on narrow screens). */
+  dockRight: number | null = null;
+
+  @HostListener('window:resize')
+  onWindowResize(): void { this._scheduleMeasure(); }
+
+  private _measureDock(): void {
+    let next: number | null = null;
+    if (this.besideRightPanel && typeof window !== 'undefined' && window.innerWidth >= 900) {
+      const rc = document.querySelector('.right-column') as HTMLElement | null;
+      if (rc && rc.getClientRects().length > 0) next = Math.max(0, Math.round(window.innerWidth - rc.getBoundingClientRect().left));
+    }
+    if (next === this.dockRight) return;
+    this.dockRight = next;
+    this.cdr.detectChanges();   // the editor runs change detection sparingly; this is a layout-only update
+  }
+
+  ngOnDestroy(): void {
+    this._destroyed = true;
+    this._placementsSub?.unsubscribe();
+    this._placementsSub = null;
+  }
+
+  /** Ctrl+Z / Ctrl+Y (and canvas moves) change placements behind the panel's back: refresh the list when the engine
+   *  says so (newer Salsa; an older dist has no event and the list refreshes on the panel's own actions). */
+  private _subscribePlacements(): void {
+    this._placementsSub?.unsubscribe();
+    this._placementsSub = null;
+    const ev = this.engine.onEphemeraPlacementsChanged;
+    if (!ev || typeof ev.subscribe !== 'function') return;
+    this._placementsSub = ev.subscribe((layerId: string) => {
+      if (layerId !== this.vectorLayerId) return;
+      this.zone.run(() => { this.refreshPlacements(); this.cdr.markForCheck(); });
+    });
   }
 
   refresh(): void {
@@ -172,10 +252,15 @@ export class EphemeraPanel implements OnInit, OnChanges {
     }
     const size = this.sm?.getDefaultPlacementSize(typeId);
     if (size) {
-      this.placeWidth = size.width;
-      this.placeHeight = size.height;
+      // World units at the current zoom; 3 decimals is plenty and keeps the inputs readable
+      this.placeWidth = Math.max(EPHEMERA_MIN_SIZE, +size.width.toFixed(3));
+      this.placeHeight = Math.max(EPHEMERA_MIN_SIZE, +size.height.toFixed(3));
     }
     this.updatePreview();
+  }
+
+  get activeGeneratorName(): string {
+    return this.generators.find(g => g.typeId === this.activeGeneratorTypeId)?.displayName ?? '';
   }
 
   updatePreview(): void {
@@ -256,22 +341,50 @@ export class EphemeraPanel implements OnInit, OnChanges {
     return (hex6 || '#000000').slice(0, 7) + aa;
   }
 
+  // ── Size inputs ───────────────────────────────────────────────
+
+  onPlaceWidthChange(v: unknown): void { this.placeWidth = clampEphemeraSize(v, this.placeWidth); }
+  onPlaceHeightChange(v: unknown): void { this.placeHeight = clampEphemeraSize(v, this.placeHeight); }
+
   // ── Place ─────────────────────────────────────────────────────
 
+  /** The world point at the centre of what the user can see of the canvas (the right column / this panel excluded). */
+  private _viewCentreWorld(): { x: number; y: number } {
+    const is = this.engine.interactionService;
+    const canvas = is?.canvas;
+    if (!canvas || typeof is?.toWorldCoordsFromCanvas !== 'function' || typeof canvas.getBoundingClientRect !== 'function') {
+      return { x: 0, y: 0 };   // artboard centre
+    }
+    const r = canvas.getBoundingClientRect();
+    const covered: number[] = [];
+    for (const sel of ['.right-column', '.ep-panel']) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (!el || el.getClientRects().length === 0) continue;   // display:none (offsetParent is null for fixed too)
+      const er = el.getBoundingClientRect();
+      if (er.width > 0 && er.height > 0) covered.push(er.left);
+    }
+    const c = visibleCanvasCentre({ left: r.left, top: r.top, width: r.width, height: r.height }, covered);
+    const w = is.toWorldCoordsFromCanvas(c.x, c.y);
+    return Number.isFinite(w?.x) && Number.isFinite(w?.y) ? w : { x: 0, y: 0 };
+  }
+
   placeCurrent(): void {
-    if (!this.vectorLayerId || !this.activeGeneratorTypeId) return;
-    const placed = this.sm?.addEphemeraPlacement(
-      this.vectorLayerId,
-      this.activeGeneratorTypeId,
-      { ...this.params },
-      this.placeX, this.placeY,
-      this.placeWidth, this.placeHeight,
-      this.placeRotation,
-      this.placeOpacity,
-    );
-    // addEphemeraPlacement has no blend-mode argument (a former 10th arg was silently ignored) — apply it after
-    if (placed && this.placeBlendMode) {
-      this.sm?.updateEphemeraPlacement(this.vectorLayerId, placed.id, { blendMode: this.placeBlendMode });
+    if (!this.vectorLayerId || !this.activeGeneratorTypeId || !this.sm) return;
+    const w = clampEphemeraSize(this.placeWidth, 0.5);
+    const h = clampEphemeraSize(this.placeHeight, 0.5);
+    const { x, y } = placementOriginForCentre(this._viewCentreWorld(), w, h);
+    const style = { blendMode: this.placeBlendMode, glow: fxGlow(this.placeFx), feather: fxFeather(this.placeFx) };
+    // The 10th argument (blend / glow / feather in the same undo step) is new in Salsa 2026-10-07; an older dist
+    // ignores it, so whatever didn't land is applied after (as before: a second call)
+    const add = this.sm.addEphemeraPlacement as unknown as (...a: unknown[]) => EphemeraPlacement | null;
+    const placed = add.call(this.sm, this.vectorLayerId, this.activeGeneratorTypeId, { ...this.params },
+      x, y, w, h, this.placeRotation, this.placeOpacity, style);
+    if (placed) {
+      const missing: Record<string, unknown> = {};
+      if ((placed.blendMode ?? 'source-over') !== style.blendMode) missing['blendMode'] = style.blendMode;
+      if (!!placed.glow !== !!style.glow) missing['glow'] = style.glow;
+      if (!!placed.feather !== !!style.feather) missing['feather'] = style.feather;
+      if (Object.keys(missing).length) this.sm.updateEphemeraPlacement(this.vectorLayerId, placed.id, missing as any);
     }
     this.refreshPlacements();
   }
@@ -279,41 +392,44 @@ export class EphemeraPanel implements OnInit, OnChanges {
   // ── Placements list ───────────────────────────────────────────
 
   refreshPlacements(): void {
-    if (!this.vectorLayerId || !this.sm) { this.placements = []; return; }
-    this.placements = (this.sm?.getEphemeraPlacementsForLayer(this.vectorLayerId) ?? []) as any;
+    if (!this.vectorLayerId || !this.sm) { this.placements = []; this.placementLabels = []; return; }
+    this.placements = [...((this.sm?.getEphemeraPlacementsForLayer(this.vectorLayerId) ?? []) as any)];
+    this.placementLabels = ephemeraPlacementLabels(this.placements, (t) => this.sm?.getEphemeraGenerator(t)?.displayName);
+    if (this.editingPlacementId && !this.placements.some(p => p.id === this.editingPlacementId)) this.editingPlacementId = null;
   }
+
+  placementSize(p: EphemeraPlacement): string { return formatEphemeraSize(p.width, p.height); }
+
+  trackPlacement(_i: number, p: EphemeraPlacement): string { return p.id; }
 
   startEdit(p: EphemeraPlacement): void {
     this.editingPlacementId = p.id;
     this.editParams = { ...p.params };
     // Host EphemeraPlacement types blendMode as string (TODO: align host interfaces with the engine's)
     this.editBlendMode = (p.blendMode ?? 'source-over') as EphemeraBlendMode;
-    this.editGlowEnabled = !!p.glow;
-    this.editGlowRadius = p.glow?.radius ?? 6;
-    this.editGlowColor = p.glow?.color ?? '#ffffff';
-    this.editGlowOpacity = p.glow?.opacity ?? 0.8;
-    this.editFeatherEnabled = !!p.feather;
-    this.editFeatherMode = p.feather?.mode ?? 'radial';
-    this.editFeatherStart = p.feather?.start ?? 0.6;
-    this.editFeatherEnd = p.feather?.end ?? 1.0;
-    this.editFeatherAngle = p.feather?.angle ?? 0;
+    const d = defaultFx();
+    this.editFx = {
+      glowEnabled: !!p.glow,
+      glowRadius: p.glow?.radius ?? d.glowRadius,
+      glowColor: p.glow?.color ?? d.glowColor,
+      glowOpacity: p.glow?.opacity ?? d.glowOpacity,
+      featherEnabled: !!p.feather,
+      featherMode: p.feather?.mode ?? d.featherMode,
+      featherStart: p.feather?.start ?? d.featherStart,
+      featherEnd: p.feather?.end ?? d.featherEnd,
+      featherAngle: p.feather?.angle ?? d.featherAngle,
+    };
     const gen = this.sm?.getEphemeraGenerator(p.typeId);
     this.editParamSchemaList = (gen?.getParamSchema?.() ?? []) as any;
   }
 
   commitEdit(): void {
     if (!this.editingPlacementId || !this.vectorLayerId) return;
-    const glow = this.editGlowEnabled
-      ? { radius: this.editGlowRadius, color: this.editGlowColor, opacity: this.editGlowOpacity }
-      : null;
-    const feather = this.editFeatherEnabled
-      ? { mode: this.editFeatherMode, start: this.editFeatherStart, end: this.editFeatherEnd, ...(this.editFeatherMode === 'linear' ? { angle: this.editFeatherAngle } : {}) }
-      : null;
     this.sm?.updateEphemeraPlacement(this.vectorLayerId, this.editingPlacementId, {
       params: { ...this.editParams },
       blendMode: this.editBlendMode,
-      glow,
-      feather,
+      glow: fxGlow(this.editFx),
+      feather: fxFeather(this.editFx),
     });
     this.editingPlacementId = null;
     this.refreshPlacements();
@@ -329,8 +445,9 @@ export class EphemeraPanel implements OnInit, OnChanges {
     this.refreshPlacements();
   }
 
-  rasterize(): void {
-    void this.sm?.rasterizeEphemeraLayer(this.vectorLayerId);
+  async rasterize(): Promise<void> {
+    await this.sm?.rasterizeEphemeraLayer(this.vectorLayerId);
+    this.refreshPlacements();
   }
 
   close(): void {

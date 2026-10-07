@@ -31,7 +31,7 @@
          title="Generate a procedural building">Building…</div>
     <div class="scene3d-add-mesh-item" (click)="action.emit('foliage'); menuOpenChange.emit(false)"
          title="Generate a freestanding plant or hedge">Foliage…</div>
-    <div *ngFor="let ct of scene3dCreatorTypesList"
+    <div *ngFor="let ct of extraCreatorTypes"
          class="scene3d-add-mesh-item"
          (click)="action.emit({ creator: ct.typeId }); menuOpenChange.emit(false)"
          title="Add a procedural {{ ct.label }}">{{ ct.label }}…</div>
@@ -373,6 +373,6 @@
     </div>
     <div style="display:flex;gap:4px;margin-top:6px">
         <button class="scene3d-qf-btn" style="flex:1" (click)="add.scene3dGenerateCharacter()">Generate body</button>
-        <button class="scene3d-qf-btn" style="flex:none;background:#2a2a2a" (click)="add.scene3dCancelCharacter()">Cancel</button>
+        <button class="scene3d-qf-btn" style="width:auto;flex:none;padding:5px 12px;background:#2a2a2a" (click)="add.scene3dCancelCharacter()">Cancel</button>
     </div>
 </div>

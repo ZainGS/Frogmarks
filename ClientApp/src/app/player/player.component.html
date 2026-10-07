@@ -4,30 +4,33 @@
      (dragleave)="!isLoaded && onDragLeave($event)"
      (drop)="!isLoaded && onDrop($event)">
 
-  <!-- Canvas (always mounted so WebGPU has a target) -->
+  <!-- Canvas (always mounted so WebGPU has a target; absolutely placed, so while hidden it doesn't push the drop zone
+       off-screen) -->
   <canvas #webgpuCanvas id="playerCanvas" class="player-canvas" [class.hidden]="!isLoaded"></canvas>
 
   <!-- Header bar (shown when a cart is loaded) -->
   <div class="player-header" *ngIf="isLoaded">
     <span class="player-header-title">{{ cartTitle }}</span>
     <span class="player-header-author" *ngIf="cartAuthor">by {{ cartAuthor }}</span>
-    <button class="player-exit-btn" (click)="goHome()" title="Exit player">✕ Exit</button>
+    <button type="button" class="player-btn player-exit-btn" (click)="goHome()" title="Exit the player">✕ Exit</button>
   </div>
+
+  <!-- Back (before a cart is loaded): an installed, full-screen app has no browser Back button -->
+  <button type="button" class="player-btn player-back-btn" *ngIf="!isLoaded" (click)="goHome()" title="Back to Frogmarks">← Back</button>
 
   <!-- Drop zone (shown when nothing loaded) -->
   <div class="player-drop-zone" *ngIf="!isLoaded && !isLoading" [class.drag-over]="isDragOver">
-    <div class="player-drop-icon">💿</div>
     <div class="player-drop-heading">Frogmarks Player</div>
     <div class="player-drop-sub">Drop a <code>.frogcart</code> file here to play it</div>
-    <label class="player-file-btn">
+    <label class="player-btn player-file-btn">
       Choose file
       <input type="file" accept=".frogcart" style="display:none" (change)="onFileInput($event)">
     </label>
-    <div class="player-error" *ngIf="errorMsg">{{ errorMsg }}</div>
+    <div class="player-error" *ngIf="errorMsg" role="alert">Couldn't play this file: {{ errorMsg }}</div>
   </div>
 
   <!-- Loading spinner -->
-  <div class="player-loading" *ngIf="isLoading">
+  <div class="player-loading" *ngIf="isLoading" role="status">
     <div class="player-loading-spinner"></div>
     <div class="player-loading-label">Loading…</div>
   </div>

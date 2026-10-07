@@ -17,6 +17,15 @@ export interface MeshModifier {
   direction?: 'x' | 'y' | 'z' | 'normal';
 }
 
+/** Salsa region ops newer than the dist Frogmarks type-checks against (UI review 2026-10-07): feature-detected. */
+export interface RegionOpsApi {
+  extrudeRegion3D?(meshId: string, faces: Iterable<number> | null, distance: number): boolean;
+  insetRegion3D?(meshId: string, faces: Iterable<number> | null, amount: number): boolean;
+  subdivideFaces3D?(meshId: string, faces: Iterable<number> | null): boolean;
+  fillHoles3D?(meshId: string): number;
+  bridgeLoops3D?(meshId: string, verts: Iterable<number> | null): boolean;
+}
+
 @Component({
   selector: 'app-mesh-edit-panel',
   templateUrl: './mesh-edit-panel.component.html',
@@ -36,7 +45,8 @@ export class MeshEditPanelComponent implements OnChanges {
   get selectionMode(): MeshEditSelectMode { return this.meshEditState?.selectionMode ?? this._localMode; }
   /** The key chips, generated from the Edit Mesh keymap (mode-keymap.ts). */
   readonly keys = meshEditKeyLabels();
-  bgMode: 'wavy' | 'gradient' | 'dim' | 'solid' | 'none' = 'wavy';
+  /** The calm gradient by default (UI review 2026-10-07 §3 #18); Wavy stays in the list. */
+  bgMode: 'wavy' | 'checkers' | 'gradient' | 'dim' | 'solid' | 'none' = 'gradient';
 
   extrudeDistance = 0.3;
   insetAmount = 0.1;
@@ -188,16 +198,26 @@ export class MeshEditPanelComponent implements OnChanges {
 
   // ── Operations ───────────────────────────────────────────────────
 
+  /** The region ops (a newer Salsa dist; feature-detected, else the per-face fallbacks below). */
+  private get regionOps(): RegionOpsApi { return (this.sm ?? {}) as unknown as RegionOpsApi; }
+
+  /** Extrude: connected selected faces move as ONE region (one ring of walls, a welded top) and stay selected, ready
+   *  for the next extrude / G. Older Salsa: each face on its own. */
   extrudeSelected(): void {
     if (!this.meshId || this.selectedFaces.length === 0) return;
+    const r = this.regionOps;
+    if (typeof r.extrudeRegion3D === 'function') { r.extrudeRegion3D(this.meshId, new Set(this.selectedFaces), this.extrudeDistance); return; }
     for (const fi of this.selectedFaces) {
       this.sm?.extrudeEditFace3D(this.meshId, fi, this.extrudeDistance);
     }
     this.sm?.clearEditSelection3D(this.meshId);
   }
 
+  /** Inset: one border around each connected group of selected faces (the inner faces stay selected). */
   insetSelected(): void {
     if (!this.meshId || this.selectedFaces.length === 0) return;
+    const r = this.regionOps;
+    if (typeof r.insetRegion3D === 'function') { r.insetRegion3D(this.meshId, new Set(this.selectedFaces), this.insetAmount); return; }
     for (const fi of this.selectedFaces) {
       this.sm?.insetEditFace3D(this.meshId, fi, this.insetAmount);
     }
@@ -221,9 +241,13 @@ export class MeshEditPanelComponent implements OnChanges {
     this.sm?.clearEditSelection3D(this.meshId);
   }
 
+  /** Subdivide every selected face at once (shared midpoints: a selected grid stays a grid; one undo step). Older
+   *  Salsa: one by one, highest index first (each subdivide removes its face, so lower indices stay valid). */
   subdivideFaceSelected(): void {
     if (!this.meshId || this.selectedFaces.length === 0) return;
-    for (const fi of this.selectedFaces) {
+    const r = this.regionOps;
+    if (typeof r.subdivideFaces3D === 'function') { r.subdivideFaces3D(this.meshId, new Set(this.selectedFaces)); this.sm?.clearEditSelection3D(this.meshId); return; }
+    for (const fi of [...this.selectedFaces].sort((a, b) => b - a)) {
       this.sm?.subdivideFace3D(this.meshId, fi);
     }
     this.sm?.clearEditSelection3D(this.meshId);
@@ -243,13 +267,23 @@ export class MeshEditPanelComponent implements OnChanges {
     this.mergeRemovedCount = typeof removed === 'number' ? removed : null;
   }
 
+  /** How many holes the last Fill Holes capped (null = not run since entering). */
+  holesFilled: number | null = null;
+
+  /** Fill Holes: EVERY hole (or, with vertices / edges selected on holes, just those) in one undo step. Older Salsa:
+   *  the first hole, again and again until none is left. */
   fillHole(): void {
     if (!this.meshId) return;
-    const em = this.sm?.getMesh3D(this.meshId)?.editMesh;
-    if (!em) return;
-    const boundaryIdx = (em.halfEdges as any[]).findIndex((he: any) => he.twin === -1);
-    if (boundaryIdx === -1) return;
-    this.sm?.fillHole3D(this.meshId, boundaryIdx);
+    const r = this.regionOps;
+    if (typeof r.fillHoles3D === 'function') { this.holesFilled = r.fillHoles3D(this.meshId); return; }
+    let filled = 0;
+    for (let guard = 0; guard < 256; guard++) {
+      const em = this.sm?.getMesh3D(this.meshId)?.editMesh;
+      const boundaryIdx = em ? (em.halfEdges as Array<{ twin: number }>).findIndex(he => he.twin === -1) : -1;
+      if (boundaryIdx === -1 || !this.sm?.fillHole3D(this.meshId, boundaryIdx)) break;
+      filled++;
+    }
+    this.holesFilled = filled;
   }
 
   // ── Phase 2 proportional edit ────────────────────────────────────
@@ -306,8 +340,17 @@ export class MeshEditPanelComponent implements OnChanges {
 
   // ── Bridge loops ─────────────────────────────────────────────────
 
+  /** Bridge Loops is possible: ≥ 4 vertices selected (or, on a newer Salsa, ≥ 4 edges — their ends). */
+  get canBridge(): boolean {
+    return this.selectedVertices.length >= 4 || (typeof this.regionOps.bridgeLoops3D === 'function' && this.selectedEdges.length >= 4);
+  }
+
+  /** Bridge the two loops the selection forms, whatever order they were picked in (the engine orders them by their
+   *  edges). Older Salsa: the selection split in half by pick order. */
   bridgeLoops(): void {
-    if (!this.meshId || this.selectedVertices.length < 4) return;
+    if (!this.meshId || !this.canBridge) return;
+    const r = this.regionOps;
+    if (typeof r.bridgeLoops3D === 'function') { r.bridgeLoops3D(this.meshId, null); return; }
     const verts = this.selectedVertices;
     const half = Math.floor(verts.length / 2);
     const loopA = verts.slice(0, half);

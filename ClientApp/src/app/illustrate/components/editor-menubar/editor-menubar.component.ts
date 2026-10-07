@@ -1,4 +1,5 @@
-import { Component, DoCheck, HostListener, Input } from '@angular/core';
+import { Component, DoCheck, ElementRef, HostListener, Input, OnDestroy, OnInit, Optional } from '@angular/core';
+import { OverlayManagerService, insideElement } from '../../../shared/services/overlay/overlay-manager.service';
 import type { IllustrationComponent } from '../illustration/illustration.component';
 import { ProjectFileService } from '../../services/project-file.service';
 import { ViewportHudService } from '../../services/viewport-hud.service';
@@ -26,7 +27,7 @@ export type EditorMenubarHost = Pick<IllustrationComponent, 'doc' | 'imports' | 
   templateUrl: './editor-menubar.component.html',
   styleUrls: ['./editor-menubar.component.scss'],
 })
-export class EditorMenubarComponent implements DoCheck {
+export class EditorMenubarComponent implements DoCheck, OnInit, OnDestroy {
   @Input() editor!: EditorMenubarHost;
   /** Bottom of the File menu: "Frogmarks v0.01" + build time / Salsa dist (app-version.ts: bump APP_VERSION per deploy). */
   readonly appVersionLabel = APP_VERSION_LABEL;
@@ -34,7 +35,30 @@ export class EditorMenubarComponent implements DoCheck {
   /** The Experimental dropdown is open. Kept here (not on the editor) so the editor needs no new member. */
   showExperimentalMenu = false;
   constructor(public files: ProjectFileService, public hud: ViewportHudService, public persist: IllustrationPersistenceService, public storage: StorageSettingsService,
-              public exp: ExperimentalSettingsService, public corners: ScreenCornerService, public updates: AppUpdateService) {}
+              public exp: ExperimentalSettingsService, public corners: ScreenCornerService, public updates: AppUpdateService,
+              @Optional() private overlays?: OverlayManagerService, @Optional() private hostEl?: ElementRef<HTMLElement>) {}
+
+  /** The menus and the Experimental result dialog join the overlay manager: Esc / a tap outside closes them, and one
+   *  overlay is open at a time (UI review 2026-10-07 §3 item 2). */
+  private _unregister: Array<() => void> = [];
+  ngOnInit(): void {
+    const o = this.overlays;
+    if (!o) return;
+    this._unregister.push(o.register({
+      id: 'menubar',
+      isOpen: () => this.anyMenuOpen,
+      close: () => { this.showExperimentalMenu = false; if (this.anyMenuOpen) this.editor?.closeAllMenus(); },
+      contains: insideElement(() => this.hostEl?.nativeElement),
+    }));
+    this._unregister.push(o.register({ id: 'experimental-dialog', isOpen: () => !!this.exp.dialog, close: () => this.exp.closeDialog() }));
+  }
+  ngOnDestroy(): void { this._unregister.forEach(f => f()); this._unregister = []; }
+
+  /** One of the menubar's dropdowns is open (the editor's four + Experimental). */
+  get anyMenuOpen(): boolean {
+    const e = this.editor;
+    return this.showExperimentalMenu || !!(e?.showFileMenu || e?.showEditMenu || e?.showAnimationMenu || e?.showViewMenu);
+  }
 
   /** The "Update ready" button (never a popup in the editor: app-update.logic.ts). */
   get updatePrompt(): UpdatePromptKind { return updatePromptFor('editor', this.updates?.state ?? 'none', false); }

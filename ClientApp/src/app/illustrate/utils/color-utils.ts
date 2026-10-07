@@ -108,10 +108,17 @@ export function rgba01ObjToHex(c: { r: number; g: number; b: number; a?: number 
   return `#${r}${g}${b}`;
 }
 
+/** '#'-prefix a bare 3 / 6 / 8-digit hex colour ('191919' -> '#191919'); anything else is returned unchanged. */
+export function withHash(color: string | null | undefined): string {
+  const c = (color ?? '').trim();
+  return /^(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c) ? '#' + c : c;
+}
+
 /** Any CSS colour (#rgb / #rrggbb / #rrggbbaa / rgb[a]() / named) -> {r,g,b} 0–255 + a 0–1. Named colours go through
  *  a canvas context. */
 export function parseAnyColor(color: string): { r: number; g: number; b: number; a: number } {
   let r = 255, g = 255, b = 255, a = 1;
+  color = withHash(color);   // a bare 'rrggbb' (the engine's getBackgroundColor) used to fall through to white
   if (color.startsWith('#')) {
     const hex = color.substring(1);
     if (hex.length === 3) { r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16); }

@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { transformVec3 } from '../../utils/transform-fields';
 
 /** Mesh inspector: Transform (position / rotation in degrees / scale). Extracted from illustration.component (refactor-plan 2.9D). */
 @Component({
@@ -46,25 +47,33 @@ export class MeshTransformSectionComponent implements OnChanges {
     this.scene3dMeshScaleZ = mesh.scaleZ ?? 1;
   }
 
+  // Only whole numbers are applied (utils/transform-fields.ts): a "-" being typed or a cleared field waits; blur
+  // (onFieldBlur) puts the mesh's real value back in a field left unfinished.
+
   scene3dUpdateMeshPosition(): void {
-    if (!this.meshId) return;
-    this.shapeManager.scene3d?.setPosition(
-      this.meshId, +this.scene3dMeshPosX, +this.scene3dMeshPosY, +this.scene3dMeshPosZ);
+    const v = transformVec3(this.scene3dMeshPosX, this.scene3dMeshPosY, this.scene3dMeshPosZ);
+    if (!this.meshId || !v) return;
+    this.shapeManager.scene3d?.setPosition(this.meshId, v[0], v[1], v[2]);
     this.dirty.emit();
   }
 
   scene3dUpdateMeshRotation(): void {
-    if (!this.meshId) return;
+    const v = transformVec3(this.scene3dMeshRotX, this.scene3dMeshRotY, this.scene3dMeshRotZ);
+    if (!this.meshId || !v) return;
     const d2r = Math.PI / 180;
-    this.shapeManager.scene3d?.setRotation(
-      this.meshId, +this.scene3dMeshRotX * d2r, +this.scene3dMeshRotY * d2r, +this.scene3dMeshRotZ * d2r);
+    this.shapeManager.scene3d?.setRotation(this.meshId, v[0] * d2r, v[1] * d2r, v[2] * d2r);
     this.dirty.emit();
   }
 
   scene3dUpdateMeshScale(): void {
-    if (!this.meshId) return;
-    this.shapeManager.scene3d?.setScale(
-      this.meshId, +this.scene3dMeshScaleX, +this.scene3dMeshScaleY, +this.scene3dMeshScaleZ);
+    const v = transformVec3(this.scene3dMeshScaleX, this.scene3dMeshScaleY, this.scene3dMeshScaleZ, { nonZero: true });
+    if (!this.meshId || !v) return;
+    this.shapeManager.scene3d?.setScale(this.meshId, v[0], v[1], v[2]);
     this.dirty.emit();
+  }
+
+  /** A field lost focus: show the mesh's real transform again (an unfinished "-" / empty field doesn't stay). */
+  onFieldBlur(): void {
+    this.load();
   }
 }

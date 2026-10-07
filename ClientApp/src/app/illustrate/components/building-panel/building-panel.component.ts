@@ -1,10 +1,13 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { colorToHex, hexToRgba01Obj } from '../../utils/color-utils';
+import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 
 /**
  * Edit Building panel: category/archetype/seed, massing, facade, storefront, Japan details, greenery,
- * colours, scale, frame, delete, save-to-library. Also edits a building inside a Block (blockId + index).
+ * colours, scale, frame, delete, save-to-library. Also edits a building inside a Block (blockId + index): then the
+ * actions are that ONE building's (Remove from block) — the whole-block Delete / Scale / Frame / Save stay in the
+ * Block panel. ~100 controls, so a menu of groups (utils/sub-nav.ts) opens one group at a time, like Edit Character.
  * Extracted from illustration.component (refactor-plan Phase 2.4b). The editor owns which building is being
  * edited, the block-building flow and deletion; the panel owns the params.
  */
@@ -21,13 +24,25 @@ export class BuildingPanelComponent implements OnChanges {
   @Input() blockBuildingIndex: number | null = null;
   @Input() open = false;
   @Output() deleteBuilding = new EventEmitter<void>();
-  /** "Back to block" clicked while editing a block building. */
+  /** "Back to block" clicked while editing a block building (also after Remove from block). */
   @Output() backToBlock = new EventEmitter<void>();
+  /** A param / scale changed or a block building was removed — the editor marks the document for autosave. */
+  @Output() dirty = new EventEmitter<void>();
+
+  /** Drill-down: null = the menu of groups, else the open group ('style', 'massing', …). */
+  readonly nav = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
+  /** Which destructive action is asking first. */
+  confirming: 'delete' | 'remove' | null = null;
+
+  constructor(private el: ElementRef<HTMLElement>) {}
 
   scene3dBuildingArchetypes: string[] = [];
 
   ngOnChanges(changes: SimpleChanges): void {
     const relevant = ['open', 'buildingId', 'blockId', 'blockBuildingIndex'].some(k => changes[k]);
+    if (relevant) this.confirming = null;
+    // Another building (or a block building) starts at the menu
+    if (['buildingId', 'blockId', 'blockBuildingIndex'].some(k => changes[k] && !changes[k].firstChange)) this.nav.reset();
     if (relevant && this.open && this.buildingId) this._initBuildingParams();
   }
 
@@ -256,11 +271,28 @@ export class BuildingPanelComponent implements OnChanges {
     const sm = this.shapeManager;
     if (this.blockBuildingIndex !== null && this.blockId) {
       sm.setBlockBuildingParams3D(this.blockId, this.blockBuildingIndex, { [field]: v });
+      this.dirty.emit();
       return;
     }
     const id = this.buildingId;
     if (!id) return;
     sm.setBuildingParams3D(id, { [field]: v });
+    this.dirty.emit();
+  }
+
+  /** Back: a group goes back to the menu; the menu of a block building goes back to the Block panel. */
+  back(): void {
+    if (this.nav.id) this.nav.close();
+    else if (this.blockBuildingIndex !== null) this.backToBlock.emit();
+  }
+
+  /** Remove from block (confirmed): only this building — the block and its other buildings stay. */
+  scene3dRemoveFromBlock(): void {
+    const blockId = this.blockId, index = this.blockBuildingIndex;
+    if (!blockId || index === null) return;
+    this.shapeManager.removeBlockBuilding3D(blockId, index);
+    this.dirty.emit();
+    this.backToBlock.emit();
   }
 
   scene3dRandomizeBuildingSeed(): void {
@@ -270,7 +302,7 @@ export class BuildingPanelComponent implements OnChanges {
 
   async scene3dBuildingPromoteToLibrary(): Promise<void> {
     const id = this.buildingId;
-    if (!id) return;
+    if (!id || this.blockBuildingIndex !== null) return;   // buildingId is the BLOCK's id there
     const sm = this.shapeManager;
     await sm.promoteCreatorToLibrary3D(id, { name: 'Building', tags: ['building'] });
   }
@@ -284,14 +316,15 @@ export class BuildingPanelComponent implements OnChanges {
 
   scene3dApplyBuildingScale(): void {
     const id = this.buildingId;
-    if (!id) return;
+    if (!id || this.blockBuildingIndex !== null) return;   // the block's scale is the Block panel's
     this.shapeManager.setBuildingScale3D(id, this.buildingUnitsPerMetre);
     this._refreshBuildingScaleInfo();
+    this.dirty.emit();
   }
 
   scene3dFrameBuilding(): void {
     const id = this.buildingId;
-    if (!id) return;
+    if (!id || this.blockBuildingIndex !== null) return;
     this.shapeManager.frameBuilding3D(id);
   }
 }

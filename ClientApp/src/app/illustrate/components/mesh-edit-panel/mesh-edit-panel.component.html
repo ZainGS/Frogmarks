@@ -6,9 +6,9 @@
     <span class="me-mesh-name" [title]="meshName">{{ meshName || 'Mesh' }}</span>
     <select class="me-bg-select" [(ngModel)]="bgMode" (change)="updateBgMode()"
             title="Background style">
+      <option value="gradient">Gradient</option>
       <option value="wavy">Wavy</option>
       <option value="checkers">Clover Picnic</option>
-      <option value="gradient">Gradient</option>
       <option value="dim">Dim</option>
       <option value="solid">Solid</option>
       <option value="none">None</option>
@@ -89,7 +89,8 @@
         <button class="me-op-btn me-op-full me-op-secondary"
                 style="margin-top:4px"
                 [disabled]="selectedFaces.length === 0"
-                (click)="subdivideFaceSelected()">Subdivide Face</button>
+                (click)="subdivideFaceSelected()"
+                title="Split each selected face into quads (selected neighbours share their new edge points)">Subdivide</button>
 
         <button class="me-op-btn me-op-full me-op-secondary"
                 style="margin-top:4px"
@@ -191,7 +192,10 @@
 
       <button class="me-op-btn me-op-full me-op-secondary" style="margin-top:6px"
               (click)="fillHole()"
-              title="Detect boundary and fill first open hole">Fill Hole</button>
+              title="Cap every open hole with a face (select a vertex or edge on a hole to fill only that one)">Fill Holes</button>
+      <div *ngIf="holesFilled !== null" class="me-hint" [class.me-hint-ok]="holesFilled > 0">
+        {{ holesFilled === 0 ? 'No open holes.' : holesFilled + (holesFilled === 1 ? ' hole filled' : ' holes filled') }}
+      </div>
     </div>
 
     <!-- ── Proportional Edit ──────────────────────────────── -->
@@ -297,13 +301,13 @@
 
       <button class="me-op-btn me-op-full me-op-secondary"
               style="margin-top:6px"
-              [disabled]="selectedVertices.length < 4"
+              [disabled]="!canBridge"
               (click)="bridgeLoops()"
-              title="Fill gap between two vertex loops with quad faces">
+              title="Join two open loops with a ring of quad faces (pick the loops' vertices in any order)">
         Bridge Loops
       </button>
-      <div class="me-hint" *ngIf="selectedVertices.length > 0 && selectedVertices.length < 4">
-        Select the same number of vertices on each open boundary loop.
+      <div class="me-hint" *ngIf="selectedVertices.length > 0 && !canBridge">
+        Select both loops — the same number of vertices on each, in any order.
       </div>
     </div>
 

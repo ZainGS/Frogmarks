@@ -74,15 +74,21 @@ export class RasterAutoSaveService {
   // ── Availability ────────────────────────────────────────────
 
   private async _checkAvailability(): Promise<void> {
+    // Available after all (the first check runs at construction, before the engine exists, and can fail there):
+    // clear a stale 'unavailable' — enable()'s re-check never did, so the top bar said "Not saved" for good.
+    const markAvailable = () => {
+      this._available$.next(true);
+      if (this._state$.value === 'unavailable') this._state$.next('idle');
+    };
     try {
       const available = this.sm?.isAutoSaveAvailable() ?? false;
       if (available) {
-        this._available$.next(true);
+        markAvailable();
         return;
       }
       // Fallback: check OPFS support directly
       if (typeof navigator !== 'undefined' && 'storage' in navigator && 'getDirectory' in (navigator.storage || {})) {
-        this._available$.next(true);
+        markAvailable();
       } else {
         this._available$.next(false);
         this._state$.next('unavailable');

@@ -1271,7 +1271,8 @@ body.theme-retro-chrome .scene3d-btn {
   color: var(--rc-text) !important;
   font-size: 10px !important;
   &:hover:not(:disabled) { background: var(--rc-surface-hi) !important; }
-  &.active {
+  // The panels' toggle "on" state is .scene3d-btn-active (_panel-controls.scss): this rule's specificity hid it
+  &.active, &.scene3d-btn-active, &.scene3d-btn-active:hover:not(:disabled) {
     background: var(--rc-green) !important;
     border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk) !important;
     color: var(--rc-green-txt) !important;

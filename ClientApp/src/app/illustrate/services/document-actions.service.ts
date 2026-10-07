@@ -156,6 +156,30 @@ export class DocumentActionsService implements OnDestroy {
   }
 
   /**
+   * "Document not found" › Create new: a new, empty local illustration in this browser, opened in place of the missing
+   * one (replaceUrl: Back does not return to the dead link). Its first change saves like any other local document.
+   */
+  async createInPlaceOfMissing(): Promise<void> {
+    if (this._docActionRunning) return;
+    this._docActionRunning = true;
+    try {
+      const local = await this.localIllustrationService.create('Untitled Illustration');
+      await this.router.navigate(['/illustration/local', local.uuid], { state: { illustration: local, isNew: true }, replaceUrl: true });
+    } catch (e) {
+      console.error('[Create new]', e);
+      this.notifyService.error('A new illustration could not be created in this browser.');
+    } finally {
+      this._docActionRunning = false;
+    }
+  }
+
+  /** "Document not found" › Back to Shell (nothing to save: no document is bound). */
+  backToShellFromMissing(): void { void this.router.navigate(['/']); }
+
+  /** "Document not found" › Try again (a cloud document the server could not return): load the page again. */
+  retryMissing(): void { window.location.reload(); }
+
+  /**
    * File > Duplicate Illustration: save the open document, then copy it AS SAVED into a new illustration and open the
    * copy. The copy is made from this device's saved document (Salsa's OPFS document + the editor's OPFS metadata), so
    * it is complete: layers and cels, vector shapes, the 3D scene, characters, city, cameras, textures, settings. For a

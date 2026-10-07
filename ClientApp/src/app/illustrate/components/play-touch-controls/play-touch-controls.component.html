@@ -5,12 +5,16 @@
 <div class="ptc-zone ptc-look-zone" #lookZone
      [style.left]="'calc(50% + ' + (leftInset - rightInset) / 2 + 'px)'"
      [style.right.px]="rightInset"></div>
+<!-- The hint fades out after 3 s (CSS); it never takes input. -->
 <div class="ptc-hint" [style.left.px]="leftInset + 16">Drag left to move &middot; drag right to look</div>
+
+<!-- Stop sits alone at the top right, far from Sneak / Run (a 44 px+ target). -->
+<button type="button" class="ptc-stop" [style.right.px]="rightInset + 16" (click)="stop.emit()"
+        title="Stop: back to the editor">&#9632; Stop</button>
 
 <div class="ptc-stick-base" #stickBase><div class="ptc-stick-knob" #stickKnob></div></div>
 
 <div class="ptc-buttons" [style.right.px]="rightInset + 16">
-    <button type="button" class="ptc-btn ptc-btn-sm" (click)="stop.emit()" title="Stop: back to the editor">Stop</button>
     <button type="button" class="ptc-btn ptc-btn-sm" [class.on]="sneaking" (click)="toggleSneak()" title="Sneak (toggle)">Sneak</button>
     <button type="button" class="ptc-btn ptc-btn-sm" [class.on]="running" (click)="toggleRun()" title="Walk / run (toggle)">Run</button>
     <button type="button" class="ptc-btn" [class.on]="useHeld"

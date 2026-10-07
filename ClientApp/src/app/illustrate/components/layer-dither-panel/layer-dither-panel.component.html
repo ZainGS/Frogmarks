@@ -1,9 +1,9 @@
-<div class="form-check" style="margin-bottom: 6px;">
-    <input class="form-check-input" type="checkbox"
+<label class="scene3d-checkbox-row" style="margin-bottom: 6px;">
+    <input type="checkbox"
            [checked]="fx.getLayerDitherEnabled(selectedRasterLayerId)"
            (change)="fx.onLayerDitherEnabledChange(selectedRasterLayerId, $any($event.target).checked)">
-    <label class="form-check-label" style="color: #ccc; font-size: 11px;">Layer Dither</label>
-</div>
+    <span style="color: #ccc; font-size: 11px;">Layer Dither</span>
+</label>
 
 <div *ngIf="fx.getLayerDitherEnabled(selectedRasterLayerId)" style="padding-left: 4px;">
     <!-- Algorithm -->
@@ -102,22 +102,22 @@
 
     <!-- Per-Channel -->
     <div style="margin-bottom: 5px;">
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox"
+        <label class="scene3d-checkbox-row">
+            <input type="checkbox"
                    [checked]="fx.getLayerDitherConfig(selectedRasterLayerId).perChannel"
                    (change)="fx.onLayerDitherPerChannelChange(selectedRasterLayerId, $any($event.target).checked)">
-            <label class="form-check-label" style="color: #ccc; font-size: 9px;">Per-Channel</label>
-        </div>
+            <span style="color: #ccc; font-size: 10px;">Per-Channel</span>
+        </label>
     </div>
 
     <!-- Invert Pattern -->
     <div style="margin-bottom: 5px;">
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox"
+        <label class="scene3d-checkbox-row">
+            <input type="checkbox"
                    [checked]="fx.getLayerDitherConfig(selectedRasterLayerId).invertPattern"
                    (change)="fx.onLayerDitherInvertChange(selectedRasterLayerId, $any($event.target).checked)">
-            <label class="form-check-label" style="color: #ccc; font-size: 9px;">Invert Pattern</label>
-        </div>
+            <span style="color: #ccc; font-size: 10px;">Invert Pattern</span>
+        </label>
     </div>
 
     <!-- Bayer settings (only when algorithm = 'bayer') -->

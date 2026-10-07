@@ -83,6 +83,17 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     &:disabled { opacity: 0.35; cursor: default; }
 }
 
+// Eyedropper armed (the next canvas tap samples): sunken + green, like the other "on" toggles.
+.picker-eyedropper.on {
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+    border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
+}
+
+@media (pointer: coarse) {
+    .picker-action-btn { width: 44px; height: 44px; }
+}
+
 .reset-icon {
     position: relative;
     display: inline-block;

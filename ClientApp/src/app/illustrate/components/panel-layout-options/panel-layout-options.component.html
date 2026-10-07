@@ -62,18 +62,16 @@
     </div>
     <hr style="border-color: #444; margin: 4px 0;">
     <!-- Guides -->
-    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+    <label class="scene3d-checkbox-row" style="gap: 6px; margin-bottom: 6px;" title="Show dashed guides at the bleed margin.">
         <input type="checkbox" [(ngModel)]="pl.panelShowBleedGuides"
-               (ngModelChange)="pl.onPanelShowBleedGuidesChange($event)"
-               title="Show dashed guides at the bleed margin.">
-        <label style="color: #aaa; font-size: 11px;">Bleed guides</label>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+               (ngModelChange)="pl.onPanelShowBleedGuidesChange($event)">
+        <span style="color: #aaa; font-size: 11px;">Bleed guides</span>
+    </label>
+    <label class="scene3d-checkbox-row" style="gap: 6px; margin-bottom: 6px;" title="Show dashed guides at gutter center lines.">
         <input type="checkbox" [(ngModel)]="pl.panelShowGutterGuides"
-               (ngModelChange)="pl.onPanelShowGutterGuidesChange($event)"
-               title="Show dashed guides at gutter center lines.">
-        <label style="color: #aaa; font-size: 11px;">Gutter guides</label>
-    </div>
+               (ngModelChange)="pl.onPanelShowGutterGuidesChange($event)">
+        <span style="color: #aaa; font-size: 11px;">Gutter guides</span>
+    </label>
     <hr style="border-color: #444; margin: 4px 0;">
     <!-- Create Button -->
     <button (click)="pl.createPanelLayout()"

@@ -7,6 +7,7 @@ import { ArmBindingService } from './arm-binding.service';
 import { ArmAnimService } from './arm-anim.service';
 import { ArmLibraryService } from './arm-library.service';
 import { ArmSpringService } from './arm-spring.service';
+import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
 
 export interface ArmatureSkeleton {
   id: string;
@@ -78,7 +79,11 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
   // ── Clips ────────────────────────────────────────────────────────
 
   // ── Background ───────────────────────────────────────────────────
-  bgMode: 'wavy' | 'gradient' | 'dim' | 'solid' | 'none' = 'wavy';
+  /** The calm gradient by default (UI review 2026-10-07 §3 #18); Wavy stays in the list. */
+  bgMode: 'wavy' | 'checkers' | 'gradient' | 'dim' | 'solid' | 'none' = 'gradient';
+
+  /** Experimental › Developer buttons: gates the developer-only tools (Copy pose + body for Claude). */
+  readonly exp = inject(ExperimentalSettingsService);
 
   // ── Retarget ─────────────────────────────────────────────────────
 
@@ -168,6 +173,7 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     this.rig.selectedJointIsTail = this.sm?.getSelectedJointIsTail3D() ?? false;
     if (idx !== null && idx !== this.rig.selectedJointIdx) {
       this.rig._applyJointSelection(idx);
+      if (this.binding.wpActive) this.sm?.setWeightPaintJoint3D(idx);   // a joint picked in the viewport paints too
     } else if (idx !== null && this.rig.armatureToolMode === 'rotate') {
       this.rig._syncRotationInputs(idx);
     }

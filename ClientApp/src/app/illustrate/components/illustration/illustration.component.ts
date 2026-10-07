@@ -48,6 +48,10 @@ import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
 import { rasterLayerSignature } from '../../utils/raster-layer-signature';
 import { vectorLayerToolSwitch } from '../../utils/vector-layer-tools';
+import { CanvasPointerExtras } from '../../utils/canvas-pointer-extras';
+import { sampleCanvasHex, type EyedropperEngine } from '../../utils/canvas-eyedropper';
+import { canvasMenuItems, clampMenuPosition, runCanvasMenuItem, type CanvasMenuId, type CanvasMenuItem } from './canvas-context-menu';
+import { liveTextPillTop, vectorToolHint } from './drawing-tool-ui';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { activeContextPill, canRouteDuplicate, ContextPillButton, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete, TOOL3D_ACTIONS,
   routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
@@ -88,6 +92,9 @@ import { RasterSelectionService } from 'app/shared/services/raster/raster-select
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { HiddenUiWake } from '../../utils/hidden-ui-wake';
+import { applyStoredRetroTheme, isRetroThemeOn, setRetroTheme } from 'app/shared/services/theme/retro-theme';
+import { OverlayManagerService } from 'app/shared/services/overlay/overlay-manager.service';
+import { installEditorChrome } from './editor-chrome';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
 import {
@@ -322,6 +329,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
    *  "Update ready" saves it first through this guard. Registered for the editor's whole life (a reused, detached
    *  editor still holds its document). */
   private readonly _appUpdate = inject(AppUpdateService);
+  /** Esc / outside tap / one at a time for menus, popovers and dialogs (UI review §3 item 2; editor-chrome.ts). */
+  private readonly _overlays = inject(OverlayManagerService);
+  /** Uninstalls the editor's overlay entries + the two- / three-finger history taps (editor-chrome.ts). */
+  private _uninstallChrome: (() => void) | null = null;
   private _unregisterUpdateGuard: (() => void) | null = null;
 
   @HostListener('document:fullscreenchange') onFullscreenChange() {
@@ -338,6 +349,71 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   contextMenu = { visible: false, x: 0, y: 0 };
   closeContextMenu() { if (this.contextMenu.visible) this.contextMenu.visible = false; }
+
+  // ── Canvas context menu + eyedropper (UI review 2026-10-07 §2b, §3 #10; canvas-context-menu.ts,
+  //    utils/canvas-pointer-extras.ts) ──
+  /** The canvas menu's items, routed like their keys (only built while the menu is open). */
+  get canvasMenu(): CanvasMenuItem[] { return canvasMenuItems(this); }
+  runCanvasMenu(id: CanvasMenuId): void { runCanvasMenuItem(this, id); this.closeContextMenu(); }
+  /** Open the canvas menu at a viewport point, kept on screen. */
+  openContextMenu(clientX: number, clientY: number): void {
+    this.closeAllMenus();
+    const coarse = this.touchUi.coarse;
+    const w = coarse ? 220 : 200, h = 7 * (coarse ? 44 : 32) + 2 * 9 + 8;
+    const p = clampMenuPosition(clientX, clientY, w, h, window.innerWidth, window.innerHeight);
+    this.contextMenu = { visible: true, x: p.x, y: p.y };
+  }
+  /** The one-shot eyedropper is armed (the colour picker's button shows it pressed). */
+  eyedropperArmed = false;
+  toggleEyedropper(): void { this.canvasExtras.toggleArmed(); }
+  readonly canvasExtras = new CanvasPointerExtras({
+    canvas: () => this.canvas ?? null,
+    menuAllowed: () => !this.uiHidden && !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible &&
+      !this.liveTextOptions?.liveTextIsEditing && !this.shapeManager?.lineDrawingService?.isDrawing,
+    openMenu: (x, y) => this.ngZone.run(() => this.openContextMenu(x, y)),
+    altSampleAllowed: () => !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible && !this.isPathEditActive,
+    sample: (x, y) => { void this._sampleCanvasColor(x, y); },
+    armedChanged: (on) => this.ngZone.run(() => { this.eyedropperArmed = on; }),
+    cancelPress: () => { (this.shapeManager as unknown as { cancelRasterStroke?(): boolean }).cancelRasterStroke?.(); },
+  });
+  private async _sampleCanvasColor(clientX: number, clientY: number): Promise<void> {
+    const hex = await sampleCanvasHex(this.shapeManager as unknown as EyedropperEngine, this.canvas ?? null, clientX, clientY);
+    this.ngZone.run(() => {
+      if (!hex) { this.notifyService.error('No colour could be read there'); return; }
+      this.draw.setPenColor(hex);
+      this.draw.addRecentColor(hex);
+    });
+  }
+
+  /** The vector tools' one-line hint (shape drag-to-size / arrow drag on a newer dist). */
+  get vectorToolHint(): string {
+    const drags = (this.shapeManager as unknown as { shapeDragToSize?: boolean } | undefined)?.shapeDragToSize === true;
+    return vectorToolHint(this.controlPanelActiveTool, this.draw.activeShapeKind, drags);
+  }
+
+  /** Touch LiveText editing: the "Done editing text" pill sits above (or below) the text box, never on it — the
+   *  on-screen keyboard covers the bottom where the pill normally sits. null = the default placement. */
+  get contextPillTop(): number | null {
+    if (!this.liveTextOptions?.liveTextIsEditing) return null;
+    const box = this._liveTextScreenSpan();
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    return liveTextPillTop(box, vh, 56, 64);
+  }
+  /** The editing LiveText box's vertical screen span (viewport px), from its world box and the 2D view matrix. */
+  private _liveTextScreenSpan(): { top: number; bottom: number } | null {
+    const sm = this.shapeManager, id = this.liveTextOptions?.liveTextNodeId, cv = this.canvas;
+    const node = id ? sm?.getLiveTextNode(id) as unknown as { x: number; y: number; height: number; scaleY?: number } | null : null;
+    const m = sm?.interactionService?.getWorldMatrix?.() as ArrayLike<number> | undefined;
+    if (!node || !m || !cv) return null;
+    const r = cv.getBoundingClientRect();
+    const h = Math.abs((node.height || 0) * (node.scaleY ?? 1));
+    const toY = (wy: number): number => {
+      const cy = m[1] * node.x + m[5] * wy + m[13], cw = m[3] * node.x + m[7] * wy + m[15] || 1;
+      return r.top + (1 - cy / cw) / 2 * r.height;
+    };
+    const a = toY(node.y + h / 2), b = toY(node.y - h / 2);
+    return Number.isFinite(a) && Number.isFinite(b) ? { top: Math.min(a, b), bottom: Math.max(a, b) } : null;
+  }
 
   private rasterStrokeSubscription?: Subscription;
   /** Stroke start / cancel (mobile-parity 7.3c): the cloud pixel poll waits for a stroke; a taken-back stroke re-uploads. */
@@ -408,18 +484,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   rightPanelTab: 'scene' | 'global' | 'ui' = 'scene';
 
   // ── Theme ──────────────────────────────────────────────────────
-  retroThemeActive = localStorage.getItem('fm-theme') === 'retro-chrome';
+  /** View › Retro Chrome's ✓: what is showing (the body class), one source of truth with index.html (retro-theme.ts). */
+  get retroThemeActive(): boolean { return isRetroThemeOn(); }
 
-  toggleRetroTheme(): void {
-    this.retroThemeActive = !this.retroThemeActive;
-    if (this.retroThemeActive) {
-      document.body.classList.add('theme-retro-chrome');
-      localStorage.setItem('fm-theme', 'retro-chrome');
-    } else {
-      document.body.classList.remove('theme-retro-chrome');
-      localStorage.removeItem('fm-theme');
-    }
-  }
+  toggleRetroTheme(): void { setRetroTheme(!this.retroThemeActive); }
 
   // Sidebar tool-swap animation state
   tools2dVisible = true;
@@ -1366,7 +1434,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       case 'deleteCDKit': this.scene3dOutlinerDeleteCDKit(a.id); break;
       case 'duplicate': this.scene3dDuplicateMesh(a.id); break;
       case 'editCloth': this.scene3dOpenClothBuilder(a.id); break;
-      case 'move': this.scene3dMoveMesh(a.id, a.dir); break;
+      case 'undo': this.scene3dUndo(); this.scene3dMarkDirty(); break;
     }
   }
 
@@ -1414,15 +1482,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     }
   }
 
-  scene3dMoveMesh(id: string, direction: 'up' | 'down'): void {
-    const sm = this.shapeManager;
-    // TODO: moveLayerUp3D/moveLayerDown3D never existed in the engine — these
-    // outliner arrows have always been no-ops. Needs a Salsa reorder API.
-    console.warn('Mesh reorder not supported by engine yet', id, direction);
-    setTimeout(() => this.outliner.scene3dRefreshHierarchy(), 50);
-    this.scene3dMarkDirty();
-  }
-
   _scene3dReconstructGroups(sm: ShapeManager, groups: Array<{ name: string; children: string[] }>): void {
     for (const g of groups) {
       if (!g.children?.length) continue;
@@ -1441,6 +1500,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (this.outliner.scene3dCharacterBodyIds.has(groupId)) { this.scene3dDeleteMesh(groupId); return; }
     this.shapeManager.deleteMeshGroup3D(groupId);
     this.scene3dRefreshMeshes();
+    this.scene3dMarkDirty();
   }
 
   scene3dAddGroup(): void {
@@ -1671,6 +1731,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       document.addEventListener('keydown', this._onDocKeyDownOutsideZone);
       document.addEventListener('keyup', this._onDocKeyUpOutsideZone);
     });
+    this._uninstallChrome = installEditorChrome(this, this._overlays, this.ngZone);
     this.editorState.bind(this);
     this.doc.bind(this);
     this.stats.bind(this);
@@ -1727,7 +1788,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       dielinePaneCanvas: () => this.pkgDiePaneRef?.nativeElement,
       dielineGuideCanvas: () => this.pkgDieGuideRef?.nativeElement,
     });
-    if (this.retroThemeActive) document.body.classList.add('theme-retro-chrome');
+    applyStoredRetroTheme();   // index.html applied it already; same source of truth (retro-theme.ts)
     // React whenever /illustrate/:id changes
     this.routeSub = this.route.paramMap
       .pipe(
@@ -1775,6 +1836,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.persist.isLocalMode  = this.route.snapshot.data?.['local']   === true;
     this.isViewerMode = this.route.snapshot.data?.['viewer']  === true;
     this.persist.syncMode = this.persist.isLocalMode ? 2 : 0;
+    this.persist.documentMissing = null;
 
     // cleanup
     this.persist.autoSaveSubscription?.unsubscribe();
@@ -1839,7 +1901,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         if (fromState) {
           await this.persist.initWithIllustration(fromState as any, { nothingSavedYet: !!fresh });
         } else {
-          this.notifyService.error('Local illustration not found');
+          // Nothing is bound, so nothing would save: the "Document not found" screen, not an editable page (UI review d27)
+          this.persist.documentMissing = 'local';
           this.markLoaded('illustration');
           requestAnimationFrame(() => this.markLoaded('sceneApplied'));
         }
@@ -1852,6 +1915,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         const res: any = await firstValueFrom(this.illustrationService.getIllustrationByUid(this.persist.illustrationUid)).catch(() => null);
         if (res?.resultType === ResultType.Success) {
           await this.persist.initWithIllustration(res.resultObject);
+        } else {
+          // Not on the server (or it can't be reached): the same "Document not found" screen (UI review d30)
+          this.persist.documentMissing = 'cloud';
+          this.markLoaded('illustration');
+          requestAnimationFrame(() => this.markLoaded('sceneApplied'));
         }
       }
 
@@ -1906,6 +1974,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     };
     this.ngZone.runOutsideAngular(() => {
       document.addEventListener('pointermove', this.onMouseMove);
+      // Eyedropper (Alt+click / armed tap) + the canvas menu (right-click / long-press): window capture phase
+      this.canvasExtras.attach(window);
       // Salsa step 2: the 3D canvas pointermove (was the template's (pointermove) binding), see _canvasPointerMoveOutsideZone.
       const cv = this.canvasRef?.nativeElement ?? null;
       if (cv && this._canvasPointerMoveEl !== cv) {
@@ -2023,6 +2093,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._setEngineDeleteRoute(false);
     if (this.onDocMousedown) document.removeEventListener('mousedown', this.onDocMousedown);
     if (this.onPaste) document.removeEventListener('paste', this.onPaste);
+    this.canvasExtras.detach();
   }
 
   /** The engine claims Delete / Backspace first when something is selected (its own window listener, registered at
@@ -2706,6 +2777,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // ── Arrow tool (line with default arrowheads) ──
     if (this.controlPanelActiveTool === 'arrow') {
       this.shapeManager.setDefaultArrowheads(this.draw.arrowheadStart, this.draw.arrowheadEnd);
+      this.draw.syncLineColor();   // arrows draw in the current colour (they were a fixed grey)
       this.shapeManager.enableLineDrawing();
     }
   }
@@ -3001,6 +3073,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this._unregisterUpdateGuard?.();
     this._unregisterUpdateGuard = null;
+    this._uninstallChrome?.(); this._uninstallChrome = null;
     window.removeEventListener('scroll', this._onWinScrollOrResize);
     window.removeEventListener('resize', this._onWinScrollOrResize);
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);

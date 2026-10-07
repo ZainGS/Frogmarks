@@ -1,602 +1,668 @@
 <ng-container *ngIf="blockBuildingIndex !== null; else standaloneLabel">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <button class="scene3d-btn scene3d-btn-sm" (click)="backToBlock.emit()" title="Back to block">←</button>
-        <div class="tool-label" style="margin:0">BLOCK BUILDING {{ (blockBuildingIndex ?? 0) + 1 }}</div>
-    </div>
+    <div class="tool-label">BLOCK BUILDING {{ (blockBuildingIndex ?? 0) + 1 }}</div>
 </ng-container>
 <ng-template #standaloneLabel>
     <div class="tool-label">EDIT BUILDING</div>
 </ng-template>
 
+<!-- ── Back header: a group back to the menu; in a Block, the menu back to the block ── -->
+<div *ngIf="nav.id || blockBuildingIndex !== null" class="nav-header">
+    <button class="nav-back" (click)="back()">{{ nav.id ? '← Back' : '← Block' }}</button>
+    <span class="nav-crumb">
+        <span [class.nav-crumb-here]="!nav.id">{{ blockBuildingIndex !== null ? 'Block building ' + ((blockBuildingIndex ?? 0) + 1) : 'Building' }}</span>
+        <ng-container *ngIf="nav.id"><span class="nav-crumb-sep">›</span><span class="nav-crumb-here">{{ nav.label }}</span></ng-container>
+    </span>
+</div>
+
+<!-- ── Menu: one tile per group (utils/sub-nav.ts), the group's controls on their own page ── -->
+<div class="nav-tiles" *ngIf="!nav.id">
+    <button class="nav-tile" (click)="nav.open('style', 'Style')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Style</span><span class="nav-tile-hint">Category · Archetype · Seed · Render style</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('massing', 'Massing')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Massing</span><span class="nav-tile-hint">Floors · Size · Corners · Setbacks · Podium</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('facade', 'Facade')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Facade</span><span class="nav-tile-hint">Windows · Material · Corner stones · Cornice</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('ground', 'Ground')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Ground</span><span class="nav-tile-hint">Shopfront · Awning · Doors</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('greenery', 'Greenery')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Greenery</span><span class="nav-tile-hint">Hedge · Vines · Window boxes · Planters</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('japan', 'Japan details')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Japan details</span><span class="nav-tile-hint">Sash · Lanterns · Signs · AC units · Laundry</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('features', 'Features')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Features</span><span class="nav-tile-hint">Balconies · Window trim · Ledges · Fire escape</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('roof', 'Roof')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Roof</span><span class="nav-tile-hint">Style · Pitch · Clutter · Garden · Crown</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('signage', 'Signage')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Signage</span><span class="nav-tile-hint">Signs · LED screen · Neon</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" (click)="nav.open('color', 'Color')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Color</span><span class="nav-tile-hint">Walls · Trim · Roof · Glass · Doors · Night windows</span></span><span class="nav-tile-chev">›</span>
+    </button>
+    <button class="nav-tile" *ngIf="blockBuildingIndex === null" (click)="nav.open('scale', 'Scale')">
+        <span class="nav-tile-text"><span class="nav-tile-label">Scale</span><span class="nav-tile-hint">Units per metre · Frame</span></span><span class="nav-tile-chev">›</span>
+    </button>
+</div>
+
 <!-- ── Style ── -->
-<div class="scene3d-array-strip-label">Style</div>
-<div class="scene3d-material-row">
-    <label>Category</label>
-    <select class="scene3d-select" [(ngModel)]="buildingCategory"
-            (ngModelChange)="scene3dApplyBuildingParam('category', $event)">
-        <option value="house">House</option>
-        <option value="shophouse">Shophouse</option>
-        <option value="apartment">Apartment</option>
-        <option value="office">Office</option>
-        <option value="tower">Tower</option>
-        <option value="machiya">Machiya</option>
-        <option value="warehouse">Warehouse</option>
-        <option value="mall">Mall</option>
-    </select>
-</div>
-<div class="scene3d-material-row" *ngIf="scene3dBuildingArchetypes.length">
-    <label>Archetype</label>
-    <select class="scene3d-select" [(ngModel)]="buildingArchetype"
-            (ngModelChange)="scene3dApplyBuildingParam('archetype', $event)">
-        <option value="">— none —</option>
-        <option *ngFor="let a of scene3dBuildingArchetypes" [value]="a">{{ a }}</option>
-    </select>
-</div>
-<div class="scene3d-material-row">
-    <label>Seed</label>
-    <input type="number" class="scene3d-number-input" min="1" max="9999" step="1"
-           [(ngModel)]="buildingSeed"
-           (change)="scene3dApplyBuildingParam('seed', buildingSeed)">
-    <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dRandomizeBuildingSeed()" title="Randomize seed">🎲</button>
-</div>
-<div class="scene3d-material-row">
-    <label>Render style</label>
-    <select class="scene3d-select" [(ngModel)]="buildingRenderStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('renderStyle', $event)">
-        <option value="default">Default (PBR)</option>
-        <option value="cel">Cel</option>
-        <option value="cel-hd">Cel HD</option>
-        <option value="sketch">Sketch</option>
-        <option value="ink">Ink</option>
-        <option value="gouraud">Gouraud</option>
-    </select>
-</div>
+<ng-container *ngIf="nav.id === 'style'">
+    <div class="scene3d-material-row">
+        <label>Category</label>
+        <select class="scene3d-select" [(ngModel)]="buildingCategory"
+                (ngModelChange)="scene3dApplyBuildingParam('category', $event)">
+            <option value="house">House</option>
+            <option value="shophouse">Shophouse</option>
+            <option value="apartment">Apartment</option>
+            <option value="office">Office</option>
+            <option value="tower">Tower</option>
+            <option value="machiya">Machiya</option>
+            <option value="warehouse">Warehouse</option>
+            <option value="mall">Mall</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="scene3dBuildingArchetypes.length">
+        <label>Archetype</label>
+        <select class="scene3d-select" [(ngModel)]="buildingArchetype"
+                (ngModelChange)="scene3dApplyBuildingParam('archetype', $event)">
+            <option value="">— none —</option>
+            <option *ngFor="let a of scene3dBuildingArchetypes" [value]="a">{{ a }}</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Seed</label>
+        <input type="number" class="scene3d-number-input" min="1" max="9999" step="1"
+               [(ngModel)]="buildingSeed"
+               (change)="scene3dApplyBuildingParam('seed', buildingSeed)">
+        <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dRandomizeBuildingSeed()" title="Randomize seed">🎲</button>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Render style</label>
+        <select class="scene3d-select" [(ngModel)]="buildingRenderStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('renderStyle', $event)">
+            <option value="default">Default (PBR)</option>
+            <option value="cel">Cel</option>
+            <option value="cel-hd">Cel HD</option>
+            <option value="sketch">Sketch</option>
+            <option value="ink">Ink</option>
+            <option value="gouraud">Gouraud</option>
+        </select>
+    </div>
+</ng-container>
 
 <!-- ── Massing ── -->
-<div class="scene3d-array-strip-label">Massing</div>
-<div class="scene3d-material-row">
-    <label>Floors</label>
-    <input type="range" min="1" max="60" step="1" [(ngModel)]="buildingFloors"
-           (ngModelChange)="scene3dApplyBuildingParam('floors', $event)">
-    <span class="scene3d-val">{{ buildingFloors }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Width (m)</label>
-    <input type="range" min="6" max="80" step="1" [(ngModel)]="buildingWidth"
-           (ngModelChange)="scene3dApplyBuildingParam('width', $event)">
-    <span class="scene3d-val">{{ buildingWidth }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Depth (m)</label>
-    <input type="range" min="6" max="80" step="1" [(ngModel)]="buildingDepth"
-           (ngModelChange)="scene3dApplyBuildingParam('depth', $event)">
-    <span class="scene3d-val">{{ buildingDepth }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Floor H</label>
-    <input type="range" min="2.4" max="6" step="0.1" [(ngModel)]="buildingFloorHeight"
-           (ngModelChange)="scene3dApplyBuildingParam('floorHeight', $event)">
-    <span class="scene3d-val">{{ buildingFloorHeight | number:'1.1-1' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Ground H</label>
-    <input type="range" min="2.8" max="8" step="0.1" [(ngModel)]="buildingGroundFloorHeight"
-           (ngModelChange)="scene3dApplyBuildingParam('groundFloorHeight', $event)">
-    <span class="scene3d-val">{{ buildingGroundFloorHeight | number:'1.1-1' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Corner</label>
-    <select class="scene3d-select" [(ngModel)]="buildingCornerStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('cornerStyle', $event)">
-        <option value="sharp">Sharp</option>
-        <option value="chamfer">Chamfer</option>
-        <option value="round">Round</option>
-    </select>
-</div>
-<div class="scene3d-material-row" *ngIf="buildingCornerStyle !== 'sharp'">
-    <label>Amount</label>
-    <input type="range" min="0.1" max="1" step="0.05" [(ngModel)]="buildingCornerAmount"
-           (ngModelChange)="scene3dApplyBuildingParam('cornerAmount', $event)">
-    <span class="scene3d-val">{{ buildingCornerAmount | number:'1.2-2' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Setbacks</label>
-    <input type="checkbox" [(ngModel)]="buildingSetbacks"
-           (ngModelChange)="scene3dApplyBuildingParam('setbacks', $event)">
-</div>
-<div class="scene3d-material-row" *ngIf="buildingSetbacks">
-    <label>Setback inset</label>
-    <input type="range" min="0.5" max="6" step="0.25" [(ngModel)]="buildingSetbackInset"
-           (ngModelChange)="scene3dApplyBuildingParam('setbackInset', $event)">
-    <span class="scene3d-val">{{ buildingSetbackInset | number:'1.1-1' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Podium</label>
-    <input type="checkbox" [(ngModel)]="buildingPodium"
-           (ngModelChange)="scene3dApplyBuildingParam('podium', $event)">
-</div>
-<div class="scene3d-material-row" *ngIf="buildingPodium">
-    <label>Podium floors</label>
-    <input type="range" min="1" max="8" step="1" [(ngModel)]="buildingPodiumFloors"
-           (ngModelChange)="scene3dApplyBuildingParam('podiumFloors', $event)">
-    <span class="scene3d-val">{{ buildingPodiumFloors }}</span>
-</div>
+<ng-container *ngIf="nav.id === 'massing'">
+    <div class="scene3d-material-row">
+        <label>Floors</label>
+        <input type="range" min="1" max="60" step="1" [(ngModel)]="buildingFloors"
+               (ngModelChange)="scene3dApplyBuildingParam('floors', $event)">
+        <span class="scene3d-val">{{ buildingFloors }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Width (m)</label>
+        <input type="range" min="6" max="80" step="1" [(ngModel)]="buildingWidth"
+               (ngModelChange)="scene3dApplyBuildingParam('width', $event)">
+        <span class="scene3d-val">{{ buildingWidth }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Depth (m)</label>
+        <input type="range" min="6" max="80" step="1" [(ngModel)]="buildingDepth"
+               (ngModelChange)="scene3dApplyBuildingParam('depth', $event)">
+        <span class="scene3d-val">{{ buildingDepth }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Floor H</label>
+        <input type="range" min="2.4" max="6" step="0.1" [(ngModel)]="buildingFloorHeight"
+               (ngModelChange)="scene3dApplyBuildingParam('floorHeight', $event)">
+        <span class="scene3d-val">{{ buildingFloorHeight | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Ground H</label>
+        <input type="range" min="2.8" max="8" step="0.1" [(ngModel)]="buildingGroundFloorHeight"
+               (ngModelChange)="scene3dApplyBuildingParam('groundFloorHeight', $event)">
+        <span class="scene3d-val">{{ buildingGroundFloorHeight | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Corner</label>
+        <select class="scene3d-select" [(ngModel)]="buildingCornerStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('cornerStyle', $event)">
+            <option value="sharp">Sharp</option>
+            <option value="chamfer">Chamfer</option>
+            <option value="round">Round</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingCornerStyle !== 'sharp'">
+        <label>Amount</label>
+        <input type="range" min="0.1" max="1" step="0.05" [(ngModel)]="buildingCornerAmount"
+               (ngModelChange)="scene3dApplyBuildingParam('cornerAmount', $event)">
+        <span class="scene3d-val">{{ buildingCornerAmount | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Setbacks</label>
+        <input type="checkbox" [(ngModel)]="buildingSetbacks"
+               (ngModelChange)="scene3dApplyBuildingParam('setbacks', $event)">
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingSetbacks">
+        <label>Setback inset</label>
+        <input type="range" min="0.5" max="6" step="0.25" [(ngModel)]="buildingSetbackInset"
+               (ngModelChange)="scene3dApplyBuildingParam('setbackInset', $event)">
+        <span class="scene3d-val">{{ buildingSetbackInset | number:'1.1-1' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Podium</label>
+        <input type="checkbox" [(ngModel)]="buildingPodium"
+               (ngModelChange)="scene3dApplyBuildingParam('podium', $event)">
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingPodium">
+        <label>Podium floors</label>
+        <input type="range" min="1" max="8" step="1" [(ngModel)]="buildingPodiumFloors"
+               (ngModelChange)="scene3dApplyBuildingParam('podiumFloors', $event)">
+        <span class="scene3d-val">{{ buildingPodiumFloors }}</span>
+    </div>
+</ng-container>
 
 <!-- ── Facade ── -->
-<div class="scene3d-array-strip-label">Facade</div>
-<div class="scene3d-material-row">
-    <label>Windows</label>
-    <select class="scene3d-select" [(ngModel)]="buildingWindowStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('windowStyle', $event)">
-        <option value="grid">Grid</option>
-        <option value="punched">Punched</option>
-        <option value="ribbon">Ribbon</option>
-        <option value="curtain">Curtain</option>
-    </select>
-</div>
-<div class="scene3d-material-row">
-    <label>Bay width</label>
-    <input type="range" min="1.5" max="8" step="0.25" [(ngModel)]="buildingBayWidth"
-           (ngModelChange)="scene3dApplyBuildingParam('bayWidth', $event)">
-    <span class="scene3d-val">{{ buildingBayWidth | number:'1.2-2' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Material</label>
-    <select class="scene3d-select" [(ngModel)]="buildingMaterial"
-            (ngModelChange)="scene3dApplyBuildingParam('material', $event)">
-        <option value="concrete">Concrete</option>
-        <option value="brick">Brick</option>
-        <option value="plaster">Plaster</option>
-        <option value="tile">Tile</option>
-        <option value="glass">Glass</option>
-        <option value="timber">Timber</option>
-        <option value="metal">Metal</option>
-        <option value="siding">Siding</option>
-        <option value="panel">Metal panel</option>
-    </select>
-</div>
-<div class="scene3d-material-row">
-    <label>Pilasters</label>
-    <input type="checkbox" [(ngModel)]="buildingPilasters"
-           (ngModelChange)="scene3dApplyBuildingParam('pilasters', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Quoins</label>
-    <input type="checkbox" [(ngModel)]="buildingQuoins"
-           (ngModelChange)="scene3dApplyBuildingParam('quoins', $event)">
-</div>
-<div class="scene3d-material-row" *ngIf="buildingQuoins">
-    <label>Quoin style</label>
-    <select class="scene3d-select" [(ngModel)]="buildingQuoinStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('quoinStyle', $event)">
-        <option value="alternating">Alternating</option>
-        <option value="block">Block</option>
-    </select>
-</div>
-<div class="scene3d-material-row">
-    <label>Cornice</label>
-    <input type="checkbox" [(ngModel)]="buildingCornice"
-           (ngModelChange)="scene3dApplyBuildingParam('cornice', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Mullions</label>
-    <input type="checkbox" [(ngModel)]="buildingMullions"
-           (ngModelChange)="scene3dApplyBuildingParam('mullions', $event)">
-</div>
+<ng-container *ngIf="nav.id === 'facade'">
+    <div class="scene3d-material-row">
+        <label>Windows</label>
+        <select class="scene3d-select" [(ngModel)]="buildingWindowStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('windowStyle', $event)">
+            <option value="grid">Grid</option>
+            <option value="punched">Punched</option>
+            <option value="ribbon">Ribbon</option>
+            <option value="curtain">Curtain</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Bay width</label>
+        <input type="range" min="1.5" max="8" step="0.25" [(ngModel)]="buildingBayWidth"
+               (ngModelChange)="scene3dApplyBuildingParam('bayWidth', $event)">
+        <span class="scene3d-val">{{ buildingBayWidth | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Material</label>
+        <select class="scene3d-select" [(ngModel)]="buildingMaterial"
+                (ngModelChange)="scene3dApplyBuildingParam('material', $event)">
+            <option value="concrete">Concrete</option>
+            <option value="brick">Brick</option>
+            <option value="plaster">Plaster</option>
+            <option value="tile">Tile</option>
+            <option value="glass">Glass</option>
+            <option value="timber">Timber</option>
+            <option value="metal">Metal</option>
+            <option value="siding">Siding</option>
+            <option value="panel">Metal panel</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Pilasters</label>
+        <input type="checkbox" [(ngModel)]="buildingPilasters"
+               (ngModelChange)="scene3dApplyBuildingParam('pilasters', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label title="Quoins: dressed stone blocks up the building's corners">Corner stones</label>
+        <input type="checkbox" [(ngModel)]="buildingQuoins"
+               (ngModelChange)="scene3dApplyBuildingParam('quoins', $event)">
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingQuoins">
+        <label>Corner stone style</label>
+        <select class="scene3d-select" [(ngModel)]="buildingQuoinStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('quoinStyle', $event)">
+            <option value="alternating">Alternating</option>
+            <option value="block">Block</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Cornice</label>
+        <input type="checkbox" [(ngModel)]="buildingCornice"
+               (ngModelChange)="scene3dApplyBuildingParam('cornice', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Mullions</label>
+        <input type="checkbox" [(ngModel)]="buildingMullions"
+               (ngModelChange)="scene3dApplyBuildingParam('mullions', $event)">
+    </div>
+</ng-container>
 
 <!-- ── Ground ── -->
-<div class="scene3d-array-strip-label">Ground</div>
-<div class="scene3d-material-row">
-    <label>Storefront</label>
-    <input type="checkbox" [(ngModel)]="buildingStorefront"
-           (ngModelChange)="scene3dApplyBuildingParam('storefront', $event)">
-</div>
-<ng-container *ngIf="buildingStorefront">
+<ng-container *ngIf="nav.id === 'ground'">
     <div class="scene3d-material-row">
-        <label>Shop bays</label>
-        <input type="range" min="1" max="8" step="1" [(ngModel)]="buildingShopBays"
-               (ngModelChange)="scene3dApplyBuildingParam('shopBays', $event)">
-        <span class="scene3d-val">{{ buildingShopBays }}</span>
+        <label>Storefront</label>
+        <input type="checkbox" [(ngModel)]="buildingStorefront"
+               (ngModelChange)="scene3dApplyBuildingParam('storefront', $event)">
     </div>
+    <ng-container *ngIf="buildingStorefront">
+        <div class="scene3d-material-row">
+            <label>Shop bays</label>
+            <input type="range" min="1" max="8" step="1" [(ngModel)]="buildingShopBays"
+                   (ngModelChange)="scene3dApplyBuildingParam('shopBays', $event)">
+            <span class="scene3d-val">{{ buildingShopBays }}</span>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Stallriser</label>
+            <input type="checkbox" [(ngModel)]="buildingStallriser"
+                   (ngModelChange)="scene3dApplyBuildingParam('stallriser', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Transom</label>
+            <input type="checkbox" [(ngModel)]="buildingTransom"
+                   (ngModelChange)="scene3dApplyBuildingParam('transom', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Shutter</label>
+            <input type="checkbox" [(ngModel)]="buildingShutter"
+                   (ngModelChange)="scene3dApplyBuildingParam('shutter', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Recessed entry</label>
+            <input type="checkbox" [(ngModel)]="buildingRecessedEntry"
+                   (ngModelChange)="scene3dApplyBuildingParam('recessedEntry', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Noren</label>
+            <input type="checkbox" [(ngModel)]="buildingNoren"
+                   (ngModelChange)="scene3dApplyBuildingParam('noren', $event)">
+        </div>
+    </ng-container>
     <div class="scene3d-material-row">
-        <label>Stallriser</label>
-        <input type="checkbox" [(ngModel)]="buildingStallriser"
-               (ngModelChange)="scene3dApplyBuildingParam('stallriser', $event)">
+        <label>Awning</label>
+        <input type="checkbox" [(ngModel)]="buildingAwning"
+               (ngModelChange)="scene3dApplyBuildingParam('awning', $event)">
     </div>
+    <ng-container *ngIf="buildingAwning">
+        <div class="scene3d-material-row">
+            <label>Awning style</label>
+            <select class="scene3d-select" [(ngModel)]="buildingAwningStyle"
+                    (ngModelChange)="scene3dApplyBuildingParam('awningStyle', $event)">
+                <option value="flat">Flat</option>
+                <option value="sloped">Sloped</option>
+                <option value="dome">Dome</option>
+            </select>
+        </div>
+        <div class="scene3d-material-row">
+            <label>Stripe</label>
+            <input type="checkbox" [(ngModel)]="buildingAwningStripe"
+                   (ngModelChange)="scene3dApplyBuildingParam('awningStripe', $event)">
+        </div>
+    </ng-container>
     <div class="scene3d-material-row">
-        <label>Transom</label>
-        <input type="checkbox" [(ngModel)]="buildingTransom"
-               (ngModelChange)="scene3dApplyBuildingParam('transom', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Shutter</label>
-        <input type="checkbox" [(ngModel)]="buildingShutter"
-               (ngModelChange)="scene3dApplyBuildingParam('shutter', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Recessed entry</label>
-        <input type="checkbox" [(ngModel)]="buildingRecessedEntry"
-               (ngModelChange)="scene3dApplyBuildingParam('recessedEntry', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Noren</label>
-        <input type="checkbox" [(ngModel)]="buildingNoren"
-               (ngModelChange)="scene3dApplyBuildingParam('noren', $event)">
-    </div>
-</ng-container>
-<div class="scene3d-material-row">
-    <label>Awning</label>
-    <input type="checkbox" [(ngModel)]="buildingAwning"
-           (ngModelChange)="scene3dApplyBuildingParam('awning', $event)">
-</div>
-<ng-container *ngIf="buildingAwning">
-    <div class="scene3d-material-row">
-        <label>Awning style</label>
-        <select class="scene3d-select" [(ngModel)]="buildingAwningStyle"
-                (ngModelChange)="scene3dApplyBuildingParam('awningStyle', $event)">
-            <option value="flat">Flat</option>
-            <option value="sloped">Sloped</option>
-            <option value="dome">Dome</option>
+        <label>Door style</label>
+        <select class="scene3d-select" [(ngModel)]="buildingDoorStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('doorStyle', $event)">
+            <option value="flush">Flush</option>
+            <option value="panel">Panel</option>
+            <option value="glazed">Glazed</option>
+            <option value="double">Double</option>
+            <option value="sliding">Sliding</option>
+            <option value="auto-slide">Auto-slide</option>
         </select>
     </div>
     <div class="scene3d-material-row">
-        <label>Stripe</label>
-        <input type="checkbox" [(ngModel)]="buildingAwningStripe"
-               (ngModelChange)="scene3dApplyBuildingParam('awningStripe', $event)">
+        <label>Roller doors</label>
+        <input type="checkbox" [(ngModel)]="buildingRollerDoors"
+               (ngModelChange)="scene3dApplyBuildingParam('rollerDoors', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Canopy</label>
+        <input type="checkbox" [(ngModel)]="buildingCanopy"
+               (ngModelChange)="scene3dApplyBuildingParam('canopy', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Lattice</label>
+        <input type="checkbox" [(ngModel)]="buildingLattice"
+               (ngModelChange)="scene3dApplyBuildingParam('lattice', $event)">
     </div>
 </ng-container>
-<div class="scene3d-material-row">
-    <label>Door style</label>
-    <select class="scene3d-select" [(ngModel)]="buildingDoorStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('doorStyle', $event)">
-        <option value="flush">Flush</option>
-        <option value="panel">Panel</option>
-        <option value="glazed">Glazed</option>
-        <option value="double">Double</option>
-        <option value="sliding">Sliding</option>
-        <option value="auto-slide">Auto-slide</option>
-    </select>
-</div>
-<div class="scene3d-material-row">
-    <label>Roller doors</label>
-    <input type="checkbox" [(ngModel)]="buildingRollerDoors"
-           (ngModelChange)="scene3dApplyBuildingParam('rollerDoors', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Canopy</label>
-    <input type="checkbox" [(ngModel)]="buildingCanopy"
-           (ngModelChange)="scene3dApplyBuildingParam('canopy', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Lattice</label>
-    <input type="checkbox" [(ngModel)]="buildingLattice"
-           (ngModelChange)="scene3dApplyBuildingParam('lattice', $event)">
-</div>
 
 <!-- ── Greenery ── -->
-<div class="scene3d-array-strip-label">Greenery</div>
-<div class="scene3d-material-row">
-    <label>Base hedge</label>
-    <input type="checkbox" [(ngModel)]="buildingBaseHedge"
-           (ngModelChange)="scene3dApplyBuildingParam('baseHedge', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Vines</label>
-    <input type="checkbox" [(ngModel)]="buildingVines"
-           (ngModelChange)="scene3dApplyBuildingParam('vines', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Window boxes</label>
-    <input type="checkbox" [(ngModel)]="buildingWindowBoxes"
-           (ngModelChange)="scene3dApplyBuildingParam('windowBoxes', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Door planters</label>
-    <input type="checkbox" [(ngModel)]="buildingBasePlanters"
-           (ngModelChange)="scene3dApplyBuildingParam('basePlanters', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Green</label>
-    <input type="color" [(ngModel)]="buildingGreeneryColor"
-           (ngModelChange)="scene3dApplyBuildingParam('greeneryColor', $event)">
-    <span class="scene3d-val">{{ buildingGreeneryColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Bloom</label>
-    <input type="color" [(ngModel)]="buildingBloomColor"
-           (ngModelChange)="scene3dApplyBuildingParam('bloomColor', $event)">
-    <span class="scene3d-val">{{ buildingBloomColor }}</span>
-</div>
-
-<!-- ── Japan details (Salsa city-quality B4–B9, 2026-09-29) ── -->
-<div class="scene3d-array-strip-label">Japan details</div>
-<div class="scene3d-material-row" *ngFor="let f of buildingJpFlags">
-    <label>{{ f.label }}</label>
-    <input type="checkbox" [ngModel]="buildingJp[f.key]" (ngModelChange)="buildingJp[f.key] = $event; scene3dApplyBuildingParam(f.key, $event)" [title]="f.title">
-</div>
-<div class="scene3d-material-row">
-    <label>Shutters down</label>
-    <input type="range" min="0" max="1" step="0.05" [(ngModel)]="buildingShutterBays" (ngModelChange)="scene3dApplyBuildingParam('shutterBays', +$event)" title="Fraction of shop bays with a roller shutter partly or fully down">
-    <span class="scene3d-val">{{ buildingShutterBays | number:'1.2-2' }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Balcony style</label>
-    <select class="scene3d-select" [(ngModel)]="buildingBalconyStyle" (ngModelChange)="scene3dApplyBuildingParam('balconyStyle', $event)">
-        <option value="rail">Rail</option>
-        <option value="panel">Panel (mansion)</option>
-    </select>
-</div>
-
-<!-- ── Features ── -->
-<div class="scene3d-array-strip-label">Features</div>
-<div class="scene3d-material-row">
-    <label>Balconies</label>
-    <input type="checkbox" [(ngModel)]="buildingBalconies"
-           (ngModelChange)="scene3dApplyBuildingParam('balconies', $event)">
-</div>
-<div class="scene3d-material-row" *ngIf="buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched'">
-    <label>Juliet balconies</label>
-    <input type="checkbox" [(ngModel)]="buildingJulietBalconies"
-           (ngModelChange)="scene3dApplyBuildingParam('julietBalconies', $event)"
-           title="Wrought-iron railing at each window — ornamental, no slab">
-</div>
-<ng-container *ngIf="buildingJulietBalconies && (buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched')">
-    <div class="scene3d-material-row scene3d-indent">
-        <label>Railing color</label>
-        <input type="color" [(ngModel)]="buildingJulietColor"
-               (ngModelChange)="scene3dApplyBuildingParam('julietColor', $event)">
-        <span class="scene3d-val">{{ buildingJulietColor }}</span>
+<ng-container *ngIf="nav.id === 'greenery'">
+    <div class="scene3d-material-row">
+        <label>Base hedge</label>
+        <input type="checkbox" [(ngModel)]="buildingBaseHedge"
+               (ngModelChange)="scene3dApplyBuildingParam('baseHedge', $event)">
     </div>
-    <div class="scene3d-material-row scene3d-indent">
-        <label>Scroll detail</label>
-        <input type="range" min="0" max="1" step="0.01" [(ngModel)]="buildingJulietScroll"
-               (ngModelChange)="scene3dApplyBuildingParam('julietScroll', $event)">
-        <span class="scene3d-val">{{ buildingJulietScroll | number:'1.2-2' }}</span>
+    <div class="scene3d-material-row">
+        <label>Vines</label>
+        <input type="checkbox" [(ngModel)]="buildingVines"
+               (ngModelChange)="scene3dApplyBuildingParam('vines', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Window boxes</label>
+        <input type="checkbox" [(ngModel)]="buildingWindowBoxes"
+               (ngModelChange)="scene3dApplyBuildingParam('windowBoxes', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Door planters</label>
+        <input type="checkbox" [(ngModel)]="buildingBasePlanters"
+               (ngModelChange)="scene3dApplyBuildingParam('basePlanters', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Green</label>
+        <input type="color" [(ngModel)]="buildingGreeneryColor"
+               (ngModelChange)="scene3dApplyBuildingParam('greeneryColor', $event)">
+        <span class="scene3d-val">{{ buildingGreeneryColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Bloom</label>
+        <input type="color" [(ngModel)]="buildingBloomColor"
+               (ngModelChange)="scene3dApplyBuildingParam('bloomColor', $event)">
+        <span class="scene3d-val">{{ buildingBloomColor }}</span>
     </div>
 </ng-container>
-<div class="scene3d-material-row" *ngIf="buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched'">
-    <label>Window trim</label>
-    <input type="checkbox" [(ngModel)]="buildingWindowTrim"
-           (ngModelChange)="scene3dApplyBuildingParam('windowTrim', $event)"
-           title="Raised stone surround — sill + lintel + jambs (+ keystone on punched)">
-</div>
-<div class="scene3d-material-row scene3d-indent"
-     *ngIf="buildingWindowTrim && (buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched')">
-    <label>Trim color</label>
-    <input type="color" [(ngModel)]="buildingWindowTrimColor"
-           (ngModelChange)="scene3dApplyBuildingParam('windowTrimColor', $event)">
-    <span class="scene3d-val">{{ buildingWindowTrimColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Ledges</label>
-    <input type="checkbox" [(ngModel)]="buildingLedges"
-           (ngModelChange)="scene3dApplyBuildingParam('ledges', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Fire escape</label>
-    <input type="checkbox" [(ngModel)]="buildingFireEscape"
-           (ngModelChange)="scene3dApplyBuildingParam('fireEscape', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Downpipes</label>
-    <input type="checkbox" [(ngModel)]="buildingDownpipes"
-           (ngModelChange)="scene3dApplyBuildingParam('downpipes', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Wall AC units</label>
-    <input type="checkbox" [(ngModel)]="buildingWallUnits"
-           (ngModelChange)="scene3dApplyBuildingParam('wallUnits', $event)">
-</div>
 
-<!-- ── Roof ── -->
-<div class="scene3d-array-strip-label">Roof</div>
-<div class="scene3d-material-row">
-    <label>Style</label>
-    <select class="scene3d-select" [(ngModel)]="buildingRoofStyle"
-            (ngModelChange)="scene3dApplyBuildingParam('roofStyle', $event)">
-        <option value="flat">Flat</option>
-        <option value="parapet">Parapet</option>
-        <option value="hip">Hip</option>
-        <option value="gable">Gable</option>
-        <option value="mansard">Mansard</option>
-        <option value="sawtooth">Sawtooth</option>
-        <option value="tiled-hip">Tiled hip</option>
-    </select>
-</div>
-<div class="scene3d-material-row" *ngIf="buildingRoofStyle === 'hip' || buildingRoofStyle === 'gable' || buildingRoofStyle === 'mansard' || buildingRoofStyle === 'tiled-hip'">
-    <label>Pitch</label>
-    <input type="range" min="0.1" max="1.2" step="0.05" [(ngModel)]="buildingRoofPitch"
-           (ngModelChange)="scene3dApplyBuildingParam('roofPitch', $event)">
-    <span class="scene3d-val">{{ buildingRoofPitch | number:'1.2-2' }}</span>
-</div>
-<div class="scene3d-material-row" *ngIf="buildingRoofStyle === 'hip' || buildingRoofStyle === 'tiled-hip'">
-    <label>Deep eaves</label>
-    <input type="checkbox" [(ngModel)]="buildingDeepEaves"
-           (ngModelChange)="scene3dApplyBuildingParam('deepEaves', $event)">
-</div>
-<div class="scene3d-material-row">
-    <label>Roof clutter</label>
-    <input type="checkbox" [(ngModel)]="buildingRoofClutter"
-           (ngModelChange)="scene3dApplyBuildingParam('roofClutter', $event)">
-</div>
-<ng-container *ngIf="buildingRoofStyle === 'flat' || buildingRoofStyle === 'parapet'">
-    <div class="scene3d-material-row">
-        <label>Penthouse</label>
-        <input type="checkbox" [(ngModel)]="buildingRoofPenthouse"
-               (ngModelChange)="scene3dApplyBuildingParam('roofPenthouse', $event)">
+<!-- ── Japan details (Salsa city-quality B4–B9, 2026-09-29) ── -->
+<ng-container *ngIf="nav.id === 'japan'">
+    <div class="scene3d-material-row" *ngFor="let f of buildingJpFlags">
+        <label>{{ f.label }}</label>
+        <input type="checkbox" [ngModel]="buildingJp[f.key]" (ngModelChange)="buildingJp[f.key] = $event; scene3dApplyBuildingParam(f.key, $event)" [title]="f.title">
     </div>
     <div class="scene3d-material-row">
-        <label>Railing</label>
-        <input type="checkbox" [(ngModel)]="buildingRoofRailing"
-               (ngModelChange)="scene3dApplyBuildingParam('roofRailing', $event)">
+        <label>Shutters down</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="buildingShutterBays" (ngModelChange)="scene3dApplyBuildingParam('shutterBays', +$event)" title="Fraction of shop bays with a roller shutter partly or fully down">
+        <span class="scene3d-val">{{ buildingShutterBays | number:'1.2-2' }}</span>
     </div>
     <div class="scene3d-material-row">
-        <label>Garden</label>
-        <input type="checkbox" [(ngModel)]="buildingRoofGarden"
-               (ngModelChange)="scene3dApplyBuildingParam('roofGarden', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Dishes</label>
-        <input type="checkbox" [(ngModel)]="buildingRoofDishes"
-               (ngModelChange)="scene3dApplyBuildingParam('roofDishes', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Vents</label>
-        <input type="checkbox" [(ngModel)]="buildingRoofVents"
-               (ngModelChange)="scene3dApplyBuildingParam('roofVents', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Helipad</label>
-        <input type="checkbox" [(ngModel)]="buildingHelipad"
-               (ngModelChange)="scene3dApplyBuildingParam('helipad', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Crown</label>
-        <select class="scene3d-select" [(ngModel)]="buildingCrown"
-                (ngModelChange)="scene3dApplyBuildingParam('crown', $event)">
-            <option value="none">None</option>
-            <option value="spire">Spire</option>
-            <option value="mech">Mech</option>
-            <option value="blade">Blade</option>
+        <label>Balcony style</label>
+        <select class="scene3d-select" [(ngModel)]="buildingBalconyStyle" (ngModelChange)="scene3dApplyBuildingParam('balconyStyle', $event)">
+            <option value="rail">Rail</option>
+            <option value="panel">Panel (mansion)</option>
         </select>
     </div>
+</ng-container>
+
+<!-- ── Features ── -->
+<ng-container *ngIf="nav.id === 'features'">
+    <div class="scene3d-material-row">
+        <label>Balconies</label>
+        <input type="checkbox" [(ngModel)]="buildingBalconies"
+               (ngModelChange)="scene3dApplyBuildingParam('balconies', $event)">
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched'">
+        <label>Juliet balconies</label>
+        <input type="checkbox" [(ngModel)]="buildingJulietBalconies"
+               (ngModelChange)="scene3dApplyBuildingParam('julietBalconies', $event)"
+               title="Wrought-iron railing at each window — ornamental, no slab">
+    </div>
+    <ng-container *ngIf="buildingJulietBalconies && (buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched')">
+        <div class="scene3d-material-row scene3d-indent">
+            <label>Railing color</label>
+            <input type="color" [(ngModel)]="buildingJulietColor"
+                   (ngModelChange)="scene3dApplyBuildingParam('julietColor', $event)">
+            <span class="scene3d-val">{{ buildingJulietColor }}</span>
+        </div>
+        <div class="scene3d-material-row scene3d-indent">
+            <label>Scroll detail</label>
+            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="buildingJulietScroll"
+                   (ngModelChange)="scene3dApplyBuildingParam('julietScroll', $event)">
+            <span class="scene3d-val">{{ buildingJulietScroll | number:'1.2-2' }}</span>
+        </div>
+    </ng-container>
+    <div class="scene3d-material-row" *ngIf="buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched'">
+        <label>Window trim</label>
+        <input type="checkbox" [(ngModel)]="buildingWindowTrim"
+               (ngModelChange)="scene3dApplyBuildingParam('windowTrim', $event)"
+               title="Raised stone surround — sill + lintel + jambs (+ keystone on punched)">
+    </div>
+    <div class="scene3d-material-row scene3d-indent"
+         *ngIf="buildingWindowTrim && (buildingWindowStyle === 'grid' || buildingWindowStyle === 'punched')">
+        <label>Trim color</label>
+        <input type="color" [(ngModel)]="buildingWindowTrimColor"
+               (ngModelChange)="scene3dApplyBuildingParam('windowTrimColor', $event)">
+        <span class="scene3d-val">{{ buildingWindowTrimColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Ledges</label>
+        <input type="checkbox" [(ngModel)]="buildingLedges"
+               (ngModelChange)="scene3dApplyBuildingParam('ledges', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Fire escape</label>
+        <input type="checkbox" [(ngModel)]="buildingFireEscape"
+               (ngModelChange)="scene3dApplyBuildingParam('fireEscape', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Downpipes</label>
+        <input type="checkbox" [(ngModel)]="buildingDownpipes"
+               (ngModelChange)="scene3dApplyBuildingParam('downpipes', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Wall AC units</label>
+        <input type="checkbox" [(ngModel)]="buildingWallUnits"
+               (ngModelChange)="scene3dApplyBuildingParam('wallUnits', $event)">
+    </div>
+</ng-container>
+
+<!-- ── Roof ── -->
+<ng-container *ngIf="nav.id === 'roof'">
+    <div class="scene3d-material-row">
+        <label>Style</label>
+        <select class="scene3d-select" [(ngModel)]="buildingRoofStyle"
+                (ngModelChange)="scene3dApplyBuildingParam('roofStyle', $event)">
+            <option value="flat">Flat</option>
+            <option value="parapet">Parapet</option>
+            <option value="hip">Hip</option>
+            <option value="gable">Gable</option>
+            <option value="mansard">Mansard</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="tiled-hip">Tiled hip</option>
+        </select>
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingRoofStyle === 'hip' || buildingRoofStyle === 'gable' || buildingRoofStyle === 'mansard' || buildingRoofStyle === 'tiled-hip'">
+        <label>Pitch</label>
+        <input type="range" min="0.1" max="1.2" step="0.05" [(ngModel)]="buildingRoofPitch"
+               (ngModelChange)="scene3dApplyBuildingParam('roofPitch', $event)">
+        <span class="scene3d-val">{{ buildingRoofPitch | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingRoofStyle === 'hip' || buildingRoofStyle === 'tiled-hip'">
+        <label>Deep eaves</label>
+        <input type="checkbox" [(ngModel)]="buildingDeepEaves"
+               (ngModelChange)="scene3dApplyBuildingParam('deepEaves', $event)">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Roof clutter</label>
+        <input type="checkbox" [(ngModel)]="buildingRoofClutter"
+               (ngModelChange)="scene3dApplyBuildingParam('roofClutter', $event)">
+    </div>
+    <ng-container *ngIf="buildingRoofStyle === 'flat' || buildingRoofStyle === 'parapet'">
+        <div class="scene3d-material-row">
+            <label>Penthouse</label>
+            <input type="checkbox" [(ngModel)]="buildingRoofPenthouse"
+                   (ngModelChange)="scene3dApplyBuildingParam('roofPenthouse', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Railing</label>
+            <input type="checkbox" [(ngModel)]="buildingRoofRailing"
+                   (ngModelChange)="scene3dApplyBuildingParam('roofRailing', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Garden</label>
+            <input type="checkbox" [(ngModel)]="buildingRoofGarden"
+                   (ngModelChange)="scene3dApplyBuildingParam('roofGarden', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Dishes</label>
+            <input type="checkbox" [(ngModel)]="buildingRoofDishes"
+                   (ngModelChange)="scene3dApplyBuildingParam('roofDishes', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Vents</label>
+            <input type="checkbox" [(ngModel)]="buildingRoofVents"
+                   (ngModelChange)="scene3dApplyBuildingParam('roofVents', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Helipad</label>
+            <input type="checkbox" [(ngModel)]="buildingHelipad"
+                   (ngModelChange)="scene3dApplyBuildingParam('helipad', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Crown</label>
+            <select class="scene3d-select" [(ngModel)]="buildingCrown"
+                    (ngModelChange)="scene3dApplyBuildingParam('crown', $event)">
+                <option value="none">None</option>
+                <option value="spire">Spire</option>
+                <option value="mech">Mech</option>
+                <option value="blade">Blade</option>
+            </select>
+        </div>
+    </ng-container>
 </ng-container>
 
 <!-- ── Signage ── -->
-<div class="scene3d-array-strip-label">Signage</div>
-<div class="scene3d-material-row">
-    <label>Signage</label>
-    <input type="checkbox" [(ngModel)]="buildingSignage"
-           (ngModelChange)="scene3dApplyBuildingParam('signage', $event)">
-</div>
-<ng-container *ngIf="buildingSignage">
+<ng-container *ngIf="nav.id === 'signage'">
     <div class="scene3d-material-row">
-        <label>Blade sign</label>
-        <input type="checkbox" [(ngModel)]="buildingBladeSign"
-               (ngModelChange)="scene3dApplyBuildingParam('bladeSign', $event)">
+        <label>Signage</label>
+        <input type="checkbox" [(ngModel)]="buildingSignage"
+               (ngModelChange)="scene3dApplyBuildingParam('signage', $event)">
     </div>
-    <div class="scene3d-material-row">
-        <label>Wrap sign</label>
-        <input type="checkbox" [(ngModel)]="buildingWrapSign"
-               (ngModelChange)="scene3dApplyBuildingParam('wrapSign', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Rooftop sign</label>
-        <input type="checkbox" [(ngModel)]="buildingRooftopSign"
-               (ngModelChange)="scene3dApplyBuildingParam('rooftopSign', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>LED screen</label>
-        <input type="checkbox" [(ngModel)]="buildingLedScreen"
-               (ngModelChange)="scene3dApplyBuildingParam('ledScreen', $event)">
-    </div>
-    <div class="scene3d-material-row">
-        <label>Neon</label>
-        <input type="checkbox" [(ngModel)]="buildingNeon"
-               (ngModelChange)="scene3dApplyBuildingParam('neon', $event)">
-    </div>
+    <ng-container *ngIf="buildingSignage">
+        <div class="scene3d-material-row">
+            <label>Blade sign</label>
+            <input type="checkbox" [(ngModel)]="buildingBladeSign"
+                   (ngModelChange)="scene3dApplyBuildingParam('bladeSign', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Wrap sign</label>
+            <input type="checkbox" [(ngModel)]="buildingWrapSign"
+                   (ngModelChange)="scene3dApplyBuildingParam('wrapSign', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Rooftop sign</label>
+            <input type="checkbox" [(ngModel)]="buildingRooftopSign"
+                   (ngModelChange)="scene3dApplyBuildingParam('rooftopSign', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>LED screen</label>
+            <input type="checkbox" [(ngModel)]="buildingLedScreen"
+                   (ngModelChange)="scene3dApplyBuildingParam('ledScreen', $event)">
+        </div>
+        <div class="scene3d-material-row">
+            <label>Neon</label>
+            <input type="checkbox" [(ngModel)]="buildingNeon"
+                   (ngModelChange)="scene3dApplyBuildingParam('neon', $event)">
+        </div>
+    </ng-container>
 </ng-container>
 
 <!-- ── Color ── -->
-<div class="scene3d-array-strip-label">Color</div>
-<div class="scene3d-material-row">
-    <label>Base</label>
-    <input type="color" [(ngModel)]="buildingBaseColor"
-           (ngModelChange)="scene3dApplyBuildingParam('baseColor', $event)">
-    <span class="scene3d-val">{{ buildingBaseColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Trim</label>
-    <input type="color" [(ngModel)]="buildingTrimColor"
-           (ngModelChange)="scene3dApplyBuildingParam('trimColor', $event)">
-    <span class="scene3d-val">{{ buildingTrimColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Roof</label>
-    <input type="color" [(ngModel)]="buildingRoofColor"
-           (ngModelChange)="scene3dApplyBuildingParam('roofColor', $event)">
-    <span class="scene3d-val">{{ buildingRoofColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Glass</label>
-    <input type="color" [(ngModel)]="buildingGlassColor"
-           (ngModelChange)="scene3dApplyBuildingParam('glassColor', $event)">
-    <span class="scene3d-val">{{ buildingGlassColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Glass transparent</label>
-    <input type="checkbox" [(ngModel)]="buildingGlassTransparent"
-           (ngModelChange)="scene3dApplyBuildingParam('glassTransparent', $event)"
-           title="See-through glass (0.6 opacity) — off = opaque glazed skin">
-</div>
-<div class="scene3d-material-row">
-    <label>Accent</label>
-    <input type="color" [(ngModel)]="buildingAccentColor"
-           (ngModelChange)="scene3dApplyBuildingParam('accentColor', $event)">
-    <span class="scene3d-val">{{ buildingAccentColor }}</span>
-</div>
-<div class="scene3d-material-row" *ngIf="buildingSignage">
-    <label>Sign</label>
-    <input type="color" [(ngModel)]="buildingSignColor"
-           (ngModelChange)="scene3dApplyBuildingParam('signColor', $event)">
-    <span class="scene3d-val">{{ buildingSignColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Shopfront</label>
-    <input type="color" [(ngModel)]="buildingStorefrontColor"
-           (ngModelChange)="scene3dApplyBuildingParam('storefrontColor', $event)">
-    <span class="scene3d-val">{{ buildingStorefrontColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Awning</label>
-    <input type="color" [(ngModel)]="buildingAwningColor"
-           (ngModelChange)="scene3dApplyBuildingParam('awningColor', $event)">
-    <span class="scene3d-val">{{ buildingAwningColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Door leaf</label>
-    <input type="color" [(ngModel)]="buildingDoorColor"
-           (ngModelChange)="scene3dApplyBuildingParam('doorColor', $event)">
-    <span class="scene3d-val">{{ buildingDoorColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Door frame</label>
-    <input type="color" [(ngModel)]="buildingDoorFrameColor"
-           (ngModelChange)="scene3dApplyBuildingParam('doorFrameColor', $event)">
-    <span class="scene3d-val">{{ buildingDoorFrameColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Door handle</label>
-    <input type="color" [(ngModel)]="buildingDoorHandleColor"
-           (ngModelChange)="scene3dApplyBuildingParam('doorHandleColor', $event)">
-    <span class="scene3d-val">{{ buildingDoorHandleColor }}</span>
-</div>
-<div class="scene3d-material-row">
-    <label>Night windows</label>
-    <input type="range" min="0" max="1" step="0.05" [(ngModel)]="buildingNightWindows"
-           (ngModelChange)="scene3dApplyBuildingParam('nightWindows', $event)">
-    <span class="scene3d-val">{{ buildingNightWindows | number:'1.2-2' }}</span>
-</div>
+<ng-container *ngIf="nav.id === 'color'">
+    <div class="scene3d-material-row">
+        <label>Base</label>
+        <input type="color" [(ngModel)]="buildingBaseColor"
+               (ngModelChange)="scene3dApplyBuildingParam('baseColor', $event)">
+        <span class="scene3d-val">{{ buildingBaseColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Trim</label>
+        <input type="color" [(ngModel)]="buildingTrimColor"
+               (ngModelChange)="scene3dApplyBuildingParam('trimColor', $event)">
+        <span class="scene3d-val">{{ buildingTrimColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Roof</label>
+        <input type="color" [(ngModel)]="buildingRoofColor"
+               (ngModelChange)="scene3dApplyBuildingParam('roofColor', $event)">
+        <span class="scene3d-val">{{ buildingRoofColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Glass</label>
+        <input type="color" [(ngModel)]="buildingGlassColor"
+               (ngModelChange)="scene3dApplyBuildingParam('glassColor', $event)">
+        <span class="scene3d-val">{{ buildingGlassColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Glass transparent</label>
+        <input type="checkbox" [(ngModel)]="buildingGlassTransparent"
+               (ngModelChange)="scene3dApplyBuildingParam('glassTransparent', $event)"
+               title="See-through glass (0.6 opacity) — off = opaque glazed skin">
+    </div>
+    <div class="scene3d-material-row">
+        <label>Accent</label>
+        <input type="color" [(ngModel)]="buildingAccentColor"
+               (ngModelChange)="scene3dApplyBuildingParam('accentColor', $event)">
+        <span class="scene3d-val">{{ buildingAccentColor }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingSignage">
+        <label>Sign</label>
+        <input type="color" [(ngModel)]="buildingSignColor"
+               (ngModelChange)="scene3dApplyBuildingParam('signColor', $event)">
+        <span class="scene3d-val">{{ buildingSignColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Shopfront</label>
+        <input type="color" [(ngModel)]="buildingStorefrontColor"
+               (ngModelChange)="scene3dApplyBuildingParam('storefrontColor', $event)">
+        <span class="scene3d-val">{{ buildingStorefrontColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Awning</label>
+        <input type="color" [(ngModel)]="buildingAwningColor"
+               (ngModelChange)="scene3dApplyBuildingParam('awningColor', $event)">
+        <span class="scene3d-val">{{ buildingAwningColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Door leaf</label>
+        <input type="color" [(ngModel)]="buildingDoorColor"
+               (ngModelChange)="scene3dApplyBuildingParam('doorColor', $event)">
+        <span class="scene3d-val">{{ buildingDoorColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Door frame</label>
+        <input type="color" [(ngModel)]="buildingDoorFrameColor"
+               (ngModelChange)="scene3dApplyBuildingParam('doorFrameColor', $event)">
+        <span class="scene3d-val">{{ buildingDoorFrameColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Door handle</label>
+        <input type="color" [(ngModel)]="buildingDoorHandleColor"
+               (ngModelChange)="scene3dApplyBuildingParam('doorHandleColor', $event)">
+        <span class="scene3d-val">{{ buildingDoorHandleColor }}</span>
+    </div>
+    <div class="scene3d-material-row">
+        <label>Night windows</label>
+        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="buildingNightWindows"
+               (ngModelChange)="scene3dApplyBuildingParam('nightWindows', $event)">
+        <span class="scene3d-val">{{ buildingNightWindows | number:'1.2-2' }}</span>
+    </div>
+</ng-container>
 
 <!-- ── Scale ── -->
-<div class="scene3d-array-strip-label">Scale</div>
-<div class="scene3d-material-row">
-    <label>Units/m</label>
-    <input type="range" min="0.01" max="1" step="0.01" [(ngModel)]="buildingUnitsPerMetre"
-           (ngModelChange)="scene3dApplyBuildingScale()">
-    <span class="scene3d-val">{{ buildingUnitsPerMetre | number:'1.2-2' }}</span>
-</div>
-<div class="scene3d-material-row" *ngIf="buildingScaleInfo">
-    <label style="font-size:10px;color:rgba(255,255,255,0.5)">
-        1:{{ (buildingScaleInfo.metersPerUnit | number:'1.0-0') }} · {{ buildingScaleInfo.realHeightM | number:'1.0-0' }}m tall
-    </label>
-    <button class="scene3d-btn scene3d-btn-sm" style="margin-left:auto" (click)="scene3dFrameBuilding()" title="Re-frame camera on building">⊡</button>
-</div>
+<ng-container *ngIf="nav.id === 'scale' && blockBuildingIndex === null">
+    <div class="scene3d-material-row">
+        <label>Units/m</label>
+        <input type="range" min="0.01" max="1" step="0.01" [(ngModel)]="buildingUnitsPerMetre"
+               (ngModelChange)="scene3dApplyBuildingScale()">
+        <span class="scene3d-val">{{ buildingUnitsPerMetre | number:'1.2-2' }}</span>
+    </div>
+    <div class="scene3d-material-row" *ngIf="buildingScaleInfo">
+        <label style="font-size:10px;color:rgba(255,255,255,0.5)">
+            1:{{ (buildingScaleInfo.metersPerUnit | number:'1.0-0') }} · {{ buildingScaleInfo.realHeightM | number:'1.0-0' }}m tall
+        </label>
+        <button class="scene3d-btn scene3d-btn-sm" style="margin-left:auto" (click)="scene3dFrameBuilding()" title="Re-frame camera on building">⊡</button>
+    </div>
+</ng-container>
 
-<!-- ── Actions ── -->
-<div style="margin-top:12px;display:flex;gap:6px">
-    <button class="scene3d-btn scene3d-btn-danger" style="flex:1" (click)="deleteBuilding.emit()" title="Remove this building">Delete</button>
-</div>
-<div style="margin-top:6px;display:flex">
-    <button class="scene3d-btn scene3d-btn-primary" style="flex:1" (click)="scene3dBuildingPromoteToLibrary()">Save to Library</button>
-</div>
+<!-- ── Actions (menu only). Inside a Block they act on this ONE building, never the whole block ── -->
+<ng-container *ngIf="!nav.id">
+    <ng-container *ngIf="blockBuildingIndex === null; else blockBuildingActions">
+        <div style="margin-top:6px;display:flex">
+            <button class="scene3d-btn scene3d-btn-primary" style="flex:1" (click)="scene3dBuildingPromoteToLibrary()">Save to Library</button>
+        </div>
+        <button *ngIf="confirming !== 'delete'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirming = 'delete'" title="Remove this building">Delete building…</button>
+        <fm-confirm-strip *ngIf="confirming === 'delete'" text="Delete this building? This can't be undone." action="Delete"
+                          (ok)="confirming = null; deleteBuilding.emit()" (cancel)="confirming = null"></fm-confirm-strip>
+    </ng-container>
+    <ng-template #blockBuildingActions>
+        <button *ngIf="confirming !== 'remove'" class="scene3d-btn scene3d-btn-danger" style="width:100%;margin-top:16px"
+                (click)="confirming = 'remove'" title="Remove this building from the block (the rest of the block stays)">Remove from block…</button>
+        <fm-confirm-strip *ngIf="confirming === 'remove'" action="Remove"
+                          [text]="'Remove building ' + ((blockBuildingIndex ?? 0) + 1) + ' from this block? This can’t be undone.'"
+                          (ok)="confirming = null; scene3dRemoveFromBlock()" (cancel)="confirming = null"></fm-confirm-strip>
+    </ng-template>
+</ng-container>

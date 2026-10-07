@@ -104,13 +104,25 @@
 
     <!-- Quick controls shown below grid for active brush -->
     <div class="quick-controls" *ngIf="activePresetId">
-      <!-- Size -->
-      <div class="quick-row">
+      <!-- Size: non-linear (small sizes get most of the travel) -->
+      <label class="quick-row">
         <span class="quick-label">Size</span>
-        <input type="range" min="1" max="500" step="1"
-               [(ngModel)]="maxSize" (ngModelChange)="onMaxSizeChange($event)">
+        <input type="range" min="0" [max]="sizeSliderSteps" step="1" aria-label="Brush size"
+               [value]="sizeSliderPos" (input)="onSizeSliderInput($any($event.target).value)">
         <span class="quick-value">{{ maxSize }}px</span>
-      </div>
+      </label>
+      <label class="quick-row">
+        <span class="quick-label">Opacity</span>
+        <input type="range" min="1" max="100" step="1" aria-label="Brush opacity"
+               [ngModel]="opacity" (ngModelChange)="onOpacityChange(+$event)">
+        <span class="quick-value">{{ opacity }}%</span>
+      </label>
+      <label class="quick-row">
+        <span class="quick-label">Flow</span>
+        <input type="range" min="1" max="100" step="1" aria-label="Brush flow"
+               [ngModel]="flow" (ngModelChange)="onFlowChange(+$event)">
+        <span class="quick-value">{{ flow }}%</span>
+      </label>
     </div>
 
     <!-- Import / Export Brush Pack -->

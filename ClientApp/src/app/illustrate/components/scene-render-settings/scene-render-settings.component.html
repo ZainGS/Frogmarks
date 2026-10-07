@@ -203,7 +203,7 @@
             <option value="solid">Solid</option>
             <option value="gradient">Gradient</option>
             <option value="wavy">Wavy</option>
-            <option value="checkers">Clover Picnic</option>
+            <option value="checkers">Checkers</option>
         </select>
     </div>
     <div class="scene3d-material-row" *ngIf="s3.scene3dBgMode !== 'none'">
@@ -327,7 +327,7 @@
     <div *ngIf="s3.scene3dIblEnabled" class="scene3d-ibl-active-badge">&#9679; IBL active</div>
     <div class="scene3d-material-row" style="margin-top:4px">
         <label>Intensity</label>
-        <input type="range" min="0" max="4" step="0.05" [(ngModel)]="s3.scene3dIblIntensity">
+        <input type="range" min="0" max="4" step="0.05" [ngModel]="s3.scene3dIblIntensity" (ngModelChange)="s3.scene3dSetIblIntensity($event)">
         <span class="scene3d-val">{{ s3.scene3dIblIntensity | number:'1.2-2' }}</span>
     </div>
     <div class="scene3d-row" style="margin-top:6px;gap:6px">

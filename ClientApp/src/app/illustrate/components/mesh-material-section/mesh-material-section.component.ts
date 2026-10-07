@@ -17,11 +17,13 @@ export class MeshMaterialSectionComponent implements OnChanges {
   @Input() scene3dSelectedMeshType: string = '';
   @Input() scene3dSketchPaper: number = 0.75;
   mathRound(v: number): number { return Math.round(v); }
+  /** Which material-slot action is asking first: a slot index (its ✕) or 'single' (back to one material). */
+  confirmMaterial: number | 'single' | null = null;
   @Output() dirty = new EventEmitter<void>();
   @Output() sketchPaperEdited = new EventEmitter<number>();
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['meshId']) this.load();
+    if (changes['meshId']) { this.confirmMaterial = null; this.load(); }
   }
 
   /** Re-read the section from the engine (the editor calls this on a same-id re-select). */

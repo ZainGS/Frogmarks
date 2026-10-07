@@ -5,7 +5,7 @@
     }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=visibility" />
-<body style="background-color: black !important;" class="dark-mode">
+<body style="background-color: black !important;" class="dark-mode" [class.play-touch-active]="touchUi.coarse && scene3dViewIsPlaying">
 
     <!-- Fixed info tooltip (escapes overflow:hidden panels) -->
     <div *ngIf="infoTooltipVisible" class="info-tooltip-fixed"
@@ -220,6 +220,28 @@
           </div>
         </div>
 
+        <!-- Document not found (persist.documentMissing): nothing is bound, so nothing would save. It covers the whole
+             editor (no editable page that silently drops the work, UI review d27 / d30). -->
+        <div *ngIf="persist.documentMissing as missing" class="doc-missing" role="alertdialog" aria-modal="true"
+             aria-labelledby="doc-missing-title" aria-describedby="doc-missing-body">
+          <div class="doc-missing-card">
+            <div class="doc-missing-title" id="doc-missing-title">Document not found</div>
+            <p class="doc-missing-body" id="doc-missing-body">
+              <ng-container *ngIf="missing === 'local'">This illustration isn't saved in this browser. It may have been
+                deleted, or made in another browser or on another device.</ng-container>
+              <ng-container *ngIf="missing === 'cloud'">This illustration couldn't be opened. It may have been deleted,
+                or the server can't be reached right now.</ng-container>
+            </p>
+            <div class="doc-missing-actions">
+              <button type="button" class="doc-missing-btn" (click)="doc.backToShellFromMissing()">Back to Shell</button>
+              <button *ngIf="missing === 'local'" type="button" class="doc-missing-btn doc-missing-btn--primary"
+                      (click)="doc.createInPlaceOfMissing()">Create new</button>
+              <button *ngIf="missing === 'cloud'" type="button" class="doc-missing-btn doc-missing-btn--primary"
+                      (click)="doc.retryMissing()">Try again</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Mesh Edit Panel overlay -->
         <app-mesh-edit-panel
             *ngIf="meshEdit.scene3dIsEditingMesh && editorState.scene3dSelectedMeshId"
@@ -293,6 +315,7 @@
             *ngIf="showEphemeraPanel && activeVectorLayerId"
             [shapeManager]="shapeManager"
             [vectorLayerId]="activeVectorLayerId"
+            [besideRightPanel]="sidePanel.visible && !uiHidden && !isViewerMode"
             (closeRequest)="closeEphemeraPanel()">
         </app-ephemera-panel>
 
@@ -386,15 +409,17 @@
 
         <!-- Touch (salsa docs/specs/mobile-parity.md): Play touch controls (TOUCH-4), the contextual Apply / Cancel pill
              for the modal states Enter / Esc end (TOUCH-10; the other keyboard-only actions are in the Edit / View
-             menus) and a way back from Hide UI without the X key (UI-1 / UI-13). -->
+             menus) and a way back from Hide UI without the X key (UI-1 / UI-13). While playing on touch the rail, panels,
+             colour picker and zoom box are hidden (.play-touch-active), so the controls use the whole view. -->
         <app-play-touch-controls *ngIf="touchUi.coarse && scene3dViewIsPlaying"
                                  [shapeManager]="shapeManager"
-                                 [leftInset]="70"
-                                 [rightInset]="(!uiHidden && !isViewerMode && sidePanel.visible) ? 280 : 0"
+                                 [leftInset]="0"
+                                 [rightInset]="0"
                                  (stop)="scene3dTogglePlay()"></app-play-touch-controls>
         <ng-container *ngIf="touchUi.coarse && !uiHidden && !isViewerMode && !scene3dViewIsPlaying">
             <app-touch-context-pill *ngIf="contextPill as pill" [spec]="pill" [ed]="this"
                                     [aboveTimeline]="animationEnabled" [sidePanelOpen]="sidePanel.visible || modePanelOpen"
+                                    [anchorTop]="contextPillTop"
                                     (apply)="runContextPill(pill, 'apply')"
                                     (cancel)="runContextPill(pill, 'cancel')"
                                     (action)="runContextPillButton(pill, $event)"
@@ -437,29 +462,27 @@
                     </div>
                     <div class="top-toolbar-title">
                         <input #titleInput type="text" class="board-title-input" [(ngModel)]="doc.illustrationTitle" (keyup.enter)="doc.updateIllustrationTitle(); titleInput.blur()" (blur)="doc.updateIllustrationTitle()" placeholder="Untitled" />
-                        <span class="autosave-indicator"
-                              [class.saving]="persist.autoSaveState === 'saving'"
-                              [class.saved]="persist.autoSaveState === 'saved'"
-                              [class.error]="persist.autoSaveState === 'error'"
-                              [class.unavailable]="persist.autoSaveState === 'unavailable'"
-                              [title]="persist.autoSaveState === 'saving'
-                                       ? (persist.syncMode > 0 ? 'Saving locally…' : 'Saving…')
-                                       : persist.autoSaveState === 'saved'
-                                         ? (persist.syncMode > 0 ? 'Saved locally ✓' : 'Saved ✓')
-                                         : persist.autoSaveState === 'error' ? 'Save failed — click to retry'
-                                         : persist.autoSaveState === 'unavailable' ? 'Auto-save unavailable in this browser mode'
-                                         : persist.syncMode > 0 ? 'Saves to local storage on this device.'
-                                         : 'Auto-save is active. Your work is saved automatically.'"
-                              (click)="persist.autoSaveState === 'error' ? saveNow() : null">
-                          <span *ngIf="persist.autoSaveState === 'idle'">{{ persist.syncMode > 0 ? '⬡' : '☁️' }}</span>
-                          <span *ngIf="persist.autoSaveState === 'saving'" class="spin">⟳</span>
-                          <span *ngIf="persist.autoSaveState === 'saved'" style="color: #6f6;">✓</span>
-                          <span *ngIf="persist.autoSaveState === 'error'" style="color: #fa0;">⚠️</span>
-                          <span *ngIf="persist.autoSaveState === 'unavailable'" style="opacity:.4">—</span>
-                        </span>
+                        <!-- Save status in words (persist.saveStatus, services/save-status.ts): Saved ✓ / Saving… /
+                             Not saved; a failed save is a button that retries. -->
+                        <span *ngIf="persist.saveStatus as st" class="save-status" [ngClass]="'save-status--' + st.kind"
+                              [title]="st.title" [attr.role]="st.retry ? 'button' : 'status'" [attr.tabindex]="st.retry ? 0 : null"
+                              [attr.aria-label]="st.label + '. ' + st.title"
+                              (click)="st.retry && saveNow()" (keydown.enter)="st.retry && saveNow()">{{ st.label }}</span>
                         <span *ngIf="storage.opfsSizeLabel && persist.syncMode > 0"
                               class="opfs-size-chip"
                               title="Scene data stored in browser storage (OPFS)">{{ storage.opfsSizeLabel }}</span>
+                    </div>
+                    <!-- Undo / Redo: routed like Ctrl+Z / Ctrl+Y (editor-keymap routeUndo: 2D objects → 3D → raster). On
+                         touch, a two-finger tap undoes and a three-finger tap redoes (multi-finger-tap.ts). -->
+                    <div class="top-toolbar-history" role="group" aria-label="History">
+                        <button type="button" class="top-history-btn" (click)="editUndo(); $event.stopPropagation()"
+                                [title]="touchUi.coarse ? 'Undo (two-finger tap)' : 'Undo (Ctrl+Z)'" aria-label="Undo">
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 7H4V2M4.5 7.5A8.5 8.5 0 1 1 3.6 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+                        </button>
+                        <button type="button" class="top-history-btn" (click)="editRedo(); $event.stopPropagation()"
+                                [title]="touchUi.coarse ? 'Redo (three-finger tap)' : 'Redo (Ctrl+Y)'" aria-label="Redo">
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 7h5V2M19.5 7.5A8.5 8.5 0 1 0 20.4 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+                        </button>
                     </div>
                 </div>
 
@@ -877,7 +900,9 @@
              (opacityChange)="rasterBrushService.updateOpacity($event)"
              (pickRecent)="draw.setPenColor($event)"
              (swap)="draw.swapColors()"
-             (resetColors)="draw.resetToDefaultColors()">
+             (resetColors)="draw.resetToDefaultColors()"
+             [eyedropperArmed]="eyedropperArmed"
+             (eyedropper)="toggleEyedropper()">
         </app-persistent-color-picker>
 
         <!-- Engine status pill (Salsa performance P2/P3): shader compiles + background jobs, instead of a frozen app -->
@@ -927,69 +952,22 @@
             </div> -->
         </div>
 
-        <!-- Context Menu Panel -->
+        <!-- Canvas context menu: right-click (desktop) / long-press (touch) on the canvas (CanvasPointerExtras). Each item
+             runs its key's route (canvas-context-menu.ts) and is disabled when that route has nothing to act on. -->
         <div *ngIf="contextMenu.visible && !uiHidden"
-                class="board-context-menu shadow-sm"
+                class="canvas-menu" [class.canvas-menu--coarse]="touchUi.coarse"
                 [style.left.px]="contextMenu.x"
                 [style.top.px]="contextMenu.y"
-                role="menu"
-                (click)="$event.stopPropagation()">
-
-            <button (click)="doc.newIllustrationButtonClicked()" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">open_in_new</mat-icon>
-                New Illustration
-            </button>
-            <button (click)="doc.duplicateIllustrationButtonClicked()" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">content_copy</mat-icon>
-                Duplicate Illustration
-            </button>
-            <hr/>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">undo</mat-icon>
-                Undo
-            </button>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">redo</mat-icon>
-                Redo
-            </button>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">content_copy</mat-icon>
-                Copy
-            </button>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">content_cut</mat-icon>
-                Cut
-            </button>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">content_copy</mat-icon>
-                Duplicate
-            </button>
-            <button class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">content_paste</mat-icon>
-                Paste
-            </button>
-            <hr/>
-            <button (click)="toggleFullscreen()" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">fullscreen</mat-icon>
-                Toggle Full Screen
-            </button>
-            <button (click)="toggleSidePanel()" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">account_tree</mat-icon>
-                {{ sidePanel.visible ? 'Hide' : 'Show' }} Side Panel
-            </button>
-            <button (click)="toggleUI(true)" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">toggle_on</mat-icon>
-                Toggle UI
-            </button>
-            <button (click)="toggleAnimationMode()" class="menu-item" role="menuitem"
-                    title="Enable animation timeline. Your illustration becomes the first frame — add more frames to start animating.">
-                <mat-icon class="menu-icon mt-1">movie</mat-icon>
-                {{ animationEnabled ? 'Disable' : 'Enable' }} Animation
-            </button>
-            <button (click)="doc.setCurrentViewAsThumbnail()" class="menu-item" role="menuitem">
-                <mat-icon class="menu-icon mt-1">filter_frames</mat-icon>
-                Capture Thumbnail
-            </button>
+                role="menu" aria-label="Canvas"
+                (click)="$event.stopPropagation()"
+                (contextmenu)="$event.preventDefault()">
+            <ng-container *ngFor="let item of canvasMenu">
+                <div *ngIf="item.divider" class="canvas-menu-divider" role="separator"></div>
+                <button type="button" class="canvas-menu-item" role="menuitem" [attr.data-item]="item.id"
+                        [disabled]="!item.enabled" (click)="runCanvasMenu(item.id)">
+                    <span>{{ item.label }}</span><span *ngIf="!touchUi.coarse" class="canvas-menu-keys">{{ item.keys }}</span>
+                </button>
+            </ng-container>
         </div>
     </div>
 
@@ -1561,6 +1539,7 @@
             [blockBuildingIndex]="procedural.scene3dEditBlockBuildingIndex"
             [open]="procedural.scene3dEditBuildingPanelOpen"
             (deleteBuilding)="procedural.scene3dDeleteBuilding()"
+            (dirty)="scene3dMarkDirty()"
             (backToBlock)="procedural.scene3dBackToBlock()">
         </app-building-panel>
     </div>
@@ -1571,6 +1550,7 @@
             [shapeManager]="shapeManager"
             [foliageId]="procedural.scene3dEditFoliageId"
             [open]="procedural.scene3dEditFoliagePanelOpen"
+            (dirty)="scene3dMarkDirty()"
             (delete)="procedural.scene3dDeleteFoliage()">
         </app-foliage-panel>
     </div>
@@ -1623,6 +1603,7 @@
 
     <!-- Shape Tool compact subpanel -->
     <div class="tool-subpanel tool-subpanel--compact" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && controlPanelActiveTool.startsWith('shape')">
+        <div class="tool-hint" *ngIf="controlPanelActiveTool.startsWith('shape')">{{ vectorToolHint }}</div>
         <div class="tool-label">Shape Type</div>
         <div class="shape-type-grid">
             <div class="shape-type-btn" [class.active]="draw.activeShapeKind === 'circle'"
@@ -1673,6 +1654,7 @@
 
     <!-- Line (Arrow) Tool compact subpanel -->
     <div class="tool-subpanel tool-subpanel--compact" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && controlPanelActiveTool === 'arrow'">
+        <div class="tool-hint" *ngIf="controlPanelActiveTool === 'arrow'">{{ vectorToolHint }}</div>
         <div class="tool-label">Line Options</div>
         <div style="padding: 4px 8px; font-size: 12px;">
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
@@ -1702,7 +1684,8 @@
     </div>
 
     <!-- toolSubpanel.collapsed: touch only, folded after a brush pick (tap the tool again to reopen) -->
-    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && !toolSubpanel.collapsed && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout')">
+    <!-- !activeVectorLayerId: these are the 2D rail's tools — on a vector layer that rail is gone, so is their panel -->
+    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && !toolSubpanel.collapsed && !activeVectorLayerId && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout')">
         <!-- Drawing Tool Options -->
         <div *ngIf="controlPanelActiveTool.startsWith('drawing')">
             <div class="tool-label">Drawing Options</div>
@@ -1801,7 +1784,9 @@
     </div>
 
     <!-- Animation timeline — shown when animation mode is enabled (outside tool-subpanel, at board-shell level) -->
+    <!-- Toggle UI (X) hides it too, display only: it stays mounted, so playback / the current frame are kept. -->
     <app-animation-timeline *ngIf="animationEnabled && !isViewerMode" class="animation-timeline-wrapper"
+      [style.display]="uiHidden ? 'none' : null"
       [mesh3dAllTracks]="anim.scene3dAllMeshTracks"
       [shapeManager]="shapeManager"
       [cameraCuts]="anim.scene3dCameraCuts"
