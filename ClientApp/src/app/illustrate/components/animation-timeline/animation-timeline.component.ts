@@ -3,7 +3,6 @@ import {
   OnInit,
   OnDestroy,
   DoCheck,
-  HostListener,
   ElementRef,
   ViewChild,
   Input,
@@ -641,7 +640,19 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
   /** Subscriptions are live (BehaviorSubjects replay synchronously in ngOnInit — no view refresh needed then). */
   private _ready = false;
 
+  /** The keys onKeyDown handles (Alt+, / Alt+. included). */
+  private static readonly HOTKEYS = new Set([' ', ',', '.', 'Home', 'End', 'd', 'D', 'Delete', 'F5', 'F6', 'F7', 'o', 'O']);
+  /** Document keydown, listened OUTSIDE the zone (zone audit item 2): as a @HostListener every key in the editor —
+   *  each WASD / space auto-repeat in Play too — ran an app change detection. Enters only for a timeline key outside
+   *  Play (a repeat that only claims its key stays outside), and marks this OnPush view (the HostListener did). */
+  private readonly _onDocKeyDownOutsideZone = (e: KeyboardEvent): void => {
+    if (this.editorState.playing || !AnimationTimelineComponent.HOTKEYS.has(e.key)) return;
+    if (e.repeat && e.key !== ',' && e.key !== '.') { this.onKeyDown(e); return; }
+    this.ngZone.run(() => { this.onKeyDown(e); this.cdr.markForCheck(); });
+  };
+
   ngOnInit(): void {
+    this.ngZone.runOutsideAngular(() => document.addEventListener('keydown', this._onDocKeyDownOutsideZone));
     this.subs.push(
       // Per frame of playback — emitted OUTSIDE the Angular zone (no app tick), so refresh this view directly.
       this.animService.currentFrame$.subscribe(f => { if (f !== this.currentFrame) { this.currentFrame = f; this._refresh(); } }),
@@ -659,6 +670,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
 
   ngOnDestroy(): void {
     this._ready = false;
+    document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
     this.subs.forEach(s => s.unsubscribe());
     // No timeline on screen = nothing to pause it from (animation turned off, the editor left): don't leave the clock
     // running in the background.
@@ -1177,7 +1189,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
 
   // ── Keyboard shortcuts ────────────────────────────────────
 
-  @HostListener('document:keydown', ['$event'])
+  /** (Called by _onDocKeyDownOutsideZone.) */
   onKeyDown(event: KeyboardEvent): void {
     if (this.editorState.playing) return;   // Play mode owns the keyboard (editor hotkeys off)
     // Don't capture when typing in inputs
@@ -1218,6 +1230,9 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
         }
         break;
       case 'Delete': {
+        // Delete with a 3D selection in the 3D view is the editor's (routeDelete: the selected 3D items) — it must not
+        // ALSO delete the current raster cel.
+        if (this.editorState.scene3dPanelVisible && this.editorState.scene3dSelectedMeshId) break;
         const layer = this.layers.find(l => l.animated);
         if (layer) {
           const cel = this.getCelAtFrame(layer, this.currentFrame);

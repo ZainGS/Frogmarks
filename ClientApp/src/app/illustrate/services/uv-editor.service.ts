@@ -3,6 +3,8 @@ import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
 import { EditorStateService } from './editor-state.service';
+/** Salsa API newer than the dist Frogmarks type-checks against (feature-detected). */
+type UvCloseAllApi = { closeAllUVEditors3D?: () => void };
 /** Exactly the editor state the UV editor session uses. */
 export type UvEditorHost = Pick<IllustrationComponent, 'shapeManager' | 'character' |
   '_exitAllScene3dModes' | 'skinsPanel' | 'uvCanvasRef'
@@ -26,6 +28,8 @@ export class UvEditorService {
   private _uvHandlersBound = false;
   uvPaintMode = false;
   showUVPane  = false;
+  /** The mesh openUVEditor opened the engine session on (the selection can move while the editor is open). */
+  private _uvOpenedMeshId: string | null = null;
   // Stamp tool (Mode B decals — bake into mesh texture while in UV Paint)
   uvStampActive = false;
   uvStampSize   = 0.25;
@@ -48,6 +52,7 @@ export class UvEditorService {
     // openUVEditor3D handles orbit setup internally — no enterMeshEditMode3D needed
     this._uvSession = sm.openUVEditor3D(this.editorState.scene3dSelectedMeshId);
     if (!this._uvSession) return;
+    this._uvOpenedMeshId = this.editorState.scene3dSelectedMeshId;
     this.uvEditorOpen = true;
     setTimeout(() => {
       // The pane canvas is *ngIf'd on uvEditorOpen. With event coalescing (main.ts) the click's change detection waits for
@@ -74,11 +79,18 @@ export class UvEditorService {
     const sm = this.shapeManager;
     // If closing with an active GARP paint preview, the Skins panel discards it
     this.host.skinsPanel?.handleUvEditorClosed();
-    // No-arg exit is idempotent and safe — don't gate on mesh ID (wrong mesh = skipped exit)
-    sm.exitUVPaintMode3D();
-    if (!this.scene3dClothingPaintActive) {
-      sm.closeUVEditor3D(this.editorState.scene3dSelectedMeshId);
+    // ONE full exit, whatever mesh the editor was opened on (mobile-parity 7.2): closing by the CURRENT selection's id
+    // missed the engine session once the selection had moved (or been cleared) while the editor was open, so the
+    // mesh-edit orbit + the wavy focus background stayed up. closeAllUVEditors3D exits paint (surface input, the mobile
+    // idle pause, double-sided) and closes every UV session; older Salsa builds: exit + close the id it was opened on.
+    const closeAll = (sm as unknown as UvCloseAllApi).closeAllUVEditors3D;
+    if (typeof closeAll === 'function') {
+      closeAll.call(sm);
+    } else {
+      sm.exitUVPaintMode3D();   // no-arg exit is idempotent (clothing paint: it closes the editor it opened itself)
+      if (this._uvOpenedMeshId) sm.closeUVEditor3D(this._uvOpenedMeshId);
     }
+    this._uvOpenedMeshId = null;
     this.scene3dClothingPaintActive = null;
     this.uvPaintTargetId = null;
     this._uvSession = null;

@@ -1,4 +1,4 @@
-import { copySalsaDocument } from './salsa-document-copy';
+import { copySalsaDocument, copySavedDocument } from './salsa-document-copy';
 
 /** Runs against the karma browser's real OPFS (its own temporary profile). */
 async function salsaRoot(): Promise<FileSystemDirectoryHandle> {
@@ -60,5 +60,37 @@ describe('copySalsaDocument (Duplicate Illustration, engine half)', () => {
     expect(await copySalsaDocument(src, src, 'x')).toBeFalse();
     expect(await copySalsaDocument('', dst, 'x')).toBeFalse();
     expect(await copySalsaDocument(src, '', 'x')).toBeFalse();
+  });
+});
+
+describe('copySavedDocument (the whole saved document: engine + editor metadata)', () => {
+  const src = `spec-copy-saved-${Date.now()}`;
+  const dst = `${src}-dst`;
+
+  afterEach(async () => {
+    const root = await salsaRoot();
+    for (const id of [src, dst]) { try { await root.removeEntry(id, { recursive: true }); } catch { /* */ } }
+  });
+
+  it('copies the engine document and the metadata, minus the server revision, marked not yet synced', async () => {
+    const dir = await (await salsaRoot()).getDirectoryHandle(src, { create: true });
+    await write(dir, 'manifest.json', JSON.stringify({ version: 3, docId: src, name: 'A', layers: [] }));
+    await write(dir, 'scene.json', '{"root":{"children":[{"type":"Rect"}]}}');
+    const meta = {
+      read: jasmine.createSpy('read').and.resolveTo({ revision: 4, baseRevision: 3, backendSynced: true, bgColor: '#abcdef', packaging: { packagingId: 'p1' } }),
+      write: jasmine.createSpy('write').and.resolveTo(true),
+    };
+    expect(await copySavedDocument(meta, src, dst, 'Copy of A')).toBeTrue();
+    expect(await read(await (await salsaRoot()).getDirectoryHandle(dst), 'scene.json')).toBe('{"root":{"children":[{"type":"Rect"}]}}');
+    const [key, written] = meta.write.calls.mostRecent().args as [string, Record<string, unknown>];
+    expect(key).toBe(dst);
+    expect(written).toEqual({ backendSynced: false, bgColor: '#abcdef', packaging: { packagingId: 'p1' } });
+  });
+
+  it('a never-saved source copies nothing (no metadata written either)', async () => {
+    const meta = { read: jasmine.createSpy('read').and.resolveTo({}), write: jasmine.createSpy('write').and.resolveTo(true) };
+    expect(await copySavedDocument(meta, src, dst, 'x')).toBeFalse();
+    expect(meta.write).not.toHaveBeenCalled();
+    expect(await copySavedDocument(meta, 'local-', dst, 'x')).toBeFalse();   // a local key without its uuid
   });
 });

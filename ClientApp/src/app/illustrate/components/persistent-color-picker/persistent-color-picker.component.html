@@ -22,9 +22,11 @@
     <!-- Current color swatch -->
     <div class="persistent-swatch-row">
         <div class="persistent-swatch" [style.background-color]="color"></div>
+        <!-- [value] + (input), not ngModel: NgModel writes each new [ngModel] through a resolved promise, i.e. a second
+             app change detection per picked colour (a ring / square drag ran 2 ticks per frame). -->
         <input type="text" class="persistent-hex-input"
-               [ngModel]="color"
-               (ngModelChange)="onPersistentHexInput($event)">
+               [value]="color"
+               (input)="onPersistentHexInput($any($event.target).value)">
         <input type="number" class="persistent-opacity-input"
                min="0" max="100" step="1"
                [value]="persistentOpacity"

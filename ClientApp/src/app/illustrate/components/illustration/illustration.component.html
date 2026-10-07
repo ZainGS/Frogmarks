@@ -492,8 +492,8 @@
                             <input
                                 type="text"
                                 class="form-control d-inline-block panel-input-field"
-                                [ngModel]="canvasLook.bgHexInputDraft"
-                                (ngModelChange)="canvasLook.onBgHexInputChange($event)"
+                                [value]="canvasLook.bgHexInputDraft"
+                                (input)="canvasLook.onBgHexInputChange($any($event.target).value)"
                                 (blur)="canvasLook.onBgHexInputBlur()"
                                 (keydown.enter)="canvasLook.onHexInputEnter($event)"
                             />
@@ -811,9 +811,11 @@
         </div> <!-- close .raster-layers-inline -->
 
         <!-- ── UI System Panel ───────────────────────────────── -->
-        <!-- Stays mounted across tab switches so preview/selection state survives (was *ngIf) -->
+        <!-- Stays mounted across tab switches so preview/selection state survives (was *ngIf); not change-checked while
+             another tab shows (fmDetachWhenHidden) -->
         <app-ui-system-panel #uiPanel
             [hidden]="rightPanelTab !== 'ui'"
+            [fmDetachWhenHidden]="rightPanelTab === 'ui'"
             [shapeManager]="shapeManager"
             [rasterLayers]="editorState.rasterLayers"
             [selectedShapeId]="uiSelectedShapeId">
@@ -1464,20 +1466,23 @@
 
     <!-- AI Authoring subpanel — kept in DOM so session state survives close/reopen (not mounted while the tool is hidden) -->
     <div *ngIf="showAiTool" class="tool-subpanel authoring-subpanel" [class.visible]="authoringPanelOpen && !uiHidden">
-        <app-authoring-panel [authoring]="authoringApi"></app-authoring-panel>
+        <app-authoring-panel [fmDetachWhenHidden]="authoringPanelOpen && !uiHidden" [authoring]="authoringApi"></app-authoring-panel>
     </div>
 
     <!-- Mode label — sibling of tool-subpanel so it renders below it in z-order -->
     <div class="toolbar-mode-label" *ngIf="!uiHidden">{{ editorState.scene3dPanelVisible ? '3D TOOLS' : activeVectorLayerId ? 'VECTOR TOOLS' : '2D TOOLS' }}</div>
 
+    <!-- Tool subpanels below stay mounted and slide in / out ([class.visible]); each panel component carries
+         [fmDetachWhenHidden] with its wrapper's expression, so a hidden one is not change-checked (zone audit D.1). -->
+
     <!-- Array Tool subpanel — shown when 3D array tool is active -->
     <div class="tool-subpanel" [class.visible]="!uiHidden && arrayTool.scene3dArrayToolActive">
-        <app-array-tool-panel [scene3dGizmoOrientation]="scene3dGizmoOrientation" (toggleGizmoOrientation)="scene3dToggleGizmoOrientation()"></app-array-tool-panel>
+        <app-array-tool-panel [fmDetachWhenHidden]="!uiHidden && arrayTool.scene3dArrayToolActive" [scene3dGizmoOrientation]="scene3dGizmoOrientation" (toggleGizmoOrientation)="scene3dToggleGizmoOrientation()"></app-array-tool-panel>
     </div>
 
     <!-- City Tool subpanel -->
     <div class="tool-subpanel" [class.visible]="scene3dWorldPanelOpen && !uiHidden">
-        <app-world-panel #worldPanel
+        <app-world-panel #worldPanel [fmDetachWhenHidden]="scene3dWorldPanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [open]="scene3dWorldPanelOpen"
             (dirty)="scene3dMarkDirty()"
@@ -1489,12 +1494,12 @@
 
     <!-- Package Creator subpanel -->
     <div class="tool-subpanel" [class.visible]="pkg.scene3dPkgCreatorOpen && !uiHidden">
-        <app-pkg-creator-panel></app-pkg-creator-panel>
+        <app-pkg-creator-panel [fmDetachWhenHidden]="pkg.scene3dPkgCreatorOpen && !uiHidden"></app-pkg-creator-panel>
     </div>
 
     <!-- Edit Character subpanel — shown when a procedural body is selected and panel is open -->
     <div class="tool-subpanel" [class.visible]="character.scene3dEditCharPanelOpen && !uiHidden">
-        <app-character-panel #charPanel
+        <app-character-panel #charPanel [fmDetachWhenHidden]="character.scene3dEditCharPanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [open]="character.scene3dEditCharPanelOpen"
             [scene3dEditCharBodyId]="character.scene3dEditCharBodyId"
@@ -1519,7 +1524,7 @@
 
     <!-- Edit Building subpanel -->
     <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBuildingPanelOpen && !uiHidden">
-        <app-building-panel
+        <app-building-panel [fmDetachWhenHidden]="procedural.scene3dEditBuildingPanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [buildingId]="procedural.scene3dEditBuildingId"
             [blockId]="procedural.scene3dEditBlockId"
@@ -1532,7 +1537,7 @@
 
     <!-- Edit Foliage subpanel -->
     <div class="tool-subpanel" [class.visible]="procedural.scene3dEditFoliagePanelOpen && !uiHidden">
-        <app-foliage-panel
+        <app-foliage-panel [fmDetachWhenHidden]="procedural.scene3dEditFoliagePanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [foliageId]="procedural.scene3dEditFoliageId"
             [open]="procedural.scene3dEditFoliagePanelOpen"
@@ -1542,17 +1547,17 @@
 
     <!-- Creator panel (vending / bike-rack / bollard / …) -->
     <div class="tool-subpanel" [class.visible]="creator.scene3dCreatorPanelOpen && !uiHidden">
-        <app-creator-panel></app-creator-panel>
+        <app-creator-panel [fmDetachWhenHidden]="creator.scene3dCreatorPanelOpen && !uiHidden"></app-creator-panel>
     </div>
 
     <!-- Decal Tool subpanel -->
     <div class="tool-subpanel" [class.visible]="(decal.scene3dDecalToolActive || scene3dSelectedIsDecal) && !uiHidden">
-        <app-decal-panel [scene3dSelectedIsDecal]="scene3dSelectedIsDecal"></app-decal-panel>
+        <app-decal-panel [fmDetachWhenHidden]="(decal.scene3dDecalToolActive || scene3dSelectedIsDecal) && !uiHidden" [scene3dSelectedIsDecal]="scene3dSelectedIsDecal"></app-decal-panel>
     </div>
 
     <!-- GARP Skins subpanel -->
     <div class="tool-subpanel" [class.visible]="garpPanelOpen && !uiHidden">
-        <app-skins-panel #skinsPanel
+        <app-skins-panel #skinsPanel [fmDetachWhenHidden]="garpPanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [open]="garpPanelOpen"
             [(canDesigns)]="garpCanDesigns"
@@ -1565,7 +1570,7 @@
 
     <!-- Edit Block subpanel -->
     <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBlockPanelOpen && !uiHidden">
-        <app-block-panel
+        <app-block-panel [fmDetachWhenHidden]="procedural.scene3dEditBlockPanelOpen && !uiHidden"
             [shapeManager]="shapeManager"
             [blockId]="procedural.scene3dEditBlockId"
             [open]="procedural.scene3dEditBlockPanelOpen"

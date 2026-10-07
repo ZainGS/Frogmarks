@@ -182,7 +182,12 @@ export class RasterAutoSaveService {
   // ── Document management ────────────────────────────────────
 
   async loadDocument(docId: string): Promise<{ success: boolean; layers: any[] }> {
-    const result = await this.sm?.loadDocument(docId);
+    // H3 (zone audit item 3): the engine load runs OUTSIDE the zone. It restores the whole document — a city's build,
+    // stream pump, tile workers, traffic / day-cycle tickers start in it — and every timer / worker message it started
+    // in the zone ran an app change detection. The await resumes in the CALLER's zone (the CLI downlevels async/await
+    // to zone-aware promises; a continuation runs in the zone its await was in), so the callers' post-load work —
+    // the editor's layers, title, loader; the package editor's state — stays in the zone and change-detected.
+    const result = await this.ngZone.runOutsideAngular(() => this.sm?.loadDocument(docId));
     // Handle both old (boolean) and new ({ success, layers }) return shapes
     if (result && typeof result === 'object' && 'success' in result) {
       return result as { success: boolean; layers: any[] };

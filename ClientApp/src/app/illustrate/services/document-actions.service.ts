@@ -13,8 +13,7 @@ import { ResultType } from '../../shared/models/error-result.model';
 import { Illustration } from 'app/illustrate/models/illustration.model';
 import { firstValueFrom } from 'rxjs';
 import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
-import { IllustrationStateDto } from 'app/shared/services/illustrate/illustration.service';
-import { copySalsaDocument } from 'app/shared/services/illustrate/salsa-document-copy';
+import { copySavedDocument } from 'app/shared/services/illustrate/salsa-document-copy';
 
 /** Exactly the editor state the document actions use. */
 export type DocumentActionsHost = Pick<IllustrationComponent, 'shapeManager' |
@@ -199,7 +198,7 @@ export class DocumentActionsService implements OnDestroy {
       const ill: Illustration = res.resultObject;
       if (!await this._copySavedDocument(srcKey, String(ill.id ?? ''), name)) {
         // No saved copy on this device to copy from (browser storage unavailable): fall back to the server's own
-        // duplicate, which copies the raster layers only.
+        // duplicate (everything the server stores: layers, settings, the 3D scene — not the vector-shape scene graph).
         if (ill.id) this.illustrationService.deleteIllustration(ill.id).subscribe({ error: () => {} });
         await this._serverDuplicate(src, name);
         return;
@@ -216,25 +215,16 @@ export class DocumentActionsService implements OnDestroy {
   /** Copy the saved document `srcKey` to `dstKey`: Salsa's document (every layer, the 3D scene, textures ...) and the
    *  editor's OPFS metadata (settings, dither, 3D host state). The copy's metadata drops the original's server
    *  revision (the copy is a different server record) and is marked not yet synced. */
-  private async _copySavedDocument(srcKey: string, dstKey: string, name: string): Promise<boolean> {
-    if (!srcKey || !dstKey || srcKey.endsWith('-') ) return false;
-    if (!await copySalsaDocument(srcKey, dstKey, name)) return false;
-    const meta = await this.opfsMeta.read(srcKey);
-    if (meta) {
-      const copy = { ...meta } as IllustrationStateDto & { backendSynced?: boolean };
-      delete copy.revision;
-      delete copy.baseRevision;
-      copy.backendSynced = false;
-      if (!await this.opfsMeta.write(dstKey, copy)) return false;
-    }
-    return true;
+  private _copySavedDocument(srcKey: string, dstKey: string, name: string): Promise<boolean> {
+    return copySavedDocument(this.opfsMeta, srcKey, dstKey, name);
   }
 
-  /** The server-side duplicate (raster layers + pixels only), used when this device has no saved copy to copy. */
+  /** The server-side duplicate (the cloud copy: layers + pixels, settings, the 3D scene), used when this device has no
+   *  saved copy to copy. The server doesn't store the vector-shape scene graph, so that part can't come along. */
   private async _serverDuplicate(src: Illustration, name: string): Promise<void> {
-    const res: any = await firstValueFrom(this.illustrationService.duplicateIllustration(src.id!, { name, teamId: src.teamId, copyThumbnail: false }));
+    const res: any = await firstValueFrom(this.illustrationService.duplicateIllustration(src.id!, { name, teamId: src.teamId, copyThumbnail: true }));
     if (res?.resultType !== ResultType.Success || !res.resultObject?.uuid) throw new Error('server duplicate failed');
-    this.notifyService.error('Only the painted layers could be duplicated: this browser has no saved copy of the rest.');
+    this.notifyService.error('Duplicated from the cloud copy: this browser has no saved copy of the original, so its vector shapes were not copied.');
     await this.router.navigate(['/illustration', res.resultObject.uuid], { state: { illustration: res.resultObject } });
   }
 

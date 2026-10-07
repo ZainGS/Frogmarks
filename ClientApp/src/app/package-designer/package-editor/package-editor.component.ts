@@ -9,6 +9,19 @@ import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadat
 import { LocalIllustrationService } from 'app/shared/services/illustrate/local-illustration.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { PackagingStateDto } from 'app/shared/services/illustrate/illustration.service';
+import { startBlankEngineDocument } from 'app/illustrate/utils/blank-engine-document';
+
+/**
+ * Document isolation (mobile-parity 7.2), like the illustration editor's load: the engine outlives every document, so
+ * a package opens on a BLANK engine document — nothing of the previous document (layers, pixels, shapes, 3D, packages,
+ * settings, undo) leaks in and gets saved as this package's. Autosave is unbound first, so no pending save of the
+ * previous document can run during the reset. A package with a save restores over the blank one afterwards.
+ */
+export async function startBlankPackageDocument(sm: ShapeManager, autoSave: Pick<RasterAutoSaveService, 'disable'>,
+                                                docId: string, name: string): Promise<void> {
+  autoSave.disable();
+  await startBlankEngineDocument(sm, docId, name);
+}
 
 @Component({
   selector: 'app-package-editor',
@@ -82,6 +95,8 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
   private async _init(uuid: string): Promise<void> {
     this.isLoading = true;
+    // Package A → package B reuses this component: save + leave A first (its pending save, stroke hook, editor mode)
+    await this._leaveCurrentPackage();
     this.isLocalMode = this.route.snapshot.data?.['local'] === true;
     this._docId = `local-${uuid}`;
 
@@ -100,6 +115,8 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
     this._sm = ShapeManager.getInstance();
     await this._sm.whenWebGPUReady();
+    // A clean engine document for this package, new or existing (see startBlankPackageDocument)
+    await this.ngZone.runOutsideAngular(() => startBlankPackageDocument(this._sm, this.autoSaveService, this._docId, this.projectName));
 
     const pkg = this._sm.packaging;
     if (!pkg) {
@@ -162,6 +179,19 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     });
 
     this.isLoading = false;
+  }
+
+  /** Before opening another package on this (reused) component: write the open one's pending metadata + pixels, then
+   *  drop its stroke hook and editor mode. No-op on the first open. */
+  private async _leaveCurrentPackage(): Promise<void> {
+    if (!this._pkgId) return;
+    if (this._saveDebounce) { clearTimeout(this._saveDebounce); this._saveDebounce = null; await this._saveState(); }
+    if (this.autoSaveService.docId === this._docId) await this.autoSaveService.saveNow().catch(() => false);
+    this._strokeSub?.unsubscribe?.();
+    this._strokeSub = undefined;
+    if (this._sm?.packaging) this._sm.packaging.exitEditor(this._pkgId);
+    this._pkgId = null;
+    this._dielineLayerId = null;
   }
 
   // ── Dimension change ─────────────────────────────────────────

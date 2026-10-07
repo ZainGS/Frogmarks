@@ -50,6 +50,7 @@ import { rasterLayerSignature } from '../../utils/raster-layer-signature';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete,
   routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
+import { hotkeyNeedsZone } from './hotkey-zone-gate';
 import { TouchUiService } from '../../services/touch-ui.service';
 import { ToolSubpanelCollapse } from '../../utils/tool-subpanel-collapse';
 import { aiToolEnabled } from '../../utils/ai-tool-flag';
@@ -91,6 +92,16 @@ import {
 
 /** The engine events the editor coalesces to one change detection per frame (H5). */
 type EngineEventKind = 'selection' | 'shapeSelection' | 'scene';
+
+/** Salsa API newer than the dist Frogmarks type-checks against (feature-detected). */
+type EngineDeleteKeyApi = { setDeleteKeyHandler?: (fn: (() => void) | null) => void };
+type EngineDuplicateKeyApi = { setDuplicateKeyHandler?: (fn: (() => void) | null) => void };
+
+/** The keyboard event being dispatched right now (window.event), for an engine key hook that isn't handed it. */
+function currentKeyEvent(): KeyboardEvent | null {
+  const ev = (globalThis as { event?: Event }).event;
+  return typeof KeyboardEvent !== 'undefined' && ev instanceof KeyboardEvent ? ev : null;
+}
 
 /**
  * The Illustration editor shell: engine boot, selection, tool switching, canvas pointer routing, view modes and
@@ -191,7 +202,20 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
-  @HostListener('document:keydown', ['$event']) onCtrlSnapKeyDown(e: KeyboardEvent) {
+  /** Document keydown / keyup (the snap badge + the 3D keyboard transform). Listened OUTSIDE the zone (registered in
+   *  ngOnInit; zone audit item 2): as @HostListeners every key — each WASD auto-repeat in Play too — ran an app change
+   *  detection. Enter only when the badge or the transform HUD can change. Still document-level, so it runs before the
+   *  window hotkeys (which skip a key the transform claimed: defaultPrevented). */
+  private readonly _onDocKeyDownOutsideZone = (e: KeyboardEvent): void => {
+    if (this.shapeManager?.isPlaying3D) return;
+    if (e.repeat && (e.key === 'Control' || !/^[\d.\-]$/.test(e.key))) return;
+    if (e.key !== 'Control' && !(this.editorState.scene3dPanelVisible && this.editorState.scene3dSelectedMeshId)) return;
+    this.ngZone.run(() => this.onCtrlSnapKeyDown(e));
+  };
+  private readonly _onDocKeyUpOutsideZone = (e: KeyboardEvent): void => {
+    if (e.key === 'Control') this.ngZone.run(() => this.onCtrlSnapKeyUp(e));
+  };
+  onCtrlSnapKeyDown(e: KeyboardEvent) {
     if (this.shapeManager?.isPlaying3D) return;   // Play owns the keyboard (Ctrl = sneak, not the snap indicator)
     // Held Ctrl: the badge is already on (each repeat re-entered the zone). Held transform keys: G / R / S / X / Y / Z /
     // Enter / Esc act once (a repeat restarted the transform or flipped the axis); digits keep repeating like typing.
@@ -199,7 +223,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (e.key === 'Control') this.hud.snapKeyDown();
     if (this.editorState.scene3dPanelVisible && this.editorState.scene3dSelectedMeshId) this.hud.handleTransformKey(e);
   }
-  @HostListener('document:keyup', ['$event']) onCtrlSnapKeyUp(e: KeyboardEvent) {
+  onCtrlSnapKeyUp(e: KeyboardEvent) {
     if (e.key === 'Control') this.hud.snapKeyUp();
   }
 
@@ -990,6 +1014,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (this.meshEdit.scene3dIsEditingMesh && id !== this.editorState.scene3dSelectedMeshId) {
       this.meshEdit.exitMeshEditMode();
     }
+    // Same rule for the UV editor / UV paint (viewport picks are off while it's open, so this is the outliner or
+    // another explicit select): a different object leaves it fully — orbit, focus background, paint input.
+    if ((this.uv.uvEditorOpen || this.uv.scene3dClothingPaintActive) && id !== this.editorState.scene3dSelectedMeshId) {
+      this.uv.closeUVEditor();
+    }
     this.editorState.scene3dSelectedMeshId = id;
     this._resetMeshSelectionFlags();
     const s3d = this.shapeManager.scene3d;
@@ -1031,6 +1060,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.editorState.scene3dSelectedMeshId = null;
     this._resetMeshSelectionFlags();
     this.shapeManager?.setSelectedNode(null);
+    // setSelectedNode(null) finds no node and leaves the engine's selected-node set alone: a deleted mesh stayed in
+    // it, so the next Delete key "deleted" it again (a 2D undo step that could re-attach it). Drop it for real.
+    if (this.shapeManager?.interactionService?.selectedNodes?.size) this.shapeManager.clearSelectedNodes();
   }
 
   /** Reset per-mesh state so switching between mesh types clears the flags. */
@@ -1252,6 +1284,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dDeleteMesh(id: string): void {
     const sm = this.shapeManager;
+    // Deleting the mesh the UV editor / UV paint is on: leave it first (its engine session would otherwise outlive the
+    // mesh and keep the orbit + focus background up).
+    if ((this.uv.uvEditorOpen || this.uv.scene3dClothingPaintActive)
+        && (id === this.editorState.scene3dSelectedMeshId || id === this.uv.uvPaintTargetId || id === this.character.scene3dEditCharBodyId)) {
+      this.uv.closeUVEditor();
+    }
     if (this.outliner.scene3dCharacterBodyIds.has(id)) {
       // deleteProceduralBody3D removes body + all parts + skeleton + clears rig maps atomically
       sm.deleteProceduralBody3D(id);
@@ -1261,7 +1299,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       }
     } else {
       this._instanceGroupRemove(id);
-      sm.scene3d?.deleteMesh(id);
+      // The full engine teardown (also frees the mesh's UV-paint texture; packages / CD kits are routed before here)
+      sm.deleteMesh3D(id);
     }
     this.scene3dRefreshMeshes();
     if (this.editorState.scene3dSelectedMeshId === id) {
@@ -1537,6 +1576,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.ngZone.runOutsideAngular(() => {
       window.addEventListener('scroll', this._onWinScrollOrResize, { passive: true });
       window.addEventListener('resize', this._onWinScrollOrResize);
+      document.addEventListener('keydown', this._onDocKeyDownOutsideZone);
+      document.addEventListener('keyup', this._onDocKeyUpOutsideZone);
     });
     this.editorState.bind(this);
     this.doc.bind(this);
@@ -1813,8 +1854,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     };
     this.canvas!.addEventListener('dblclick', this.onDblClick);
 
-    this.onKeyDown = this.handleHotkeys.bind(this);
-    window.addEventListener('keydown', this.onKeyDown);
+    // Outside the zone (zone audit item 2): enter it only for a key handleHotkeys could act on (hotkey-zone-gate)
+    this.onKeyDown = this._onKeyDownOutsideZone;
+    this.ngZone.runOutsideAngular(() => window.addEventListener('keydown', this.onKeyDown));
+    this._setEngineDeleteRoute(true);
 
     this.onDocMousedown = this.canvasLook.handleBgColorPickerClick.bind(this.canvasLook);
     document.addEventListener('mousedown', this.onDocMousedown);
@@ -1865,8 +1908,42 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (this.onClick) document.removeEventListener('click', this.onClick);
     if (this.onDblClick) this.canvas?.removeEventListener('dblclick', this.onDblClick);
     if (this.onKeyDown) window.removeEventListener('keydown', this.onKeyDown);
+    this._setEngineDeleteRoute(false);
     if (this.onDocMousedown) document.removeEventListener('mousedown', this.onDocMousedown);
     if (this.onPaste) document.removeEventListener('paste', this.onPaste);
+  }
+
+  /** The engine claims Delete / Backspace first when something is selected (its own window listener, registered at
+   *  boot); route that through Edit › Delete too, so the key and the menu do exactly the same thing (mobile-parity
+   *  7.2: the key unlinked a 3D mesh raw). Off = the engine's default 2D delete, for the next route. */
+  private _setEngineDeleteRoute(on: boolean): void {
+    this._setEngineDuplicateRoute(on);   // Ctrl+D gets the same treatment (Edit › Duplicate)
+    const sm = this.shapeManager;
+    if (!sm) return;
+    const fn = on ? () => this.ngZone.run(() => this.editDelete()) : null;
+    const api = sm as unknown as EngineDeleteKeyApi;
+    if (typeof api.setDeleteKeyHandler === 'function') { api.setDeleteKeyHandler(fn); return; }
+    // Older Salsa dist: the renderer hook ShapeManager wires to deleteSelectedShapes
+    const r = sm.webgpuRenderer;
+    if (typeof r?.setDeleteSelectedHandler === 'function') r.setDeleteSelectedHandler(fn ?? (() => sm.deleteSelectedShapes()));
+  }
+
+  /** The engine claims Ctrl+D first when 2D / 3D nodes are selected (3D meshes sit in its 2D selection too) and only
+   *  knows the 2D duplicate; route it through Edit › Duplicate, so a selected mesh goes through the 3D duplicate (3D
+   *  undo, characters, instance group, outliner) and the key and the menu do exactly the same thing (mobile-parity 7.2,
+   *  the Delete route's twin). Off = the engine's default 2D duplicate, for the next route. */
+  private _setEngineDuplicateRoute(on: boolean): void {
+    const sm = this.shapeManager;
+    if (!sm) return;
+    const fn = on ? () => this.ngZone.run(() => this.editDuplicate()) : null;
+    const api = sm as unknown as EngineDuplicateKeyApi;
+    if (typeof api.setDuplicateKeyHandler === 'function') { api.setDuplicateKeyHandler(fn); return; }
+    // Older Salsa dist: the renderer hook ShapeManager wires to duplicateSelectedShapes. That engine also ran it on every
+    // auto-repeat of a held Ctrl+D; the newer one skips them itself — here, skip them by the event being dispatched.
+    const r = sm.webgpuRenderer;
+    if (typeof r?.setDuplicateSelectedHandler !== 'function') return;
+    const onceFn = fn && (() => { if (!(currentKeyEvent()?.repeat)) fn(); });
+    r.setDuplicateSelectedHandler(onceFn ?? (() => { sm.duplicateSelectedShapes(); }));
   }
 
   private afterRendererBoot(isReinit = false) {
@@ -2273,6 +2350,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       console.warn('Failed to select raster layer on ShapeManager', e);
     }
   }
+
+  /** The window keydown listener (outside the zone): handleHotkeys runs in the zone only for a key it could act on —
+   *  in Play, WASD / arrows / space and their repeats cost no change detection (zone audit item 2). */
+  private readonly _onKeyDownOutsideZone = (event: KeyboardEvent): void => {
+    const needsZone = hotkeyNeedsZone(event, {
+      playing: this.scene3dViewIsPlaying,
+      liveTextEditing: !!this.liveTextOptions?.liveTextIsEditing,
+      engineInputActive: !!this.shapeManager?.isInputActive(),
+      screencastKeys: this.hud.screencastKeysEnabled,
+    });
+    if (needsZone) this.ngZone.run(() => this.handleHotkeys(event));
+  };
 
   handleHotkeys(event: KeyboardEvent) {
     if (this.scene3dViewIsPlaying) return; // game loop owns the keyboard during Play Mode
@@ -2756,6 +2845,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     window.removeEventListener('scroll', this._onWinScrollOrResize);
     window.removeEventListener('resize', this._onWinScrollOrResize);
+    document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
+    document.removeEventListener('keyup', this._onDocKeyUpOutsideZone);
     this._hiddenUiWake.detach();
     clearTimeout(this._showUiBtnTimer);
     this._teardownEngineSubs();
@@ -2768,6 +2859,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._scene3dViewportSub?.unsubscribe?.();
     this._scene3dResizeObserver?.disconnect();
     this.autoSaveService.disable();
+    // Leaving the route with the UV editor / UV paint open: the engine outlives the editor, so close it fully here
+    // (orbit, focus background, paint input, the mobile idle pause) — the panel's own destroy only exits paint.
+    if (this.uv.uvEditorOpen || this.uv.scene3dClothingPaintActive) {
+      try { this.uv.closeUVEditor(); } catch (e) { console.warn('[illustration] UV editor close on destroy failed', e); }
+    }
 
     this.ribbon.stopHandleLoop();
 

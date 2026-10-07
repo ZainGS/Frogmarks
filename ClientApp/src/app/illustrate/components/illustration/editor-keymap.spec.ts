@@ -86,6 +86,10 @@ describe('editor keymap', () => {
         animationService: { fillSelection: jasmine.createSpy('fill') },
         draw: { selectedPenColor: '#123456' },
         deleteSelectionOrLayers: jasmine.createSpy('delete'),
+        editorState: { scene3dPanelVisible: false, scene3dSelectedMeshId: null },
+        shapeManager: { interactionService: { selectedNodes: new Set(), suppressBoxSelect: false }, deleteSelectedShapes: jasmine.createSpy('del2D') },
+        meshEdit: { scene3dIsEditingMesh: false, deleteSelectedFaces: jasmine.createSpy('delFaces') },
+        scene3dDeleteSelected: jasmine.createSpy('del3D'),
       } as any;
     }
 
@@ -173,8 +177,74 @@ describe('editor keymap', () => {
         scene3dDuplicateMesh: jasmine.createSpy('dup3D'),
         scene3dDeleteSelected: jasmine.createSpy('del3D'),
         deleteSelectionOrLayers: jasmine.createSpy('delLayers'),
+        rasterSelectionService: { deselectAll: jasmine.createSpy('deselectPixels') },
       };
     }
+
+    // mobile-parity 7.2 (the Delete fix's twin): the engine claims Ctrl+D when nodes are selected and calls routeDuplicate
+    // through its duplicate-key hook; the keymap binding is the fallback, so one press never duplicates twice.
+    describe('Ctrl+D = Edit › Duplicate', () => {
+      const ctrlD = (o: { repeat?: boolean } = {}) => key('d', o);
+
+      it('a selected 3D mesh is duplicated once, through the 3D duplicate (never the 2D path)', () => {
+        const ed = host({ panel3D: true, meshId: 'm1', nodes2D: 1 });
+        const e = ctrlD();
+        spyOn(e, 'stopImmediatePropagation').and.callThrough();
+        expect(dispatchKey(MOD_KEYMAP, ed as any, e, true)).toBeTrue();
+        expect(ed.scene3dDuplicateMesh).toHaveBeenCalledOnceWith('m1');
+        expect(ed.shapeManager.duplicateSelectedShapes).not.toHaveBeenCalled();
+        expect(ed.rasterSelectionService.deselectAll).not.toHaveBeenCalled();
+        expect(e.stopImmediatePropagation).toHaveBeenCalled();
+      });
+
+      it('the key and the menu do the same thing (2D shapes via the 2D duplicate; nothing else)', () => {
+        const viaKey = host({ nodes2D: 2 });
+        const viaMenu = host({ nodes2D: 2 });
+        dispatchKey(MOD_KEYMAP, viaKey as any, ctrlD(), true);
+        expect(routeDuplicate(viaMenu as any)).toBeTrue();
+        for (const ed of [viaKey, viaMenu]) {
+          expect(ed.shapeManager.duplicateSelectedShapes).toHaveBeenCalledTimes(1);
+          expect(ed.scene3dDuplicateMesh).not.toHaveBeenCalled();
+          expect(ed.rasterSelectionService.deselectAll).not.toHaveBeenCalled();
+        }
+      });
+
+      it('the engine already ran Edit › Duplicate for this press (default prevented) → the binding does nothing more', () => {
+        const ed = host({ panel3D: true, meshId: 'm1', nodes2D: 1 });
+        const e = ctrlD();
+        e.preventDefault();   // the engine's Ctrl+D handler claimed it (and called routeDuplicate itself)
+        expect(dispatchKey(MOD_KEYMAP, ed as any, e, true)).toBeTrue();
+        expect(ed.scene3dDuplicateMesh).not.toHaveBeenCalled();
+        expect(ed.shapeManager.duplicateSelectedShapes).not.toHaveBeenCalled();
+        expect(ed.rasterSelectionService.deselectAll).not.toHaveBeenCalled();
+      });
+
+      it('a held Ctrl+D duplicates once: the auto-repeats are claimed but run nothing', () => {
+        const ed = host({ panel3D: true, meshId: 'm1' });
+        dispatchKey(MOD_KEYMAP, ed as any, ctrlD(), true);
+        const rep = ctrlD({ repeat: true });
+        expect(dispatchKey(MOD_KEYMAP, ed as any, rep, true)).toBeTrue();
+        dispatchKey(MOD_KEYMAP, ed as any, ctrlD({ repeat: true }), true);
+        expect(rep.defaultPrevented).toBeTrue();
+        expect(ed.scene3dDuplicateMesh).toHaveBeenCalledTimes(1);
+      });
+
+      it('nothing to duplicate → deselects the pixel selection (Edit › Duplicate is disabled then)', () => {
+        const ed = host();
+        dispatchKey(MOD_KEYMAP, ed as any, ctrlD(), true);
+        expect(ed.rasterSelectionService.deselectAll).toHaveBeenCalledTimes(1);
+        expect(ed.scene3dDuplicateMesh).not.toHaveBeenCalled();
+      });
+
+      it('the key never duplicates the selected 3D object while a creator mode owns input (the menu still does)', () => {
+        const ed = host({ panel3D: true, meshId: 'm1', suppress: true });
+        dispatchKey(MOD_KEYMAP, ed as any, ctrlD(), true);
+        expect(ed.scene3dDuplicateMesh).not.toHaveBeenCalled();
+        expect(ed.rasterSelectionService.deselectAll).not.toHaveBeenCalled();
+        expect(routeDuplicate(ed as any)).toBeTrue();
+        expect(ed.scene3dDuplicateMesh).toHaveBeenCalledTimes(1);
+      });
+    });
 
     it('Duplicate: the selected 3D mesh in the 3D view (like Ctrl+D), else the selected 2D shapes', () => {
       const ed3 = host({ panel3D: true, meshId: 'm1', nodes2D: 1 });
@@ -219,6 +289,66 @@ describe('editor keymap', () => {
       routeDelete(edit as any);
       expect(edit.meshEdit.deleteSelectedFaces).toHaveBeenCalledTimes(1);
       expect(edit.scene3dDeleteSelected).not.toHaveBeenCalled();
+    });
+
+    // mobile-parity 7.2: the Delete key only unlinked a selected 3D mesh (no outliner / undo / character teardown)
+    it('the Delete and Backspace keys route through the same Edit › Delete (3D items, mesh-edit faces)', () => {
+      for (const k of ['Delete', 'Backspace']) {
+        const ed = host({ panel3D: true, meshId: 'm1' });
+        expect(dispatchKey(TOOL_KEYMAP, ed as any, key(k), false)).toBeTrue();
+        expect(ed.scene3dDeleteSelected).toHaveBeenCalledTimes(1);
+        expect(ed.shapeManager.deleteSelectedShapes).not.toHaveBeenCalled();
+        const edit = host({ panel3D: true, meshId: 'm1', editing: true, suppress: true });
+        dispatchKey(TOOL_KEYMAP, edit as any, key(k), false);
+        expect(edit.meshEdit.deleteSelectedFaces).toHaveBeenCalledTimes(1);
+        expect(edit.scene3dDeleteSelected).not.toHaveBeenCalled();
+      }
+    });
+
+    it('the key fallback leaves 2D shapes to the engine (it declined: Backspace typing into a selected text shape)', () => {
+      const ed = host({ nodes2D: 1 });
+      dispatchKey(TOOL_KEYMAP, ed as any, key('Backspace'), false);
+      expect(ed.shapeManager.deleteSelectedShapes).not.toHaveBeenCalled();
+      expect(ed.deleteSelectionOrLayers).toHaveBeenCalledTimes(1);   // the pixel selection, like Edit › Delete
+    });
+
+    it('the key never deletes the selected 3D object while a creator mode (UV paint, armature…) owns input', () => {
+      const ed = host({ panel3D: true, meshId: 'm1', suppress: true });
+      dispatchKey(TOOL_KEYMAP, ed as any, key('Delete'), false);
+      expect(ed.scene3dDeleteSelected).not.toHaveBeenCalled();
+      routeDelete(ed as any);   // the menu is explicit
+      expect(ed.scene3dDeleteSelected).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Esc leaves the UV editor (mobile-parity 7.2)', () => {
+    function host(o: { uvOpen?: boolean; clothing?: string | null; transforming?: boolean } = {}) {
+      return {
+        decal: { scene3dDecalToolActive: false },
+        meshEdit: { scene3dIsEditingMesh: false, scene3dEditTool: 'select' },
+        rasterSelectionService: { info: { isTransforming: !!o.transforming }, cancelTransform: jasmine.createSpy('cancelTransform') },
+        uv: { uvEditorOpen: !!o.uvOpen, scene3dClothingPaintActive: o.clothing ?? null, closeUVEditor: jasmine.createSpy('closeUV') },
+        selectCursor: jasmine.createSpy('selectCursor'),
+      };
+    }
+
+    it('through the panel Close (the full exit), for the UV editor and clothing paint', () => {
+      for (const ed of [host({ uvOpen: true }), host({ clothing: 'top' })]) {
+        dispatchKey(TOOL_KEYMAP, ed as any, key('Escape'), false);
+        expect(ed.uv.closeUVEditor).toHaveBeenCalledTimes(1);
+        expect(ed.selectCursor).not.toHaveBeenCalled();
+      }
+    });
+
+    it('a selection transform is cancelled first; with nothing open Esc is still the cursor tool', () => {
+      const t = host({ uvOpen: true, transforming: true });
+      dispatchKey(TOOL_KEYMAP, t as any, key('Escape'), false);
+      expect(t.rasterSelectionService.cancelTransform).toHaveBeenCalledTimes(1);
+      expect(t.uv.closeUVEditor).not.toHaveBeenCalled();
+      const none = host();
+      dispatchKey(TOOL_KEYMAP, none as any, key('Escape'), false);
+      expect(none.selectCursor).toHaveBeenCalledOnceWith('cursor');
+      expect(none.uv.closeUVEditor).not.toHaveBeenCalled();
     });
   });
 

@@ -10,6 +10,7 @@ import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
+import { RasterBrushService } from 'app/shared/services/raster/raster-brush.service';
 import { Scene3dSettingsService } from './scene3d-settings.service';
 import { SceneAnimationService } from './scene-animation.service';
 import { IllustrationStateDto, LayerStateDto } from 'app/shared/services/illustrate/illustration.service';
@@ -41,7 +42,7 @@ export type PersistenceHost = Pick<IllustrationComponent, 'shapeManager' | 'doc'
 @Injectable()
 export class IllustrationPersistenceService implements OnDestroy {
   private host!: PersistenceHost;
-  constructor(private editorState: EditorStateService, private artboard: ArtboardService, private canvasLook: CanvasAppearanceService, private anim: SceneAnimationService, private animationService: RasterAnimationService, private autoSaveService: RasterAutoSaveService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private opfsMetadataService: OpfsMetadataService, private s3: Scene3dSettingsService, private ngZone?: NgZone) {}
+  constructor(private editorState: EditorStateService, private artboard: ArtboardService, private canvasLook: CanvasAppearanceService, private anim: SceneAnimationService, private animationService: RasterAnimationService, private autoSaveService: RasterAutoSaveService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private opfsMetadataService: OpfsMetadataService, private s3: Scene3dSettingsService, private ngZone?: NgZone, private rasterBrush?: RasterBrushService) {}
   bind(host: PersistenceHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -87,6 +88,8 @@ export class IllustrationPersistenceService implements OnDestroy {
     this.autoSaveService.disable();              // nothing may save into the previous document from here on
     this.animationService.resetForNewDocument();
     await startBlankEngineDocument(sm, localUuid ? 'local-' + localUuid : undefined);
+    // Brush presets are per-document: the reset dropped the previous document's custom brushes — the list follows
+    this.rasterBrush?.refreshPresets();
   }
 
   private _autoSaveStateSub: { unsubscribe(): void } | null = null;
@@ -887,6 +890,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     const stillExists = this.editorState.rasterLayers.some(l => l.id === this.editorState.selectedRasterLayerId);
     if (!stillExists) this.editorState.selectedRasterLayerId = this.editorState.rasterLayers[0]?.id ?? null;
     this.fx._syncLayerDitherConfigsFromEngine();
+    this.rasterBrush?.refreshPresets();   // this document's own brush presets (brushes.json), not the previous one's
   }
 
   /** Background / dot colour / paper grain from saved metadata. */

@@ -68,3 +68,29 @@ export async function copySalsaDocument(srcDocId: string, dstDocId: string, name
     return false;
   }
 }
+
+/** The editor's OPFS metadata store (OpfsMetadataService) — just what a copy needs. */
+export interface DocumentMetaStore {
+  read(docKey: string): Promise<object | null>;
+  write(docKey: string, meta: any): Promise<boolean>;
+}
+
+/**
+ * Copy a whole saved document `srcKey` → `dstKey`: Salsa's document (every layer, the scene graph, the 3D scene,
+ * textures …, see copySalsaDocument) AND the editor's OPFS metadata (settings, dither, 3D host state). The copy's
+ * metadata drops the original's server revision (the copy is a different server record) and is marked not yet synced.
+ * False when this device has no saved copy of the source (nothing was copied).
+ */
+export async function copySavedDocument(meta: DocumentMetaStore, srcKey: string, dstKey: string, name: string): Promise<boolean> {
+  if (!srcKey || !dstKey || srcKey.endsWith('-')) return false;
+  if (!await copySalsaDocument(srcKey, dstKey, name)) return false;
+  const src = await meta.read(srcKey);
+  if (src) {
+    const copy = { ...src } as Record<string, unknown>;
+    delete copy['revision'];
+    delete copy['baseRevision'];
+    copy['backendSynced'] = false;
+    if (!await meta.write(dstKey, copy)) return false;
+  }
+  return true;
+}

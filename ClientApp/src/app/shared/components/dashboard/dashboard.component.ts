@@ -23,6 +23,7 @@ import { Illustration } from 'app/illustrate/models/illustration.model';
 import { IllustrationService } from 'app/shared/services/illustrate/illustration.service';
 import { FrogFileService } from 'app/shared/services/illustrate/frog-file.service';
 import { LocalIllustrationService, LocalIllustration } from 'app/shared/services/illustrate/local-illustration.service';
+import { copySavedDocument } from 'app/shared/services/illustrate/salsa-document-copy';
 import { OpfsMetadataService } from 'app/shared/services/illustrate/opfs-metadata.service';
 import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -2124,7 +2125,7 @@ onKeydown(e: KeyboardEvent) {
         }
       });
     } else if (this.isLocalIllustration(item)) {
-      this.localIllustrationService.create(`Copy of ${item.name}`, (item as Illustration).documentAspect).then(copy => {
+      this.duplicateLocalIllustration(item as Illustration).then(copy => {
         this.listItems.unshift(copy as any);
         this.filteredListItems.unshift(copy as any);
       }).catch(() => this.notifyService.error('There was an error duplicating the illustration :('));
@@ -2135,6 +2136,11 @@ onKeydown(e: KeyboardEvent) {
           if (res.resultType === ResultType.Success) {
             this.listItems.unshift(res.resultObject);
             this.filteredListItems.unshift(res.resultObject);
+            // The server copies what it stores; this device's saved document (when there is one) also has the vector
+            // shapes the server doesn't keep — and is ALL there is of a No-Cloud illustration. Copy it under the new id.
+            if (res.resultObject?.id != null && item.id != null) {
+              void copySavedDocument(this.opfsMetadataService, String(item.id), String(res.resultObject.id), payload.name).catch(() => false);
+            }
           } else {
             this.notifyService.error('There was an error duplicating the illustration :(');
           }
@@ -2142,6 +2148,25 @@ onKeydown(e: KeyboardEvent) {
         error: () => this.notifyService.error('There was an error duplicating the illustration :('),
       });
     }
+  }
+
+  /** Duplicate a local-only illustration (or package): the copy is the whole saved document — Salsa's document (layers,
+   *  vector shapes, 3D scene, characters …), the editor's OPFS metadata and the thumbnail — like File › Duplicate. It
+   *  used to be a new EMPTY document under the copy's name. A source never saved on this device is empty itself, so
+   *  its copy is too; a failed copy of a saved source removes the half-made copy and rejects. */
+  async duplicateLocalIllustration(item: Illustration): Promise<LocalIllustration> {
+    const name = `Copy of ${item.name}`;
+    const src = item.uuid ? await this.localIllustrationService.getByUuid(item.uuid) : null;
+    const created = await this.localIllustrationService.create(name, src?.documentAspect ?? item.documentAspect, src?.kind);
+    const srcKey = 'local-' + item.uuid;
+    if (!await copySavedDocument(this.opfsMetadataService, srcKey, 'local-' + created.uuid, name)
+        && await this.opfsMetadataService.getSceneSizeBytes(srcKey) > 0) {
+      await this.localIllustrationService.delete(created.uuid).catch(() => {});
+      throw new Error('the saved document could not be copied');
+    }
+    return src?.thumbnailDataUrl
+      ? await this.localIllustrationService.update({ uuid: created.uuid, thumbnailDataUrl: src.thumbnailDataUrl })
+      : created;
   }
 
   isLeftHalf(index: number): boolean {

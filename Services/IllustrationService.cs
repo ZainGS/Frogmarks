@@ -657,12 +657,39 @@ namespace Frogmarks.Services
             if (source == null)
                 return new ResultModel<IllustrationDto>(ResultType.NotFound, "Source illustration not found.");
 
+            // The copy carries EVERYTHING the server stores for the source — what SaveIllustrationState and the blob
+            // uploads write: the extended state (canvas settings, dither, document size, 3D global settings, the mesh
+            // list, groups / frame-link buckets / packaging), the per-mesh + texture-library blobs, the layers with
+            // their dither / frame-link JSON, the cels and every pixel blob. It used to copy the raster layers only
+            // (mobile-parity 7.2). (The vector-shape scene graph is not stored server-side at all, so it can't be.)
+            ExtendedState? ext = null;
+            if (!string.IsNullOrEmpty(source.ExtendedStateJson))
+                try { ext = JsonSerializer.Deserialize<ExtendedState>(source.ExtendedStateJson); } catch { }
+
+            // Quota: the copy's blobs count against the duplicating user's storage, like uploading the same bytes (the
+            // copy also records their sizes, so deleting it later credits them back). Charged up front from the
+            // source's recorded sizes; whatever fails to copy is refunded at the end.
+            var userId = GetCurrentUserId();
+            var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
+            long recordedBytes = source.Layers.Sum(l => l.BlobSizeBytes + l.Cels.Sum(c => c.BlobSizeBytes))
+                + (ext?.MeshBlobSizes?.Values.Sum() ?? 0) + (ext?.TexLibBlobSize ?? 0);
+            long chargedBytes = 0, copiedBytes = 0;
+            if (user != null && recordedBytes > 0)
+            {
+                if (!await TryIncrementStorageAsync(userId!, recordedBytes, user.IsPro))
+                    return new ResultModel<IllustrationDto>(ResultType.Failure, "Storage quota exceeded.");
+                chargedBytes = recordedBytes;
+            }
+
+            var teamId = targetTeamId ?? source.TeamId;
             var newIllustration = new Illustration
             {
                 UUID = Guid.NewGuid(),
                 Name = string.IsNullOrWhiteSpace(nameOverride) ? $"Copy of {source.Name}" : nameOverride,
                 Description = source.Description,
-                TeamId = targetTeamId ?? source.TeamId,
+                TeamId = teamId,
+                ProjectId = teamId == source.TeamId ? source.ProjectId : null,   // a project belongs to its team
+                isDraft = source.isDraft,
                 // copy canvas data & look preferences
                 CanvasData = source.CanvasData,
                 Width = source.Width,
@@ -672,9 +699,12 @@ namespace Frogmarks.Services
                 Created = DateTime.UtcNow,
                 DateModified = DateTime.UtcNow,
                 IsArchived = false,
-                IsCustomThumbnail = source.IsCustomThumbnail,
+                // Only with the thumbnail: a "custom" flag without one stops the editor making an automatic thumbnail
+                IsCustomThumbnail = copyThumbnail && source.IsCustomThumbnail,
                 // V2 fields
                 SceneVersion = source.SceneVersion,
+                SavedAt = source.SavedAt,
+                SyncMode = source.SyncMode,
                 AnimationEnabled = source.AnimationEnabled,
                 FrameCount = source.FrameCount,
                 Fps = source.Fps,
@@ -687,8 +717,34 @@ namespace Frogmarks.Services
             _context.Illustrations.Add(newIllustration);
             await _context.SaveChangesAsync();
 
-            // Copy v2 layers, cels, and pixel data blobs
-            if (source.SceneVersion >= 2 && source.Layers.Count > 0)
+            // 3D scene: the per-mesh blobs (+ their recorded sizes), the texture library, the legacy whole-scene blob
+            if (ext != null)
+            {
+                var meshIds = new HashSet<string>(ext.MeshIds ?? new List<string>());
+                if (ext.MeshBlobSizes != null) meshIds.UnionWith(ext.MeshBlobSizes.Keys);
+                var sizes = new Dictionary<string, long>();
+                foreach (var meshId in meshIds)
+                {
+                    if (!BlobNames.IsSafeSegment(meshId)) continue;
+                    if (!await TryCopyBlobAsync(_scene3dContainerName, $"{source.Id}/mesh/{meshId}.gz", $"{newIllustration.Id}/mesh/{meshId}.gz")) continue;
+                    var size = ext.MeshBlobSizes?.GetValueOrDefault(meshId, 0L) ?? 0L;
+                    if (ext.MeshBlobSizes?.ContainsKey(meshId) == true) sizes[meshId] = size;
+                    copiedBytes += size;
+                }
+                ext.MeshBlobSizes = sizes.Count > 0 ? sizes : null;
+            }
+            var texLibCopied = await TryCopyBlobAsync(_scene3dContainerName, $"{source.Id}/texture-library.gz", $"{newIllustration.Id}/texture-library.gz");
+            await TryCopyBlobAsync(_scene3dContainerName, $"{source.Id}/scene3d-nodes.gz", $"{newIllustration.Id}/scene3d-nodes.gz");
+            if (ext != null)
+            {
+                if (texLibCopied) copiedBytes += ext.TexLibBlobSize; else ext.TexLibBlobSize = 0;
+                ext.Revision = 0;   // a new record: its own optimistic-concurrency counter
+                newIllustration.ExtendedStateJson = JsonSerializer.Serialize(ext);
+                await _context.SaveChangesAsync();
+            }
+
+            // Copy layers, cels, and pixel data blobs
+            if (source.Layers.Count > 0)
             {
                 foreach (var srcLayer in source.Layers)
                 {
@@ -708,6 +764,8 @@ namespace Frogmarks.Services
                         PixelWidth = srcLayer.PixelWidth,
                         PixelHeight = srcLayer.PixelHeight,
                         PixelFormat = srcLayer.PixelFormat,
+                        DitherConfigJson = srcLayer.DitherConfigJson,
+                        FrameLinkAnimationJson = srcLayer.FrameLinkAnimationJson,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
@@ -715,22 +773,14 @@ namespace Frogmarks.Services
                     // Copy static layer pixel data blob
                     if (!srcLayer.Animated && !string.IsNullOrEmpty(srcLayer.PixelDataUrl))
                     {
-                        try
+                        var fmt = srcLayer.PixelFormat ?? "webp";
+                        var dstBlobName = $"{newIllustration.Id}/{srcLayer.LayerId}.{fmt}";
+                        if (await TryCopyBlobAsync(_celContainerName, $"{source.Id}/{srcLayer.LayerId}.{fmt}", dstBlobName))
                         {
-                            var ext = srcLayer.PixelFormat ?? "webp";
-                            var srcBlobName = $"{source.Id}/{srcLayer.LayerId}.{ext}";
-                            var dstBlobName = $"{newIllustration.Id}/{srcLayer.LayerId}.{ext}";
-                            if (await _blobStorage.ExistsAsync(_celContainerName, srcBlobName))
-                            {
-                                var data = await _blobStorage.DownloadAsync(_celContainerName, srcBlobName);
-                                using var ms = new MemoryStream(data);
-                                await _blobStorage.UploadAsync(_celContainerName, dstBlobName, ms, overwrite: true);
-                                newLayer.PixelDataUrl = await _blobStorage.GetReadUrlAsync(_celContainerName, dstBlobName);
-                            }
-                        }
-                        catch
-                        {
-                            // Swallow; pixel data can be re-uploaded
+                            newLayer.BlobSizeBytes = srcLayer.BlobSizeBytes;
+                            copiedBytes += srcLayer.BlobSizeBytes;
+                            try { newLayer.PixelDataUrl = await _blobStorage.GetReadUrlAsync(_celContainerName, dstBlobName); }
+                            catch { /* the load path regenerates the read URL */ }
                         }
                     }
 
@@ -758,22 +808,14 @@ namespace Frogmarks.Services
                         // Copy cel pixel data blob
                         if (!string.IsNullOrEmpty(srcCel.PixelDataUrl))
                         {
-                            try
+                            var fmt = srcCel.PixelFormat ?? "webp";
+                            var dstBlobName = $"{newIllustration.Id}/{srcCel.CelId}.{fmt}";
+                            if (await TryCopyBlobAsync(_celContainerName, $"{source.Id}/{srcCel.CelId}.{fmt}", dstBlobName))
                             {
-                                var ext = srcCel.PixelFormat ?? "webp";
-                                var srcBlobName = $"{source.Id}/{srcCel.CelId}.{ext}";
-                                var dstBlobName = $"{newIllustration.Id}/{srcCel.CelId}.{ext}";
-                                if (await _blobStorage.ExistsAsync(_celContainerName, srcBlobName))
-                                {
-                                    var data = await _blobStorage.DownloadAsync(_celContainerName, srcBlobName);
-                                    using var ms = new MemoryStream(data);
-                                    await _blobStorage.UploadAsync(_celContainerName, dstBlobName, ms, overwrite: true);
-                                    newCel.PixelDataUrl = await _blobStorage.GetReadUrlAsync(_celContainerName, dstBlobName);
-                                }
-                            }
-                            catch
-                            {
-                                // Swallow; pixel data can be re-uploaded
+                                newCel.BlobSizeBytes = srcCel.BlobSizeBytes;
+                                copiedBytes += srcCel.BlobSizeBytes;
+                                try { newCel.PixelDataUrl = await _blobStorage.GetReadUrlAsync(_celContainerName, dstBlobName); }
+                                catch { /* the load path regenerates the read URL */ }
                             }
                         }
 
@@ -803,6 +845,10 @@ namespace Frogmarks.Services
                     // swallow or log; thumbnail can be regenerated later by frontend
                 }
             }
+
+            // Refund the recorded bytes of blobs that didn't copy (missing at the source, or a failed copy)
+            if (chargedBytes > copiedBytes)
+                await DecrementStorageAsync(userId!, chargedBytes - copiedBytes);
 
             var dto = _mapper.Map<IllustrationDto>(newIllustration);
             dto.ThumbnailUrl = await GetThumbnailSasUrl(newIllustration);
@@ -1250,6 +1296,23 @@ namespace Frogmarks.Services
                     await _blobStorage.DeleteAsync(container, blobName);
             }
             catch { }
+        }
+
+        /// <summary>Copy one blob within a container (Duplicate). False when the source doesn't exist or the copy failed.</summary>
+        private async Task<bool> TryCopyBlobAsync(string container, string srcBlobName, string dstBlobName)
+        {
+            try
+            {
+                if (!await _blobStorage.ExistsAsync(container, srcBlobName)) return false;
+                var data = await _blobStorage.DownloadAsync(container, srcBlobName);
+                using var ms = new MemoryStream(data);
+                await _blobStorage.UploadAsync(container, dstBlobName, ms, overwrite: true);
+                return true;
+            }
+            catch
+            {
+                return false;   // swallowed like before: the copy is still usable, that part can be re-uploaded
+            }
         }
 
         private async Task<string?> TryDownloadBase64BlobAsync(string container, string blobName)

@@ -77,7 +77,10 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Lifecycle ─────────────────────────────────────────────────
 
   ngOnInit(): void {
-    this.ngZone.runOutsideAngular(() => window.addEventListener('resize', this._onWinResize));
+    this.ngZone.runOutsideAngular(() => {
+      window.addEventListener('resize', this._onWinResize);
+      document.addEventListener('keydown', this._onDocKeyDownOutsideZone);
+    });
     this.rasterService.refreshLayers();
     this.subs.push(
       this.rasterService.layers$.subscribe(l => {
@@ -104,6 +107,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     window.removeEventListener('resize', this._onWinResize);
+    document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
     this.subs.forEach(s => s.unsubscribe());
   }
 
@@ -117,7 +121,16 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── Keyboard shortcuts ────────────────────────────────────────
 
-  @HostListener('document:keydown', ['$event'])
+  /** Document keydown, listened OUTSIDE the zone (registered in ngOnInit; zone audit item 2): as a @HostListener every
+   *  key in the editor — each WASD auto-repeat in Play too — ran an app change detection. Enters only for the two
+   *  shortcuts below; a repeat only claims Ctrl+J (no state change), so it stays outside. */
+  private readonly _onDocKeyDownOutsideZone = (e: KeyboardEvent): void => {
+    if (this.hotkeysSuspended) return;
+    if (e.key !== '/' && !((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J'))) return;
+    if (e.repeat) this.onKeyDown(e);
+    else this.ngZone.run(() => this.onKeyDown(e));
+  };
+
   onKeyDown(e: KeyboardEvent): void {
     if (this.hotkeysSuspended) return;
     // Both shortcuts act once per press: a held / toggled lock transparency on and off, a held Ctrl+J duplicated the

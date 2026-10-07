@@ -1901,6 +1901,13 @@ body.theme-retro-chrome:has(.board-shell.ui-hidden)::before {
   display: none;
 }
 
+/* The strips frame the EDITOR (illustration / board: the pages with a .board-shell). The theme class is on <body> on
+   every route, so without this the Shell, dashboard etc. showed a stray green right + bottom border. */
+body.theme-retro-chrome:not(:has(.board-shell))::after,
+body.theme-retro-chrome:not(:has(.board-shell))::before {
+  display: none;
+}
+
 body.theme-retro-chrome .right-column {
   border-bottom: 4px solid var(--rc-green);
 }

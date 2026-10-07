@@ -31,6 +31,7 @@ export interface KeyBinding {
 export type KeymapHost = Pick<IllustrationComponent,
   'shapeManager' | 'editorState' | 'draw' | 'artboard' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo' | 'saveNow' | 'rasterFlipHorizontal' | 'rasterFlipVertical' | 'files' | 'pl' | 'rasterSelectionService' |
   'scene3dDuplicateMesh' | 'decal' | 'meshEdit' | 'selectCursor' | 'setActiveTool' | 'deleteSelectionOrLayers' | 'toggleFullscreen' | 'toggleUI' | 'scene3dSetIllustrationProjection' |
+  'scene3dDeleteSelected' | 'uv' |
   'animationEnabled' | 'anim' | 'scene3dArmaturePanelOpen' | 'closeArmaturePanel' |
   'openArmaturePanel' | 'animationService'
 >;
@@ -71,25 +72,39 @@ export function canRouteDuplicate(ed: Pick<EditRouteHost, 'shapeManager' | 'edit
   return has3DMeshSelection(ed) || has2DShapeSelection(ed);
 }
 
-/** Edit › Duplicate, routed like Ctrl+D: the selected 3D mesh in the 3D view (the keymap's branch), else the selected 2D
- *  shapes (the engine's Ctrl+D handler: one 'Duplicate shapes' undo step). Never Ctrl+D's raster "Deselect" half (that
- *  is Edit › Deselect). No-op when nothing is selected. */
-export function routeDuplicate(ed: Pick<EditRouteHost, 'shapeManager' | 'editorState' | 'scene3dDuplicateMesh'>): void {
-  if (has3DMeshSelection(ed)) { ed.scene3dDuplicateMesh(ed.editorState.scene3dSelectedMeshId!); return; }
-  if (has2DShapeSelection(ed)) ed.shapeManager.duplicateSelectedShapes();
+/** Edit › Duplicate: the selected 3D mesh in the 3D view through the editor's 3D duplicate (duplicateMesh3D: 3D undo,
+ *  characters, instance group, outliner), else the selected 2D shapes (the engine's 2D duplicate: one 'Duplicate shapes'
+ *  undo step). ONE route for the menu AND Ctrl+D (mobile-parity 7.2, like routeDelete): the engine claims Ctrl+D when
+ *  nodes are selected and calls this through its duplicate-key hook (IllustrationComponent._setEngineDuplicateRoute);
+ *  the keymap calls it when the engine didn't. Never Ctrl+D's raster "Deselect" half (that is Edit › Deselect).
+ *  `fromKey`: the keymap fallback — not the selected 3D object while a creator mode (UV paint, armature, city…) owns
+ *  input. Returns whether something was duplicated (false = nothing selected / declined). */
+export function routeDuplicate(ed: Pick<EditRouteHost, 'shapeManager' | 'editorState' | 'scene3dDuplicateMesh'>, opts: { fromKey?: boolean } = {}): boolean {
+  if (has3DMeshSelection(ed)) {
+    if (opts.fromKey && ed.shapeManager?.interactionService?.suppressBoxSelect) return false;
+    ed.scene3dDuplicateMesh(ed.editorState.scene3dSelectedMeshId!);
+    return true;
+  }
+  if (has2DShapeSelection(ed)) { ed.shapeManager.duplicateSelectedShapes(); return true; }
+  return false;
 }
 
 /** Edit › Delete, routed per context. 3D view: in mesh edit mode the selected faces (the Mesh Edit panel's Delete),
  *  else the selected 3D items through the editor's own teardown (the outliner's ✕ path: characters, groups, packages,
  *  CD kits, decals). 2D: what the Delete key does — the engine deletes the selected 2D shapes, then the keymap's
- *  deleteSelectionOrLayers clears the pixel selection / drops the layers' editor-side state. */
-export function routeDelete(ed: EditRouteHost): void {
+ *  deleteSelectionOrLayers clears the pixel selection / drops the layers' editor-side state.
+ *  ONE route for the menu AND the Delete / Backspace key (the engine's Delete hook calls it, and so does the keymap
+ *  when the engine didn't claim the key). `fromKey`: the keymap fallback — the engine already declined the key for
+ *  its 2D shapes (Backspace typing into a selected text shape, a creator mode owning input), so don't delete them —
+ *  nor the selected 3D object while a creator mode (UV paint, armature, city…) owns input; mesh edit still deletes
+ *  its faces. */
+export function routeDelete(ed: EditRouteHost, opts: { fromKey?: boolean } = {}): void {
   if (has3DMeshSelection(ed)) {
     if (ed.meshEdit.scene3dIsEditingMesh) ed.meshEdit.deleteSelectedFaces();
-    else ed.scene3dDeleteSelected();
+    else if (!(opts.fromKey && ed.shapeManager?.interactionService?.suppressBoxSelect)) ed.scene3dDeleteSelected();
     return;
   }
-  if (has2DShapeSelection(ed)) ed.shapeManager.deleteSelectedShapes();
+  if (!opts.fromKey && has2DShapeSelection(ed)) ed.shapeManager.deleteSelectedShapes();
   ed.deleteSelectionOrLayers();
 }
 
@@ -173,13 +188,17 @@ export const MOD_KEYMAP: KeyBinding[] = [
   { keys: [';'], mod: true, group: 'View', help: 'Toggle gutter guides', run: (ed) => ed.pl.onPanelShowGutterGuidesChange(!ed.pl.panelShowGutterGuides) },
   // Selection
   { keys: ['a', 'A'], mod: true, shift: false, group: 'Selection', help: 'Select all', run: (ed) => ed.rasterSelectionService.selectAll() },
-  { keys: ['d', 'D'], mod: true, shift: false, group: 'Selection', help: 'Deselect (3D: duplicate mesh)', run: (ed, e) => {
-    if (ed.editorState.scene3dPanelVisible && ed.editorState.scene3dSelectedMeshId) {
-      ed.scene3dDuplicateMesh(ed.editorState.scene3dSelectedMeshId);
-      e.stopImmediatePropagation();
-    } else {
-      ed.rasterSelectionService.deselectAll();
+  // Ctrl+D = Edit › Duplicate (routeDuplicate: the selected 3D mesh / 2D shapes); with nothing to duplicate it deselects
+  // the pixel selection. When 2D / 3D nodes are selected the engine claims the key first and runs routeDuplicate itself
+  // (its duplicate-key hook — the default is then prevented); this binding is the fallback for the rest. A held Ctrl+D
+  // runs once (no `repeat`; the engine skips its auto-repeats too).
+  { keys: ['d', 'D'], mod: true, shift: false, group: 'Selection', help: 'Duplicate selection (nothing selected: deselect)', run: (ed, e) => {
+    if (e.defaultPrevented) return;   // the engine already ran Edit › Duplicate for this press
+    if (canRouteDuplicate(ed)) {
+      if (routeDuplicate(ed, { fromKey: true })) e.stopImmediatePropagation();
+      return;
     }
+    ed.rasterSelectionService.deselectAll();
   } },
   { keys: ['i', 'I'], mod: true, shift: true, group: 'Selection', help: 'Invert selection', run: (ed) => ed.rasterSelectionService.invertSelection() },
   { keys: ['x', 'X'], mod: true, shift: false, group: 'Edit', help: 'Cut', run: (ed) => { void ed.rasterSelectionService.cut(); } },
@@ -204,6 +223,8 @@ export const TOOL_KEYMAP: KeyBinding[] = [
       MODE_ACTIONS.cancelKnife(ed);
     } else if (ed.rasterSelectionService.info.isTransforming) {
       MODE_ACTIONS.cancelTransform(ed);
+    } else if (ed.uv?.uvEditorOpen || ed.uv?.scene3dClothingPaintActive) {
+      ed.uv.closeUVEditor();   // the panel's Close: the full exit (orbit, focus background, paint input, idle pause)
     } else {
       ed.selectCursor('cursor');
     }
@@ -219,7 +240,10 @@ export const TOOL_KEYMAP: KeyBinding[] = [
   { keys: ['i'], group: 'Tools', help: 'Highlighter', run: (ed) => ed.setActiveTool('drawing:highlighter') },
   { keys: ['+', '='], repeat: true, group: 'View', help: 'Zoom in', run: (ed) => ed.artboard.zoomIn() },
   { keys: ['-', '_'], repeat: true, group: 'View', help: 'Zoom out', run: (ed) => ed.artboard.zoomOut() },
-  { keys: ['Delete', 'Backspace'], group: 'Edit', help: 'Delete selection / shape', run: (ed) => ed.deleteSelectionOrLayers() },
+  // The same routing as Edit › Delete (3D items through the outliner teardown, mesh-edit faces, 2D shapes, the pixel
+  // selection). It only runs when the engine's own Delete handler didn't claim the key — the editor routes that one
+  // here too (IllustrationComponent installs routeDelete as the engine's Delete hook).
+  { keys: ['Delete', 'Backspace'], group: 'Edit', help: 'Delete selection / shape', run: (ed) => routeDelete(ed, { fromKey: true }) },
   { keys: ['f'], group: 'View', help: 'Fullscreen', run: (ed) => { void ed.toggleFullscreen(); } },
   { keys: ['x'], group: 'View', help: 'Hide / show UI', run: (ed) => ed.toggleUI() },
   { keys: ['M'], shift: true, group: 'Selection', help: 'Rect select', run: (ed) => ed.setActiveTool('select:rect') },

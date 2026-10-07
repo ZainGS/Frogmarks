@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { inject, Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { Scene3dSettingsService } from './scene3d-settings.service';
 import { SceneAnimationService } from './scene-animation.service';
@@ -33,6 +33,10 @@ export class ProjectFileService implements OnDestroy {
   constructor(private artboard: ArtboardService, private animationService: RasterAnimationService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private notifyService: NotifyService, private persist: IllustrationPersistenceService, private s3: Scene3dSettingsService, private anim: SceneAnimationService) {}
   bind(host: ProjectFileHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
+  /** Zone audit item 3: unpackProject restores a whole document (a city's build, stream pump, tile workers, tickers) —
+   *  run OUTSIDE the zone so the timers / worker messages it starts don't each run an app change detection. The awaits
+   *  resume in the zone (callers are in it), so the UI updates after them are change-detected as before. */
+  private readonly ngZone = inject(NgZone);
 
   ngOnDestroy(): void {
   }
@@ -203,7 +207,7 @@ export class ProjectFileService implements OnDestroy {
       if (!response.ok) throw new Error(`Bundle fetch failed: ${response.status}`);
       const bundle = await response.blob();
 
-      await this.shapeManager.unpackProject(bundle);
+      await this.ngZone.runOutsideAngular(() => this.shapeManager.unpackProject(bundle));
       this.host._disableAllViewerTools();
       // Safety fallback: if unpackProject doesn't fire onSceneGraphChanged, unblock the loader
       requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
@@ -409,7 +413,7 @@ export class ProjectFileService implements OnDestroy {
     try {
       const sm = this.shapeManager;
       this.animationService.beginBulkRestore();
-      await sm.unpackProject(file).finally(() => this.animationService.endBulkRestore());
+      await this.ngZone.runOutsideAngular(() => sm.unpackProject(file)).finally(() => this.animationService.endBulkRestore());
       if (fileUuid && this.persist.illustrationUid && fileUuid !== this.persist.illustrationUid) {
         sm.setCurrentDocId(this.persist.illustrationUid, this.persist.illustration?.name);
         // (saveNow was a phantom — saveDocument is the real flush)

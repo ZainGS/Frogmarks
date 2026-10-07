@@ -2,7 +2,9 @@
     <!-- Input Field & Eyedropper -->
     <div *ngIf="!hideInput" class="color-input-container">
         <!-- <button (click)="openEyedropper()" class="eyedropper-btn">🔍</button> -->
-        <input type="text" [(ngModel)]="hexColor" (input)="updateFromHex()" class="color-input" />
+        <!-- [value] + (input), not [(ngModel)]: NgModel writes each new hexColor through a resolved promise — a second
+             app change detection per frame of a gradient drag -->
+        <input type="text" [value]="hexColor" (input)="hexColor = $any($event.target).value; updateFromHex()" class="color-input" />
         <ng-container *ngIf="showOpacity">
             <input type="number" class="opacity-input" min="0" max="100" step="1"
                    [value]="opacity"
