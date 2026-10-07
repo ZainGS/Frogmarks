@@ -463,6 +463,50 @@ $vector-accent: #3dbfa8;
   flex-shrink: 0;
 }
 
+/* ── Touch opacity toggle (rendered only when TouchUiService.coarse) ──
+   A square bevelled chrome key (the user asked for sharp corners, not a pill). The --rc-* tokens exist only under
+   body.theme-retro-chrome; the fallbacks are this panel's default-theme colours. */
+
+.rl-opacity-touch {
+  min-height: 44px;   /* the empty slot is row area: a tap there selects the layer */
+}
+
+.rl-opacity-btn {
+  flex-shrink: 0;
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 0;
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #{$border}) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #{$border});
+  background: var(--rc-surface, #{$surface});
+  color: var(--rc-text, #{$text});
+  font-family: monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Slider open: sunk in (inverted bevel), green, with an inner rule so it still reads inside an active (green) row.
+     (An outline, not an inset box-shadow: the retro theme strips box-shadow from everything.) */
+  &.open {
+    border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #{$border}) var(--rc-bevel-lt, #{$border}) var(--rc-bevel-dk, #111);
+    background: var(--rc-green, #{$accent});
+    color: var(--rc-green-txt, #fff);
+    outline: 1px solid var(--rc-green-txt, #{$accent-light});
+    outline-offset: -5px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rc-green-txt, #{$accent-light});
+    outline-offset: 1px;
+  }
+}
+
 /* ── Empty state ─────────────────────────────────────────── */
 
 .rl-empty {

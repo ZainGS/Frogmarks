@@ -14,3 +14,13 @@
     border-color: #9B59B6;
     box-shadow: 0 0 0 0.2rem rgba(155, 89, 182, 0.25);
 }
+
+// Touch (tablet / phone): finger-sized controls in the Global tab's "Global Dither" section.
+// The template sizes colour swatches inline, hence the !important. Desktop (fine pointer) is unchanged.
+@media (pointer: coarse) {
+    .form-check { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+    .form-check-input { width: 20px; height: 20px; margin-top: 0; flex-shrink: 0; }
+    .form-select-sm { min-height: 32px; }
+    input[type="color"] { width: 32px !important; height: 32px !important; }
+    .btn-sm { min-height: 32px; }
+}

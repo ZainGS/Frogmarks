@@ -2,6 +2,7 @@ import { Injectable, OnDestroy, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
+import { StatusThrottle } from '../utils/status-throttle';
 
 /** Exactly the editor state the engine status readouts use. */
 export type EngineStatusHost = Pick<IllustrationComponent, 'shapeManager'>;
@@ -27,17 +28,26 @@ export class EngineStatusService implements OnDestroy {
     for (const u of this._engineStatusUnsubs) { try { u(); } catch { /* ignore */ } }
     this._engineStatusUnsubs = [];
     clearTimeout(this._deviceBannerTimer); this._deviceBannerTimer = null;
+    this._statusThrottle.dispose();
   }
 
   engineStatusText = '';
   private _pipeStatus: { compiled: number; total: number; waiting: boolean } = { compiled: 0, total: 0, waiting: false };
   private _jobStatus: { active: boolean; label: string; done: number; total: number } = { active: false, label: '', done: 0, total: 0 };
   private _engineStatusUnsubs: Array<() => void> = [];
+  /** M6 (zone audit): the progress callbacks fire many times a second and every new text entered the zone — the pill
+   *  now changes at most 4×/s (the pacing timer runs outside the zone). Going idle clears it at once. */
+  private readonly _statusThrottle = new StatusThrottle(
+    text => this.ngZone.run(() => { this.engineStatusText = text; }),
+    250,
+    () => performance.now(),
+    (fn, ms) => this.ngZone.runOutsideAngular(() => setTimeout(fn, ms)),
+  );
   private _updateEngineStatus(): void {
     let txt = '';
     if (this._pipeStatus.waiting) txt = `Preparing shaders… ${this._pipeStatus.compiled}/${this._pipeStatus.total}`;
     else if (this._jobStatus.active) txt = this._jobStatus.total > 1 ? `${this._jobStatus.label}… ${this._jobStatus.done}/${this._jobStatus.total}` : `${this._jobStatus.label}…`;
-    if (txt !== this.engineStatusText) this.ngZone.run(() => { this.engineStatusText = txt; });
+    this._statusThrottle.set(txt);
   }
 
   /** Engine boot: start listening (pipeline warm-up, worker jobs, device status, deferred saves). */

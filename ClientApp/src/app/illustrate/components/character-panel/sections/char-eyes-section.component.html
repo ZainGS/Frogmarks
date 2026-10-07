@@ -268,11 +268,10 @@
 
 <!-- Live gaze pad -->
 <ng-container *ngIf="cp.sub2.id === 'live-gaze'"><div style="margin-top:14px">
-    <!-- Live Gaze -->
+    <!-- Live Gaze (pointermove is listened outside the zone: CharEyesSectionComponent.gazePadRef) -->
     <div class="gaze-pad"
          #gazePad
          (pointerdown)="face.scene3dGazePadPointerDown($event, gazePad)"
-         (pointermove)="face.scene3dGazePadPointerMove($event, gazePad)"
          (pointerup)="face.scene3dGazePadPointerUp()"
          (pointercancel)="face.scene3dGazePadPointerUp()">
         <div class="gaze-reticle"></div>

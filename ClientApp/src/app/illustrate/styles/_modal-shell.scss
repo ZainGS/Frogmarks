@@ -57,3 +57,64 @@
     &:hover { background: #2e2e4a; color: #ccc; }
     @media (pointer: coarse) { min-width: 44px; min-height: 44px; }
 }
+
+// ── Retro Chrome (body.theme-retro-chrome) ─────────────────────────────────────────────────────────────────────────
+// Same shell as the New Illustration dialog (.nid, retro-chrome-theme.scss § 13): raised chrome card, green title
+// strip, bevelled square close button, Courier. Built only from the theme's --rc-* variables (they live on the body
+// class, so they resolve here). The default theme above is untouched. :host-context reaches the body class from
+// inside the component's emulated style scope (both importers — the editor and <app-export-modal> — are emulated).
+:host-context(body.theme-retro-chrome) {
+    .export-modal-overlay {
+        background: rgba(0, 0, 0, 0.78);   // = the theme's .cdk-overlay-backdrop
+    }
+
+    .export-modal {
+        background: var(--rc-panel-bg);
+        border: 2px solid;
+        border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+        border-radius: 0;
+        color: var(--rc-text);
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    .export-modal-header {
+        background: var(--rc-green);
+        border-bottom: 2px solid var(--rc-bevel-lt);
+        padding: 6px 6px 6px 10px;
+        gap: 8px;
+    }
+
+    .export-modal-title {
+        color: var(--rc-green-txt);
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .export-modal-close {
+        flex-shrink: 0;
+        min-width: 24px;
+        min-height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        background: var(--rc-surface);
+        border: 2px solid;
+        border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+        color: var(--rc-text);
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+
+        &:hover { background: var(--rc-surface-hi); color: #fff; }
+        &:active { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk); }
+        &:focus-visible { outline: 1px solid var(--rc-green-txt); outline-offset: 1px; }
+        @media (pointer: coarse) { min-width: 44px; min-height: 44px; font-size: 14px; }
+    }
+}

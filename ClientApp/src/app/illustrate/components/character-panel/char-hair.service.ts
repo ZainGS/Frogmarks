@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { CharacterPanelComponent } from './character-panel.component';
 import { HAIR_PARAM_DEFAULTS } from '../../utils/character-randomizer';
@@ -28,6 +28,7 @@ export type CharHairHost = Pick<CharacterPanelComponent,
 @Injectable()
 export class CharHairService implements OnDestroy {
   private host!: CharHairHost;
+  constructor(private zone: NgZone) {}
   bind(host: CharHairHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -103,14 +104,16 @@ export class CharHairService implements OnDestroy {
     this.scene3dHairParamChanged();
   }
 
+  // H7 (zone audit): debounce timers run OUTSIDE the zone — they only push params to the engine, and an in-zone timer
+  // ran an extra app change detection between slider inputs.
   scene3dHairParamChanged(): void {
     clearTimeout(this._hairParamTimer);
-    this._hairParamTimer = setTimeout(() => {
+    this._hairParamTimer = this.zone.runOutsideAngular(() => setTimeout(() => {
       const sm = this.shapeManager;
       const id = this.host.scene3dEditCharBodyId;
       if (!id || !this.scene3dHairParams) return;
       sm.setHairParams3D(id, this.scene3dHairParams);
-    }, 10);
+    }, 10));
   }
 
   scene3dRemoveHair(): void {

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { RasterTextState } from 'app/boards/models/brush-preset.model';
 
@@ -14,6 +14,7 @@ export interface RasterTextHost {
 @Injectable()
 export class RasterTextService {
   private host!: RasterTextHost;
+  constructor(private ngZone: NgZone) {}
   bind(host: RasterTextHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager(); }
 
@@ -37,8 +38,10 @@ export class RasterTextService {
   _enableRasterText(): void {
     this.shapeManager.enableRasterText();
     this._rasterTextSub?.unsubscribe();   // re-enabling (tool re-selected) must not leak the previous listener
+    // Fires from the engine's zoneless canvas pointerdown as well as from key input: the options panel binds the state
     this._rasterTextSub =this.shapeManager.onRasterTextStateChanged((state: RasterTextState) => {
-      this.rasterTextState = state;
+      if (NgZone.isInAngularZone()) this.rasterTextState = state;
+      else this.ngZone.run(() => { this.rasterTextState = state; });
     }) ?? null;
   }
 

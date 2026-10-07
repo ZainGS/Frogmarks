@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, AfterViewInit, Input, Output, EventEmitter, NgZone, ChangeDetectorRef } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import {
@@ -10,6 +10,7 @@ import {
   BLEND_MODE_CATEGORIES,
 } from '../../models/brush-preset.model';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { TouchUiService } from '../../../illustrate/services/touch-ui.service';
 
 /** Flat display entry with computed depth for indentation */
 export interface LayerDisplayEntry extends RasterLayer {
@@ -24,7 +25,9 @@ export interface LayerDisplayEntry extends RasterLayer {
 })
 export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
-  constructor(private rasterService: RasterBrushService, private elRef: ElementRef, private ngZone: NgZone) {}
+  constructor(private rasterService: RasterBrushService, private elRef: ElementRef, private ngZone: NgZone, private cdr: ChangeDetectorRef,
+              /** `touchUi.coarse` (primary pointer is a finger) swaps each row's inline opacity slider for a % button. */
+              readonly touchUi: TouchUiService) {}
 
   layers: RasterLayer[] = [];
   activeLayerId: string | null = null;
@@ -80,6 +83,7 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
       this.rasterService.layers$.subscribe(l => {
         this.vectorLayers = l.filter(x => x.type === 'vector' && !x.systemOwner);
         this.layers = l.filter(x => x.type !== 'vector' && !x.systemOwner);
+        this._pruneOpenOpacitySliders();
         setTimeout(() => {
           if (!this.activeLayerId && !this.selected3DSceneId && !this.activeVectorLayerId) this._autoSelectDefault();
         }, 0);
@@ -116,6 +120,12 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('document:keydown', ['$event'])
   onKeyDown(e: KeyboardEvent): void {
     if (this.hotkeysSuspended) return;
+    // Both shortcuts act once per press: a held / toggled lock transparency on and off, a held Ctrl+J duplicated the
+    // layer ~30×/s. (A held Ctrl+J stays claimed below.)
+    if (e.repeat) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J') && !this._isInputFocused()) e.preventDefault();
+      return;
+    }
     if (e.key === '/' && !this._isInputFocused()) {
       e.preventDefault();
       this.toggleLockTransparencyOnActive();
@@ -457,6 +467,8 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private _correctFixedOffset(wantLeft: number, wantTop: number | null, wantBottom: number | null): void {
     setTimeout(() => {
+      // With event coalescing (main.ts) the click's change detection can still be pending: render the dropdown first
+      this.cdr.detectChanges();
       const el = (this.elRef.nativeElement as HTMLElement).querySelector('.blend-dropdown') as HTMLElement | null;
       if (!el) return;
       const r = el.getBoundingClientRect();
@@ -480,6 +492,41 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
   onOpacityChange(layer: RasterLayer, event: Event): void {
     const val = +(event.target as HTMLInputElement).value;
     this.rasterService.setLayerOpacity(layer.id, val / 100);
+  }
+
+  /**
+   * Touch only (`touchUi.coarse`): an inline range input swallows taps meant for the row, so on a tablet the row
+   * shows its opacity as a % button and the slider appears only while that button is toggled on. Per layer, several
+   * can be open at once, and none persist: the set lives in this component (a recreated panel starts all closed) and
+   * ids that leave the layer list are pruned (a newly opened document's layers start closed).
+   */
+  private readonly _openOpacitySliderIds = new Set<string>();
+
+  isOpacitySliderOpen(layerId: string): boolean {
+    return this._openOpacitySliderIds.has(layerId);
+  }
+
+  /** The row's % button: opens / closes only this layer's slider. Never selects the layer (no row click). */
+  toggleOpacitySlider(layer: RasterLayer, e: Event): void {
+    e.stopPropagation();
+    if (!this._openOpacitySliderIds.delete(layer.id)) this._openOpacitySliderIds.add(layer.id);
+    // stopPropagation also skips the document click that closes these menus
+    this.showAddMenu = false;
+    this.openBlendDropdownId = null;
+  }
+
+  opacityPercent(layer: RasterLayer): number {
+    return Math.round((layer.opacity ?? 1) * 100);
+  }
+
+  opacityButtonLabel(layer: RasterLayer): string {
+    return `Layer opacity ${this.opacityPercent(layer)}%, ${this.isOpacitySliderOpen(layer.id) ? 'hide' : 'show'} slider`;
+  }
+
+  private _pruneOpenOpacitySliders(): void {
+    if (!this._openOpacitySliderIds.size) return;
+    const live = new Set(this.layers.map(l => l.id));
+    for (const id of this._openOpacitySliderIds) if (!live.has(id)) this._openOpacitySliderIds.delete(id);
   }
 
   // ── Clipping mask ─────────────────────────────────────────────

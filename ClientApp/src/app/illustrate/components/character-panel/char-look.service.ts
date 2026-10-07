@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { CharacterPanelComponent } from './character-panel.component';
 import { hexToRgba01 } from '../../utils/color-utils';
@@ -16,6 +16,7 @@ export type CharLookHost = Pick<CharacterPanelComponent,
 @Injectable()
 export class CharLookService implements OnDestroy {
   private host!: CharLookHost;
+  constructor(private zone: NgZone) {}
   bind(host: CharLookHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -154,6 +155,17 @@ export class CharLookService implements OnDestroy {
     this.scene3dCharSceneMpu = s.sceneMetresPerUnit ?? null;
   }
 
+  /** _syncCharScale, entering the zone only when a bound readout changes (callers outside the zone). */
+  private _syncCharScaleIfChanged(id: string): void {
+    const s = this.shapeManager.getCharacterScale3D(id);
+    if (!s) return;
+    const scale = Math.round(s.scale * 1000) / 1000;
+    const heightM = Math.round(s.heightMetres * 100) / 100;
+    const mpu = s.sceneMetresPerUnit ?? null;
+    if (scale === this.scene3dCharScale && heightM === this.scene3dCharHeightM && mpu === this.scene3dCharSceneMpu) return;
+    this.zone.run(() => this._syncCharScale(id));
+  }
+
   scene3dCharScaleChanged(v: number | null): void {
     const id = this.host.scene3dEditCharBodyId;
     if (!id || v == null || !(v > 0)) return;
@@ -174,12 +186,14 @@ export class CharLookService implements OnDestroy {
 
   scene3dBodyParamChanged(): void {
     clearTimeout(this._bodyParamTimer);
-    this._bodyParamTimer = setTimeout(() => {
+    // H7: the debounce (and the promise after it) run OUTSIDE the zone; they enter it only when the scale / metre
+    // readout actually changed (the Height slider), not on every other body slider tick.
+    this._bodyParamTimer = this.zone.runOutsideAngular(() => setTimeout(() => {
       const sm = this.shapeManager;
       const id = this.host.scene3dEditCharBodyId;
       if (!id || !this.scene3dBodyParams) return;
-      void Promise.resolve(sm.setBodyParams3D(id, this.scene3dBodyParams)).then(() => this._syncCharScale(id));   // the metre readout follows the Height slider
-    }, 10);
+      void Promise.resolve(sm.setBodyParams3D(id, this.scene3dBodyParams)).then(() => this._syncCharScaleIfChanged(id));   // the metre readout follows the Height slider
+    }, 10));
   }
 
   scene3dSkinToneChanged(): void {

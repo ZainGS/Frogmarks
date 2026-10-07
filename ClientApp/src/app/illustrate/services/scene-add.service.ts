@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { SceneAnimationService } from './scene-animation.service';
@@ -23,7 +23,7 @@ export type SceneAddHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class SceneAddService implements OnDestroy {
   private host!: SceneAddHost;
-  constructor(private editorState: EditorStateService, private character: CharacterEditService, private anim: SceneAnimationService, private outliner: SceneOutlinerService) {}
+  constructor(private editorState: EditorStateService, private character: CharacterEditService, private anim: SceneAnimationService, private outliner: SceneOutlinerService, private ngZone: NgZone) {}
   bind(host: SceneAddHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -335,7 +335,8 @@ export class SceneAddService implements OnDestroy {
    *  by cancel / generate but never set). */
   scene3dPreviewCharacter(): void {
     clearTimeout(this._charPreviewTimer);
-    this._charPreviewTimer = setTimeout(() => this._fireCharPreview(), 60);
+    // H7: outside the zone — the preview is engine-only, and an in-zone timer ran an app change detection per tick
+    this._charPreviewTimer = this.ngZone.runOutsideAngular(() => setTimeout(() => this._fireCharPreview(), 60));
   }
 
   _fireCharPreview(): void {

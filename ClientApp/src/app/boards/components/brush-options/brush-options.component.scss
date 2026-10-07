@@ -651,7 +651,7 @@ $radius: 6px;
 .import-row {
   display: flex;
   gap: 4px;
-  padding: 6px 8px 0;
+  padding: 6px 8px;   /* the same 6 px gap below as above, so the buttons are not flush with the border below */
   border-top: 1px solid $border;
   margin-top: 4px;
 }

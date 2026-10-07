@@ -1,4 +1,4 @@
-import { Injectable, NgZone } from '@angular/core';
+import { ApplicationRef, Injectable, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
@@ -16,7 +16,7 @@ export type UvEditorHost = Pick<IllustrationComponent, 'shapeManager' | 'charact
 @Injectable()
 export class UvEditorService {
   private host!: UvEditorHost;
-  constructor(private editorState: EditorStateService, private ngZone: NgZone) {}
+  constructor(private editorState: EditorStateService, private ngZone: NgZone, private appRef: ApplicationRef) {}
   bind(host: UvEditorHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -50,9 +50,17 @@ export class UvEditorService {
     if (!this._uvSession) return;
     this.uvEditorOpen = true;
     setTimeout(() => {
+      // The pane canvas is *ngIf'd on uvEditorOpen. With event coalescing (main.ts) the click's change detection waits for
+      // the next frame, so this timeout can run first: render now when the canvas isn't there yet.
+      if (!this.host.uvCanvasRef) this.appRef.tick();
       const uvCanvas = this.host.uvCanvasRef?.nativeElement;
       if (!uvCanvas) return;
-      const dpr = window.devicePixelRatio || 1;
+      // mobile-parity 7.3b: the pane's backing store is capped by the GPU tier's maxDpr like the main canvas (a tablet:
+      // 1.5) — the pane redraws while painting, so its pixel count is per-stroke work.
+      const caps = typeof (sm.webgpuRenderer as { getGpuCaps?: unknown } | undefined)?.getGpuCaps === 'function'
+        ? sm.webgpuRenderer.getGpuCaps() : null;
+      const maxDpr = caps && Number.isFinite(caps.maxDpr) && caps.maxDpr > 0 ? caps.maxDpr : Infinity;
+      const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
       uvCanvas.width  = Math.round((window.innerWidth * 0.5 - 280) * dpr);
       uvCanvas.height = Math.round(window.innerHeight * dpr);
       this._uvRenderer = sm.createUVCanvasRenderer(uvCanvas);
@@ -76,6 +84,7 @@ export class UvEditorService {
     this._uvSession = null;
     this._uvRenderer = null;
     this._uvHandlersBound = false;
+    this._uvRect = null;
     this.uvEditorOpen = false;
     this.uvPaintMode  = false;
     this.showUVPane   = false;
@@ -102,14 +111,24 @@ export class UvEditorService {
     this._uvRenderer.draw(this._uvSession, em);
   }
 
+  /** The pane's client rect, read once per hover / press (cleared on leave, press and release) instead of per move. */
+  private _uvRect: DOMRect | null = null;
+
   private _uvCssCoords(canvas: HTMLCanvasElement, e: PointerEvent): { x: number; y: number } {
-    const rect = canvas.getBoundingClientRect();
+    const rect = this._uvRect ??= canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
   private _attachUVPointerHandlers(canvas: HTMLCanvasElement): void {
     if (this._uvHandlersBound) return;
     this._uvHandlersBound = true;
+    // Registered OUTSIDE Angular's zone: hover moves / leave / wheel only redraw the pane and the 3D hover tint (no
+    // template state), so they must not run an app-wide change detection each. A face pick (pointerdown) still
+    // enters the zone below — a rare state change.
+    this.ngZone.runOutsideAngular(() => this._addUVPointerListeners(canvas));
+  }
+
+  private _addUVPointerListeners(canvas: HTMLCanvasElement): void {
     const sm = this.shapeManager;
 
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
@@ -123,6 +142,7 @@ export class UvEditorService {
 
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       if (!this._uvRenderer || !this._uvSession) return;
+      this._uvRect = null;   // a press re-measures (the pane may have moved since the last hover)
       const { x, y } = this._uvCssCoords(canvas, e);
       const em = sm.getEditMesh3D(this.editorState.scene3dSelectedMeshId);
       if (!em) return;
@@ -133,7 +153,10 @@ export class UvEditorService {
       }
     });
 
+    canvas.addEventListener('pointerup', () => { this._uvRect = null; });
+
     canvas.addEventListener('pointerleave', () => {
+      this._uvRect = null;
       sm.setUVHoverFace3D(this.editorState.scene3dSelectedMeshId, null);
       this._uvDraw();
     });

@@ -57,6 +57,7 @@
 /***************************************************************************************************
  * Zone JS is required by default for Angular itself.
  */
+import './zone-flags';   // BEFORE zone.js: requestAnimationFrame stays unpatched (see zone-flags.ts)
 import 'zone.js';  // Included with Angular CLI.
 
 

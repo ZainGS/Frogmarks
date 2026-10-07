@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { gunzipFromBase64, gunzipFromBinary, gzipToBlob } from '../utils/gzip-utils';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
@@ -41,7 +41,7 @@ export type PersistenceHost = Pick<IllustrationComponent, 'shapeManager' | 'doc'
 @Injectable()
 export class IllustrationPersistenceService implements OnDestroy {
   private host!: PersistenceHost;
-  constructor(private editorState: EditorStateService, private artboard: ArtboardService, private canvasLook: CanvasAppearanceService, private anim: SceneAnimationService, private animationService: RasterAnimationService, private autoSaveService: RasterAutoSaveService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private opfsMetadataService: OpfsMetadataService, private s3: Scene3dSettingsService) {}
+  constructor(private editorState: EditorStateService, private artboard: ArtboardService, private canvasLook: CanvasAppearanceService, private anim: SceneAnimationService, private animationService: RasterAnimationService, private autoSaveService: RasterAutoSaveService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private localIllustrationService: LocalIllustrationService, private notifyService: NotifyService, private opfsMetadataService: OpfsMetadataService, private s3: Scene3dSettingsService, private ngZone?: NgZone) {}
   bind(host: PersistenceHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -1013,7 +1013,11 @@ export class IllustrationPersistenceService implements OnDestroy {
 
   /** Common tail of the OPFS / server loads: procedural restore, snap + grid settings, loaded. */
   private _finishLoad(fitArtboard: boolean): void {
-    this.shapeManager.restoreProceduralFromSave3D();
+    // H3: OUTSIDE the zone — a restored city starts its ticker / stream pump / tile workers here, and anything it starts
+    // in the zone runs an app change detection per tick / worker message for the whole session. (Optional: specs
+    // construct this service without an NgZone.)
+    if (this.ngZone) this.ngZone.runOutsideAngular(() => this.shapeManager.restoreProceduralFromSave3D());
+    else this.shapeManager.restoreProceduralFromSave3D();
     this.s3._scene3dLoadSnapSettings();
     this.s3._loadScene3dGrid();
     console.timeEnd('[V2 Load] total');
@@ -1339,16 +1343,18 @@ export class IllustrationPersistenceService implements OnDestroy {
     await this.loadIllustrationV2();
 
     this._pendingChangeSub = this.sceneChanged$.subscribe(() => { this._pendingChange = true; });
+    // sceneChanged$ may be ticked from outside the zone (engine callbacks, debounce timers moved out of it — zone audit
+    // H7), and then the audit timers run outside too: the saves re-enter, their status / prompts are bound.
     this.autoSaveSubscription = this.sceneChanged$
       .pipe(auditTime(2000), distinctUntilChanged())
-      .subscribe(async () => {
+      .subscribe(() => this._inZone(async () => {
         if (!this.illustration) return;
         try {
           await this.saveIllustrationV2();
         } catch (e) {
           console.warn('[V2 Save] autosave failed', e);
         }
-      });
+      }));
 
     // Fast OPFS metadata flush — persists non-pixel settings (dither, bgColor, etc.)
     // within ~400ms so a quick refresh doesn't lose them before the 2s cloud save fires.
@@ -1374,11 +1380,11 @@ export class IllustrationPersistenceService implements OnDestroy {
 
     this.thumbnailSaveSubscription = this.sceneChanged$
       .pipe(auditTime(5000))
-      .subscribe(() => {
+      .subscribe(() => this._inZone(() => {
         if (!this.illustration?.isCustomThumbnail) {
           this.saveThumbnailIfChanged();
         }
-      });
+      }));
 
     // A Duplicate (DocumentActionsService) was copied on this device's storage; the server has none of it yet. Its
     // first cloud save uploads EVERY layer, mesh and the texture library (not just what changed since this load).
@@ -1390,6 +1396,12 @@ export class IllustrationPersistenceService implements OnDestroy {
 
     this._checkSaveBlocked();
     this.host.markLoaded('illustration');
+  }
+
+  /** Run fn in Angular's zone (directly when already in it, or when there is no NgZone — specs). */
+  private _inZone<T>(fn: () => T): T {
+    if (!this.ngZone || NgZone.isInAngularZone()) return fn();
+    return this.ngZone.run(fn);
   }
 
   saveBlockedReason: string | null = null;

@@ -33,13 +33,19 @@ export class WorldPanelComponent implements OnDestroy {
     this._perfStopPoll();
   }
 
+  /** H3 (zone audit): city builds / animation run OUTSIDE Angular's zone — the city ticker, stream pump and tile-worker
+   *  listeners they start would otherwise run an app change detection per tick / message for the whole session. The
+   *  panel's own state is set by the callers (in the zone); onCityBuildStateChange re-enters for the build badge. */
+  private _engine<T>(fn: () => T): T { return this.ngZone.runOutsideAngular(fn); }
+
   /** Called by the editor when the panel opens (moved from openWorldPanel). */
   onOpen(): void {
     const sm = this.shapeManager;
     if (this.worldHasWorld && sm.world?.hasWorld) {
-      sm.world?.enterCityMode();              // resume existing city, no regen
+      this._engine(() => sm.world?.enterCityMode());              // resume existing city, no regen
     } else {
-      sm.world?.enterCityMode(this._worldParams());  // fresh city
+      const params = this._worldParams();
+      this._engine(() => sm.world?.enterCityMode(params));  // fresh city
       this.worldHasWorld = true;
       this.worldRefreshRegions();
     }
@@ -239,7 +245,8 @@ export class WorldPanelComponent implements OnDestroy {
   worldGenerate(): void {
     // Re-enters the mode → reframes the camera. Use for Generate button.
     const sm = this.shapeManager;
-    sm.world?.enterCityMode(this._worldParams());
+    const params = this._worldParams();
+    this._engine(() => sm.world?.enterCityMode(params));
     this.worldHasWorld = true;
     this.worldEnabledRegions = null;
     this.worldRefreshRegions();
@@ -254,7 +261,7 @@ export class WorldPanelComponent implements OnDestroy {
 
   worldToggleRegion(id: number): void {
     const sm = this.shapeManager;
-    sm.world?.toggleRegion(id);
+    this._engine(() => sm.world?.toggleRegion(id));
     const active = sm.world?.activeRegions;
     this.worldEnabledRegions = Array.isArray(active) ? active : null;
     this.dirty.emit();
@@ -262,7 +269,7 @@ export class WorldPanelComponent implements OnDestroy {
 
   worldEnableAllRegions(): void {
     const sm = this.shapeManager;
-    sm.world?.setActiveRegions(null);
+    this._engine(() => sm.world?.setActiveRegions(null));
     this.worldEnabledRegions = null;
     this.dirty.emit();
   }
@@ -278,7 +285,7 @@ export class WorldPanelComponent implements OnDestroy {
       sm.world?.stopDayCycle();
       this.worldDayCyclePlaying = false;
     } else {
-      sm.world?.playDayCycle(this.worldDayCycleSec);
+      this._engine(() => sm.world?.playDayCycle(this.worldDayCycleSec));
       this.worldDayCyclePlaying = true;
     }
   }
@@ -287,7 +294,7 @@ export class WorldPanelComponent implements OnDestroy {
     if (!this.worldDayCyclePlaying) return;
     const sm = this.shapeManager;
     sm.world?.stopDayCycle();
-    sm.world?.playDayCycle(this.worldDayCycleSec);
+    this._engine(() => sm.world?.playDayCycle(this.worldDayCycleSec));
   }
 
   worldSetRenderStyle(style: string | null): void {
@@ -900,7 +907,7 @@ export class WorldPanelComponent implements OnDestroy {
 
   worldToggleTurntable(): void {
     this.worldTurntableOn = !this.worldTurntableOn;
-    this.shapeManager.world?.setTurntable(this.worldTurntableOn ? 6 : 0);
+    this._engine(() => this.shapeManager.world?.setTurntable(this.worldTurntableOn ? 6 : 0));
   }
 
   worldClear(): void {
@@ -929,7 +936,7 @@ export class WorldPanelComponent implements OnDestroy {
 
   worldRandomizeSeed(): void {
     this.worldSeed = (Math.random() * 1e9) | 0 || 1;
-    this.shapeManager.world?.updateCity({ seed: this.worldSeed });
+    this._engine(() => this.shapeManager.world?.updateCity({ seed: this.worldSeed }));
     this.dirty.emit();
   }
 
@@ -937,9 +944,9 @@ export class WorldPanelComponent implements OnDestroy {
    *  checking the box turned follow OFF.) No argument = toggle. */
   worldToggleStreamFollow(on?: boolean): void {
     this.worldStreamFollow = on ?? !this.worldStreamFollow;
-    this.shapeManager.world?.setStreamFollow(this.worldStreamFollow);
+    this._engine(() => this.shapeManager.world?.setStreamFollow(this.worldStreamFollow));
     if (this.worldStreamFollow) {
-      this.shapeManager.world?.setStreamOutsideTiles(this.worldStreamOutside);
+      this._engine(() => this.shapeManager.world?.setStreamOutsideTiles(this.worldStreamOutside));
       if (this.worldStreamOutside === 'hlod') this._syncHlodSkyline();
       this._startStreamStats();
     } else {
@@ -975,7 +982,7 @@ export class WorldPanelComponent implements OnDestroy {
   /** Salsa P10.D / P17: Outside tiles — HLOD / None / Flat / Massing beyond the active window (live, no regen). */
   worldSetStreamOutside(mode: 'hlod' | 'none' | 'flat' | 'massing'): void {
     this.worldStreamOutside = mode;
-    this.shapeManager?.world?.setStreamOutsideTiles(mode);
+    this._engine(() => this.shapeManager?.world?.setStreamOutsideTiles(mode));
     if (mode === 'hlod') this._syncHlodSkyline();
   }
 
@@ -1004,7 +1011,8 @@ export class WorldPanelComponent implements OnDestroy {
       this._stopStreamStats();
     }
     this._worldDebounce = setTimeout(() => {
-      this.shapeManager.world?.updateCity(this._worldParams());
+      const params = this._worldParams();
+      this._engine(() => this.shapeManager.world?.updateCity(params));
       this.dirty.emit();
       // Skip the O(n) mesh rebuild for selective regens that don't change mesh IDs.
       const s3d = this.shapeManager.scene3d;

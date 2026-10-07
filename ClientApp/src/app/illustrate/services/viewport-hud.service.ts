@@ -1,11 +1,12 @@
 import { Injectable, OnDestroy, NgZone } from '@angular/core';
+import { formatNumber } from '@angular/common';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
 import { EditorStateService } from './editor-state.service';
 /** Exactly the editor state the 3D viewport HUD reads. */
 export type ViewportHudHost = Pick<IllustrationComponent, 'shapeManager' |
-  'canvasRef' 
+  'canvasRef' | 'angleLabelRef'
 >;
 
 /**
@@ -162,14 +163,27 @@ export class ViewportHudService implements OnDestroy {
     const screen = sm.scene3d?.projectWorldToScreen3D(wx, wy, wz, cw, ch);
     const newAngle = Math.round(info.angleDeg * 10) / 10;
     const newPos = screen ? { x: screen.x, y: screen.y } : null;
-    if (this.scene3dDragAngleDeg !== newAngle ||
-        this.scene3dDragLabelPos?.x !== newPos?.x ||
-        this.scene3dDragLabelPos?.y !== newPos?.y) {
+    if (this.scene3dDragAngleDeg === newAngle &&
+        this.scene3dDragLabelPos?.x === newPos?.x &&
+        this.scene3dDragLabelPos?.y === newPos?.y) return;
+    // M2 (zone audit): enter the zone only when the label appears / disappears (the *ngIf). While it is up, this runs
+    // every frame of the drag: move it and write its text directly (the bindings render the same values later).
+    const label = this.host.angleLabelRef?.nativeElement;
+    const wasShown = this.scene3dDragAngleDeg !== null && !!this.scene3dDragLabelPos;
+    if (!wasShown || !newPos || !label) {
       this.ngZone.run(() => {
         this.scene3dDragAngleDeg = newAngle;
         this.scene3dDragLabelPos = newPos;
       });
+      return;
     }
+    this.scene3dDragAngleDeg = newAngle;
+    this.scene3dDragLabelPos = newPos;
+    label.style.left = (newPos.x + 20) + 'px';
+    label.style.top = (newPos.y - 12) + 'px';
+    // Write Angular's own interpolation text node (replacing textContent would detach the node the binding updates)
+    const text = label.firstChild;
+    if (text && text.nodeType === Node.TEXT_NODE) text.nodeValue = ' ' + formatNumber(newAngle, 'en-US', '1.1-1') + '° ';
   }
   // ── Screencast keys (on-screen key display) ──
   screencastKeysEnabled = false;

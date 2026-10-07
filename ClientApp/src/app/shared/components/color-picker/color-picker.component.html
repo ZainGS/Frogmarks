@@ -17,10 +17,10 @@
     <!-- Saturation/Brightness Square -->   
     <div class="color-gradient" #gradient
          (pointerdown)="startColorSelection($event)"
-         (pointermove)="onGradientPointerMove($event)"
          (pointerup)="endColorSelection()"
          (pointercancel)="endColorSelection()"
          (lostpointercapture)="endColorSelection()">
-        <div class="color-indicator" [ngStyle]="{'top': sbY + '%', 'left': sbX + '%'}"></div>
+        <!-- pointermove is listened outside the zone (ColorPickerComponent.ngAfterViewInit) -->
+        <div class="color-indicator" #indicator [ngStyle]="{'top': sbY + '%', 'left': sbX + '%'}"></div>
     </div>
 </div>

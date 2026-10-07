@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone, inject } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -27,10 +27,16 @@ export class SkinInspectorService {
     if (e.key === 'Control') document.body.classList.remove('sb-inspecting-paused');
   };
 
+  private readonly _zone = inject(NgZone);
+
   openPanel(): void {
     document.body.classList.add('sb-inspecting');
-    document.addEventListener('keydown', this._ctrlDown);
-    document.addEventListener('keyup', this._ctrlUp);
+    // Outside the zone: they only toggle a body class, and in the zone EVERY keystroke (and each auto-repeat of a held
+    // key) ran an app change detection while the inspector was open.
+    this._zone.runOutsideAngular(() => {
+      document.addEventListener('keydown', this._ctrlDown);
+      document.addEventListener('keyup', this._ctrlUp);
+    });
   }
 
   closePanel(): void {

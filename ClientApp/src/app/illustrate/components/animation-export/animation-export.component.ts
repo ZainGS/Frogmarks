@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnChanges, OnInit, OnDestroy, ElementRef } from '@angular/core';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { AnimationFrameSource } from '../../models/animation-frame-source';
 
@@ -10,7 +10,7 @@ export type ExportFormat = 'gif' | 'mp4' | 'sprite-sheet' | 'png-sequence' | 'gi
   templateUrl: './animation-export.component.html',
   styleUrl: './animation-export.component.scss',
 })
-export class AnimationExportComponent implements OnChanges {
+export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
   @Input() shapeManager!: AnimationFrameSource;
   @Input() frameCount = 24;
   @Input() fps = 12;
@@ -38,7 +38,21 @@ export class AnimationExportComponent implements OnChanges {
 
   scaleOptions = ['0.5x', '1x', '2x'];
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef, private host: ElementRef<HTMLElement>) {}
+
+  /** Presentation only: the dialog is declared inside the timeline, whose wrapper (.animation-timeline-wrapper) is
+   *  position: fixed + z-index 500, i.e. its own stacking context, so the editor's left toolbar / colour panel
+   *  painted over the backdrop and the card. Re-parent the host element to <body> (like a CDK overlay) so the
+   *  overlay covers the whole editor; body.theme-retro-chrome rules still reach it. Angular removes the host from
+   *  its current parent on *ngIf=false; ngOnDestroy also removes it for the case where the whole timeline goes away. */
+  ngOnInit(): void {
+    const el = this.host.nativeElement;
+    if (el.parentNode !== document.body) document.body.appendChild(el);
+  }
+
+  ngOnDestroy(): void {
+    this.host.nativeElement.remove();
+  }
 
   ngOnChanges(): void {
     // Sync rangeEnd whenever frameCount changes (e.g. first open)

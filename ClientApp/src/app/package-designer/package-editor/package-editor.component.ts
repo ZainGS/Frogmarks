@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, ViewChild, ElementRef, NgZone,
+  Component, OnInit, OnDestroy, ViewChild, ElementRef, NgZone, ChangeDetectorRef,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import ShapeManager from '@zaings/salsa/shape-manager';
@@ -59,6 +59,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     private opfsMeta: OpfsMetadataService,
     private localIllustrationService: LocalIllustrationService,
     private autoSaveService: RasterAutoSaveService,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
@@ -89,10 +90,12 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
     if (local) this.projectName = local.name;
 
     // ── WebGPU bootstrap ────────────────────────────────────────
+    // OUTSIDE Angular's zone (H8, zone audit), like the illustration editor: the engine's frame loop and timers must not
+    // run app change detection. The awaits resume in the zone, so the state set below is bound as before.
     if (!isRendererLive) {
-      await startWebGPURendering('webgpuCanvas');
+      await this.ngZone.runOutsideAngular(() => startWebGPURendering('webgpuCanvas'));
     } else {
-      await reinitializeWebGPURendering('webgpuCanvas');
+      await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering('webgpuCanvas'));
     }
 
     this._sm = ShapeManager.getInstance();
@@ -124,7 +127,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
       // Load pixel data before enterEditor so the dieline layer already has artwork.
       await this.autoSaveService.loadDocument(this._docId);
 
-      const h = pkg.enterEditor?.(this._pkgId, { layerId: savedPkg.dielineLayerId });
+      const h = this.ngZone.runOutsideAngular(() => pkg.enterEditor?.(this._pkgId!, { layerId: savedPkg.dielineLayerId }));
       this._dielineLayerId = h?.dielineLayerId ?? savedPkg.dielineLayerId ?? null;
       if (h?.canvasWidth)  this._lastDocW = h.canvasWidth;
       if (h?.canvasHeight) this._lastDocH = h.canvasHeight;
@@ -137,7 +140,7 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
       // enterEditor sizes the doc, creates + links the dieline layer, frames + orbits the box,
       // and arms 3D-surface painting — one call replaces the manual setup.
-      const h = pkg.enterEditor?.(this._pkgId);
+      const h = this.ngZone.runOutsideAngular(() => pkg.enterEditor?.(this._pkgId!));
       this._dielineLayerId = h?.dielineLayerId ?? null;
       if (h?.canvasWidth)  this._lastDocW = h.canvasWidth;
       if (h?.canvasHeight) this._lastDocH = h.canvasHeight;
@@ -202,11 +205,19 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
 
   private _syncFoldTween(): void {
     if (this._foldTweenRaf != null) cancelAnimationFrame(this._foldTweenRaf);
+    // rAF callbacks run outside the zone (src/zone-flags.ts): the fold slider follows the tween through this view's
+    // own change detection, once per frame — no app-wide tick.
+    // Settled = the engine's value stopped moving for a few frames. (It was "near 0 or 1", which held on the very first
+    // frame — the eased tween has barely left 0 then — so the slider never followed a fold.)
+    let still = 0;
     const tick = () => {
       const state = this._sm.packaging?.get(this._pkgId!);
-      if (state != null) this.foldAmount = state.foldAmount;
-      const settled = Math.abs(this.foldAmount - Math.round(this.foldAmount)) < 0.002;
-      this._foldTweenRaf = settled ? undefined : requestAnimationFrame(tick);
+      if (state != null && state.foldAmount !== this.foldAmount) {
+        this.foldAmount = state.foldAmount;
+        this.cdr.detectChanges();
+        still = 0;
+      } else still++;
+      this._foldTweenRaf = still >= 10 ? undefined : requestAnimationFrame(tick);
     };
     this._foldTweenRaf = requestAnimationFrame(tick);
   }

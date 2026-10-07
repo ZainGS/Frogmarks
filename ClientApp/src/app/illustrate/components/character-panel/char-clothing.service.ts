@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { CharacterPanelComponent } from './character-panel.component';
 
@@ -15,6 +15,7 @@ export type CharClothingHost = Pick<CharacterPanelComponent,
 @Injectable()
 export class CharClothingService implements OnDestroy {
   private host!: CharClothingHost;
+  constructor(private zone: NgZone) {}
   bind(host: CharClothingHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -200,7 +201,13 @@ export class CharClothingService implements OnDestroy {
     }
   }
 
+  // H7 (zone audit): debounce timers run OUTSIDE the zone — they only push params to the engine, and an in-zone timer
+  // ran an extra app change detection between slider inputs.
   scene3dClothingParamChanged(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
+    this.zone.runOutsideAngular(() => this._clothingParamChanged(slot));
+  }
+
+  private _clothingParamChanged(slot: 'top' | 'bottom' | 'shoes' | 'socks' | 'undershirt' | 'underpants'): void {
     if (slot === 'top') {
       clearTimeout(this._clothingParamTopTimer);
       this._clothingParamTopTimer = setTimeout(() => {

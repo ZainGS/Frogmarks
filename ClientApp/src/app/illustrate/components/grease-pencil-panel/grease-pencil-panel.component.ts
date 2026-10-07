@@ -1,4 +1,5 @@
 import { Component, inject, Input, NgZone, Output, EventEmitter, OnInit, OnChanges, OnDestroy } from '@angular/core';
+import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { Subscription } from 'rxjs';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
@@ -103,11 +104,16 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _subscribe(): void {
     const obs = this.shapeManager?.interactionService?.onSceneGraphChanged;
     if (obs) {
-      this._sub = obs.subscribe(() => this.refreshAll());
+      // Fires per stroke move from the engine's zoneless listeners: one zone entry per frame (at once when in the zone)
+      this._sub = obs.subscribe(() => {
+        if (NgZone.isInAngularZone()) this.refreshAll();
+        else this._sceneFrame.mark('scene');
+      });
     }
   }
+  private readonly _sceneFrame = new FrameCoalescer(() => this.ngZone.run(() => this.refreshAll()));
 
-  private _unsubscribe(): void { this._sub?.unsubscribe(); this._sub = null; }
+  private _unsubscribe(): void { this._sub?.unsubscribe(); this._sub = null; this._sceneFrame.cancel(); }
 
   private _startDrawPlanePoll(): void {
     // Polled outside Angular's zone (audit Phase 5.4: an in-zone 250 ms interval re-checked the whole editor 4× a

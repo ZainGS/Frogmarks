@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, HostListener, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, HostListener, ElementRef, NgZone } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ResultType } from '../../../shared/models/error-result.model';
 import { BoardService } from '../../../shared/services/boards/board.service';
@@ -18,6 +18,7 @@ import { AuthService } from 'app/shared/services/auth/auth.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
 import { toggleAppFullscreen } from 'app/shared/utilities/app-fullscreen';
+import { FrameCoalescer } from 'app/shared/utilities/frame-coalescer';
 
 @Component({
   selector: 'app-board',
@@ -714,7 +715,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
               private boardService: BoardService,
               private router: Router,
               private authService: AuthService,
-              private notifyService: NotifyService) { }
+              private notifyService: NotifyService,
+              private ngZone: NgZone) { }
 
   ngOnInit() {
     // React whenever /board/:id changes (same component instance)
@@ -739,89 +741,15 @@ onNodeFillColorSelected(layerId: string, color: string) {
     this.lastSavedThumbnailJSON = '';
     this.lastThumbnailTime = 0;
 
-    // Ensure WebGPU only initializes if not already running
+    // Ensure WebGPU only initializes if not already running. The boot runs OUTSIDE Angular's zone (H8, zone audit): the
+    // engine's frame loop / timers it starts would otherwise stay zoned and run an app change detection every frame.
+    // The post-boot state (loading flags, subscriptions) is applied back inside the zone, like the illustration editor.
     if (!isRendererLive) {
-      await startWebGPURendering("webgpuCanvas").then(() => {
-        // Get the singleton ShapeManager & WorldManager instances after Salsa has initialized
-        this.shapeManager = ShapeManager.getInstance();
-        this.worldManager = WorldManager.getInstance();
-        this.loadPolygonPresets();
-
-        // Loading screen state:
-        this.markLoaded('renderer');
-        // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
-        const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
-          .subscribe(() => {
-            this.markLoaded('sceneApplied');
-            sceneAppliedOnce.unsubscribe();
-            if(!this.board.isCustomThumbnail) {
-              void this.saveThumbnail();
-            }
-          });
-
-        this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
-          if(this.selectedLayerIds.has(this.hoveredLayerId)) {
-            this.selectedLayerIds = new Set(selectedIds);
-            const selectedId = this.selectedLayerIds.values().next().value;
-            this.selectedNode = this.getNodeById(selectedId);
-          } else {
-            selectedIds = selectedIds.filter(id => id !== this.hoveredLayerId);
-            this.selectedLayerIds = new Set(selectedIds);
-            const selectedId = this.selectedLayerIds.values().next().value;
-            this.selectedNode = this.getNodeById(selectedId);
-          }
-
-          if(selectedIds.length === 1) {
-            var nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
-            this.shapeColor = '#'+nodeColor;
-            this.shapeHexInputDraft = nodeColor; // keep in sync
-          }
-        });
-
-        this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
-          const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
-          const parsed = JSON.parse(currentSceneJSON);
-          this.layerTree = this.buildLayerTree(parsed.root);
-          this.sceneChanged$.next(currentSceneJSON);
-        });
-
-      });
+      await this.ngZone.runOutsideAngular(() => startWebGPURendering("webgpuCanvas"));
     } else {
-      await reinitializeWebGPURendering("webgpuCanvas").then(() => {
-        // Get the singleton ShapeManager & WorldManager instances after Salsa has initialized
-        this.shapeManager = ShapeManager.getInstance();
-        this.worldManager = WorldManager.getInstance();
-        this.loadPolygonPresets();
-
-        // Loading screen state:
-        this.markLoaded('renderer');
-        // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
-        const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
-          .subscribe(() => {
-            this.markLoaded('sceneApplied');
-            sceneAppliedOnce.unsubscribe();
-            if(!this.board.isCustomThumbnail) {
-              void this.saveThumbnail();
-            }
-          });
-
-        this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
-          if(this.selectedLayerIds.has(this.hoveredLayerId)) {
-            this.selectedLayerIds = new Set(selectedIds);
-          } else {
-            selectedIds = selectedIds.filter(id => id !== this.hoveredLayerId);
-            this.selectedLayerIds = new Set(selectedIds);
-          }
-        });
-
-        this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => {
-          const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
-          const parsed = JSON.parse(currentSceneJSON);
-          this.layerTree = this.buildLayerTree(parsed.root);
-          this.sceneChanged$.next(currentSceneJSON);
-        });
-      });
+      await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering("webgpuCanvas"));
     }
+    this.ngZone.run(() => this.afterRendererBoot());
 
     this.canvas = this.canvasRef.nativeElement;
     this.shapeManager.setStrokeWidth(this.strokeWidth);
@@ -950,6 +878,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
     const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
     if (isEditable || this.shapeManager.isTextDrawingInProgress() || this.shapeManager.isSDFTextDrawingInProgress()) return;
+    // A held key acts once (tool switch, fullscreen / UI toggles, delete); zoom keeps zooming while held.
+    if (event.repeat && !['+', '=', '-', '_'].includes(event.key)) return;
     switch (event.key) {
         case "Escape": // Esc → Cursor (Selection Tool)
             this.selectCursor("cursor");
@@ -1473,6 +1403,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
     if (this.selectionChangedSubscription) {
       this.selectionChangedSubscription.unsubscribe();
     }
+    this._sceneGraphChangedSub?.unsubscribe();
+    this._engineEvents.cancel();
 
     if (this.onMouseMove) document.removeEventListener("mousemove", this.onMouseMove);
     if (this.onClick) document.removeEventListener("click", this.onClick);
@@ -1538,6 +1470,75 @@ onNodeFillColorSelected(layerId: string, color: string) {
     }
   }
 
+  /** Engine events (selection / scene graph) fire per pointer move from the engine's zoneless listeners: record them
+   *  and apply them in ONE zone entry per frame (zone audit H5 / H8). */
+  private readonly _engineEvents = new FrameCoalescer<'selection' | 'scene'>(dirty => this.ngZone.run(() => this._flushEngineEvents(dirty)));
+  private _pendingSelectionIds: string[] | null = null;
+  private _sceneGraphChangedSub: { unsubscribe(): void } | null = null;
+
+  private _markEngineEvent(kind: 'selection' | 'scene'): void {
+    this._engineEvents.mark(kind);
+    if (NgZone.isInAngularZone()) this._engineEvents.flushNow();   // raised from Angular code: apply at once, as before
+  }
+
+  private _flushEngineEvents(dirty: ReadonlySet<'selection' | 'scene'>): void {
+    if (dirty.has('selection') && this._pendingSelectionIds) {
+      let selectedIds = this._pendingSelectionIds;
+      this._pendingSelectionIds = null;
+      if(this.selectedLayerIds.has(this.hoveredLayerId)) {
+        this.selectedLayerIds = new Set(selectedIds);
+      } else {
+        selectedIds = selectedIds.filter(id => id !== this.hoveredLayerId);
+        this.selectedLayerIds = new Set(selectedIds);
+      }
+      const selectedId = this.selectedLayerIds.values().next().value;
+      this.selectedNode = this.getNodeById(selectedId);
+
+      if(selectedIds.length === 1) {
+        var nodeColor = this.rgbaToHex(this.shapeManager.getNodeFillColor(selectedIds[0]));
+        this.shapeColor = '#'+nodeColor;
+        this.shapeHexInputDraft = nodeColor; // keep in sync
+      }
+    }
+    if (dirty.has('scene')) {
+      const currentSceneJSON = this.shapeManager.getSceneGraphJSON();
+      const parsed = JSON.parse(currentSceneJSON);
+      this.layerTree = this.buildLayerTree(parsed.root);
+      this.sceneChanged$.next(currentSceneJSON);
+    }
+  }
+
+  /** After (re)booting the renderer: engine singletons, loading flag, engine-event subscriptions. In the zone. */
+  private afterRendererBoot(): void {
+    // Get the singleton ShapeManager & WorldManager instances after Salsa has initialized
+    this.shapeManager = ShapeManager.getInstance();
+    this.worldManager = WorldManager.getInstance();
+    this.loadPolygonPresets();
+
+    // Loading screen state:
+    this.markLoaded('renderer');
+    // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
+    const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
+      .subscribe(() => this.ngZone.run(() => {
+        this.markLoaded('sceneApplied');
+        sceneAppliedOnce.unsubscribe();
+        if(!this.board.isCustomThumbnail) {
+          void this.saveThumbnail();
+        }
+      }));
+
+    this._engineEvents.cancel();
+    this._pendingSelectionIds = null;
+    this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((selectedIds: string[]) => {
+      this._pendingSelectionIds = selectedIds;
+      this._markEngineEvent('selection');
+    });
+
+    // (was re-subscribed on every board switch without ever being released)
+    this._sceneGraphChangedSub?.unsubscribe();
+    this._sceneGraphChangedSub = this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => this._markEngineEvent('scene'));
+  }
+
   isLoading = true;
   private loadingState = {
     renderer: false,
@@ -1546,6 +1547,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
   };
 
   private markLoaded(key: keyof typeof this.loadingState) {
+    // 'sceneApplied' is also marked from requestAnimationFrame callbacks, which run outside the zone (src/zone-flags.ts)
+    if (!NgZone.isInAngularZone()) { this.ngZone.run(() => this.markLoaded(key)); return; }
     this.loadingState[key] = true;
     if (Object.values(this.loadingState).every(Boolean)) {
       this.isLoading = false;

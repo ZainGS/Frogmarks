@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef, NgZone, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { ArmRigService } from './arm-rig.service';
 import { ArmBindingService } from './arm-binding.service';
 import { ArmAnimService } from './arm-anim.service';
@@ -127,28 +128,39 @@ export class ArmaturePanelComponent implements OnInit, OnChanges, OnDestroy {
     // Each service stops its own work (clip / NLA players / polls, library previews) in its ngOnDestroy.
   }
 
+  private readonly _zone = inject(NgZone);
+  /** Scene-graph changes fire per pointer move from the engine's zoneless listeners (bone placement, weight paint, 2D
+   *  drags): apply them in ONE zone entry per frame. Raised from Angular code (in the zone): applied at once. */
+  private readonly _sceneFrame = new FrameCoalescer(() => this._zone.run(() => this._onSceneGraphChanged()));
+
   private _subscribeScene(): void {
     const obs = this.shapeManager?.interactionService?.onSceneGraphChanged;
     if (obs) {
       this._sceneChangeSub = obs.subscribe(() => {
-        this.rig.placementModeActive = this.sm?.isBonePlacementModeActive3D() ?? false;
-        this.binding.wpActive = this.sm?.isWeightPainting3D() ?? this.binding.wpActive;
-        this.refreshAll();
-        this._syncViewportSelection();
-        // Detect root bone head→tail phase transition: joint was added but placement still active
-        if (this.rig.placementPhase === 'head' && this.rig.placementModeActive && this.rig.joints.length > this.rig._placementJointCount) {
-          this.rig.placementPhase = 'tail';
-        }
-        if (!this.rig.placementModeActive) {
-          this.rig.placementPhase = null;
-        }
+        if (NgZone.isInAngularZone()) this._onSceneGraphChanged();
+        else this._sceneFrame.mark('scene');
       });
+    }
+  }
+
+  private _onSceneGraphChanged(): void {
+    this.rig.placementModeActive = this.sm?.isBonePlacementModeActive3D() ?? false;
+    this.binding.wpActive = this.sm?.isWeightPainting3D() ?? this.binding.wpActive;
+    this.refreshAll();
+    this._syncViewportSelection();
+    // Detect root bone head→tail phase transition: joint was added but placement still active
+    if (this.rig.placementPhase === 'head' && this.rig.placementModeActive && this.rig.joints.length > this.rig._placementJointCount) {
+      this.rig.placementPhase = 'tail';
+    }
+    if (!this.rig.placementModeActive) {
+      this.rig.placementPhase = null;
     }
   }
 
   private _unsubscribeScene(): void {
     this._sceneChangeSub?.unsubscribe();
     this._sceneChangeSub = null;
+    this._sceneFrame.cancel();
   }
 
   private _syncViewportSelection(): void {

@@ -17,6 +17,9 @@ export interface KeyBinding {
   mod?: boolean;
   shift?: boolean;
   alt?: boolean;
+  /** Keeps firing while the key is held (keyboard auto-repeat). Default: a held key runs the action ONCE — toggles,
+   *  tool switches, dialogs, duplicate / paste / fill would otherwise fire ~30×/s (zone audit M1). */
+  repeat?: boolean;
   /** Cheatsheet section and text — the cheatsheet is generated from these tables (it used to be hand-written HTML that
    *  drifted from the real bindings). */
   group: CheatsheetGroup;
@@ -148,13 +151,14 @@ export function activeContextPill(ed: Pick<ModeHost, 'decal' | 'meshEdit' | 'ras
 }
 
 export const MOD_KEYMAP: KeyBinding[] = [
-  { keys: ['z', 'Z'], mod: true, group: 'Edit', help: 'Undo (Shift: redo)', run: (ed, e) => {
+  // Undo / redo / zoom repeat while held (step back through history, keep zooming); everything else fires once.
+  { keys: ['z', 'Z'], mod: true, repeat: true, group: 'Edit', help: 'Undo (Shift: redo)', run: (ed, e) => {
     const sm = ed.shapeManager;
     if (!e.shiftKey && sm.canUndo2DShapes) return;   // 2D object stack (engine consumed it)
     if (e.shiftKey && sm.canRedo2DShapes) return;
     undo(ed, e.shiftKey);
   } },
-  { keys: ['y', 'Y'], mod: true, group: 'Edit', help: 'Redo', run: (ed) => {
+  { keys: ['y', 'Y'], mod: true, repeat: true, group: 'Edit', help: 'Redo', run: (ed) => {
     if (ed.shapeManager.canRedo2DShapes) return;
     undo(ed, true);
   } },
@@ -213,8 +217,8 @@ export const TOOL_KEYMAP: KeyBinding[] = [
   { keys: ['p'], group: 'Tools', help: 'Pen / draw', run: (ed) => ed.setActiveTool('drawing:pen') },
   { keys: ['e'], group: 'Tools', help: 'Eraser', run: (ed) => ed.setActiveTool('drawing:eraser') },
   { keys: ['i'], group: 'Tools', help: 'Highlighter', run: (ed) => ed.setActiveTool('drawing:highlighter') },
-  { keys: ['+', '='], group: 'View', help: 'Zoom in', run: (ed) => ed.artboard.zoomIn() },
-  { keys: ['-', '_'], group: 'View', help: 'Zoom out', run: (ed) => ed.artboard.zoomOut() },
+  { keys: ['+', '='], repeat: true, group: 'View', help: 'Zoom in', run: (ed) => ed.artboard.zoomIn() },
+  { keys: ['-', '_'], repeat: true, group: 'View', help: 'Zoom out', run: (ed) => ed.artboard.zoomOut() },
   { keys: ['Delete', 'Backspace'], group: 'Edit', help: 'Delete selection / shape', run: (ed) => ed.deleteSelectionOrLayers() },
   { keys: ['f'], group: 'View', help: 'Fullscreen', run: (ed) => { void ed.toggleFullscreen(); } },
   { keys: ['x'], group: 'View', help: 'Hide / show UI', run: (ed) => ed.toggleUI() },
@@ -253,6 +257,11 @@ export function dispatchKey(table: KeyBinding[], ed: KeymapHost, e: KeyboardEven
     if (b.mod !== undefined && b.mod !== mod) continue;
     if (b.shift !== undefined && b.shift !== e.shiftKey) continue;
     if (b.alt !== undefined && b.alt !== e.altKey) continue;
+    if (e.repeat && !b.repeat) {
+      // A held Ctrl chord stays claimed (no browser Save / Open dialog on the repeats); a plain key just does nothing
+      if (b.mod) { e.preventDefault(); return true; }
+      continue;
+    }
     if (b.run(ed, e) === false) continue;
     e.preventDefault();
     return true;

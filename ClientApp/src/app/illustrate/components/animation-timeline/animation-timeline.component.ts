@@ -564,13 +564,11 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
         const dx = e.clientX - event.clientX;
         this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
         this.kfDragIsCopy = e.altKey;
-        this.cdr.markForCheck();   // a document listener — OnPush doesn't see it on its own
+        this.cdr.detectChanges();   // outside the zone (_listenDrag): re-render this view only
       }
     };
 
     const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
       if (this.kfDragging && this.kfDragGhostFrame !== this.kfDragFromFrame) {
         const sm = this.shapeManager;
         const entry = this.mesh3dAllTracks.find(en => en.meshId === meshId);
@@ -593,8 +591,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       this.cdr.markForCheck();
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    this._listenDrag(onMove, onUp);
   }
 
   closeEasingMenu(): void {
@@ -622,7 +619,24 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     public animService: RasterAnimationService,
     private editorState: EditorStateService,
     private cdr: ChangeDetectorRef,
+    private ngZone: NgZone,
   ) {}
+
+  /** M4 (zone audit): a drag's document mousemove / mouseup listeners. The moves run OUTSIDE the zone — they update
+   *  this OnPush view with a local detectChanges (or through the service subjects, which refresh it the same way) —
+   *  and the mouseup enters it once, so the drop's change detection covers the whole app. */
+  private _listenDrag(onMove: (e: MouseEvent) => void, onUp: (e: MouseEvent) => void): void {
+    const up = (e: MouseEvent) => this.ngZone.run(() => onUp(e));
+    const move = (e: MouseEvent) => onMove(e);
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', function once(e: MouseEvent) {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', once);
+        up(e);
+      });
+    });
+  }
 
   /** Subscriptions are live (BehaviorSubjects replay synchronously in ngOnInit — no view refresh needed then). */
   private _ready = false;
@@ -780,12 +794,8 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       const newFrame = Math.max(1, Math.min(this.frameCount, startFrame + frameDelta));
       this.animService.setCurrentFrame(newFrame);
     };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    // The drop: the zone entry in _listenDrag runs the change detection for the scrubbed frame / range
+    this._listenDrag(onMove, () => {});
   }
 
   onPlayRangeHandleMouseDown(event: MouseEvent, which: 'start' | 'end'): void {
@@ -803,12 +813,8 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
         this.animService.setPlayRange(this.playRangeStart, Math.max(newValue, this.playRangeStart + 1));
       }
     };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    // The drop: the zone entry in _listenDrag runs the change detection for the scrubbed frame / range
+    this._listenDrag(onMove, () => {});
   }
 
   // ── Timeline zoom (ctrl + scroll) ─────────────────────────
@@ -995,13 +1001,11 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
         const dx = e.clientX - event.clientX;
         this.dragGhostFrame = Math.max(1, Math.min(this.frameCount, this.draggingFromFrame + Math.round(dx / this.frameWidth)));
         this.isDragSwap = e.altKey;
-        this.cdr.markForCheck();   // a document listener — OnPush doesn't see it on its own
+        this.cdr.detectChanges();   // outside the zone (_listenDrag): re-render this view only
       }
     };
 
     const onUp = (e: MouseEvent) => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
       if (this.isDragging && this.dragGhostFrame !== this.draggingFromFrame) {
         if (this.isDragSwap) {
           // Swap with whatever cel is at target frame
@@ -1021,8 +1025,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       this.cdr.markForCheck();
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    this._listenDrag(onMove, onUp);
   }
 
   // ── Hold duration drag (right edge of cel block) ──────────
@@ -1051,14 +1054,11 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     };
 
     const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
       this.durationDragging = false;
       this.cdr.markForCheck();
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    this._listenDrag(onMove, onUp);
   }
 
   /** Duplicate current cel to next frame and advance (Ctrl+D) */
@@ -1183,6 +1183,15 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     // Don't capture when typing in inputs
     const tag = (event.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    // A held key (auto-repeat): , / . (prev / next frame) and Alt+, / Alt+. (fps) keep stepping; everything else acts
+    // once — Space toggled play ~30×/s, F5 / F6 added a cel per repeat. Claimed keys stay claimed (no page scroll, F5
+    // reload, Ctrl+D bookmark on the repeats).
+    if (event.repeat && event.key !== ',' && event.key !== '.') {
+      if (event.key === ' ' || event.key === 'F5' || event.key === 'F6' || event.key === 'F7'
+          || ((event.key === 'd' || event.key === 'D') && (event.ctrlKey || event.metaKey))) event.preventDefault();
+      return;
+    }
 
     switch (event.key) {
       case ' ':

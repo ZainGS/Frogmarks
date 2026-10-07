@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { ApplicationRef, Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { UvEditorService } from './uv-editor.service';
@@ -19,7 +19,7 @@ export type CharacterEditHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class CharacterEditService {
   private host!: CharacterEditHost;
-  constructor(private editorState: EditorStateService, private uv: UvEditorService) {}
+  constructor(private editorState: EditorStateService, private uv: UvEditorService, private appRef: ApplicationRef) {}
   bind(host: CharacterEditHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -65,6 +65,9 @@ export class CharacterEditService {
     this.eyeDrawMode  = true;
     this.eyeDrawExprId = exprId;
     setTimeout(() => {
+      // The pane canvas is *ngIf'd on eyeDrawMode; with event coalescing (main.ts) the click's change detection can still
+      // be pending here — render first when the canvas isn't there yet.
+      if (!this.host.uvCanvasRef) this.appRef.tick();
       const uvCanvas = this.host.uvCanvasRef?.nativeElement;
       if (!uvCanvas) return;
       const dpr = window.devicePixelRatio || 1;

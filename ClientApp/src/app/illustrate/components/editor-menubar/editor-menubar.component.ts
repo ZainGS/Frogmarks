@@ -5,6 +5,7 @@ import { ViewportHudService } from '../../services/viewport-hud.service';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
 import { StorageSettingsService } from '../../services/storage-settings.service';
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
+import { SCREEN_CORNER_MAX_PX, ScreenCornerService } from '../../services/screen-corner.service';
 import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
 
 /** Exactly the editor members the menubar uses (compile-time checked against the editor). */
@@ -31,7 +32,12 @@ export class EditorMenubarComponent implements DoCheck {
   /** The Experimental dropdown is open. Kept here (not on the editor) so the editor needs no new member. */
   showExperimentalMenu = false;
   constructor(public files: ProjectFileService, public hud: ViewportHudService, public persist: IllustrationPersistenceService, public storage: StorageSettingsService,
-              public exp: ExperimentalSettingsService) {}
+              public exp: ExperimentalSettingsService, public corners: ScreenCornerService) {}
+
+  /** View › Screen corner radius: the slider's upper end (px). */
+  readonly cornerMaxPx = SCREEN_CORNER_MAX_PX;
+  /** Live slider drag: a fixed radius from now on (Auto is left by moving the slider). */
+  onCornerSlider(e: Event): void { this.corners.setPx(Number((e.target as HTMLInputElement).value)); }
 
   /** The engine handle for the Experimental items (undefined until the renderer has booted). */
   get engine(): EditorMenubarHost['shapeManager'] | undefined { return this.editor?.shapeManager; }

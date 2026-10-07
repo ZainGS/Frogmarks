@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
@@ -15,7 +15,7 @@ export type CreatorHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class CreatorService implements OnDestroy {
   private host!: CreatorHost;
-  constructor() {}
+  constructor(private ngZone: NgZone) {}
   bind(host: CreatorHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -40,7 +40,9 @@ export class CreatorService implements OnDestroy {
     const result = sm.createCreator3D(typeId);
     this.activeCreatorId = result?.id ?? null;
     if (this.activeCreatorId) {
-      sm.enterCreatorStage3D(this.activeCreatorId);
+      const id = this.activeCreatorId;
+      // Outside the zone (H2): the stage's per-frame loop / timers must not run app change detection
+      this.ngZone.runOutsideAngular(() => sm.enterCreatorStage3D(id));
     }
     this.scene3dCreatorPanelOpen = true;
     this.host.scene3dRefreshMeshes();
@@ -56,7 +58,7 @@ export class CreatorService implements OnDestroy {
     this.activeCreatorId = id;
     this.creatorSchemaList = sm.creatorParamSchema3D(typeId) ?? [];
     this.creatorParams = { ...((sm.getCreatorParams3D(id) as any) ?? {}) };
-    sm.enterCreatorStage3D(id);
+    this.ngZone.runOutsideAngular(() => sm.enterCreatorStage3D(id));
     this.scene3dCreatorPanelOpen = true;
     this.host._updateGizmoPosition();
   }

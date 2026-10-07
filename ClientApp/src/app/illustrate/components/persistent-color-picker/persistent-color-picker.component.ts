@@ -1,4 +1,5 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { hexToHSL, hslToHex, lightnessToSbY, sbYToLightness } from '../../utils/color-utils';
 
 /** Always-visible colour picker: hue ring + saturation / brightness square, hex + opacity inputs, recent colours,
@@ -9,7 +10,7 @@ import { hexToHSL, hslToHex, lightnessToSbY, sbYToLightness } from '../../utils/
   templateUrl: './persistent-color-picker.component.html',
   styleUrls: ['./persistent-color-picker.component.scss'],
 })
-export class PersistentColorPickerComponent implements OnChanges {
+export class PersistentColorPickerComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() color = '#000000';
   @Input() secondaryColor = '#ffffff';
   @Input() recentColors: string[] = [];
@@ -21,6 +22,48 @@ export class PersistentColorPickerComponent implements OnChanges {
   @Output() resetColors = new EventEmitter<void>();
   @ViewChild('hueRing') hueRingRef?: ElementRef<HTMLElement>;
   @ViewChild('sbSquare') sbSquareRef?: ElementRef<HTMLElement>;
+  @ViewChild('hueThumb') hueThumbRef?: ElementRef<HTMLElement>;
+  @ViewChild('sbIndicator') sbIndicatorRef?: ElementRef<HTMLElement>;
+
+  constructor(private ngZone: NgZone) {}
+
+  /** M3 (zone audit): the ring / square pointermove is listened OUTSIDE the zone — as template bindings every hover
+   *  move ran an app change detection. While dragging, the thumb / indicator / square hue move by direct style writes
+   *  per move, and the colour is emitted (colorPicked: the editor applies it live) in ONE zone entry per frame;
+   *  pointerup emits the last one at once. */
+  private readonly _dragFrame = new FrameCoalescer(() => this.ngZone.run(() => this._persistentPickerEmit()));
+  private readonly _onRingMoveOutsideZone = (e: PointerEvent): void => {
+    if (!this._hueSelecting) return;
+    if (!this._setHueFromEvent(e)) return;
+    const thumb = this.hueThumbRef?.nativeElement;
+    if (thumb) thumb.style.transform = 'rotate(' + this.persistentHue + 'deg) translateY(-63px)';
+    const sq = this.sbSquareRef?.nativeElement;
+    if (sq) sq.style.background = 'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + this.persistentHue + ', 100%, 50%))';
+    this._dragFrame.mark('hue');
+  };
+  private readonly _onSquareMoveOutsideZone = (e: PointerEvent): void => {
+    if (!this._sbSelecting) return;
+    e.stopPropagation();   // (the square sits inside the ring)
+    if (!this._setSbFromEvent(e)) return;
+    const ind = this.sbIndicatorRef?.nativeElement;
+    if (ind) { ind.style.left = this.persistentSbX + '%'; ind.style.top = this.persistentSbY + '%'; }
+    this._dragFrame.mark('sb');
+  };
+
+  ngAfterViewInit(): void {
+    const ring = this.hueRingRef?.nativeElement;
+    const sq = this.sbSquareRef?.nativeElement;
+    this.ngZone.runOutsideAngular(() => {
+      ring?.addEventListener('pointermove', this._onRingMoveOutsideZone);
+      sq?.addEventListener('pointermove', this._onSquareMoveOutsideZone);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.hueRingRef?.nativeElement.removeEventListener('pointermove', this._onRingMoveOutsideZone);
+    this.sbSquareRef?.nativeElement.removeEventListener('pointermove', this._onSquareMoveOutsideZone);
+    this._dragFrame.cancel();
+  }
   /** The last colour this picker emitted — re-deriving hue from it would snap greys to hue 0 mid-drag. */
   private _lastEmitted: string | null = null;
 
@@ -73,8 +116,10 @@ export class PersistentColorPickerComponent implements OnChanges {
     if (this._hueSelecting) this._updateHueFromEvent(e);
   }
 
-  /** pointerup / pointercancel / lostpointercapture on either area (the square's bubble up to the ring). */
+  /** pointerup / pointercancel / lostpointercapture on either area (the square's bubble up to the ring). The drag's
+   *  last colour is emitted first. */
   onPickerPointerEnd(): void {
+    this._dragFrame.flushNow();
     this._hueSelecting = false;
     this._sbSelecting = false;
   }
@@ -84,14 +129,18 @@ export class PersistentColorPickerComponent implements OnChanges {
   }
 
   _updateHueFromEvent(e: MouseEvent): void {
+    if (this._setHueFromEvent(e)) this._persistentPickerEmit();
+  }
+
+  private _setHueFromEvent(e: MouseEvent): boolean {
     const ring = this.hueRingRef?.nativeElement;   // (was e.target.closest('.hue-ring') — lost the drag off the ring)
-    if (!ring) return;
+    if (!ring) return false;
     const rect = ring.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const angle = Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI) + 90;
     this.persistentHue = ((angle % 360) + 360) % 360;
-    this._persistentPickerEmit();
+    return true;
   }
 
   onSbSquarePointerDown(e: PointerEvent): void {
@@ -111,12 +160,16 @@ export class PersistentColorPickerComponent implements OnChanges {
   }
 
   _updateSbFromEvent(e: MouseEvent): void {
+    if (this._setSbFromEvent(e)) this._persistentPickerEmit();
+  }
+
+  private _setSbFromEvent(e: MouseEvent): boolean {
     const sq = this.sbSquareRef?.nativeElement;
-    if (!sq) return;
+    if (!sq) return false;
     const rect = sq.getBoundingClientRect();
     this.persistentSbX = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     this.persistentSbY = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    this._persistentPickerEmit();
+    return true;
   }
 
   onPersistentHexInput(hex: string): void {

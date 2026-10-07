@@ -2,7 +2,8 @@ import { Component } from '@angular/core';
 import { LayerEffectsService } from '../../services/layer-effects.service';
 import { BAYER_LEVEL_OPTIONS, COLOR_LEVEL_OPTIONS, COLOR_MODE_OPTIONS, HALFTONE_SHAPE_OPTIONS } from 'app/boards/models/brush-preset.model';
 
-/** Misc tool (⚡ Effects): the global dither. A view over LayerEffectsService (refactor-plan 2.10a). */
+/** The whole-canvas (global) dither, shown in the right panel's Global tab ("Global Dither" section).
+ *  A view over LayerEffectsService (refactor-plan 2.10a). */
 @Component({
   selector: 'app-dither-options',
   templateUrl: './dither-options.component.html',

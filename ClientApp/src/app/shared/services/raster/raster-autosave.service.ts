@@ -105,11 +105,13 @@ export class RasterAutoSaveService {
     // Wire Salsa engine auto-save if available
     const sm = this.sm;
     this._engineAutoSave = typeof sm?.enableAutoSave === 'function';
-    sm?.enableAutoSave(docId, name, {
+    // M7: OUTSIDE the zone — the engine's save interval / stroke debounce / playback defer-poll timers would otherwise
+    // each run an app change detection. The save events below re-enter for the indicator.
+    this.ngZone.runOutsideAngular(() => sm?.enableAutoSave(docId, name, {
       intervalMs: this._intervalMs,
       strokeDebounceMs: this._strokeDebounceMs,
       pixelFormat: 'png',
-    });
+    }));
 
     // Subscribe to Salsa save events for UI indicator
     this.sm?.onSaveEvent(

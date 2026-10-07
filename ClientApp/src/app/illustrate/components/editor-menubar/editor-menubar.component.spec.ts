@@ -10,7 +10,7 @@ function makeMenubar() {
   };
   const exp = new ExperimentalSettingsService();
   const none = null as never;   // the File / Edit / View services are not used by the Experimental menu
-  const menubar = new EditorMenubarComponent(none, none, none, none, exp);
+  const menubar = new EditorMenubarComponent(none, none, none, none, exp, none);
   menubar.editor = editor as unknown as EditorMenubarHost;
   return { menubar, editor, exp, sm };
 }

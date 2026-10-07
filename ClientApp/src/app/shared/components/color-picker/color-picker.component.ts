@@ -34,7 +34,8 @@
  * - hslToHex() / hexToHSL(): Format conversion utilities.
  */
 
-import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRef, ViewChild } from '@angular/core';
+import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRef, ViewChild, AfterViewInit, OnDestroy, NgZone } from '@angular/core';
+import { FrameCoalescer } from '../../utilities/frame-coalescer';
 
 @Component({
   selector: 'app-color-picker',
@@ -42,7 +43,7 @@ import { Component, HostListener, OnInit, Output, EventEmitter, Input, ElementRe
   templateUrl: './color-picker.component.html',
   styleUrl: './color-picker.component.scss'
 })
-export class ColorPickerComponent implements OnInit {
+export class ColorPickerComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() colorSelected = new EventEmitter<string>();
   @Output() close = new EventEmitter<void>();
   @Output() opacityChange = new EventEmitter<number>();
@@ -58,8 +59,32 @@ export class ColorPickerComponent implements OnInit {
   isInitializing = true;
   private suppressEmit = false;
   @ViewChild('gradient') gradientRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('indicator') indicatorRef?: ElementRef<HTMLDivElement>;
 
-  constructor(private elRef: ElementRef) {}
+  constructor(private elRef: ElementRef, private ngZone: NgZone) {}
+
+  /** M3 (zone audit): the square's pointermove is listened OUTSIDE the zone — as a template binding every hover move
+   *  ran an app change detection. While dragging, the indicator moves by a direct style write per move and the colour
+   *  is applied (hexColor + colorSelected, so the parent paints live) in ONE zone entry per frame; pointerup applies
+   *  the last one at once. */
+  private readonly _dragFrame = new FrameCoalescer(() => this.ngZone.run(() => this.updateColor()));
+  private readonly _onGradientMoveOutsideZone = (event: PointerEvent): void => {
+    if (!this.isSelecting) return;
+    if (!this._setSbFromEvent(event)) return;
+    const ind = this.indicatorRef?.nativeElement;
+    if (ind) { ind.style.top = this.sbY + '%'; ind.style.left = this.sbX + '%'; }
+    this._dragFrame.mark('move');
+  };
+
+  ngAfterViewInit(): void {
+    const el = this.gradientRef?.nativeElement;
+    if (el) this.ngZone.runOutsideAngular(() => el.addEventListener('pointermove', this._onGradientMoveOutsideZone));
+  }
+
+  ngOnDestroy(): void {
+    this.gradientRef?.nativeElement.removeEventListener('pointermove', this._onGradientMoveOutsideZone);
+    this._dragFrame.cancel();
+  }
 
     @HostListener('document:click', ['$event'])
     onClickOutside(event: MouseEvent) {
@@ -109,24 +134,30 @@ private sbYToLightness(sbY: number, s: number): number {
       this.updateColorFromEvent(event);
   }
 
-  // Update color on drag
+  // Update color on drag (in the zone; the per-move path is _onGradientMoveOutsideZone)
   onGradientPointerMove(event: PointerEvent) {
       if (this.isSelecting) {
           this.updateColorFromEvent(event);
       }
   }
 
-  // Stop selecting on pointerup / pointercancel / lostpointercapture
+  // Stop selecting on pointerup / pointercancel / lostpointercapture (the drag's last colour applies first)
   endColorSelection() {
+      this._dragFrame.flushNow();
       this.isSelecting = false;
   }
 
   // Update color based on cursor position inside SB gradient
   updateColorFromEvent(event: MouseEvent) {
+      if (this._setSbFromEvent(event)) this.updateColor();
+  }
+
+  /** sbX / sbY from a pointer position over the square (false when the square isn't there). */
+  private _setSbFromEvent(event: MouseEvent): boolean {
       // THIS instance's square (was document.querySelector('.color-gradient'): the first picker on the page).
       const gradient = this.gradientRef?.nativeElement;
-      if (!gradient) return;
-      
+      if (!gradient) return false;
+
       const rect = gradient.getBoundingClientRect();
       let x = ((event.clientX - rect.left) / rect.width) * 100;
       let y = ((event.clientY - rect.top) / rect.height) * 100;
@@ -134,7 +165,7 @@ private sbYToLightness(sbY: number, s: number): number {
       // Clamp values within the gradient box
       this.sbX = Math.max(0, Math.min(x, 100));
       this.sbY = Math.max(0, Math.min(y, 100));
-      this.updateColor();
+      return true;
   }
 
   // Updates the selected color (HSL → HEX)

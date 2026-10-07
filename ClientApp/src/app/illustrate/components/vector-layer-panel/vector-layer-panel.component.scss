@@ -11,17 +11,68 @@
 .vector-align-row {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
     padding: 2px 0;
 }
 
-.vector-align-sep {
+.vector-align-gap {
     flex: 1;
 }
 
 .vector-align-label {
     font-size: 9px;
-    color: #777;
+    color: var(--rc-text-label, #777);
     padding: 0 3px;
     white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+// Square bevelled icon buttons (sharp corners, like the rest of the retro-chrome UI).
+.vector-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border-radius: 0;
+    background: var(--rc-surface, #1a1a1a);
+    border: 1px solid;
+    border-color: var(--rc-bevel-lt, #555) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #555);
+    color: var(--rc-text, #d8d8d8);
+    cursor: pointer;
+
+    svg { width: 14px; height: 14px; display: block; }
+
+    &:hover:not(:disabled) { color: var(--rc-green-txt, #9fe0b8); background: var(--rc-surface-hi, #242424); }
+    &:active:not(:disabled) { border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #555) var(--rc-bevel-lt, #555) var(--rc-bevel-dk, #111); }
+    &:focus-visible { outline: 1px solid var(--rc-green-txt, #9fe0b8); outline-offset: 1px; }
+    &:disabled { opacity: 0.35; cursor: default; }
+}
+
+// Per-row delete: a small square trash button at the row's end.
+.vector-row-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 2px;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--rc-text-muted, #8a8a8a);
+    cursor: pointer;
+    flex: none;
+
+    &:hover { color: var(--rc-danger-hi, #ff7777); border-color: var(--rc-bevel-mid, #333); }
+    &:focus-visible { outline: 1px solid var(--rc-green-txt, #9fe0b8); outline-offset: 1px; }
+}
+
+@media (pointer: coarse) {
+    .vector-tool-btn { width: 36px; height: 36px; svg { width: 18px; height: 18px; } }
+    .vector-align-row { gap: 4px; flex-wrap: wrap; }
+    .vector-row-delete { width: 36px; height: 36px; svg { width: 16px; height: 16px; } }
 }

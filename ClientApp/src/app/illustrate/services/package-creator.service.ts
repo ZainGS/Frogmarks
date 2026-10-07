@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { ApplicationRef, Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
 /** What the Package Creator needs from the editor that hosts it. */
@@ -19,6 +19,7 @@ export interface PackageCreatorHost {
 @Injectable()
 export class PackageCreatorService implements OnDestroy {
   private host!: PackageCreatorHost;
+  constructor(private ngZone: NgZone, private appRef: ApplicationRef) {}
   bind(host: PackageCreatorHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager(); }
 
@@ -78,7 +79,8 @@ export class PackageCreatorService implements OnDestroy {
       opts.style = this.pkgStyle;
       this._applyStyleParams(params);
     }
-    const st = sm.packaging?.enterCreatorMode(opts);
+    // Outside the zone (H2): the creator stage's per-frame loop / timers must not run app change detection
+    const st = this.ngZone.runOutsideAngular(() => sm.packaging?.enterCreatorMode(opts));
     if (st?.packageId) {
       this.pkgCreatorId = st.packageId;
       this.pkgFoldAmount = st.foldAmount ?? 0;
@@ -112,23 +114,31 @@ export class PackageCreatorService implements OnDestroy {
       this._pkgDielinePane = null;
     } else if (!this._pkgDielinePane) {
       // Canvas just appeared in the DOM — attach fresh
-      setTimeout(() => this._attachDielinePane(), 0);
+      setTimeout(() => { this._renderPending(); this._attachDielinePane(); }, 0);
     } else {
       // Mode switched but pane already attached; canvas resized → redraw overlay
-      setTimeout(() => this._drawDielinePaneGuides(), 0);
+      setTimeout(() => { this._renderPending(); this._drawDielinePaneGuides(); }, 0);
     }
+  }
+
+  /** The view-mode click's change detection (it adds / resizes the pane canvas) can still be pending when the timeout
+   *  above runs: with event coalescing (main.ts) it waits for the next animation frame. Render it now. */
+  private _renderPending(): void {
+    try { this.appRef.tick(); } catch { /* already rendering */ }
   }
 
   pkgDimChanged(): void {
     if (this._pkgDimDebounce) clearTimeout(this._pkgDimDebounce);
-    this._pkgDimDebounce = setTimeout(() => {
+    // H7: the debounce timer runs outside the zone (it fired between slider inputs and ran an extra app change
+    // detection each time); it only drives the engine + the pane canvas, and re-enters only if the package id changed.
+    this._pkgDimDebounce = this.ngZone.runOutsideAngular(() => setTimeout(() => {
       if (!this.pkgCreatorId) return;
       const params: any = { width: this.pkgWidth, height: this.pkgHeight, depth: this.pkgDepth, bleed: this.pkgBleed };
       this._applyStyleParams(params);
       const s = this.shapeManager.packaging?.setDimensions(this.pkgCreatorId, params);
-      if (s?.id) this.pkgCreatorId = s.id;
+      if (s?.id && s.id !== this.pkgCreatorId) this.ngZone.run(() => { this.pkgCreatorId = s.id; });
       this._drawDielinePaneGuides();
-    }, 40);
+    }, 40));
   }
 
   _applyStyleParams(params: any): void {
@@ -162,11 +172,16 @@ export class PackageCreatorService implements OnDestroy {
 
   private _pkgSyncFoldTween(): void {
     if (this._pkgFoldRaf != null) cancelAnimationFrame(this._pkgFoldRaf);
+    // rAF callbacks run outside the zone (src/zone-flags.ts): the fold slider is bound, so each tween frame that moves it
+    // enters the zone (a ~0.5 s tween; the engine animates the box itself).
+    // Settled = the engine's value stopped moving for a few frames ("near 0 or 1" held on the first frame of the eased
+    // tween, so the slider never followed a fold).
+    let still = 0;
     const tick = () => {
       const st = this.shapeManager.packaging?.get(this.pkgCreatorId!);
-      if (st != null) this.pkgFoldAmount = st.foldAmount;
-      const settled = Math.abs(this.pkgFoldAmount - Math.round(this.pkgFoldAmount)) < 0.002;
-      this._pkgFoldRaf = settled ? undefined : requestAnimationFrame(tick);
+      if (st != null && st.foldAmount !== this.pkgFoldAmount) { this.ngZone.run(() => { this.pkgFoldAmount = st.foldAmount; }); still = 0; }
+      else still++;
+      this._pkgFoldRaf = still >= 10 ? undefined : requestAnimationFrame(tick);
     };
     this._pkgFoldRaf = requestAnimationFrame(tick);
   }

@@ -121,6 +121,18 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
 
   @ViewChild('clothGridCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('previewCanvas') previewCanvasRef?: ElementRef<HTMLCanvasElement>;
+  /** M3 (zone audit): the grid canvas mousemove (cell painting, stitch hover) is listened OUTSIDE the zone — it only
+   *  redraws the canvas and debounces engine resets, and as a template binding every hover move ran an app change
+   *  detection. mousedown / mouseup stay template bindings (they change bound state). */
+  private _gridMoveEl: HTMLCanvasElement | null = null;
+  @ViewChild('clothGridCanvas') set gridCanvasMoveRef(ref: ElementRef<HTMLCanvasElement> | undefined) {
+    const el = ref?.nativeElement ?? null;
+    if (el === this._gridMoveEl) return;
+    this._gridMoveEl?.removeEventListener('mousemove', this._onGridMoveOutsideZone);
+    this._gridMoveEl = el;
+    if (el) this.ngZone.runOutsideAngular(() => el.addEventListener('mousemove', this._onGridMoveOutsideZone));
+  }
+  private readonly _onGridMoveOutsideZone = (e: MouseEvent): void => this.onCanvasMouseMove(e);
 
   // ── Grid state ─────────────────────────────────────────────
   cols = 8;
@@ -225,6 +237,8 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
 
   ngOnDestroy(): void {
     this._destroyHandle();
+    this._gridMoveEl?.removeEventListener('mousemove', this._onGridMoveOutsideZone);
+    this._gridMoveEl = null;
   }
 
   ngAfterViewInit(): void {

@@ -1,20 +1,19 @@
 <!-- Main picker: hue ring + swatch -->
 <div class="picker-main">
+    <!-- pointermove on the ring / square is listened outside the zone (PersistentColorPickerComponent.ngAfterViewInit) -->
     <div class="hue-ring" #hueRing
          (pointerdown)="onHueRingPointerDown($event)"
-         (pointermove)="onHueRingPointerMove($event)"
          (pointerup)="onPickerPointerEnd()"
          (pointercancel)="onPickerPointerEnd()"
          (lostpointercapture)="onPickerPointerEnd()">
-        <div class="hue-ring-thumb"
+        <div class="hue-ring-thumb" #hueThumb
              [style.transform]="'rotate(' + persistentHue + 'deg) translateY(-63px)'">
         </div>
         <!-- SB square inside the ring -->
         <div class="sb-square" #sbSquare
              [style.background]="'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(' + persistentHue + ', 100%, 50%))'"
-             (pointerdown)="onSbSquarePointerDown($event)"
-             (pointermove)="onSbSquarePointerMove($event)">
-            <div class="sb-indicator"
+             (pointerdown)="onSbSquarePointerDown($event)">
+            <div class="sb-indicator" #sbIndicator
                  [style.left.%]="persistentSbX"
                  [style.top.%]="persistentSbY">
             </div>

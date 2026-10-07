@@ -46,6 +46,8 @@ import { StorageSettingsService } from '../../services/storage-settings.service'
 import { SceneAddService } from '../../services/scene-add.service';
 import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
+import { rasterLayerSignature } from '../../utils/raster-layer-signature';
+import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
 import { activeContextPill, canRouteDuplicate, cheatsheetColumns, ContextPillSpec, dispatchKey, MOD_KEYMAP, MODE_ACTIONS, routeDelete,
   routeDuplicate, routeUndo, TOOL_KEYMAP } from './editor-keymap';
 import { TouchUiService } from '../../services/touch-ui.service';
@@ -86,6 +88,9 @@ import {
   SelectionTool, CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS, ArrowheadStyle,
   ARROWHEAD_OPTIONS,
 } from 'app/boards/models/brush-preset.model';
+
+/** The engine events the editor coalesces to one change detection per frame (H5). */
+type EngineEventKind = 'selection' | 'shapeSelection' | 'scene';
 
 /**
  * The Illustration editor shell: engine boot, selection, tool switching, canvas pointer routing, view modes and
@@ -153,6 +158,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   @ViewChild('uiPanel') uiPanel?: UiSystemPanelComponent;
   @ViewChild('skinsPanel') skinsPanel?: SkinsPanelComponent;
   @ViewChild('webgpuCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  /** The 3D rotation-drag degree label (the HUD service writes it directly while dragging, M2). */
+  @ViewChild('angleLabel') angleLabelRef?: ElementRef<HTMLDivElement>;
   @ViewChild('handleCanvas') handleCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('uvCanvas') uvCanvasRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild('pkgDielinePane')  pkgDiePaneRef?: ElementRef<HTMLCanvasElement>;
@@ -186,6 +193,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event']) onCtrlSnapKeyDown(e: KeyboardEvent) {
     if (this.shapeManager?.isPlaying3D) return;   // Play owns the keyboard (Ctrl = sneak, not the snap indicator)
+    // Held Ctrl: the badge is already on (each repeat re-entered the zone). Held transform keys: G / R / S / X / Y / Z /
+    // Enter / Esc act once (a repeat restarted the transform or flipped the axis); digits keep repeating like typing.
+    if (e.repeat && (e.key === 'Control' || !/^[\d.\-]$/.test(e.key))) return;
     if (e.key === 'Control') this.hud.snapKeyDown();
     if (this.editorState.scene3dPanelVisible && this.editorState.scene3dSelectedMeshId) this.hud.handleTransformKey(e);
   }
@@ -755,12 +765,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dTogglePlay(): void {
     const sm = this.shapeManager;
+    // H1: enter / exit OUTSIDE the zone — the game loop and the mouse-look / keyboard listeners Play installs must not
+    // run app change detection per frame / per key. The UI follows through onPlayStateChanged3D (enters the zone).
     if (sm.isPlaying3D) {
-      sm.exitPlayMode3D();
+      this.ngZone.runOutsideAngular(() => sm.exitPlayMode3D());
     } else {
       // Touch (mobile-parity TOUCH-4): no pointer-lock mouse-look (it doesn't work on Android); the Play touch
       // overlay's right-half drag feeds lookYaw / lookPitch instead.
-      sm.enterPlayMode3D({ config: { cameraMode: this.scene3dPlayCameraMode }, ...(this.touchUi.coarse ? { mouseLook: false } : {}) });
+      const opts = { config: { cameraMode: this.scene3dPlayCameraMode }, ...(this.touchUi.coarse ? { mouseLook: false } : {}) };
+      this.ngZone.runOutsideAngular(() => sm.enterPlayMode3D(opts));
     }
   }
 
@@ -1100,6 +1113,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // select, or clear the selection (they did: every orbit / pan start selected the mesh under the cursor, or
     // deselected on empty space). Also covers the knife start, UV stamp and ribbon-handle grab below.
     if (event.button !== 0 || event.altKey) return;
+    // mobile-parity 7.3b P5: a second finger is always a camera gesture (pinch / two-finger orbit) — never a pick.
+    if (event.pointerType === 'touch' && event.isPrimary === false) return;
     const canvas = this.canvasRef?.nativeElement;
     if (!canvas) return;
     const sm = this.shapeManager;
@@ -1119,6 +1134,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       }
       return;
     }
+
+    // 0c. mobile-parity 7.3b P5: UV paint / the UV editor owns left presses on the 3D view — Salsa's surface input
+    // paints the mesh (and, for a finger, lets the press through so the orbit controller can pinch). No full-scene
+    // pick here: it cost a raycast of every mesh per press and selected / deselected under the brush.
+    if (this.uv.uvEditorOpen || sm.isUVPaintActive3D?.()) return;
 
     // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
     if (this.ribbon.tryBeginHandleDrag(event, canvas)) return;
@@ -1158,14 +1178,26 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const pts = this.ribbon.scene3dRibbonControlPoints;
     this.scene3dCanvasPointerMove(event);
     if (this.ribbon.scene3dRibbonControlPoints !== pts) { this._scheduleZoneTick(); return; }
-    if (event.buttons !== 0 && !this.scene3dViewIsPlaying && !this._isRasterStrokeTool()) this._scheduleZoneTick();
+    if (event.buttons !== 0 && !this.scene3dViewIsPlaying && !this._isRasterStrokeTool() && !this._dragSkipsZoneTick(event)) this._scheduleZoneTick();
   };
+  /** mobile-parity 7.3b P6: drags that bind nothing per move skip the per-frame change detection too — UV paint (the
+   *  stroke draws engine-side) and a touch camera gesture (pinch / two-finger orbit). The pointerup binding still
+   *  runs one change detection when the drag ends. */
+  private _dragSkipsZoneTick(event: PointerEvent): boolean {
+    const sm = this.shapeManager;
+    if (!sm) return false;
+    if (sm.isUVPaintActive3D?.()) return true;
+    if (event.pointerType !== 'touch') return false;
+    const orbit = sm.getOrbitController?.();
+    return !!orbit && (orbit.isTouchGesturing || orbit.activeTouchCount >= 2);
+  }
   private _canvasPointerMoveEl: HTMLCanvasElement | null = null;
   private _zoneTickRaf = 0;
   /** One change detection on the next animation frame (coalesces the per-move re-entries). Called outside the zone,
    *  so the rAF callback is outside too and enters the zone exactly once. */
   private _scheduleZoneTick(): void {
-    if (this._zoneTickRaf) return;
+    // A pending engine-event flush (H5) or artboard-overlay update already runs this frame's change detection
+    if (this._zoneTickRaf || this._engineEvents.pending || this.artboard.overlayUpdatePending) return;
     this._zoneTickRaf = requestAnimationFrame(() => {
       this._zoneTickRaf = 0;
       this.ngZone.run(() => { /* change detection for the state the moves changed */ });
@@ -1723,7 +1755,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         const ring = this.brushCursorRingRef?.nativeElement;
         if (ring) ring.style.transform = this.brushCursorTransform;
       }
-      if (this.draw.selectedShapeType) this.ngZone.run(() => this.shapeManager.updatePreviewShapePosition(event));
+      // H6: engine-only (moves the preview shape + schedules a render; no events, no bound state) — no zone entry
+      if (this.draw.selectedShapeType) this.shapeManager.updatePreviewShapePosition(event);
     };
     this.ngZone.runOutsideAngular(() => {
       document.addEventListener('pointermove', this.onMouseMove);
@@ -1731,7 +1764,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       const cv = this.canvasRef?.nativeElement ?? null;
       if (cv && this._canvasPointerMoveEl !== cv) {
         this._canvasPointerMoveEl?.removeEventListener('pointermove', this._canvasPointerMoveOutsideZone);
+        this._canvasPointerMoveEl?.removeEventListener('pointerup', this._flushEngineEventsOnPointerUp);
         cv.addEventListener('pointermove', this._canvasPointerMoveOutsideZone);
+        // After the engine's pointerup listener (it attached at boot): the drag's last coalesced events apply now (H5)
+        cv.addEventListener('pointerup', this._flushEngineEventsOnPointerUp);
         this._canvasPointerMoveEl = cv;
       }
     });
@@ -1805,6 +1841,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   private _sceneAppliedOnceSub: { unsubscribe(): void } | null = null;
   private _teardownEngineSubs(): void {
     this.engineStatus.teardown();
+    this._engineEvents.cancel();
+    this._pendingSelectionIds = this._pendingShapeSelectionIds = null;
+    this._layerSignature = null;
     for (const sub of [this._sceneAppliedOnceSub, this._cityBuildSub, this.selectionChangedSubscription, this.selectionToolSubscription,
                        this._sceneGraphChangedSub, this._rasterLayersSub, this._rasterActiveLayerSub, this._currentFrameSub,
                        this._viewStateSub, this._playStateSub, this._cameraCutsSub, this.rasterStrokeSubscription]) {
@@ -1821,7 +1860,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   private _removeInputListeners(): void {
     if (this.onMouseMove) document.removeEventListener('pointermove', this.onMouseMove);
     if (this._zoneTickRaf) { cancelAnimationFrame(this._zoneTickRaf); this._zoneTickRaf = 0; }
-    this._canvasPointerMoveEl?.removeEventListener('pointermove', this._canvasPointerMoveOutsideZone); this._canvasPointerMoveEl = null;
+    this._canvasPointerMoveEl?.removeEventListener('pointermove', this._canvasPointerMoveOutsideZone);
+    this._canvasPointerMoveEl?.removeEventListener('pointerup', this._flushEngineEventsOnPointerUp); this._canvasPointerMoveEl = null;
     if (this.onClick) document.removeEventListener('click', this.onClick);
     if (this.onDblClick) this.canvas?.removeEventListener('dblclick', this.onDblClick);
     if (this.onKeyDown) window.removeEventListener('keydown', this.onKeyDown);
@@ -1880,14 +1920,19 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       }
     ) ?? null;
 
-    this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((ids: string[]) =>
-      this.ngZone.run(() => this._onEngineSelectionChanged(ids)));
+    // H5 (zone audit): selection / scene-graph / shape-selection events fire per pointer move during a 2D drag or a
+    // marquee (box-select emits 1+N per move). Each one only records what changed; ONE flush per frame applies them in
+    // ONE change detection (_engineEvents). An event raised from Angular code (in the zone: a panel click, undo, a
+    // load) is still applied synchronously, as before, so code right after the engine call sees the new state.
+    this.selectionChangedSubscription = this.shapeManager.interactionService.onSelectionChanged.subscribe((ids: string[]) => {
+      this._pendingSelectionIds = ids;
+      this._markEngineEvent('selection');
+    });
 
     // Sync controlPanelActiveTool when the selection toolbar component changes the tool
     this.selectionToolSubscription = this.rasterSelectionService.tool$.subscribe((tool: string) => this._onSelectionToolChanged(tool));
 
-    this._sceneGraphChangedSub = this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() =>
-      this.ngZone.run(() => this._onSceneGraphChanged()));
+    this._sceneGraphChangedSub = this.shapeManager.interactionService.onSceneGraphChanged.subscribe(() => this._markEngineEvent('scene'));
 
     this._rasterLayersSub = this.rasterBrushService.layers$.subscribe(layers => this._onRasterLayers(layers));
 
@@ -1911,23 +1956,66 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._cameraCutsSub = this.shapeManager.onCameraCutsChanged3D?.subscribe(() => {
       this.ngZone.run(() => this.anim.scene3dRefreshCuts());
     });
+    // Only state changes are handled: shape hovers / variable changes (per move, per tick) don't enter the zone.
     this._uiEventOff = this.shapeManager.onUIEvent((e: any) => {
+      if (e?.type !== 'stateChange') return;
       this.ngZone.run(() => this._handleUIEvent(e));
     }) ?? null;
-    this._uiSelectionOff = this.shapeManager.onShapeSelectionChanged((ids: string[]) => this.ngZone.run(() => this._onShapeSelectionChanged(ids))) ?? null;
+    this._uiSelectionOff = this.shapeManager.onShapeSelectionChanged((ids: string[]) => {
+      this._pendingShapeSelectionIds = ids;
+      this._markEngineEvent('shapeSelection');
+    }) ?? null;
+    // Fires per node drag; only the on / off state is bound, so enter the zone only when it flips.
     this._pathEditedOff = (this.shapeManager.onPathEdited((path: any) => {
-      this.ngZone.run(() => { this.isPathEditActive = path != null; });
+      const active = path != null;
+      if (active === this.isPathEditActive) return;
+      if (NgZone.isInAngularZone()) this.isPathEditActive = active;
+      else this.ngZone.run(() => { this.isPathEditActive = active; });
     }) as any) ?? null;
 
     // Subscribe to raster stroke end to trigger auto-save (raster drawing bypasses scene graph events)
     try {
-      const rasterSub = this.shapeManager.onRasterStrokeEnd(() => this._onRasterStrokeEnd());
+      // Fires from the engine's (zoneless) pointerup: enter the zone, the recent-colour strip is bound. Once per stroke.
+      const rasterSub = this.shapeManager.onRasterStrokeEnd(() => this.ngZone.run(() => this._onRasterStrokeEnd()));
       if (rasterSub) this.rasterStrokeSubscription = rasterSub as any;
     } catch (e) {
       console.warn('Failed to subscribe to raster stroke end', e);
     }
 
     this._configureEngineForIllustration();
+  }
+
+  /** H5: engine events recorded since the last flush; applied once per frame (or at once when raised in the zone). */
+  private readonly _engineEvents = new FrameCoalescer<EngineEventKind>(dirty => this.ngZone.run(() => this._flushEngineEvents(dirty)));
+  /** The latest ids of the coalesced selection events (only the last set of a burst matters). */
+  private _pendingSelectionIds: string[] | null = null;
+  private _pendingShapeSelectionIds: string[] | null = null;
+  /** rasterLayerSignature() when the layer list was last refreshed (null = refresh on the next scene-graph change). */
+  private _layerSignature: string | null = null;
+
+  private _markEngineEvent(kind: EngineEventKind): void {
+    this._engineEvents.mark(kind);
+    if (NgZone.isInAngularZone()) this._engineEvents.flushNow();
+  }
+
+  /** Canvas pointerup, registered after the engine's own listener: apply the drag's last events in this task. */
+  private readonly _flushEngineEventsOnPointerUp = (): void => {
+    if (this._engineEvents.pending) this.ngZone.run(() => this._engineEvents.flushNow());
+  };
+
+  /** Selection first (the scene-graph handler re-reads inspectors for the selected item), then the scene graph. */
+  private _flushEngineEvents(dirty: ReadonlySet<EngineEventKind>): void {
+    if (dirty.has('selection') && this._pendingSelectionIds) {
+      const ids = this._pendingSelectionIds;
+      this._pendingSelectionIds = null;
+      this._onEngineSelectionChanged(ids);
+    }
+    if (dirty.has('shapeSelection') && this._pendingShapeSelectionIds) {
+      const ids = this._pendingShapeSelectionIds;
+      this._pendingShapeSelectionIds = null;
+      this._onShapeSelectionChanged(ids);
+    }
+    if (dirty.has('scene')) this._onSceneGraphChanged();
   }
 
   /** Engine selection changed: layer-panel selection, 2D sidebars (colour / balloon / live text), 3D type flags,
@@ -2006,7 +2094,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       this.draw.addRecentColor(this.draw.selectedPenColor);
     }
     if (!this._suppressLayerTreeRebuild) {
-      this.refreshRasterLayers();
+      // A move / rotate / scale changes no layer: refresh the Layers panel + timeline only when what they show changed
+      const sig = rasterLayerSignature(this.shapeManager);
+      if (sig !== this._layerSignature) {
+        this._layerSignature = sig;
+        this.refreshRasterLayers();
+      }
       this.persist.sceneChanged$.next('__scene_' + Date.now());
     }
 
@@ -2055,6 +2148,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   private _onRasterLayers(layers: any): void {
+    // Whoever refreshed the list (a panel action, a load, the scene-graph handler), the panels now show the engine's
+    // current layers: that is the state the next scene-graph change compares against.
+    this._layerSignature = rasterLayerSignature(this.shapeManager);
     this._applyRasterLayers(layers);
   }
 
@@ -2273,7 +2369,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       tool.startsWith('select') || tool.startsWith('polygon') ||
       tool === 'fill' || tool === 'stamp' || tool === 'arrow' ||
       tool === 'raster:text' || tool === 'balloon' || tool === 'live-text' ||
-      tool === 'panel-layout' || tool === 'misc';
+      tool === 'panel-layout';
   }
 
   /** Retro-chrome theme: dither the tool-options panel in (utils/dither-reveal). */
@@ -2706,6 +2802,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sceneApplied: false
   };
   markLoaded(key: keyof typeof this.loadingState) {
+    // The load paths mark 'sceneApplied' from a requestAnimationFrame callback, which runs OUTSIDE the zone (rAF is not
+    // patched, src/zone-flags.ts): enter it, the loading overlay and the after-load steps are bound state.
+    if (!NgZone.isInAngularZone()) { this.ngZone.run(() => this.markLoaded(key)); return; }
     this.loadingState[key] = true;
     if (Object.values(this.loadingState).every(Boolean)) {
       this.isLoading = false;

@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { CharacterPanelComponent } from './character-panel.component';
 
@@ -15,6 +15,7 @@ export type CharCharmsHost = Pick<CharacterPanelComponent,
 @Injectable()
 export class CharCharmsService implements OnDestroy {
   private host!: CharCharmsHost;
+  constructor(private zone: NgZone) {}
   bind(host: CharCharmsHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -105,15 +106,16 @@ export class CharCharmsService implements OnDestroy {
     if (!id) return;
     this.scene3dPlacingCharmType = type;
     this._showCharmPreview();
+    // The pick callbacks fire from the engine's zoneless capture pointerdown: the charm lists / accordion are bound
     sm.beginAttachmentPlacePick3D(id, type as any, {
-      onPlaced: (placedId: string) => {
+      onPlaced: (placedId: string) => this.zone.run(() => {
         this.scene3dRefreshAttachments();
         if (placedId) {
           this.scene3dAccordionOpen[type] = true;
           this._openCharm(placedId, type);
         }
         this.host.dirty.emit();
-      },
+      }),
     });
   }
 
@@ -138,7 +140,7 @@ export class CharCharmsService implements OnDestroy {
     this.scene3dDrawingChain = true;
     this.scene3dChainPickProgress = 'first';
     sm.beginChainPick3D(id, {
-      onPlaced: (chainId: string) => {
+      onPlaced: (chainId: string) => this.zone.run(() => {
         this.scene3dDrawingChain = false;
         this.scene3dChainPickProgress = null;
         this.scene3dRefreshAttachments();
@@ -147,10 +149,10 @@ export class CharCharmsService implements OnDestroy {
           this._openCharm(chainId, 'chain');
         }
         this.host.dirty.emit();
-      },
-      onProgress: (p: 'first' | 'second') => {
+      }),
+      onProgress: (p: 'first' | 'second') => this.zone.run(() => {
         this.scene3dChainPickProgress = p;
-      },
+      }),
     });
   }
 
@@ -266,10 +268,12 @@ export class CharCharmsService implements OnDestroy {
 
   scene3dAttachmentParamChanged(attachId: string, params: any): void {
     clearTimeout(this._attachmentParamTimers.get(attachId));
-    this._attachmentParamTimers.set(attachId, setTimeout(() => {
+    // H7: the debounce runs outside the zone; dirty (autosave tick) is emitted from it and the autosave re-enters the
+    // zone itself when it saves (illustration-persistence).
+    this._attachmentParamTimers.set(attachId, this.zone.runOutsideAngular(() => setTimeout(() => {
       this.shapeManager.setAttachmentParams3D(attachId, params);
       this.host.dirty.emit();
-    }, 30));
+    }, 30)));
   }
 
   scene3dSetAttachmentPlacement(attachId: string, field: string, value: any): void {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnDestroy, OnInit, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import {
@@ -174,7 +174,7 @@ export class SkinBuilderComponent implements OnInit, OnDestroy {
   private hadSkinOnOpen = false;
   private _inspectorSub?: Subscription;
 
-  constructor(public skinService: FroguiSkinService, private skinInspector: SkinInspectorService) {}
+  constructor(public skinService: FroguiSkinService, private skinInspector: SkinInspectorService, private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.skinInspector.openPanel();
@@ -198,6 +198,7 @@ export class SkinBuilderComponent implements OnInit, OnDestroy {
         const groupIndex = FM_ICON_GROUPS.findIndex(g => g.icons.includes(name));
         if (groupIndex >= 0) this.activeIconGroup = groupIndex;
         setTimeout(() => {
+          this.cdr.detectChanges();   // the group switch above must be rendered (event coalescing defers the click's CD)
           const input = document.getElementById(`fm-icon-input-${name}-${this.iconState}`) as HTMLInputElement | null;
           input?.click();
         });

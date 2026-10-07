@@ -1057,7 +1057,9 @@ svg {
         backdrop-filter: blur(10px);
         padding: 28px 24px 20px;
         z-index: 999;
-        transform: translateX(-100%);
+        /* Closed: slide fully off-screen (past the rail, not parked under it): Toggle UI hides the rail, and a
+           panel parked at -100% left a blank strip where the rail had been covering it. */
+        transform: translateX(calc(-100% - 75px));
         transition: transform 0.3s ease;
     }
 
@@ -1163,7 +1165,9 @@ svg {
     backdrop-filter: blur(10px);
     padding: 28px 24px 20px;
     z-index: 999;
-    transform: translateX(-100%);
+    /* Closed: slide fully off-screen past the 70 px rail (left: 70px), not parked under it. Toggle UI hides the rail,
+       and a panel parked at -100% showed its last 70 px as a blank strip at the left edge. */
+    transform: translateX(calc(-100% - 70px));
     transition: transform 0.3s ease;
 
     scrollbar-width: thin;

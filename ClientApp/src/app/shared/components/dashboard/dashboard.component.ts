@@ -118,7 +118,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, AfterViewCheck
     this.editingId = item.uuid;
     this.nameControl.setValue(item.name);
     // focus after view updates
-    setTimeout(() => this.renameInputs?.find(_=>true)?.nativeElement?.focus(), 0);
+    // (with event coalescing the click's change detection can still be pending here: render the input first)
+    setTimeout(() => { this.cdr.detectChanges(); this.renameInputs?.find(_=>true)?.nativeElement?.focus(); }, 0);
   }
 
   commitInlineRename(item: DashboardItem) {
@@ -449,6 +450,7 @@ onEsc() { this.closeContextMenu(); }
 onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.shiftKey && e.key === 'D') {
     e.preventDefault();
+    if (e.repeat) return;   // a held chord toggled the dev panel on / off per repeat
     this.showDevPanel = !this.showDevPanel;
   }
 }

@@ -185,6 +185,22 @@
             <span>{{ hud.screencastKeysEnabled ? '✓ Screencast Keys' : 'Screencast Keys' }}</span>
         </div>
         <div class="edit-menu-divider"></div>
+        <!-- Screen corner radius (ScreenCornerService): rounds the green border's bottom-right + the tool rail's top-left
+             to a tablet's rounded screen corners, in fullscreen only. Changes apply live and keep the menu open. -->
+        <div class="corner-setting" title="Rounds the bottom-right and top-left corners to match a rounded screen. Applies in full screen only. Remembered on this device.">
+            <div class="corner-setting-head">
+                <span>Screen corner radius</span>
+                <span class="corner-setting-value">{{ corners.isAuto ? 'Auto · ' : '' }}{{ corners.sliderPx }} px</span>
+            </div>
+            <div class="corner-setting-row">
+                <button type="button" class="exp-segment-btn corner-auto-btn" [class.active]="corners.isAuto"
+                        [attr.aria-pressed]="corners.isAuto" (click)="corners.setAuto()">Auto</button>
+                <input type="range" class="corner-slider" min="0" [max]="cornerMaxPx" step="1" [value]="corners.sliderPx"
+                       aria-label="Screen corner radius in pixels" (input)="onCornerSlider($event)">
+            </div>
+            <div class="exp-hint">{{ corners.edgeToEdge ? 'In use now: ' + corners.effectivePx + ' px' : 'Not in use: only applies in full screen' }}</div>
+        </div>
+        <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.toggleRetroTheme(); editor.closeAllMenus()">
             <span>Retro Chrome</span>
             <span class="shortcut" *ngIf="editor.retroThemeActive">✓</span>

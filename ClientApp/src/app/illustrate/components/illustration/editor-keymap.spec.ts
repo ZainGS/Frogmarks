@@ -3,8 +3,8 @@ import {
   routeDuplicate, routeUndo, TOOL_KEYMAP,
 } from './editor-keymap';
 
-function key(k: string, mods: { shift?: boolean; alt?: boolean } = {}): KeyboardEvent {
-  return new KeyboardEvent('keydown', { key: k, shiftKey: !!mods.shift, altKey: !!mods.alt, cancelable: true });
+function key(k: string, mods: { shift?: boolean; alt?: boolean; repeat?: boolean } = {}): KeyboardEvent {
+  return new KeyboardEvent('keydown', { key: k, shiftKey: !!mods.shift, altKey: !!mods.alt, repeat: !!mods.repeat, cancelable: true });
 }
 
 describe('editor keymap', () => {
@@ -36,6 +36,37 @@ describe('editor keymap', () => {
       expect(dispatchKey(table, ed, key('S', { shift: true }), true)).toBeFalse();   // shift forbidden
       expect(dispatchKey(table, ed, key('s'), true)).toBeTrue();
       expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it('a held key (auto-repeat) runs a binding once unless it is marked repeat', () => {
+      const once = jasmine.createSpy('once');
+      const held = jasmine.createSpy('held');
+      const table: KeyBinding[] = [
+        { keys: ['x'], group: 'Edit', help: '', run: once },
+        { keys: ['+'], repeat: true, group: 'View', help: '', run: held },
+      ];
+      dispatchKey(table, ed, key('x'), false);
+      const rep = key('x', { repeat: true });
+      expect(dispatchKey(table, ed, rep, false)).toBeFalse();   // plain key: nothing, the default isn't claimed
+      expect(rep.defaultPrevented).toBeFalse();
+      expect(once).toHaveBeenCalledTimes(1);
+      dispatchKey(table, ed, key('+'), false);
+      dispatchKey(table, ed, key('+', { repeat: true }), false);
+      expect(held).toHaveBeenCalledTimes(2);
+    });
+
+    it('a held Ctrl chord stays claimed on the repeats (no browser default) but runs once', () => {
+      const run = jasmine.createSpy('save');
+      const table: KeyBinding[] = [{ keys: ['s'], mod: true, group: 'File', help: '', run }];
+      const rep = key('s', { repeat: true });
+      expect(dispatchKey(table, ed, rep, true)).toBeTrue();
+      expect(rep.defaultPrevented).toBeTrue();
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    it('the real tables: undo / redo / zoom repeat; save, paste, duplicate, toggles and tools do not', () => {
+      const repeatable = [...MOD_KEYMAP, ...TOOL_KEYMAP].filter(b => b.repeat).map(b => b.help).sort();
+      expect(repeatable).toEqual(['Redo', 'Undo (Shift: redo)', 'Zoom in', 'Zoom out']);
     });
 
     it('matches event.key case-sensitively', () => {

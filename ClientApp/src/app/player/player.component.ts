@@ -83,15 +83,17 @@ export class PlayerComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.errorMsg  = '';
     try {
+      // Engine boot / load / mode entry run OUTSIDE Angular's zone (H8, zone audit): the timers and listeners they start
+      // must not run app change detection. The awaits resume in the zone, so the state below is still bound normally.
       if (!isRendererLive) {
-        await startWebGPURendering('playerCanvas');
+        await this.ngZone.runOutsideAngular(() => startWebGPURendering('playerCanvas'));
       } else {
-        await reinitializeWebGPURendering('playerCanvas');
+        await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering('playerCanvas'));
       }
       this._sm = ShapeManager.getInstance();
       await this._sm.whenWebGPUReady();
 
-      const result = await this._sm.importFrogcart(blob);
+      const result = await this.ngZone.runOutsideAngular(() => this._sm.importFrogcart(blob));
       if (!result) throw new Error('importFrogcart returned null');
 
       this.cartTitle  = result.manifest?.title  ?? '';
@@ -102,7 +104,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
       // (was result.config — never existed, so the cart's configured initial state was always ignored)
       const initialState = deepState ?? result.playerConfig?.initialState ?? undefined;
 
-      this._sm.enterUIPlayerMode(initialState);
+      this.ngZone.runOutsideAngular(() => this._sm.enterUIPlayerMode(initialState));
       this._wireBridge();
 
       this.isLoaded = true;

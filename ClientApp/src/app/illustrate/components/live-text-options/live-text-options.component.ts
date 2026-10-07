@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { fxColorToHex, fxHexToColor, hexToRgba01Obj, rgba01ObjToHex } from '../../utils/color-utils';
 import { TextEffectType, TextEffectEntry, TextEffectPreset, TEXT_EFFECT_TYPE_OPTIONS, createEffectEntry, createDefaultParams, ShaderSnippet, SHADER_SNIPPETS } from 'app/illustrate/models/text-effect.model';
@@ -17,13 +17,15 @@ export class LiveTextOptionsComponent {
   @Input() active = false;
   @Input() availableFonts: string[] = [];
   readonly textEffectTypeOptions = TEXT_EFFECT_TYPE_OPTIONS;
+  constructor(private ngZone: NgZone) {}
   fxColorToHex(color: number[] | undefined | null): string { return fxColorToHex(color); }
   fxHexToColor(hex: string, existingAlpha = 1): [number, number, number, number] { return fxHexToColor(hex, existingAlpha); }
 
   /** The tool became active: rect-drag creates a live text node, a click on one edits it. */
   activate(): void {
     this.hasHtmlInCanvas = !!this.shapeManager.isHtmlInCanvasAvailable();
-    this.shapeManager.setRectDrawCallback((rect: any, clientX: number, clientY: number) => {
+    // Called from the engine's zoneless pointerup (end of the rect drag / click): the editing state + sidebar are bound
+    this.shapeManager.setRectDrawCallback((rect: any, clientX: number, clientY: number) => this.ngZone.run(() => {
       const sm = this.shapeManager;
       if (this.liveTextIsEditing) {
         this.endLiveTextEditing();
@@ -51,7 +53,7 @@ export class LiveTextOptionsComponent {
         sm.enterLiveTextEditingAt(this.liveTextNodeId, clientX, clientY);
         this.liveTextIsEditing = true;
       }
-    });
+    }));
   }
 
   /** The tool was left. */

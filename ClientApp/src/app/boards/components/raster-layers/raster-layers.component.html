@@ -124,7 +124,7 @@
                  autofocus>
         </div>
         <div class="rl-row-bottom">
-          <div class="opacity-control">
+          <div *ngIf="!touchUi.coarse" class="opacity-control">
             <input type="range" min="0" max="100" step="1"
                    [value]="layer.opacity * 100"
                    (input)="onOpacityChange(layer, $event)"
@@ -132,6 +132,9 @@
                    (mousedown)="$event.stopPropagation()">
             <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
           </div>
+          <ng-container *ngIf="touchUi.coarse">
+            <ng-container *ngTemplateOutlet="touchOpacity; context: { $implicit: layer }"></ng-container>
+          </ng-container>
         </div>
       </ng-container>
 
@@ -207,8 +210,8 @@
             </div>
           </div>
 
-          <!-- Opacity slider -->
-          <div class="opacity-control">
+          <!-- Opacity slider (desktop / fine pointer: always inline) -->
+          <div *ngIf="!touchUi.coarse" class="opacity-control">
             <input type="range" min="0" max="100" step="1"
                    [value]="layer.opacity * 100"
                    (input)="onOpacityChange(layer, $event)"
@@ -216,9 +219,32 @@
                    (mousedown)="$event.stopPropagation()">
             <span class="opacity-label">{{ (layer.opacity * 100) | number:'1.0-0' }}%</span>
           </div>
+          <!-- Touch: a % button toggles the slider (an always-on slider swallowed taps meant to select the row) -->
+          <ng-container *ngIf="touchUi.coarse">
+            <ng-container *ngTemplateOutlet="touchOpacity; context: { $implicit: layer }"></ng-container>
+          </ng-container>
         </div>
       </ng-container>
     </div>
+
+    <!-- Touch opacity (pointer: coarse): the slider shows only while this row's % button is on. With it hidden the
+         empty .opacity-control is plain row, so a tap there selects the layer. The button never selects. -->
+    <ng-template #touchOpacity let-layer>
+      <div class="opacity-control rl-opacity-touch">
+        <input *ngIf="isOpacitySliderOpen(layer.id)"
+               type="range" min="0" max="100" step="1"
+               aria-label="Layer opacity"
+               [value]="layer.opacity * 100"
+               (input)="onOpacityChange(layer, $event)"
+               (click)="$event.stopPropagation()"
+               (mousedown)="$event.stopPropagation()">
+      </div>
+      <button type="button" class="rl-opacity-btn"
+              [class.open]="isOpacitySliderOpen(layer.id)"
+              [attr.aria-expanded]="isOpacitySliderOpen(layer.id)"
+              [attr.aria-label]="opacityButtonLabel(layer)"
+              (click)="toggleOpacitySlider(layer, $event)">{{ opacityPercent(layer) }}%</button>
+    </ng-template>
 
     <div *ngIf="filteredLayers.length === 0" class="rl-empty">
       No raster layers

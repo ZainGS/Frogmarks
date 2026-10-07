@@ -55,7 +55,9 @@
         </ng-container>
 
         <!-- 3D rotation drag degree readout -->
+        <!-- (shown / hidden through the zone; while a drag runs the HUD service moves it and writes its text directly) -->
         <div *ngIf="!uiHidden && hud.scene3dDragAngleDeg !== null && hud.scene3dDragLabelPos"
+             #angleLabel
              class="scene3d-angle-label"
              [style.left.px]="hud.scene3dDragLabelPos.x + 20"
              [style.top.px]="hud.scene3dDragLabelPos.y - 12">
@@ -788,6 +790,14 @@
                     </details>
                 </div>
 
+                <!-- Global Dither (Global tab, non-3D): the whole-canvas dither (LayerEffectsService, saved per document) -->
+                <div *ngIf="!editorState.scene3dPanelVisible && rightPanelTab === 'global'" class="global-dither-section">
+                    <details class="scene3d-details">
+                        <summary>Global Dither</summary>
+                        <app-dither-options></app-dither-options>
+                    </details>
+                </div>
+
                 <!-- Per-Layer Dither Settings (shown when a raster layer is selected, hidden when 3D panel is shown) -->
                 <div *ngIf="editorState.selectedRasterLayerId && !editorState.scene3dPanelVisible && rightPanelTab === 'scene'" class="layer-dither-section">
                     <app-layer-dither-panel [selectedRasterLayerId]="editorState.selectedRasterLayerId"></app-layer-dither-panel>
@@ -1121,17 +1131,6 @@
                     <rect x="2" y="2" width="20" height="20" rx="1"/>
                     <line x1="12" y1="2" x2="12" y2="14"/>
                     <line x1="2" y1="14" x2="22" y2="14"/>
-                </svg>
-            </div>
-        </div>
-
-        <!-- Misc Tools Section -->
-        <div>
-            <div class="vertical-tool-button"
-                 [class.selected]="controlPanelActiveTool === 'misc'"
-                 (click)="setActiveTool('misc')">
-                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" d="M16,16 L16,13 L18,13 L18,16 L21,16 L21,18 L18,18 L18,21 L16,21 L16,18 L13,18 L13,16 L16,16 Z M4,13 L9,13 C10.1045695,13 11,13.8954305 11,15 L11,20 C11,21.1045695 10.1045695,22 9,22 L4,22 C2.8954305,22 2,21.1045695 2,20 L2,15 C2,13.8954305 2.8954305,13 4,13 Z M4,15 L4,20 L9,20 L9,15 L4,15 Z M4,2 L9,2 C10.1045695,2 11,2.8954305 11,4 L11,9 C11,10.1045695 10.1045695,11 9,11 L4,11 C2.8954305,11 2,10.1045695 2,9 L2,4 C2,2.8954305 2.8954305,2 4,2 Z M4,4 L4,9 L9,9 L9,4 L4,4 Z M15,2 L20,2 C21.1045695,2 22,2.8954305 22,4 L22,9 C22,10.1045695 21.1045695,11 20,11 L15,11 C13.8954305,11 13,10.1045695 13,9 L13,4 C13,2.8954305 13.8954305,2 15,2 Z M15,4 L15,9 L20,9 L20,4 L15,4 Z" fill="#e8e8e8"/>
                 </svg>
             </div>
         </div>
@@ -1489,12 +1488,12 @@
     </div>
 
     <!-- Package Creator subpanel -->
-    <div class="tool-subpanel" [class.visible]="pkg.scene3dPkgCreatorOpen">
+    <div class="tool-subpanel" [class.visible]="pkg.scene3dPkgCreatorOpen && !uiHidden">
         <app-pkg-creator-panel></app-pkg-creator-panel>
     </div>
 
     <!-- Edit Character subpanel — shown when a procedural body is selected and panel is open -->
-    <div class="tool-subpanel" [class.visible]="character.scene3dEditCharPanelOpen">
+    <div class="tool-subpanel" [class.visible]="character.scene3dEditCharPanelOpen && !uiHidden">
         <app-character-panel #charPanel
             [shapeManager]="shapeManager"
             [open]="character.scene3dEditCharPanelOpen"
@@ -1519,7 +1518,7 @@
     </div>
 
     <!-- Edit Building subpanel -->
-    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBuildingPanelOpen">
+    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBuildingPanelOpen && !uiHidden">
         <app-building-panel
             [shapeManager]="shapeManager"
             [buildingId]="procedural.scene3dEditBuildingId"
@@ -1532,7 +1531,7 @@
     </div>
 
     <!-- Edit Foliage subpanel -->
-    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditFoliagePanelOpen">
+    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditFoliagePanelOpen && !uiHidden">
         <app-foliage-panel
             [shapeManager]="shapeManager"
             [foliageId]="procedural.scene3dEditFoliageId"
@@ -1542,17 +1541,17 @@
     </div>
 
     <!-- Creator panel (vending / bike-rack / bollard / …) -->
-    <div class="tool-subpanel" [class.visible]="creator.scene3dCreatorPanelOpen">
+    <div class="tool-subpanel" [class.visible]="creator.scene3dCreatorPanelOpen && !uiHidden">
         <app-creator-panel></app-creator-panel>
     </div>
 
     <!-- Decal Tool subpanel -->
-    <div class="tool-subpanel" [class.visible]="decal.scene3dDecalToolActive || scene3dSelectedIsDecal">
+    <div class="tool-subpanel" [class.visible]="(decal.scene3dDecalToolActive || scene3dSelectedIsDecal) && !uiHidden">
         <app-decal-panel [scene3dSelectedIsDecal]="scene3dSelectedIsDecal"></app-decal-panel>
     </div>
 
     <!-- GARP Skins subpanel -->
-    <div class="tool-subpanel" [class.visible]="garpPanelOpen">
+    <div class="tool-subpanel" [class.visible]="garpPanelOpen && !uiHidden">
         <app-skins-panel #skinsPanel
             [shapeManager]="shapeManager"
             [open]="garpPanelOpen"
@@ -1565,7 +1564,7 @@
     </div>
 
     <!-- Edit Block subpanel -->
-    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBlockPanelOpen">
+    <div class="tool-subpanel" [class.visible]="procedural.scene3dEditBlockPanelOpen && !uiHidden">
         <app-block-panel
             [shapeManager]="shapeManager"
             [blockId]="procedural.scene3dEditBlockId"
@@ -1668,7 +1667,7 @@
     </div>
 
     <!-- toolSubpanel.collapsed: touch only, folded after a brush pick (tap the tool again to reopen) -->
-    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && !toolSubpanel.collapsed && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout' || controlPanelActiveTool === 'misc')">
+    <div #toolOptionsPanel class="tool-subpanel" [class.visible]="!uiHidden && !editorState.scene3dPanelVisible && !toolSubpanel.collapsed && (controlPanelActiveTool.startsWith('drawing') || controlPanelActiveTool.startsWith('select') || controlPanelActiveTool === 'fill' || controlPanelActiveTool === 'stamp' || controlPanelActiveTool === 'raster:text' || controlPanelActiveTool === 'balloon' || controlPanelActiveTool === 'live-text' || controlPanelActiveTool === 'panel-layout')">
         <!-- Drawing Tool Options -->
         <div *ngIf="controlPanelActiveTool.startsWith('drawing')">
             <div class="tool-label">Drawing Options</div>
@@ -1712,11 +1711,6 @@
             <div *ngIf="controlPanelActiveTool === 'select:magic-wand'" style="padding: 4px 8px; margin-top: 6px;">
                 <app-magic-wand-options [rasterLayers]="editorState.rasterLayers"></app-magic-wand-options>
             </div>
-        </div>
-
-        <!-- ⚡ Dither Effects (misc tool) -->
-        <div *ngIf="controlPanelActiveTool === 'misc'">
-            <app-dither-options></app-dither-options>
         </div>
 
         <!-- Stamp Tool Options -->

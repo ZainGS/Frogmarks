@@ -1,7 +1,10 @@
 import {
+  AfterViewInit,
   Component,
+  ElementRef,
   Output,
   EventEmitter,
+  NgZone,
   OnInit,
   OnDestroy,
   ViewChild,
@@ -36,7 +39,7 @@ export const HIDDEN_BRUSH_PRESET_IDS: ReadonlySet<string> = new Set(['default_er
   templateUrl: './brush-options.component.html',
   styleUrl: './brush-options.component.scss',
 })
-export class BrushOptionsComponent implements OnInit, OnDestroy {
+export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() presetChanged = new EventEmitter<string>();
   /** The user tapped a brush row in the list (not the Eraser row, whose options open below it; not an editor / import
    *  change). The illustration tool panel folds itself away on this, on touch only (mobile-parity TOUCH-10). */
@@ -194,7 +197,7 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
 
   private subs: Subscription[] = [];
 
-  constructor(public rasterService: RasterBrushService) {}
+  constructor(public rasterService: RasterBrushService, private host: ElementRef<HTMLElement>, private zone: NgZone) {}
 
   ngOnInit(): void {
     this.rasterService.refreshPresets();
@@ -211,8 +214,62 @@ export class BrushOptionsComponent implements OnInit, OnDestroy {
     this._syncEraserFromEngine();
   }
 
+  ngAfterViewInit(): void {
+    // Fit the grid view to the host panel: only the brush list scrolls, so Size + Import / Export stay in view.
+    // Outside the zone: the observer / rAF only write a style, never Angular state.
+    this.zone.runOutsideAngular(() => {
+      if (typeof ResizeObserver === 'undefined') return;
+      this._fitObserver = new ResizeObserver(() => this._scheduleFitList());
+      this._fitObserver.observe(this.host.nativeElement);
+      const scroller = this._scrollParent();
+      if (scroller) this._fitObserver.observe(scroller);
+      window.addEventListener('resize', this._onFitResize);
+      this._scheduleFitList();
+    });
+  }
+
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
+    this._fitObserver?.disconnect();
+    window.removeEventListener('resize', this._onFitResize);
+    if (this._fitRaf) cancelAnimationFrame(this._fitRaf);
+  }
+
+  // ── Grid view fit (only the brush list scrolls) ───────────────
+  private _fitObserver: ResizeObserver | null = null;
+  private _fitRaf = 0;
+  private readonly _onFitResize = () => this._scheduleFitList();
+  /** Smallest list height the fit will shrink to (about two rows); below that the host panel scrolls as before. */
+  private static readonly MIN_LIST_PX = 96;
+
+  private _scheduleFitList(): void {
+    if (this._fitRaf) return;
+    this._fitRaf = requestAnimationFrame(() => { this._fitRaf = 0; this._fitList(); });
+  }
+
+  /** The illustration tool sub-panel this panel sits in (the only host where the brush panel is the whole scrolling
+   *  content), or null: other hosts (packaging sidebar, UV / eye-draw panels) have sections below it and keep the
+   *  CSS list cap. */
+  private _scrollParent(): HTMLElement | null {
+    return this.host.nativeElement.closest<HTMLElement>('.tool-subpanel');
+  }
+
+  /** Size the brush list so the panel ends at the sub-panel's bottom edge: shrink it when the panel overflows, grow
+   *  it into free space (up to its content) when there is room. Measured from the panel's real bottom (scrollHeight
+   *  can't report free space). Converges in one pass; no-op while hidden. */
+  private _fitList(): void {
+    const list = this.host.nativeElement.querySelector<HTMLElement>('.brush-list');
+    const scroller = this._scrollParent();
+    if (!list || !scroller || scroller.clientHeight === 0) return;
+    const sr = scroller.getBoundingClientRect();
+    const padBottom = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
+    const hostBottom = this.host.nativeElement.getBoundingClientRect().bottom - sr.top + scroller.scrollTop;
+    const free = scroller.clientHeight - padBottom - hostBottom;   // < 0 = the sub-panel overflows by that much
+    const cur = list.clientHeight;
+    let next = cur + free;
+    if (free > 0) next = Math.min(next, list.scrollHeight);       // never taller than the list's content
+    next = Math.max(BrushOptionsComponent.MIN_LIST_PX, Math.floor(next));
+    if (Math.abs(next - cur) >= 1) list.style.maxHeight = `${next}px`;
   }
 
   // ═══════════════════════════════════════════════════════════════

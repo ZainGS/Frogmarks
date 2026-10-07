@@ -154,3 +154,168 @@
     &:hover:not(:disabled) { background: #5050b8; }
     &:disabled { opacity: .5; cursor: default; }
 }
+
+// ── Fit (both themes) ──────────────────────────────────────────────────────────────────────────────────────────
+// Fields can shrink with the card (no input min-content overflow), and at phone width the side nav becomes a row
+// of three tabs above the panel so the panel keeps the full card width.
+.export-modal-panel { min-width: 0; min-height: 0; }
+.export-modal-field-input { width: 100%; min-width: 0; box-sizing: border-box; }
+
+@media (max-width: 560px) {
+    .export-modal-body { flex-direction: column; }
+    .export-modal-nav {
+        width: auto;
+        flex-direction: row;
+        border-right: none;
+        border-bottom: 1px solid #2e2e4a;
+        padding: 8px;
+        gap: 4px;
+    }
+    .export-modal-nav-item {
+        flex: 1 1 0;
+        min-width: 0;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 4px;
+        text-align: center;
+    }
+    .export-modal-nav-label { flex: none; }
+    .export-modal-nav-ext { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    .export-modal-panel { padding: 16px 14px 14px; }
+    .export-modal-action-btn { align-self: stretch; }
+}
+
+@media (pointer: coarse) {
+    .export-modal-nav-item { min-height: 44px; }
+    .export-modal-field-input:not(textarea) { min-height: 44px; }
+    .export-modal-action-btn { min-height: 44px; }
+}
+
+// ── Retro Chrome (body.theme-retro-chrome) ─────────────────────────────────────────────────────────────────────
+// The shell (card / green title strip / close) is themed in styles/_modal-shell.scss. These rules reuse the theme's
+// patterns from retro-chrome-theme.scss: nav items = the right-panel tabs (.rp-tab), panel title = the green-bar
+// section head (%rc-section-head), labels = .nid-label, inputs = the global input rule, action = .nid-btn-create.
+// Only the theme's --rc-* variables are used. Scoped so the default theme is unchanged.
+:host-context(body.theme-retro-chrome) {
+    .export-modal-body,
+    .export-modal-body button,
+    .export-modal-body input,
+    .export-modal-body textarea {
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    .export-modal-nav {
+        width: 190px;   // Courier is wider than the default sans: room for ".frogmarks" next to "Workfile"
+        border-right: 2px solid var(--rc-bevel-dk);
+        background: #161616;
+        gap: 4px;
+        padding: 8px;
+    }
+
+    .export-modal-nav-item {
+        background: #404040;
+        border: 2px solid;
+        border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+        border-radius: 0;
+        color: var(--rc-text);
+        padding: 7px 8px;
+
+        &:hover:not(.active) { background: #555555; color: var(--rc-text); }
+        &:active { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk); }
+        &.active {
+            background: #3d4242;
+            border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk);
+            color: #e0e0e0;
+        }
+        &:focus-visible { outline: 1px solid var(--rc-green-hi); outline-offset: 1px; }
+    }
+
+    .export-modal-nav-label {
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: 0.3px;
+    }
+
+    .export-modal-nav-ext { color: var(--rc-text-muted); font-size: 10px; }
+    .export-modal-nav-item.active .export-modal-nav-ext { color: var(--rc-green-hi); }
+
+    .export-modal-panel { padding: 14px 16px 16px; gap: 12px; }
+
+    .export-modal-panel-title {
+        align-self: stretch;
+        background: #1c1c1c;
+        border-left: 3px solid var(--rc-green);
+        color: var(--rc-green-hi);
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+    }
+
+    .export-modal-panel-desc {
+        color: var(--rc-text-muted);
+        font-size: 11px;
+        code {
+            background: #111;
+            border: 1px solid var(--rc-bevel-mid);
+            border-radius: 0;
+            color: var(--rc-green-hi);
+            font-family: 'Courier New', monospace;
+        }
+    }
+
+    .export-modal-field-label {
+        color: var(--rc-text-label);
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: 0.8px;
+    }
+
+    .export-modal-field-input {
+        background: #111;
+        border: 2px solid;
+        border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid);
+        border-radius: 0;
+        color: var(--rc-text);
+        font-size: 12px;
+        padding: 6px 8px;
+
+        &:focus { outline: 1px solid var(--rc-green-hi); border-color: var(--rc-green); }
+        &::placeholder { color: var(--rc-text-muted); }
+    }
+
+    .export-cart-sounds {
+        background: #111;
+        border: 1px solid var(--rc-bevel-mid);
+        border-left: 3px solid var(--rc-green);
+        border-radius: 0;
+    }
+    .export-cart-sounds-label { color: var(--rc-text-label); }
+    .export-cart-sounds-ids { color: var(--rc-text-muted); font-family: 'Courier New', monospace; }
+
+    .export-modal-action-btn {
+        background: var(--rc-green);
+        border: 2px solid;
+        border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+        border-radius: 0;
+        color: var(--rc-green-txt);
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        padding: 6px 16px;
+
+        &:hover:not(:disabled) { background: var(--rc-green-hi); }
+        &:active:not(:disabled) { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk); }
+        &:focus-visible { outline: 1px solid var(--rc-green-txt); outline-offset: 1px; }
+        &:disabled { opacity: 0.5; }
+    }
+
+    @media (max-width: 560px) {
+        .export-modal-nav { width: auto; border-right: none; border-bottom: 2px solid var(--rc-bevel-dk); }
+        .export-modal-nav-item { padding: 6px 4px; }
+    }
+}

@@ -171,6 +171,54 @@ a.exp-dialog-btn {
   .exp-segment-btn { min-height: 40px; }
 }
 
+// ── View › Screen corner radius ───────────────────────────────────────────────────────────────────────────────
+// Not a click row: Auto button + a finger-sized slider (40 px tall hit area, wider than the other rows' labels).
+.corner-setting {
+  padding: 6px 14px 8px;
+  cursor: default;
+}
+
+.corner-setting-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.corner-setting-value {
+  margin-left: 16px;
+  color: #4caf96;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.corner-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.corner-auto-btn {
+  flex: 0 0 auto;
+  min-width: 56px;
+}
+
+.corner-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  accent-color: #4caf96;
+  cursor: pointer;
+  touch-action: pan-y;   // a horizontal finger drag moves the thumb instead of scrolling / zooming anything
+}
+
+@media (pointer: coarse) {
+  .corner-setting-row { min-height: 44px; }
+  .corner-slider { height: 40px; }
+}
+
 // The result dialog. .left-panel (the top bar this sits in) is position: fixed with no transform / filter, so
 // position: fixed here still means the viewport.
 .exp-dialog-overlay {

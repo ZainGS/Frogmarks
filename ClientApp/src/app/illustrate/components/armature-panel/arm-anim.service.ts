@@ -172,8 +172,13 @@ export class ArmAnimService implements OnDestroy {
       }
       // Not a procedural body (or the engine refused) — fall through to a normal play
     }
-    this._clipPlayer = this.sm?.playSkeletonClip3D(this.host.rig.activeSkeleton.id, clip);
-    this._clipPlayer?.play?.();
+    // H4: started OUTSIDE the zone — the player's per-frame loop / timers must not run app change detection
+    const skelId = this.host.rig.activeSkeleton.id;
+    this._clipPlayer = this.zone.runOutsideAngular(() => {
+      const player = this.sm?.playSkeletonClip3D(skelId, clip);
+      player?.play?.();
+      return player;
+    });
     this.isPlaying = true;
   }
 

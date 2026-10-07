@@ -42,6 +42,19 @@ export class VectorLayerPanelComponent implements OnChanges {
     this.shapeManager?.enterPathEdit(id);
   }
 
+  /** Delete ONE shape from its row (undoable: deleteSelectedShapes records a vector-undo step). The rest of the
+   *  current shape selection is kept. */
+  deleteVectorShape(id: string, e: Event): void {
+    e.stopPropagation();
+    const sm = this.shapeManager;
+    if (!sm) return;
+    const keep = (sm.getSelectedShapeIds?.() ?? []).filter(s => s !== id);
+    sm.selectNodesByIds([id], false);
+    sm.deleteSelectedShapes();
+    if (keep.length) sm.selectNodesByIds(keep, false);
+    this.refreshVectorShapes();
+  }
+
   convertPolygonToPath(id: string): void {
     this.shapeManager?.convertPolygonToPath(id);
     this.refreshVectorShapes();

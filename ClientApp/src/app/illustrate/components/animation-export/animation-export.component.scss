@@ -202,3 +202,139 @@ $accent-light: #b87fd9;
 
   &:hover { background: lighten($surface, 10%); }
 }
+
+/* ── Fit (both themes) ────────────────────────────────────────────
+   The card is capped to the viewport with a 16 px margin (same rule as styles/_modal-shell.scss) and rows wrap
+   instead of overflowing at phone width; touch-sized controls on a coarse pointer. */
+.export-overlay {
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.export-dialog {
+  box-sizing: border-box;
+  min-width: min(320px, 100%);
+  max-width: min(400px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.export-row {
+  flex-wrap: wrap;
+  select { min-width: 0; }
+}
+
+@media (pointer: coarse) {
+  .close-btn { min-width: 44px; min-height: 44px; }
+  .export-row select,
+  .range-input { min-height: 40px; }
+  .toggle-label { min-height: 44px; }
+  .btn-export,
+  .btn-cancel { min-height: 44px; }
+}
+
+/* ── Retro Chrome (body.theme-retro-chrome) ───────────────────────
+   Same shell as the Export modal / New Illustration dialog (retro-chrome-theme.scss § 13): raised chrome card,
+   green title strip, bevelled close, .nid-label labels, .nid-btn-create / .nid-btn-cancel footer buttons. Selects,
+   number inputs, checkbox, range and colour inputs already get the theme's global control rules. Only the theme's
+   --rc-* variables are used; scoped so the default (purple) theme is unchanged. */
+:host-context(body.theme-retro-chrome) {
+  .export-overlay { background: rgba(0, 0, 0, 0.78); }
+
+  .export-dialog {
+    background: var(--rc-panel-bg);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+    border-radius: 0;
+    color: var(--rc-text);
+    font-family: 'Courier New', Courier, monospace;
+
+    button, select, input { font-family: 'Courier New', Courier, monospace; }
+  }
+
+  .export-header {
+    background: var(--rc-green);
+    border-bottom: 2px solid var(--rc-bevel-lt);
+    color: var(--rc-green-txt);
+    padding: 6px 6px 6px 10px;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+
+  .close-btn {
+    flex-shrink: 0;
+    min-width: 24px;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    background: var(--rc-surface);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+    color: var(--rc-text);
+    font-size: 11px;
+
+    &:hover { background: var(--rc-surface-hi); color: #fff; }
+    &:active { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk); }
+    &:focus-visible { outline: 1px solid var(--rc-green-txt); outline-offset: 1px; }
+    @media (pointer: coarse) { min-width: 44px; min-height: 44px; font-size: 14px; }
+  }
+
+  .export-label {
+    color: var(--rc-text-label);
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.8px;
+  }
+
+  .toggle-label { color: var(--rc-text); }
+
+  .range-hint,
+  .quality-value { color: var(--rc-text-muted); }
+
+  .export-progress-wrap {
+    background: #111;
+    border: 2px solid;
+    border-color: var(--rc-bevel-mid) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-mid);
+    border-radius: 0;
+
+    .export-progress-bar { background: var(--rc-green); }
+    .export-progress-label { color: var(--rc-green-txt); }
+  }
+
+  .export-footer { border-top: 2px solid var(--rc-bevel-dk); }
+
+  .btn-export,
+  .btn-cancel {
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt);
+    border-radius: 0;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    padding: 5px 16px;
+
+    &:active:not(:disabled) { border-color: var(--rc-bevel-dk) var(--rc-bevel-lt) var(--rc-bevel-lt) var(--rc-bevel-dk); }
+    &:focus-visible { outline: 1px solid var(--rc-green-hi); outline-offset: 1px; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  .btn-export {
+    background: var(--rc-green);
+    color: var(--rc-green-txt);
+    text-transform: uppercase;
+    &:hover:not(:disabled) { background: var(--rc-green-hi); }
+  }
+
+  .btn-cancel {
+    background: var(--rc-surface);
+    color: var(--rc-text);
+    &:hover:not(:disabled) { background: var(--rc-surface-hi); }
+  }
+}

@@ -1,3 +1,4 @@
+import { ElementRef, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { RasterBrushService } from '../../../shared/services/raster/raster-brush.service';
 import { BrushOptionsComponent, HIDDEN_BRUSH_PRESET_IDS } from './brush-options.component';
@@ -42,7 +43,7 @@ function setup(opts: { withPicker?: boolean } = {}) {
   const eng = fakeEngine(opts);
   spyOn(ShapeManager, 'getInstance').and.returnValue(eng.sm as unknown as ShapeManager);
   const service = new RasterBrushService();
-  const panel = new BrushOptionsComponent(service);
+  const panel = new BrushOptionsComponent(service, new ElementRef(document.createElement('div')), new NgZone({ enableLongStackTrace: false }));
   panel.ngOnInit();
   return { ...eng, service, panel };
 }
@@ -146,5 +147,48 @@ describe('BrushOptionsComponent brushPicked (touch auto-close hook)', () => {
     t.panel.selectEraserTool();   // back to the brush (quickSelectBrush, not a list pick)
     expect(picked).toEqual(['default_hard_pen']);
     t.panel.ngOnDestroy();
+  });
+});
+
+describe('BrushOptionsComponent grid fit (only the brush list scrolls)', () => {
+  /** A 300 px scrolling host panel holding a label, the brush list (20 x 48 px rows) and a 60 px footer. */
+  function build(hostPx: number) {
+    const scroller = document.createElement('div');
+    scroller.className = 'tool-subpanel';
+    scroller.style.cssText = `position:fixed;left:0;top:0;width:200px;height:${hostPx}px;overflow-y:auto;`;
+    const label = document.createElement('div'); label.style.height = '20px';
+    const host = document.createElement('div');
+    const list = document.createElement('div'); list.className = 'brush-list';
+    list.style.cssText = 'overflow-y:auto;max-height:50vh;';
+    for (let i = 0; i < 20; i++) { const r = document.createElement('div'); r.style.height = '48px'; list.appendChild(r); }
+    const footer = document.createElement('div'); footer.style.height = '60px';
+    host.append(list, footer); scroller.append(label, host); document.body.appendChild(scroller);
+    const panel = new BrushOptionsComponent({} as RasterBrushService, new ElementRef(host), new NgZone({ enableLongStackTrace: false }));
+    return { scroller, list, panel, fit: () => (panel as unknown as { _fitList(): void })._fitList() };
+  }
+
+  it('shrinks the list so the host panel no longer scrolls (footer stays in view)', () => {
+    const t = build(300);
+    t.fit();
+    expect(t.scroller.scrollHeight).toBeLessThanOrEqual(t.scroller.clientHeight);
+    expect(t.list.clientHeight).toBe(300 - 20 - 60);
+    t.fit();   // converged: a second pass changes nothing
+    expect(t.list.clientHeight).toBe(220);
+    t.scroller.remove();
+  });
+
+  it('grows the list back into free space, up to its content', () => {
+    const t = build(2000);
+    t.list.style.maxHeight = '100px';
+    t.fit();
+    expect(t.list.clientHeight).toBe(20 * 48);
+    t.scroller.remove();
+  });
+
+  it('never shrinks the list below about two rows', () => {
+    const t = build(120);
+    t.fit();
+    expect(t.list.clientHeight).toBe(96);
+    t.scroller.remove();
   });
 });

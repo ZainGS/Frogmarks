@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { CharacterPanelComponent } from './character-panel.component';
 import { EYE_PARAM_DEFAULTS } from '../../utils/character-randomizer';
@@ -16,6 +16,7 @@ export type CharFaceHost = Pick<CharacterPanelComponent,
 @Injectable()
 export class CharFaceService implements OnDestroy {
   private host!: CharFaceHost;
+  constructor(private zone: NgZone) {}
   bind(host: CharFaceHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
@@ -233,7 +234,8 @@ export class CharFaceService implements OnDestroy {
 
   scene3dEyeParamChanged(exprId: string): void {
     clearTimeout(this._eyeParamTimers[exprId]);
-    this._eyeParamTimers[exprId] = setTimeout(() => this._applyProceduralEyes(exprId), 50);
+    // H7: outside the zone (engine-only debounce). The face-kit rAF throttle above is outside already (rAF is unpatched).
+    this._eyeParamTimers[exprId] = this.zone.runOutsideAngular(() => setTimeout(() => this._applyProceduralEyes(exprId), 50));
   }
 
   private _applyProceduralEyes(exprId: string): void {
@@ -250,9 +252,11 @@ export class CharFaceService implements OnDestroy {
     this._updateGaze(event, el);
   }
 
-  scene3dGazePadPointerMove(event: PointerEvent, el: HTMLElement): void {
-    if (!this._gazePointerActive) return;
+  /** A pad move (outside the zone): aims the eyes while dragging. True when the gaze moved (the caller re-renders). */
+  scene3dGazePadPointerMove(event: PointerEvent, el: HTMLElement): boolean {
+    if (!this._gazePointerActive) return false;
     this._updateGaze(event, el);
+    return true;
   }
 
   scene3dGazePadPointerUp(): void {

@@ -1,8 +1,9 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
 import { EditorStateService } from './editor-state.service';
+import { FrameCoalescer } from '../../shared/utilities/frame-coalescer';
 /** Exactly the editor state the artboard / zoom controls use. */
 export type ArtboardHost = Pick<IllustrationComponent, 'shapeManager' |
   'canvas' | 'scene3dFrameScene' | 'worldManager'
@@ -16,13 +17,21 @@ export type ArtboardHost = Pick<IllustrationComponent, 'shapeManager' |
 @Injectable()
 export class ArtboardService implements OnDestroy {
   private host!: ArtboardHost;
-  constructor(private editorState: EditorStateService) {}
+  constructor(private editorState: EditorStateService, private ngZone: NgZone) {}
   bind(host: ArtboardHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
 
   ngOnDestroy(): void {
     this._artboardViewportSub?.unsubscribe?.();
+    this._overlayFrame.cancel();
   }
+
+  /** Wheel / pinch / pan move the viewport from the engine's zoneless listeners (and nothing else entered the zone
+   *  for a wheel or pinch once rAF stopped being patched): the shadow + label + zoom % follow in ONE zone entry per
+   *  frame. A change made from Angular code (zoom buttons, fit) still updates at once. */
+  private readonly _overlayFrame = new FrameCoalescer(() => this.ngZone.run(() => this.updateOverlay()));
+  /** An overlay update is queued for the next frame (it runs that frame's change detection). */
+  get overlayUpdatePending(): boolean { return this._overlayFrame.pending; }
 
   artboardShadowStyle: Record<string, string> = {};
   artboardLabelStyle: Record<string, string> = {};
@@ -80,7 +89,8 @@ export class ArtboardService implements OnDestroy {
     const is = this.shapeManager.interactionService;
     if (is?.onViewportChanged) {
       this._artboardViewportSub = is.onViewportChanged.subscribe(() => {
-        this.updateOverlay();
+        if (NgZone.isInAngularZone()) this.updateOverlay();
+        else this._overlayFrame.mark('viewport');
       });
     }
     this.updateOverlay();

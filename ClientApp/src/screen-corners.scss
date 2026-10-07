@@ -1,0 +1,47 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// SCREEN CORNER RADIUS  (View › Screen corner radius, ScreenCornerService)
+// ═══════════════════════════════════════════════════════════════════════════
+// A tablet in fullscreen has rounded physical corners that clip the app's square ones. While the radius in effect is
+// above 0 the service puts `fm-screen-corners` on <html> and `--fm-screen-corner-radius: <n>px` on :root; every rule
+// here is gated on that class, so at 0 (desktop, or any window that is not fullscreen) nothing here applies and the
+// layout is exactly what it was. Exactly two corners are rounded:
+//   1. the bottom-right of the retro-chrome green screen-edge border (body::after / body::before, retro-chrome-theme.scss § 12)
+//   2. the top-left of the tool rail (.vertical-control-panel, illustration.component.scss), which is what sits at the
+//      screen's top-left (the top menubar .left-panel starts right of it, at left: 70px).
+// The default theme draws no border at the screen's right / bottom edges, so only the rail changes there.
+
+$fm-corner-r: var(--fm-screen-corner-radius, 0px);
+// The right strip never gets narrower than its 4 px stroke (radius 1..3 px).
+$fm-corner-box: max(4px, var(--fm-screen-corner-radius, 0px));
+
+// ── 1. Green border, bottom-right ──────────────────────────────────────────
+// Square, the border is two fixed 4 px strips: ::after down the right edge (full height), ::before along the bottom
+// (from the rail's panels to the right edge), overlapping in a 4×4 square at the corner. Rounded, ::after becomes the
+// whole corner piece: a box R wide down the right edge whose right + bottom borders ARE the right strip and the last
+// R px of the bottom strip, with border-bottom-right-radius R, so the stroke stays 4 px all the way round the curve.
+// ::before stops where that box starts, so the two butt with no gap and no overlap. The box-shadow paints the sliver
+// outside the curve black and clip-path: inset(0) cuts the shadow back to the box, so nothing behind it (timeline,
+// right column + its own green edge borders) shows a sharp corner outside the curve. The box itself is transparent
+// and pointer-events: none (from the base rule). display stays the base rule's, so Toggle UI still hides both strips.
+html.fm-screen-corners body.theme-retro-chrome::after {
+  width: $fm-corner-box;
+  box-sizing: border-box;
+  background: transparent;
+  border-right: 4px solid var(--rc-green);
+  border-bottom: 4px solid var(--rc-green);
+  border-bottom-right-radius: $fm-corner-r;
+  box-shadow: 0 0 0 $fm-corner-r #000;
+  clip-path: inset(0);
+}
+
+html.fm-screen-corners body.theme-retro-chrome::before {
+  right: $fm-corner-box;
+}
+
+// ── 2. Tool rail, top-left ─────────────────────────────────────────────────
+// Its own border (default: border-right only; retro: the 2 px chrome bevel) follows the curve, and overflow-y: auto
+// clips the scrolling buttons to it. !important: retro-chrome § 1 forces `body.theme-retro-chrome * { border-radius: 0
+// !important }`; at (0,2,1) this beats that (0,1,1) and the component's emulated .vertical-control-panel[_ngcontent].
+html.fm-screen-corners .vertical-control-panel {
+  border-top-left-radius: $fm-corner-r !important;
+}
