@@ -50,6 +50,14 @@ export interface LayerStateDto {
   clipped: boolean;
   lockTransparency: boolean;
   animated: boolean;
+  /** Salsa layer entry type ('layer' = paint layer; 'vector' / 'ephemera' / 'folder' / '3d-scene' have no pixels).
+   *  Absent on documents saved before 2026-10-07 (the server keeps it in the extended state). */
+  type?: string;
+  /** Parent folder id (null = root). Absent on older saves. */
+  parentId?: string | null;
+  /** Subsystem owner ('packaging') / owning package of a hidden system layer. Absent on older saves / normal layers. */
+  systemOwner?: string;
+  packageOwnerId?: string;
   cels: CelStateDto[];
   pixelDataUrl?: string | null;
   ditherConfig?: DitherConfigDto | null;
@@ -95,6 +103,8 @@ export interface DitherConfigDto {
 
 export interface IllustrationStateDto {
   version: number;
+  /** The scene graph JSON. Cloud saves send the vector (2D) part only (cloud-scene-graph.ts); the server stores it
+   *  since 2026-10-07 (null on older documents). The local metadata copy keeps the full one. */
   sceneGraph: string | null;
   animation: AnimationStateDto | null;
   layers: LayerStateDto[];
@@ -110,6 +120,7 @@ export interface IllustrationStateDto {
   scene3dFrameLinkBuckets?: Record<string, string[][]> | null;         // groupId → phase buckets (v3+)
   meshSasUrls?: Record<string, string> | null;  // load response only — read SAS URLs per mesh
   texLibSasUrl?: string | null;           // load response only — read SAS URL for texture library
+  warning?: string | null;                // save response only — a part that was not stored (e.g. scene graph over quota)
   bgColor?: string | null;
   dotColor?: string | null;
   paperGrain?: { type: string; scale: number; strength: number } | null;

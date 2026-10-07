@@ -25,6 +25,12 @@ import { CanvasAppearanceService } from './canvas-appearance.service';
 import { ArtboardService } from './artboard.service';
 import { EditorStateService } from './editor-state.service';
 import { startBlankEngineDocument } from '../utils/blank-engine-document';
+import { cloudSceneGraphJSON, toVectorSceneGraphJSON } from '../utils/cloud-scene-graph';
+import { celExporter, CloudUploadVersions, contentVersionsDiffer, hasContentVersionApi, readContentVersions, type RasterContentVersions } from '../utils/cloud-pixel-versions';
+
+/** How often a cloud document checks the engine's raster content versions for edits no other event announced
+ *  (a fill, undo, paste, transform, filter, … — see _pollPixelChanges). Only a number compare while nothing changed. */
+const PIXEL_POLL_MS = 5000;
 /** Exactly the editor state persistence reads and writes (canvas settings, layer tree, document size, 3D host
  *  state, loading lifecycle). Typed against the editor so a rename breaks here at compile time. */
 export type PersistenceHost = Pick<IllustrationComponent, 'shapeManager' | 'doc' | '_scene3dReconstructGroups' | 'setAnimationEnabled' |
@@ -60,6 +66,10 @@ export class IllustrationPersistenceService implements OnDestroy {
     this._cloudConflict = false;
     this._dirtyLayerIds.clear();
     this._uploadedLayerIds.clear();
+    this._cloudVersions.clear();
+    this._stopPixelPoll();
+    this.rasterStrokeActive = false;
+    this._cloudWarningShown = false;
     this._texLibDirty = false;
     this._uploadAllMeshes = false;
     this._saveQueued = false;
@@ -95,6 +105,7 @@ export class IllustrationPersistenceService implements OnDestroy {
   private _autoSaveStateSub: { unsubscribe(): void } | null = null;
 
   ngOnDestroy(): void {
+    this._stopPixelPoll();
     this._autoSaveStateSub?.unsubscribe();
     this.autoSaveSubscription?.unsubscribe();
     this._metaFlushSub?.unsubscribe();
@@ -139,7 +150,8 @@ export class IllustrationPersistenceService implements OnDestroy {
     if (!this.illustration || this.host.isLoading) return;
     try {
       if (this._saveInFlight) await this._saveInFlight.catch(() => {});
-      if (this._pendingChange || this._saveQueued) {
+      // …or a pixel edit no event announced yet (a fill / undo / paste … since the last upload: content versions)
+      if (this._pendingChange || this._saveQueued || this._pixelsChangedSinceUpload()) {
         this._saveQueued = false;
         await this.saveIllustrationV2();
       }
@@ -466,9 +478,11 @@ export class IllustrationPersistenceService implements OnDestroy {
     if (this._cloudConflict) return;   // paused: would overwrite the newer copy saved elsewhere
     if (this._serverRevision !== null) state.baseRevision = this._serverRevision;
     try {
-      const res = await firstValueFrom(this.illustrationService.saveState(illId, state));
+      const res = await firstValueFrom(this.illustrationService.saveState(illId, this._serverStatePayload(state)));
       const rev = res?.resultObject?.revision;
       if (typeof rev === 'number') this._serverRevision = rev;
+      const warning = res?.resultObject?.warning;
+      if (warning) this._onCloudWarning(String(warning));
       state.revision = this._serverRevision ?? undefined;   // cached with the OPFS copy below
       delete state.baseRevision;
     } catch (e: any) {
@@ -496,23 +510,55 @@ export class IllustrationPersistenceService implements OnDestroy {
     }
   }
 
-  /** Upload pixel data for layers that have been painted since the last successful upload. */
-  /** @param illId  the document the calling save captured (not re-read from this.illustration). */
+  /** Upload pixel data for layers whose pixels changed since their last successful upload. */
+  /** @param illId  the document the calling save captured (not re-read from this.illustration).
+   *
+   *  Dirtiness (mobile-parity 7.3c): a layer / cel goes up when it was not uploaded yet this session, or when its Salsa
+   *  CONTENT VERSION moved since its last upload — every pixel writer reports to it (fills, undo / redo, paste,
+   *  transforms, text stamps, moves, clears, filters, merges, duplicates …), and a write with no known target moves
+   *  them all. The stroke-based `_dirtyLayerIds` still counts too (union = conservative). On an older Salsa dist (no
+   *  versions) only `_dirtyLayerIds` applies, as before, plus what the editor marks on undo / redo / scene changes. */
   async uploadPixelData(layers: LayerStateDto[], illId: number): Promise<void> {
     const sm = this.shapeManager;
     const texSize = sm?.getRasterTextureSize() ?? { w: this.host.canvas?.width ?? 1024, h: this.host.canvas?.height ?? 768 };
 
     // Fix 3: snapshot dirty set before upload so concurrent strokes during upload are preserved
     const dirtySnapshot = new Set(this._dirtyLayerIds);
+    // Versions read BEFORE any export: a write that lands during the upload leaves a newer version → uploaded next save
+    const versions = readContentVersions(sm);
+    const exportCel = versions ? celExporter(sm) : null;
 
     const failed = new Set<string>();   // layers whose upload failed stay dirty and retry on the next save
     const uploadLayer = async (layer: LayerStateDto): Promise<number> => {
-      // Skip layers that have already been uploaded and haven't been painted since
+      // No pixels: vector / ephemera layers, folders, the 3D divider (they used to "fail" — export gives null — and retry
+      // on every save). With versions, the engine lists exactly the paint layers.
+      if (layer.type && layer.type !== 'layer') return 0;
+      if (versions && !(layer.layerId in versions.layers)) return 0;
+
       const alreadyUploaded = this._uploadedLayerIds.has(layer.layerId);
-      const isDirty = dirtySnapshot.has(layer.layerId);
+
+      if (layer.animated && versions && exportCel) {
+        // Per cel, from each cel's OWN texture, only the cels whose content changed since their last upload
+        const counts = await Promise.all(layer.cels.map(async (cel) => {
+          if (!this._cloudVersions.celChanged(versions, cel.celId)) return 0;
+          const ver = versions.cels[cel.celId];
+          if (ver === 'none') { this._cloudVersions.recordCel(cel.celId, ver); return 0; }   // blank cel: no pixels
+          try {
+            const blob = await exportCel(cel.celId);
+            if (!blob) { console.warn(`[V2 Save] no blob for cel ${cel.celId}`); failed.add(layer.layerId); return 0; }
+            await firstValueFrom(this.illustrationService.uploadCelPixelData(illId, cel.celId, blob, texSize.w, texSize.h, 'webp'));
+            this._cloudVersions.recordCel(cel.celId, ver);
+            return 1;
+          } catch (e) { console.warn(`[V2 Save] cel upload failed for ${cel.celId}`, e); failed.add(layer.layerId); return 0; }
+        }));
+        return counts.reduce((a, b) => a + b, 0);
+      }
+
+      const isDirty = dirtySnapshot.has(layer.layerId) || (!!versions && this._cloudVersions.layerChanged(versions, layer.layerId));
       if (alreadyUploaded && !isDirty) return 0;
 
       if (layer.animated) {
+        // Older Salsa dist (no per-cel export): unchanged behaviour
         const counts = await Promise.all(layer.cels.map(async (cel) => {
           try {
             let blob: Blob | null = null;
@@ -527,12 +573,14 @@ export class IllustrationPersistenceService implements OnDestroy {
         }));
         return counts.reduce((a, b) => a + b, 0);
       } else {
+        const ver = versions?.layers[layer.layerId];
         try {
           const blob: Blob | null = sm?.exportRasterLayerToBlob
             ? await sm.exportRasterLayerToBlob(layer.layerId, 'image/webp')
             : null;
           if (!blob) { console.warn(`[V2 Save] exportRasterLayerToBlob returned null for ${layer.layerId}`); failed.add(layer.layerId); return 0; }
           await firstValueFrom(this.illustrationService.uploadLayerPixelData(illId, layer.layerId, blob, texSize.w, texSize.h, 'webp'));
+          this._cloudVersions.recordLayer(layer.layerId, ver);
           return 1;
         } catch (e) { console.warn(`[V2 Save] layer upload failed for ${layer.layerId}`, e); failed.add(layer.layerId); return 0; }
       }
@@ -568,6 +616,7 @@ export class IllustrationPersistenceService implements OnDestroy {
   _invalidateUploadedLayers(): void {
     this._uploadedLayerIds.clear();
     this._dirtyLayerIds.clear();
+    this._cloudVersions.clear();
   }
 
   /** Load the current document. Picks the source — local-only OPFS, this device's OPFS copy when it is at least as
@@ -816,9 +865,11 @@ export class IllustrationPersistenceService implements OnDestroy {
   /** The server's state: scene graph, layer / cel pixels, layer properties, animation, settings (preferring this
    *  device's OPFS metadata when it holds changes not yet synced), 3D nodes. */
   private async _loadFromBackend(state: IllustrationStateDto, opfsMeta: IllustrationStateDto | null): Promise<void> {
-    // 1. Apply scene graph
-    if (state.sceneGraph) {
-      await this.shapeManager.setSceneGraphJSON(state.sceneGraph);
+    // 1. Apply the vector scene graph (stored by the server since mobile-parity 7.3c; null on older documents). Only its
+    //    2D part — the 3D comes from the mesh blobs below (a copy saved by an older client may hold 3D nodes too).
+    const vectorScene = toVectorSceneGraphJSON(state.sceneGraph);
+    if (vectorScene) {
+      await this.shapeManager.setSceneGraphJSON(vectorScene);
     }
 
     // 2. Download pixel data for all layers/cels in parallel
@@ -831,7 +882,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       try {
         // Clear the auto-created "Background" layer before importing saved layers
         this.shapeManager?.rasterLayerManager?.clearAllLayers();
-        await this.shapeManager.importRasterLayersFromDataURLs(importPayload);
+        await this._importLayerStack(state.layers, importPayload);
       } catch (e) {
         console.warn('[V2 Load] importRasterLayersFromDataURLs failed', e);
       }
@@ -882,6 +933,36 @@ export class IllustrationPersistenceService implements OnDestroy {
       await this._restoreSaved3D(state, null);
     }
     this._finishLoad(false);
+  }
+
+  /**
+   * Rebuild the layer stack from the server state: the paint layers from their pixels (as before), and — for states
+   * saved with layer types (2026-10-07+) — the vector / ephemera layers at their saved place, with their ids, so the
+   * restored scene graph's shapes are back on their own layer (and gated by it) instead of on a layer that no longer
+   * exists. Folders and the 3D divider are not rebuilt (as before). Older states: every pixel entry in one import.
+   */
+  private async _importLayerStack(layers: LayerStateDto[], importPayload: any[]): Promise<void> {
+    const sm = this.shapeManager;
+    const rlm = sm?.rasterLayerManager as unknown as { addVectorLayerWithId?: (id: string, name: string, opts?: { visible?: boolean; systemOwner?: string; packageOwnerId?: string }) => void } | undefined;
+    const isVector = (l: LayerStateDto) => l.type === 'vector' || l.type === 'ephemera';
+    if (!layers.some(isVector) || typeof rlm?.addVectorLayerWithId !== 'function') {
+      await sm.importRasterLayersFromDataURLs(importPayload);
+      return;
+    }
+    const byLayer = new Map<string, any[]>();
+    for (const entry of importPayload) {
+      const list = byLayer.get(entry.id) ?? [];
+      list.push(entry);
+      byLayer.set(entry.id, list);
+    }
+    for (const layer of [...layers].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+      if (isVector(layer)) {
+        rlm.addVectorLayerWithId(layer.layerId, layer.name, { visible: layer.visible, systemOwner: layer.systemOwner, packageOwnerId: layer.packageOwnerId });
+        continue;
+      }
+      const entries = byLayer.get(layer.layerId);
+      if (entries?.length) await sm.importRasterLayersFromDataURLs(entries);
+    }
   }
 
   /** Steps after Salsa restored its own document: raster layer list, a valid selected layer, per-layer dither. */
@@ -1295,10 +1376,87 @@ export class IllustrationPersistenceService implements OnDestroy {
     }
   }
 
-  /** A raster stroke ended on `layerId` (if known): re-upload that layer on the next save, refresh the thumbnail. */
+  /** A raster stroke ended on `layerId` (if known): re-upload that layer on the next save, refresh the thumbnail.
+   *  Also used for the other raster edits the editor hears about (undo / redo, a taken-back stroke). */
   noteRasterStroke(layerId: string | null): void {
     if (layerId) this._dirtyLayerIds.add(layerId);
     this._rasterEditedSinceThumbnail = true;
+  }
+
+  /** Re-upload `layerId` on the next cloud save (no thumbnail refresh). The old-dist fallback marks the selected layer on
+   *  every scene-graph change (mobile-parity 7.3c): without content versions that is the only hint a tool edited it. */
+  markLayerDirty(layerId: string | null): void {
+    if (layerId) this._dirtyLayerIds.add(layerId);
+  }
+
+  /** The engine reports per-layer content versions (Salsa sm.getRasterContentVersions): cloud dirtiness comes from them.
+   *  A typeof check only (read on every scene-graph change). */
+  get hasContentVersions(): boolean {
+    return hasContentVersionApi(this.shapeManager);
+  }
+
+  /** A raster stroke is in progress (set by the editor from Salsa's stroke start / end / cancel): the pixel poll waits
+   *  for it to end (the stroke end saves) instead of saving mid-stroke. */
+  rasterStrokeActive = false;
+
+  /** Content versions of each layer / cel as of its last cloud upload. */
+  private readonly _cloudVersions = new CloudUploadVersions();
+  private _pixelPoll: ReturnType<typeof setInterval> | null = null;
+  private _pixelPollSeq = -1;
+  private _pixelPollBaseline: RasterContentVersions | null = null;
+  private _cloudWarningShown = false;
+
+  /** The state the server gets: the cloud keeps only the vector scene graph (3D lives in the mesh blobs; see
+   *  cloud-scene-graph.ts); a No-Cloud document sends none (its content stays on this device). The local metadata copy
+   *  keeps the full `state`. */
+  _serverStatePayload(state: IllustrationStateDto): IllustrationStateDto {
+    return { ...state, sceneGraph: this.syncMode === 0 ? cloudSceneGraphJSON(this.shapeManager, state.sceneGraph) : null };
+  }
+
+  /** The server stored the save but not all of it (the scene graph over the storage quota): say so once per document. */
+  private _onCloudWarning(message: string): void {
+    console.warn('[V2 Save]', message);
+    if (this._cloudWarningShown) return;
+    this._cloudWarningShown = true;
+    this.notifyService.error(message);
+  }
+
+  /** Raster pixels changed since they were last uploaded (content versions; false on an old Salsa dist / non-cloud doc). */
+  _pixelsChangedSinceUpload(): boolean {
+    if (this.syncMode !== 0) return false;
+    const v = readContentVersions(this.shapeManager);
+    if (!v) return false;
+    return this._cloudVersions.anyChanged(v) || (!!this._pixelPollBaseline && contentVersionsDiffer(this._pixelPollBaseline, v));
+  }
+
+  /** Cloud documents: every PIXEL_POLL_MS, compare the engine's content versions with the last check and tick the
+   *  autosave when a layer / cel changed. Many raster edits (fill, undo / redo, paste, transform, text stamp, move,
+   *  filter, merge, …) raise no event the editor hears, so before this they reached the server only with the next
+   *  stroke. Outside the zone; no-op on an old Salsa dist. */
+  private _startPixelPoll(): void {
+    this._stopPixelPoll();
+    if (this.syncMode !== 0 || !this.hasContentVersions) return;
+    const start = () => setInterval(() => this._pollPixelChanges(), PIXEL_POLL_MS);
+    this._pixelPoll = this.ngZone ? this.ngZone.runOutsideAngular(start) : start();
+  }
+
+  private _stopPixelPoll(): void {
+    if (this._pixelPoll !== null) clearInterval(this._pixelPoll);
+    this._pixelPoll = null;
+    this._pixelPollSeq = -1;
+    this._pixelPollBaseline = null;
+  }
+
+  /** One poll tick (public for specs). */
+  _pollPixelChanges(): void {
+    if (!this.illustration || this.host.isLoading || this.syncMode !== 0) return;
+    const v = readContentVersions(this.shapeManager);
+    if (!v || v.seq === this._pixelPollSeq) return;
+    if (this.rasterStrokeActive) return;   // look again after the stroke (its end saves anyway)
+    this._pixelPollSeq = v.seq;
+    const base = this._pixelPollBaseline;
+    this._pixelPollBaseline = v;
+    if (base && contentVersionsDiffer(base, v)) this._inZone(() => this.sceneChanged$.next('__pixels_' + v.seq));
   }
   private _rasterEditedSinceThumbnail = false;
 
@@ -1398,6 +1556,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       this.sceneChanged$.next('__duplicate_' + Date.now());
     }
 
+    this._startPixelPoll();
     this._checkSaveBlocked();
     this.host.markLoaded('illustration');
   }

@@ -303,6 +303,13 @@ export class FrogFileService {
         clipped: el.clipped ?? false,
         lockTransparency: el.lockTransparency ?? false,
         animated: tlLayer?.animated ?? false,
+        // The entry type + folder, so a cloud load can rebuild vector layers (the scene graph's shapes live on them) and
+        // the upload can skip layers without pixels (mobile-parity 7.3c)
+        type: el.type ?? 'layer',
+        parentId: el.parentId ?? null,
+        // Subsystem-owned layers (the package dieline / package layers) stay hidden from the Layers panel when rebuilt
+        ...(el.systemOwner ? { systemOwner: el.systemOwner } : {}),
+        ...(el.packageOwnerId ? { packageOwnerId: el.packageOwnerId } : {}),
         cels: (tlLayer?.cels ?? []).map((c: CelInfo) => ({
           celId: c.id,
           frame: c.frame,

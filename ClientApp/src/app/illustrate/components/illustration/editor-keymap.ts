@@ -36,9 +36,18 @@ export type KeymapHost = Pick<IllustrationComponent,
   'openArmaturePanel' | 'animationService'
 >;
 
+/** The engine's selected layer entry is the 3D scene layer (a city document selects it on load). Raster undo has no
+ *  history there — Ctrl+Z threw "reading 'undo'" in Salsa (mobile-parity 7.3c) — so the key means the 3D scene's undo. */
+function engineLayerIs3DScene(sm: KeymapHost['shapeManager'] | undefined): boolean {
+  const api = sm as unknown as { rasterLayerManager?: { getSelectedLayerId?: () => string | null }; getRasterLayers?: () => Array<{ id: string; type?: string }> } | undefined;
+  const id = api?.rasterLayerManager?.getSelectedLayerId?.();
+  if (!id) return false;
+  return api?.getRasterLayers?.()?.find(l => l.id === id)?.type === '3d-scene';
+}
+
 /** Undo / redo go to the active context; the engine's 2D object stack has already handled the key when it can. */
-function undo(ed: Pick<KeymapHost, 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
-  if (ed.is3DContextActive) redo ? ed.scene3dRedo() : ed.scene3dUndo();
+function undo(ed: Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
+  if (ed.is3DContextActive || engineLayerIs3DScene(ed.shapeManager)) redo ? ed.scene3dRedo() : ed.scene3dUndo();
   else void (redo ? ed.rasterRedo() : ed.rasterUndo());
 }
 

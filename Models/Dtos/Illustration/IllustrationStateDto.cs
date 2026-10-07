@@ -19,6 +19,9 @@ namespace Frogmarks.Models.Dtos.Illustration
         /// <summary>Save request: the revision the client last loaded / saved. A different current revision means someone
         /// else saved in between → 409 instead of overwriting their work. Omitted = no check (older clients).</summary>
         public long? BaseRevision { get; set; }
+        /// <summary>The vector (2D) scene graph JSON. Stored gzipped as the blob {id}/scene-graph.json.gz in the scene3d
+        /// container (mobile-parity 7.3c: it used to be ignored, so a cloud-only document lost its vector shapes). Null /
+        /// empty on a save = not sent: the stored one is kept.</summary>
         public string? SceneGraph { get; set; }
         public AnimationStateDto? Animation { get; set; }
         public List<LayerStateDto> Layers { get; set; } = new();
@@ -38,6 +41,9 @@ namespace Frogmarks.Models.Dtos.Illustration
         // Load response only — not persisted
         public Dictionary<string, string>? MeshSasUrls { get; set; }   // meshId → read SAS URL
         public string? TexLibSasUrl { get; set; }               // read SAS URL for texture-library.gz
+        /// <summary>Save response only: something in the save was not stored (e.g. the scene graph over the storage quota).
+        /// The rest of the save succeeded.</summary>
+        public string? Warning { get; set; }
 
         /// <summary>Every other top-level field the client sends (scene3dGroups, scene3dFrameLinkBuckets, packaging, and
         /// anything added later) — kept and returned verbatim instead of dropped (audit Phase 2.1).</summary>
@@ -54,6 +60,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public int PlayRangeStart { get; set; } = 1;
         public int PlayRangeEnd { get; set; } = 24;
         public OnionSkinDto? OnionSkin { get; set; }
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class OnionSkinDto
@@ -64,6 +74,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public float Opacity { get; set; } = 0.3f;
         public float[] TintBefore { get; set; } = { 1.0f, 0.2f, 0.2f };
         public float[] TintAfter { get; set; } = { 0.2f, 0.5f, 1.0f };
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class LayerStateDto
@@ -83,6 +97,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public FrameLinkAnimationDto? FrameLinkAnimation { get; set; }
         // Populated on load response only:
         public string? PixelDataUrl { get; set; }
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class CelStateDto
@@ -96,6 +114,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public string? PixelDataUrl { get; set; }
         public int? Width { get; set; }
         public int? Height { get; set; }
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class DitherConfigDto
@@ -115,6 +137,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public bool InvertPattern { get; set; }
         public double DuotoneBias { get; set; }
         public double TintOpacity { get; set; } = 1.0;
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class FrameLinkAnimationDto
@@ -135,12 +161,20 @@ namespace Frogmarks.Models.Dtos.Illustration
         public int ShakeSeed { get; set; }
         public bool DisplaceX { get; set; }
         public bool DisplaceY { get; set; }
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class DocumentSizeDto
     {
         public double W { get; set; }
         public double H { get; set; }
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
     public class PaperGrainDto
@@ -148,6 +182,10 @@ namespace Frogmarks.Models.Dtos.Illustration
         public string Type { get; set; } = "none";
         public double Scale { get; set; } = 1.0;
         public double Strength { get; set; } = 0.3;
+        /// <summary>Fields the client sends that this DTO doesn't model (a layer's type, the dither edge settings, …) —
+        /// stored and returned verbatim instead of dropped (mobile-parity 7.3c).</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtraFields { get; set; }
     }
 
 }

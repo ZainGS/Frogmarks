@@ -188,7 +188,12 @@ All fields are optional. Omitting `name` defaults to `"Copy of {original}"`. Cop
 DELETE /api/illustration/{id}
 ```
 
-**Response:** `ResultModel<Illustration>` — cascade-deletes layers, cels. (Blob cleanup is NOT automatic — blobs orphan.)
+**Response:** `ResultModel<Illustration>` — cascade-deletes layers, cels. Then (2026-10-07, mobile-parity 7.3c) deletes
+EVERY blob of the illustration, listed by prefix: `{id}/*` in the cel container (layer + cel pixels, any format), `{id}/*`
+in the scene3d container (`mesh/*.gz`, `texture-library.gz`, `scene-graph.json.gz`, legacy `scene3d-nodes.gz`), the
+thumbnail `{uuid}.png` and the published bundles `{uuid}/*`. The owner's quota is refunded for every recorded size
+(layers, cels, meshes, texture library, scene graph). The row goes first, so a failed blob delete only leaks storage.
+(It used to delete layer / cel / thumbnail / legacy blobs only: the per-mesh blobs and their quota leaked.)
 
 ---
 
@@ -284,12 +289,25 @@ Saves the full illustration state: scene graph, animation config, layers, and ce
 ```
 
 **Behavior:**
-- Upserts layers by `layerId` — layers not in the payload are deleted (cascade deletes their cels + DB rows).
-- Upserts cels by `celId` within each layer — cels not in the payload are deleted from DB (blob cleanup happens via `DELETE cel` endpoint).
+- Upserts layers by `layerId` — layers not in the payload are deleted (cascade deletes their cels + DB rows). Since
+  2026-10-07 their pixel blobs are deleted too and their sizes refunded (a blob whose id is still in the payload — a cel
+  moved to another layer — is kept).
+- Upserts cels by `celId` within each layer — cels not in the payload are deleted from DB, their blobs deleted, sizes refunded.
 - Stores `animation.onionSkin` as a JSON string column on the illustration row.
 - Sets `sceneVersion` to `version` from the payload.
+- **`sceneGraph`** (since 2026-10-07, mobile-parity 7.3c; it used to be ignored): stored gzipped as the blob
+  `{id}/scene-graph.json.gz` in the scene3d container, charged to the owner's quota like the other blobs. Its gzipped
+  size + SHA-256 live in `ExtendedStateJson` (no schema change); an unchanged scene graph is not rewritten. Null / empty
+  = not sent: the stored one is kept. Over quota / a failed upload keeps the stored one and the response carries
+  `warning` (the rest of the save succeeds). Frogmarks sends the VECTOR (2D) part only — the 3D lives in the mesh blobs
+  — and none for a No-Cloud document.
+- **Unmodelled fields are kept, not dropped** (since 2026-10-07): unknown fields on a layer (`type`, `parentId`,
+  `systemOwner`, `packageOwnerId`, …), a cel or `animation` are stored in `ExtendedStateJson` by id and returned on load;
+  unknown fields of `ditherConfig` (e.g. the edge settings), `frameLinkAnimation`, `onionSkin`, `documentSize` and
+  `paperGrain` are stored with them. A layer / cel sent without any extra fields keeps the ones stored for it.
 
-**Response:** `ResultModel<IllustrationStateDto>` — echoes back the saved state.
+**Response:** `ResultModel<IllustrationStateDto>` — `version`, `savedAt`, `revision`, and `warning` when part of the save
+was not stored.
 
 ---
 
@@ -373,6 +391,8 @@ The `resultObject` has this shape:
 - `width` / `height` on cels are the pixel dimensions stored during upload.
 - Layers are sorted by `order` (ascending). Cels are sorted by `frame` (ascending).
 - If `version` is `1` (legacy/never saved via v2), `animation` is `null`, `layers` is `[]`, and `sceneGraph` contains the raw legacy `canvasData` string.
+- `sceneGraph` (v2): the scene graph stored by the last save that sent one (`{id}/scene-graph.json.gz`), or null for a
+  document saved before 2026-10-07. Layers / cels / `animation` carry back any extra fields the client saved (`type`, …).
 
 ---
 

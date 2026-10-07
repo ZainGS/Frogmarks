@@ -63,6 +63,25 @@ namespace Frogmarks.Services
             return Task.CompletedTask;
         }
 
+        public Task<IReadOnlyList<string>> ListAsync(string containerName, string prefix)
+        {
+            var names = new List<string>();
+            var containerRoot = GetFilePath(containerName, "");
+            // Only walk the prefix's folder ("123/mesh/" → <container>/123/mesh), not the whole container
+            var slash = prefix.LastIndexOf('/');
+            var searchRoot = slash > 0 ? GetFilePath(containerName, prefix.Substring(0, slash)) : containerRoot;
+            if (Directory.Exists(searchRoot))
+            {
+                var rootWithSep = containerRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                foreach (var file in Directory.EnumerateFiles(searchRoot, "*", SearchOption.AllDirectories))
+                {
+                    var name = file.Substring(rootWithSep.Length).Replace(Path.DirectorySeparatorChar, '/');
+                    if (name.StartsWith(prefix, StringComparison.Ordinal)) names.Add(name);
+                }
+            }
+            return Task.FromResult<IReadOnlyList<string>>(names);
+        }
+
         public Task<string> GetReadUrlAsync(string containerName, string blobName)
         {
             var filePath = GetFilePath(containerName, blobName);

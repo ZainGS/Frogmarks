@@ -46,6 +46,16 @@ namespace Frogmarks.Services
             await blob.DeleteIfExistsAsync();
         }
 
+        public async Task<IReadOnlyList<string>> ListAsync(string containerName, string prefix)
+        {
+            var container = _blobServiceClient.GetBlobContainerClient(containerName);
+            var names = new List<string>();
+            if (!await container.ExistsAsync()) return names;
+            await foreach (var item in container.GetBlobsAsync(prefix: prefix))
+                names.Add(item.Name);
+            return names;
+        }
+
         public Task<string> GetReadUrlAsync(string containerName, string blobName)
         {
             var container = _blobServiceClient.GetBlobContainerClient(containerName);

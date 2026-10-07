@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { CharacterPanelComponent } from '../character-panel.component';
 import { CharCharmsService } from '../char-charms.service';
 
-/** Edit Character › Charms / attachments, placement, chains, sparkle.
+/** Edit Character › Charms / attachments, placement, chains.
  *  Markup only: state and actions live in the panel's services; `cp` is the panel (outputs, section, part textures). */
 @Component({
   selector: 'app-char-charms-section',

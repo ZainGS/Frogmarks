@@ -12,6 +12,12 @@ namespace Frogmarks.Services.Interfaces
         Task DeleteAsync(string containerName, string blobName);
 
         /// <summary>
+        /// Names of every blob in the container whose name starts with <paramref name="prefix"/> (e.g. "123/" = everything
+        /// stored for illustration 123). Empty when the container doesn't exist.
+        /// </summary>
+        Task<IReadOnlyList<string>> ListAsync(string containerName, string prefix);
+
+        /// <summary>
         /// Returns a URL the frontend can use to fetch the blob.
         /// For Azure this is a time-limited SAS URL; for local storage it is a relative path served by static files.
         /// </summary>

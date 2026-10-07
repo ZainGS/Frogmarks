@@ -162,6 +162,28 @@ describe('editor keymap', () => {
       expect(ed2.rasterUndo).toHaveBeenCalled();
       expect(ed2.shapeManager.undo2DShapes).not.toHaveBeenCalled();
     });
+
+    it("the engine's selected layer is the 3D scene layer (a city document): the 3D undo, not raster (mobile-parity 7.3c)", () => {
+      const withLayer = (type: string) => {
+        const ed = host({});
+        Object.assign(ed.shapeManager, {
+          rasterLayerManager: { getSelectedLayerId: () => 'L' },
+          getRasterLayers: () => [{ id: 'X', type: 'layer' }, { id: 'L', type }],
+        });
+        return ed;
+      };
+      const city = withLayer('3d-scene');
+      routeUndo(city as any, false);
+      routeUndo(city as any, true);
+      expect(city.scene3dUndo).toHaveBeenCalledTimes(1);
+      expect(city.scene3dRedo).toHaveBeenCalledTimes(1);
+      expect(city.rasterUndo).not.toHaveBeenCalled();
+      expect(city.rasterRedo).not.toHaveBeenCalled();
+      const paint = withLayer('layer');
+      routeUndo(paint as any, false);
+      expect(paint.rasterUndo).toHaveBeenCalled();
+      expect(paint.scene3dUndo).not.toHaveBeenCalled();
+    });
   });
 
   describe('Edit › Duplicate / Delete routing', () => {

@@ -323,6 +323,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   closeContextMenu() { if (this.contextMenu.visible) this.contextMenu.visible = false; }
 
   private rasterStrokeSubscription?: Subscription;
+  /** Stroke start / cancel (mobile-parity 7.3c): the cloud pixel poll waits for a stroke; a taken-back stroke re-uploads. */
+  private _rasterStrokeStartSub: { unsubscribe(): void } | null = null;
+  private _rasterStrokeCancelSub: { unsubscribe(): void } | null = null;
 
   controlPanelActiveTool = '';
   shapeManager!: ShapeManager;
@@ -1740,6 +1743,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.persist.thumbnailSaveSubscription?.unsubscribe();
     this.selectionChangedSubscription?.unsubscribe();
     this.rasterStrokeSubscription?.unsubscribe();
+    this._rasterStrokeStartSub?.unsubscribe(); this._rasterStrokeCancelSub?.unsubscribe();
+    this._rasterStrokeStartSub = this._rasterStrokeCancelSub = null;
     this.resetSceneState();
     this.persist.lastSavedThumbnailJSON = '';
     this.persist.lastThumbnailTime = 0;
@@ -1945,9 +1950,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._layerSignature = null;
     for (const sub of [this._sceneAppliedOnceSub, this._cityBuildSub, this.selectionChangedSubscription, this.selectionToolSubscription,
                        this._sceneGraphChangedSub, this._rasterLayersSub, this._rasterActiveLayerSub, this._currentFrameSub,
-                       this._viewStateSub, this._playStateSub, this._cameraCutsSub, this.rasterStrokeSubscription]) {
+                       this._viewStateSub, this._playStateSub, this._cameraCutsSub, this.rasterStrokeSubscription,
+                       this._rasterStrokeStartSub, this._rasterStrokeCancelSub]) {
       sub?.unsubscribe?.();
     }
+    this._rasterStrokeStartSub = this._rasterStrokeCancelSub = null;
     this._sceneAppliedOnceSub = this._cityBuildSub = this.selectionChangedSubscription = this.selectionToolSubscription = null;
     this._sceneGraphChangedSub = this._rasterLayersSub = this._rasterActiveLayerSub = this._currentFrameSub = null;
     this._viewStateSub = this._playStateSub = this._cameraCutsSub = this.rasterStrokeSubscription = null;
@@ -2114,6 +2121,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     } catch (e) {
       console.warn('Failed to subscribe to raster stroke end', e);
     }
+    this._subscribeRasterStrokeStartCancel();
 
     this._configureEngineForIllustration();
   }
@@ -2233,6 +2241,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
         this._layerSignature = sig;
         this.refreshRasterLayers();
       }
+      // Older Salsa dist (no raster content versions): a tool may have written the selected layer without a stroke
+      // (fill, paste, transform, text stamp …) — re-upload it with this save, to be safe (mobile-parity 7.3c)
+      if (!this.persist.hasContentVersions) this.persist.markLayerDirty(this.editorState.selectedRasterLayerId);
       this.persist.sceneChanged$.next('__scene_' + Date.now());
     }
 
@@ -2312,8 +2323,41 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.vectorPanel?.refreshVectorShapes();
   }
 
+  /** Stroke start (no zone: only a flag) and stroke cancel (TOUCH-5: a second finger / the pen took the stroke back). A
+   *  cancelled stroke that had BEGUN painting restored its pixels; a cloud upload that read the layer mid-stroke would
+   *  keep the taken-back pixels on the server, so the layer goes up again (mobile-parity 7.3c). Typeof-guarded. */
+  private _subscribeRasterStrokeStartCancel(): void {
+    const sm = this.shapeManager as unknown as {
+      onRasterStrokeStart?: (fn: (v: any) => void) => { unsubscribe(): void } | undefined;
+      onRasterStrokeCancel?: (fn: (v: { began?: boolean } | undefined) => void) => { unsubscribe(): void } | undefined;
+    };
+    try {
+      if (typeof sm.onRasterStrokeStart === 'function') {
+        this._rasterStrokeStartSub = sm.onRasterStrokeStart(() => { this.persist.rasterStrokeActive = true; }) ?? null;
+      }
+      if (typeof sm.onRasterStrokeCancel === 'function') {
+        this._rasterStrokeCancelSub = sm.onRasterStrokeCancel((ev) => {
+          this.persist.rasterStrokeActive = false;
+          if (ev?.began) this.ngZone.run(() => this._noteRasterHistoryEdit('__cancel_'));
+        }) ?? null;
+      }
+    } catch (e) {
+      console.warn('Failed to subscribe to raster stroke start / cancel', e);
+    }
+  }
+
+  /** A raster edit the editor itself triggered (undo / redo, a taken-back stroke): re-upload the engine's selected layer
+   *  (the one Salsa's per-layer history acted on) and tick the autosave. */
+  private _noteRasterHistoryEdit(tag: string): void {
+    if (!this.persist.illustration) return;
+    const engineLayer = this.shapeManager?.rasterLayerManager?.getSelectedLayerId?.() ?? this.editorState.selectedRasterLayerId;
+    this.persist.noteRasterStroke(engineLayer ?? null);
+    this.persist.sceneChanged$.next(tag + Date.now());
+  }
+
   /** A raster stroke ended (raster drawing bypasses scene-graph events): dirty the layer, recent colour, autosave tick. */
   private _onRasterStrokeEnd(): void {
+    this.persist.rasterStrokeActive = false;
     if (!this.persist.illustration) return;
     // Mark the painted layer dirty (uploadPixelData re-uploads only it) and the thumbnail stale
     this.persist.noteRasterStroke(this.editorState.selectedRasterLayerId);
@@ -2492,6 +2536,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   async rasterUndo() {
     try {
       const ok = await this.shapeManager?.rasterUndo();
+      if (ok) this._noteRasterHistoryEdit('__undo_');   // the cloud copy of that layer is now stale (mobile-parity 7.3c)
       if (!ok) this.notifyService.error('Raster undo returned false');
     } catch (e) {
       this.notifyService.error('Raster undo failed');
@@ -2502,6 +2547,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   async rasterRedo() {
     try {
       const ok = await this.shapeManager?.rasterRedo();
+      if (ok) this._noteRasterHistoryEdit('__redo_');
       if (!ok) this.notifyService.error('Raster redo returned false');
     } catch (e) {
       this.notifyService.error('Raster redo failed');

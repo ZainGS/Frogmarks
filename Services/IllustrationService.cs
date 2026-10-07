@@ -358,29 +358,21 @@ namespace Frogmarks.Services
 
                 var userId = await GetStorageOwnerIdAsync(id);   // quota belongs to the owner, not the uploader (audit Phase 1.10)
 
-                // Delete layer and cel blobs, accumulate freed bytes
-                long freedBytes = 0;
-                foreach (var layer in illustration.Layers)
-                {
-                    if (!string.IsNullOrEmpty(layer.PixelDataUrl))
-                        await TryDeleteBlobAsync(_celContainerName, $"{id}/{layer.LayerId}.{layer.PixelFormat ?? "webp"}");
-                    freedBytes += layer.BlobSizeBytes;
+                // Everything this illustration was charged for: layer + cel pixel blobs, and (from the extended state)
+                // the per-mesh blobs, the texture library and the scene graph. The mesh / texture-library / scene-graph
+                // sizes used to be left charged forever (mobile-parity 7.3c).
+                ExtendedState? ext = null;
+                if (!string.IsNullOrEmpty(illustration.ExtendedStateJson))
+                    try { ext = JsonSerializer.Deserialize<ExtendedState>(illustration.ExtendedStateJson); } catch { }
+                long freedBytes = illustration.Layers.Sum(l => l.BlobSizeBytes + l.Cels.Sum(c => c.BlobSizeBytes))
+                    + (ext?.MeshBlobSizes?.Values.Sum() ?? 0) + (ext?.TexLibBlobSize ?? 0) + (ext?.SceneGraphBlobSize ?? 0);
 
-                    foreach (var cel in layer.Cels)
-                    {
-                        await TryDeleteBlobAsync(_celContainerName, $"{id}/{cel.CelId}.{cel.PixelFormat ?? "webp"}");
-                        freedBytes += cel.BlobSizeBytes;
-                    }
-                }
-
-                // Delete fixed-name blobs (thumbnail, scene3d)
-                if (illustration.UUID != Guid.Empty)
-                    await TryDeleteBlobAsync(_containerName, $"{illustration.UUID}.png");
-                await TryDeleteBlobAsync(_scene3dContainerName, $"{id}/scene3d-nodes.gz");
-                await TryDeleteBlobAsync(_scene3dContainerName, $"{id}/texture-library.gz");
-
+                // The row first: if this fails nothing is lost (the blobs are still there). Blobs of a deleted row are
+                // unreachable, so a failed blob delete below only leaks storage, never data.
                 _context.Illustrations.Remove(illustration);
                 await _context.SaveChangesAsync();
+
+                await DeleteIllustrationBlobsAsync(illustration, ext);
 
                 if (userId != null && freedBytes > 0)
                     await DecrementStorageAsync(userId, freedBytes);
@@ -660,8 +652,8 @@ namespace Frogmarks.Services
             // The copy carries EVERYTHING the server stores for the source — what SaveIllustrationState and the blob
             // uploads write: the extended state (canvas settings, dither, document size, 3D global settings, the mesh
             // list, groups / frame-link buckets / packaging), the per-mesh + texture-library blobs, the layers with
-            // their dither / frame-link JSON, the cels and every pixel blob. It used to copy the raster layers only
-            // (mobile-parity 7.2). (The vector-shape scene graph is not stored server-side at all, so it can't be.)
+            // their dither / frame-link JSON, the cels and every pixel blob, and the vector-shape scene graph blob. It used
+            // to copy the raster layers only (mobile-parity 7.2; the scene graph is stored since 7.3c).
             ExtendedState? ext = null;
             if (!string.IsNullOrEmpty(source.ExtendedStateJson))
                 try { ext = JsonSerializer.Deserialize<ExtendedState>(source.ExtendedStateJson); } catch { }
@@ -672,7 +664,7 @@ namespace Frogmarks.Services
             var userId = GetCurrentUserId();
             var user = userId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId) : null;
             long recordedBytes = source.Layers.Sum(l => l.BlobSizeBytes + l.Cels.Sum(c => c.BlobSizeBytes))
-                + (ext?.MeshBlobSizes?.Values.Sum() ?? 0) + (ext?.TexLibBlobSize ?? 0);
+                + (ext?.MeshBlobSizes?.Values.Sum() ?? 0) + (ext?.TexLibBlobSize ?? 0) + (ext?.SceneGraphBlobSize ?? 0);
             long chargedBytes = 0, copiedBytes = 0;
             if (user != null && recordedBytes > 0)
             {
@@ -735,9 +727,12 @@ namespace Frogmarks.Services
             }
             var texLibCopied = await TryCopyBlobAsync(_scene3dContainerName, $"{source.Id}/texture-library.gz", $"{newIllustration.Id}/texture-library.gz");
             await TryCopyBlobAsync(_scene3dContainerName, $"{source.Id}/scene3d-nodes.gz", $"{newIllustration.Id}/scene3d-nodes.gz");
+            // The vector-shape scene graph (mobile-parity 7.3c); its size / hash travel in the copied extended state
+            var sceneGraphCopied = await TryCopyBlobAsync(_scene3dContainerName, SceneGraphBlobName(source.Id), SceneGraphBlobName(newIllustration.Id));
             if (ext != null)
             {
                 if (texLibCopied) copiedBytes += ext.TexLibBlobSize; else ext.TexLibBlobSize = 0;
+                if (sceneGraphCopied) copiedBytes += ext.SceneGraphBlobSize; else { ext.SceneGraphBlobSize = 0; ext.SceneGraphHash = null; }
                 ext.Revision = 0;   // a new record: its own optimistic-concurrency counter
                 newIllustration.ExtendedStateJson = JsonSerializer.Serialize(ext);
                 await _context.SaveChangesAsync();
@@ -881,6 +876,9 @@ namespace Frogmarks.Services
         public async Task<ResultModel<IllustrationStateDto>> SaveIllustrationState(long illustrationId, IllustrationStateDto stateDto)
         {
             if (!(await _access.CanAccessIllustrationAsync(illustrationId))) return new ResultModel<IllustrationStateDto>(ResultType.NotFound, "Not found.");   // owner / team / collaborator only (audit Phase 1.2)
+            // The scene graph store charges the quota before the main save; refunded if that save then fails
+            SceneGraphStoreResult? sg = null;
+            string? quotaOwnerId = null;
             try
             {
                 var illustration = await _context.Illustrations
@@ -891,15 +889,24 @@ namespace Frogmarks.Services
                 if (illustration == null)
                     return new ResultModel<IllustrationStateDto>(ResultType.NotFound, "Illustration not found.");
 
+                // Previous extended state: blob sizes (quota deltas), the stored scene graph, layer / cel extras
+                ExtendedState? prevExt = null;
+                if (!string.IsNullOrEmpty(illustration.ExtendedStateJson))
+                    try { prevExt = JsonSerializer.Deserialize<ExtendedState>(illustration.ExtendedStateJson); } catch { }
+
                 // Optimistic concurrency (audit Phase 2.5): the save deletes layers / cels missing from the payload, so a
                 // stale tab used to silently wipe newer work. The revision lives in ExtendedStateJson (no migration).
-                long currentRevision = 0;
-                if (!string.IsNullOrEmpty(illustration.ExtendedStateJson))
-                    try { currentRevision = JsonSerializer.Deserialize<ExtendedState>(illustration.ExtendedStateJson)?.Revision ?? 0; } catch { }
+                long currentRevision = prevExt?.Revision ?? 0;
                 if (stateDto.BaseRevision.HasValue && stateDto.BaseRevision.Value != currentRevision)
                     return new ResultModel<IllustrationStateDto>(ResultType.AlreadyExist,
                         "This illustration was saved from another tab or device since it was loaded here.",
                         new IllustrationStateDto { Revision = currentRevision });
+
+                // Vector-shape scene graph (mobile-parity 7.3c: it used to be ignored). First, while no tracked row is
+                // modified yet: the quota helpers call SaveChangesAsync.
+                quotaOwnerId = await GetStorageOwnerIdAsync(illustrationId);
+                var sceneGraphStore = await StoreSceneGraphAsync(illustrationId, stateDto.SceneGraph, prevExt, quotaOwnerId);
+                sg = sceneGraphStore;
 
                 // Update illustration-level fields
                 illustration.SceneVersion = stateDto.Version;
@@ -932,9 +939,19 @@ namespace Frogmarks.Services
 
                 // Store extended state — MeshIds tells the load path which per-mesh blobs to fetch
                 // Preserve blob size tracking fields so upload endpoints can compute deltas
-                ExtendedState? prevExt = null;
-                if (!string.IsNullOrEmpty(illustration.ExtendedStateJson))
-                    try { prevExt = JsonSerializer.Deserialize<ExtendedState>(illustration.ExtendedStateJson); } catch { }
+                // Layer / cel fields the rows don't model, by id. A layer / cel sent without any (an older client) keeps
+                // what a newer client stored for it; ones no longer in the payload are dropped with their rows.
+                Dictionary<string, Dictionary<string, JsonElement>>? layerExtras = null, celExtras = null;
+                foreach (var layerDto in stateDto.Layers)
+                {
+                    var lx = layerDto.ExtraFields ?? prevExt?.LayerExtras?.GetValueOrDefault(layerDto.LayerId);
+                    if (lx is { Count: > 0 }) (layerExtras ??= new())[layerDto.LayerId] = lx;
+                    foreach (var celDto in layerDto.Cels)
+                    {
+                        var cx = celDto.ExtraFields ?? prevExt?.CelExtras?.GetValueOrDefault(celDto.CelId);
+                        if (cx is { Count: > 0 }) (celExtras ??= new())[celDto.CelId] = cx;
+                    }
+                }
 
                 var extended = new ExtendedState
                 {
@@ -949,6 +966,11 @@ namespace Frogmarks.Services
                     MeshBlobSizes = prevExt?.MeshBlobSizes,
                     TexLibBlobSize = prevExt?.TexLibBlobSize ?? 0,
                     Revision = currentRevision + 1,
+                    SceneGraphBlobSize = sceneGraphStore.Size,
+                    SceneGraphHash = sceneGraphStore.Hash,
+                    LayerExtras = layerExtras,
+                    CelExtras = celExtras,
+                    AnimationExtras = stateDto.Animation?.ExtraFields ?? prevExt?.AnimationExtras,
                 };
                 illustration.ExtendedStateJson = JsonSerializer.Serialize(extended);
 
@@ -958,12 +980,23 @@ namespace Frogmarks.Services
                 var existingLayers = illustration.Layers.ToDictionary(l => l.LayerId);
                 var incomingLayerIds = new HashSet<string>(stateDto.Layers.Select(l => l.LayerId));
 
-                // Remove layers no longer present
+                // Remove layers no longer present. Their pixel blobs are unreachable once the rows go (the load builds
+                // every URL from a row): deleted after the save, and their recorded sizes refunded — they used to stay
+                // charged to the owner's quota forever (mobile-parity 7.3c).
+                var orphanedBlobs = new List<(string Id, string Name)>();
+                long orphanedBytes = 0;
+                void Orphan(string blobId, string? format, long bytes)
+                {
+                    orphanedBytes += bytes;
+                    if (BlobNames.IsSafeSegment(blobId)) orphanedBlobs.Add((blobId, $"{illustrationId}/{blobId}.{format ?? "webp"}"));
+                }
                 var layersToRemove = illustration.Layers
                     .Where(l => !incomingLayerIds.Contains(l.LayerId))
                     .ToList();
                 foreach (var layer in layersToRemove)
                 {
+                    Orphan(layer.LayerId, layer.PixelFormat, layer.BlobSizeBytes);
+                    foreach (var cel in layer.Cels) Orphan(cel.CelId, cel.PixelFormat, cel.BlobSizeBytes);
                     _context.IllustrationCels.RemoveRange(layer.Cels);
                     _context.IllustrationLayers.Remove(layer);
                 }
@@ -1011,6 +1044,7 @@ namespace Frogmarks.Services
                         .ToList();
                     foreach (var cel in celsToRemove)
                     {
+                        Orphan(cel.CelId, cel.PixelFormat, cel.BlobSizeBytes);
                         _context.IllustrationCels.Remove(cel);
                     }
 
@@ -1041,16 +1075,82 @@ namespace Frogmarks.Services
                 }
 
                 await _context.SaveChangesAsync();
+                sg = null;   // committed: no refund from here on
+
+                // After the commit (best effort): the scene graph blob shrank → refund; removed layers' / cels' blobs. A
+                // blob whose id is still in the payload (a cel moved to another layer) is kept — only its size is refunded,
+                // the new row is charged again when it is uploaded.
+                if (quotaOwnerId != null && sceneGraphStore.Refund > 0)
+                    await DecrementStorageAsync(quotaOwnerId, sceneGraphStore.Refund);
+                if (orphanedBlobs.Count > 0 || orphanedBytes > 0)
+                {
+                    var stillUsed = new HashSet<string>(stateDto.Layers.Select(l => l.LayerId)
+                        .Concat(stateDto.Layers.SelectMany(l => l.Cels.Select(c => c.CelId))));
+                    foreach (var (blobId, name) in orphanedBlobs)
+                        if (!stillUsed.Contains(blobId)) await TryDeleteBlobAsync(_celContainerName, name);
+                    if (quotaOwnerId != null && orphanedBytes > 0)
+                        await DecrementStorageAsync(quotaOwnerId, orphanedBytes);
+                }
+
                 // Only what the client needs back (this used to echo the whole state, scene graph included)
                 return new ResultModel<IllustrationStateDto>(ResultType.Success, resultObject: new IllustrationStateDto
                 {
                     Version = stateDto.Version, SavedAt = illustration.SavedAt, Revision = currentRevision + 1,
+                    Warning = sceneGraphStore.Warning,
                 });
             }
             catch (Exception ex)
             {
+                // The state did not commit: give back what the scene graph store charged (its blob may already hold the
+                // new JSON; the extended state still records the old size / hash, so the next save stores it again).
+                if (sg != null && sg.Charged > 0 && quotaOwnerId != null)
+                    try { await DecrementStorageAsync(quotaOwnerId, sg.Charged); } catch { }
                 return new ResultModel<IllustrationStateDto>(ResultType.Failure, ex.Message);
             }
+        }
+
+        /// <summary>What StoreSceneGraphAsync did: the size / hash the extended state should now record, the quota it
+        /// charged (refunded if the save then fails), the quota to give back after the save (the blob shrank), and a
+        /// warning when the scene graph could not be stored (the rest of the save goes on).</summary>
+        private sealed record SceneGraphStoreResult(long Size, string? Hash, long Charged, long Refund, string? Warning);
+
+        /// <summary>
+        /// Store the vector scene graph sent with a state save as SceneGraphBlobName (gzipped) — mobile-parity 7.3c. Not
+        /// sent (null / empty: an older client, a No-Cloud document) = the stored one is kept. Unchanged (same SHA-256 as
+        /// stored) = nothing is written. Quota: charged by the gzipped size delta like the other uploads; over quota, or
+        /// a failed upload, keeps the stored one and returns a warning instead of failing the whole save.
+        /// </summary>
+        private async Task<SceneGraphStoreResult> StoreSceneGraphAsync(long illustrationId, string? sceneGraph, ExtendedState? prev, string? ownerId)
+        {
+            long prevSize = prev?.SceneGraphBlobSize ?? 0;
+            var prevHash = prev?.SceneGraphHash;
+            if (string.IsNullOrEmpty(sceneGraph)) return new(prevSize, prevHash, 0, 0, null);
+
+            var raw = System.Text.Encoding.UTF8.GetBytes(sceneGraph);
+            var hash = Sha256Hex(raw);
+            if (hash == prevHash && prevSize > 0) return new(prevSize, prevHash, 0, 0, null);
+
+            var gz = Gzip(raw);
+            long delta = gz.Length - prevSize;
+            var user = ownerId != null ? await _context.ApplicationUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == ownerId) : null;
+            long charged = 0;
+            if (user != null && delta > 0)
+            {
+                if (!await TryIncrementStorageAsync(ownerId!, delta, user.IsPro))
+                    return new(prevSize, prevHash, 0, 0, "Storage quota exceeded: the vector shapes were not saved to the cloud.");
+                charged = delta;
+            }
+            try
+            {
+                using var ms = new MemoryStream(gz);
+                await _blobStorage.UploadAsync(_scene3dContainerName, SceneGraphBlobName(illustrationId), ms, overwrite: true);
+            }
+            catch
+            {
+                if (charged > 0) await DecrementStorageAsync(ownerId!, charged);
+                return new(prevSize, prevHash, 0, 0, "The vector shapes could not be saved to the cloud.");
+            }
+            return new(gz.Length, hash, charged, user != null && delta < 0 ? -delta : 0, null);
         }
 
         public async Task<ResultModel<IllustrationStateDto>> LoadIllustrationState(long illustrationId)
@@ -1097,6 +1197,14 @@ namespace Frogmarks.Services
                     }
                 }
 
+                // Deserialize extended state (canvas settings, mesh IDs, dither, document size, layer / cel extras)
+                ExtendedState? ext = null;
+                if (!string.IsNullOrEmpty(illData.ExtendedStateJson))
+                    try { ext = JsonSerializer.Deserialize<ExtendedState>(illData.ExtendedStateJson); } catch { }
+
+                // The vector-shape scene graph (mobile-parity 7.3c), fetched while the layers resolve
+                var sceneGraphTask = TryLoadSceneGraphAsync(illustrationId, ext);
+
                 // Build all layer/cel DTOs and resolve SAS URLs in parallel (each was an Azure round-trip — now fire-and-forget SAS generation)
                 var layerTasks = dbLayers.Select(async layer =>
                 {
@@ -1112,7 +1220,8 @@ namespace Frogmarks.Services
                         Clipped = layer.Clipped,
                         LockTransparency = layer.LockTransparency,
                         Animated = layer.Animated,
-                        Cels = new()
+                        Cels = new(),
+                        ExtraFields = ext?.LayerExtras?.GetValueOrDefault(layer.LayerId),
                     };
 
                     // Per-layer dither and frame link animation
@@ -1136,7 +1245,8 @@ namespace Frogmarks.Services
                             IsKey = cel.IsKey,
                             CelType = cel.CelType,
                             Width = cel.PixelWidth,
-                            Height = cel.PixelHeight
+                            Height = cel.PixelHeight,
+                            ExtraFields = ext?.CelExtras?.GetValueOrDefault(cel.CelId),
                         };
                         var urlTask = !string.IsNullOrEmpty(cel.PixelDataUrl)
                             ? _blobStorage.GetReadUrlAsync(_celContainerName, $"{illustrationId}/{cel.CelId}.{cel.PixelFormat ?? "webp"}")
@@ -1157,11 +1267,6 @@ namespace Frogmarks.Services
                 }).ToList(); // materialize so all layer tasks start immediately
 
                 var layers = (await Task.WhenAll(layerTasks)).ToList();
-
-                // Deserialize extended state (canvas settings, mesh IDs, dither, document size)
-                ExtendedState? ext = null;
-                if (!string.IsNullOrEmpty(illData.ExtendedStateJson))
-                    try { ext = JsonSerializer.Deserialize<ExtendedState>(illData.ExtendedStateJson); } catch { }
 
                 // Resolve 3D blob data: per-mesh SAS URLs (new path) or legacy monolithic base64 download
                 Dictionary<string, string>? meshSasUrls = null;
@@ -1210,8 +1315,10 @@ namespace Frogmarks.Services
                         LoopMode = illData.LoopMode,
                         PlayRangeStart = illData.PlayRangeStart,
                         PlayRangeEnd = illData.PlayRangeEnd,
-                        OnionSkin = onionSkin
+                        OnionSkin = onionSkin,
+                        ExtraFields = ext?.AnimationExtras,
                     },
+                    SceneGraph = await sceneGraphTask,
                     Layers = layers,
                     DitherConfig = ext?.DitherConfig,
                     DocumentSize = ext?.DocumentSize,
@@ -1279,6 +1386,15 @@ namespace Frogmarks.Services
             public Dictionary<string, long>? MeshBlobSizes { get; set; }
             public long TexLibBlobSize { get; set; }
             public long Revision { get; set; }   // optimistic-concurrency counter (see SaveIllustrationState)
+            // The scene graph blob (SceneGraphBlobName): its stored (gzipped) size for the quota, and the SHA-256 of the
+            // JSON it holds, so an unchanged scene graph is not rewritten on every save.
+            public long SceneGraphBlobSize { get; set; }
+            public string? SceneGraphHash { get; set; }
+            // Per-layer / per-cel / animation fields the client sends that the typed DTOs and the layer / cel rows don't
+            // model (a layer's type, parent folder, …), keyed by layer / cel id, returned on load (mobile-parity 7.3c).
+            public Dictionary<string, Dictionary<string, JsonElement>>? LayerExtras { get; set; }
+            public Dictionary<string, Dictionary<string, JsonElement>>? CelExtras { get; set; }
+            public Dictionary<string, JsonElement>? AnimationExtras { get; set; }
         }
 
         private async Task UploadBase64BlobAsync(string container, string blobName, string base64Data)
@@ -1296,6 +1412,91 @@ namespace Frogmarks.Services
                     await _blobStorage.DeleteAsync(container, blobName);
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Delete every blob an illustration owns (DeleteIllustration; mobile-parity 7.3c — the per-mesh "{id}/mesh/*.gz"
+        /// blobs, the scene graph and published bundles used to be left behind). Listed by prefix, so blobs no row or
+        /// list remembers (another pixel format, a mesh dropped from MeshIds, a legacy whole-scene blob) go too; the known
+        /// names are added as well in case a listing fails. Best effort: a failed delete only leaks storage.
+        /// </summary>
+        private async Task DeleteIllustrationBlobsAsync(Illustration illustration, ExtendedState? ext)
+        {
+            var id = illustration.Id;
+            var targets = new HashSet<(string Container, string Blob)>();
+            async Task AddListed(string container, string prefix)
+            {
+                try { foreach (var name in await _blobStorage.ListAsync(container, prefix)) targets.Add((container, name)); }
+                catch { /* the known names below still go */ }
+            }
+
+            await AddListed(_celContainerName, $"{id}/");
+            await AddListed(_scene3dContainerName, $"{id}/");
+            foreach (var layer in illustration.Layers)
+            {
+                if (BlobNames.IsSafeSegment(layer.LayerId)) targets.Add((_celContainerName, $"{id}/{layer.LayerId}.{layer.PixelFormat ?? "webp"}"));
+                foreach (var cel in layer.Cels)
+                    if (BlobNames.IsSafeSegment(cel.CelId)) targets.Add((_celContainerName, $"{id}/{cel.CelId}.{cel.PixelFormat ?? "webp"}"));
+            }
+            var meshIds = new HashSet<string>(ext?.MeshIds ?? new List<string>());
+            if (ext?.MeshBlobSizes != null) meshIds.UnionWith(ext.MeshBlobSizes.Keys);
+            foreach (var meshId in meshIds)
+                if (BlobNames.IsSafeSegment(meshId)) targets.Add((_scene3dContainerName, $"{id}/mesh/{meshId}.gz"));
+            targets.Add((_scene3dContainerName, $"{id}/scene3d-nodes.gz"));
+            targets.Add((_scene3dContainerName, $"{id}/texture-library.gz"));
+            targets.Add((_scene3dContainerName, SceneGraphBlobName(id)));
+
+            if (illustration.UUID != Guid.Empty)
+            {
+                targets.Add((_containerName, $"{illustration.UUID}.png"));
+                await AddListed(_publishedContainerName, $"{illustration.UUID}/");   // published bundles: the public page is gone with the row
+                if (!string.IsNullOrEmpty(illustration.PublishedBundleBlobName) && illustration.PublishedBundleBlobName.StartsWith($"{illustration.UUID}/"))
+                    targets.Add((_publishedContainerName, illustration.PublishedBundleBlobName));
+            }
+
+            foreach (var (container, blob) in targets)
+                await TryDeleteBlobAsync(container, blob);
+        }
+
+        // ── Scene graph (vector shapes) — mobile-parity 7.3c ─────────────────────────────────────────────────────────────
+        // SaveIllustrationState stores IllustrationStateDto.SceneGraph gzipped as one blob in the scene3d container (no
+        // schema change: its size + hash live in ExtendedStateJson). A blob, not a column: a scene graph can be MBs, and
+        // ExtendedStateJson is read and rewritten by every mesh / texture-library upload; CanvasData (v1) is mapped to
+        // IllustrationDto.SceneGraphData and written back by every PUT /illustration, so a stale copy would roll it back.
+
+        private static string SceneGraphBlobName(long illustrationId) => $"{illustrationId}/scene-graph.json.gz";
+
+        private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+
+        private static byte[] Gzip(byte[] raw)
+        {
+            using var output = new MemoryStream();
+            using (var gz = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+                gz.Write(raw, 0, raw.Length);
+            return output.ToArray();
+        }
+
+        private static byte[] Gunzip(byte[] compressed)
+        {
+            using var input = new MemoryStream(compressed);
+            using var gz = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            gz.CopyTo(output);
+            return output.ToArray();
+        }
+
+        /// <summary>The stored scene graph JSON, or null (none stored, or the blob is unreadable — the load then goes on
+        /// without it, as before this was stored).</summary>
+        private async Task<string?> TryLoadSceneGraphAsync(long illustrationId, ExtendedState? ext)
+        {
+            if (ext == null || (ext.SceneGraphBlobSize <= 0 && string.IsNullOrEmpty(ext.SceneGraphHash))) return null;
+            try
+            {
+                var name = SceneGraphBlobName(illustrationId);
+                if (!await _blobStorage.ExistsAsync(_scene3dContainerName, name)) return null;
+                return System.Text.Encoding.UTF8.GetString(Gunzip(await _blobStorage.DownloadAsync(_scene3dContainerName, name)));
+            }
+            catch { return null; }
         }
 
         /// <summary>Copy one blob within a container (Duplicate). False when the source doesn't exist or the copy failed.</summary>

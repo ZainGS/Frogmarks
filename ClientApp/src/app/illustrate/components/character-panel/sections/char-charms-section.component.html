@@ -45,18 +45,6 @@
     <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(5)" title="Add 5 evenly-spaced cloth belt loops around the waistband">+ 5</button>
     <button class="scene3d-btn" (click)="charms.scene3dAddBeltLoops(8)" title="Add 8 evenly-spaced cloth belt loops around the waistband">+ 8</button>
 </div>
-<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
-    <span style="font-size:11px;color:#888;flex:1">All metal charms:</span>
-    <button class="scene3d-btn" [class.scene3d-btn-active]="charms.scene3dCharSparkle"
-            (click)="charms.scene3dToggleCharSparkle()"
-            title="Toggle sparkle on all metal charms">
-        {{ charms.scene3dCharSparkle ? (charms.scene3dCharSparkleMode === 'star' ? '✦ Star' : '◦ Glint') : '○ Sparkle' }}
-    </button>
-</div>
-<div *ngIf="charms.scene3dCharSparkle" style="display:flex;gap:2px;margin-top:2px">
-    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='glint'" (click)="charms.scene3dSetCharSparkleMode('glint')">◦ Glint</button>
-    <button class="scene3d-btn" style="flex:1;font-size:10px" [class.scene3d-btn-active]="charms.scene3dCharSparkleMode==='star'" (click)="charms.scene3dSetCharSparkleMode('star')">✦ Star</button>
-</div>
 </ng-container>
 
 <!-- Charms grouped by type — each type is a collapsible accordion -->
@@ -167,14 +155,6 @@
             <label>Roughness</label>
             <input type="range" min="0" max="1" step="0.01" [ngModel]="a.params.roughness ?? 0.28" (ngModelChange)="a.params.roughness=+$event; charms.scene3dAttachmentParamChanged(a.id, a.params)">
             <span class="scene3d-val">{{ (a.params.roughness ?? 0.28) | number:'1.2-2' }}</span>
-        </div>
-        <div class="scene3d-material-row">
-            <label>Sparkle</label>
-            <button class="scene3d-btn" style="flex:1"
-                    [class.scene3d-btn-active]="a.params.sparkle"
-                    (click)="a.params.sparkle = a.params.sparkle === 'star' ? false : a.params.sparkle === 'glint' ? 'star' : 'glint'; charms.scene3dAttachmentParamChanged(a.id, a.params)">
-                {{ a.params.sparkle === 'star' ? '✦ Star' : a.params.sparkle ? '◦ Glint' : '○ Off' }}
-            </button>
         </div>
     </ng-container>
 

@@ -8,7 +8,7 @@ export type CharCharmsHost = Pick<CharacterPanelComponent,
 >;
 
 /**
- * Character charms: attachments by type (add / remove / params / placement), place-pick + preview, chains, belt loops, sparkle.
+ * Character charms: attachments by type (add / remove / params / placement), place-pick + preview, chains, belt loops.
  * Panel-scoped (provided by CharacterPanelComponent, bound in its constructor). Bodies moved verbatim from
  * character-panel.component (audit Phase 5.5).
  */
@@ -39,10 +39,6 @@ export class CharCharmsService implements OnDestroy {
   scene3dChainPickProgress: 'first' | 'second' | null = null;
 
   scene3dPreviewActive = false;
-
-  scene3dCharSparkle = false;
-
-  scene3dCharSparkleMode: 'glint' | 'star' = 'glint';
 
   scene3dAccordionOpen: Record<string, boolean> = {};
 
@@ -156,24 +152,6 @@ export class CharCharmsService implements OnDestroy {
     });
   }
 
-  scene3dToggleCharSparkle(): void {
-    const sm = this.shapeManager;
-    const id = this.host.scene3dEditCharBodyId;
-    if (!id) return;
-    this.scene3dCharSparkle = !this.scene3dCharSparkle;
-    sm.setCharacterSparkle3D(id, this.scene3dCharSparkle, this.scene3dCharSparkleMode);
-  }
-
-  scene3dSetCharSparkleMode(mode: 'glint' | 'star'): void {
-    const sm = this.shapeManager;
-    const id = this.host.scene3dEditCharBodyId;
-    if (!id) return;
-    this.scene3dCharSparkleMode = mode;
-    if (this.scene3dCharSparkle) {
-      sm.setCharacterSparkle3D(id, true, mode);
-    }
-  }
-
   private _showCharmPreview(): void {
     const sm = this.shapeManager;
     const id = this.host.scene3dEditCharBodyId;
@@ -207,10 +185,10 @@ export class CharCharmsService implements OnDestroy {
       let params    = sm.getDefaultAttachmentParams3D(this.scene3dNewAttachmentType as any);
       if (this.scene3dNewAttachmentType === 'chain') {
         placement = { ...placement, offset: [0, 0, 0.04] as [number,number,number], scale: 1.0 };
-        params = { ...params, chainMode: 'dangle', linkCount: 20, thickness: 0.0015, span: 0, sag: 0, metalness: 0.40, roughness: 0.28, sparkle: false };
+        params = { ...params, chainMode: 'dangle', linkCount: 20, thickness: 0.0015, span: 0, sag: 0, metalness: 0.40, roughness: 0.28 };
       }
       if (this.scene3dNewAttachmentType === 'choker') {
-        params = { ...params, metalness: 1.0, roughness: 0.46, sparkle: false, position: 0.0, thickness: 0.001 };
+        params = { ...params, metalness: 1.0, roughness: 0.46, position: 0.0, thickness: 0.001 };
       }
       if (this.scene3dNewAttachmentType === 'pocket') {
         params = { ...params, width: 0.08, height: 0.09 };
@@ -220,15 +198,15 @@ export class CharCharmsService implements OnDestroy {
       }
       if (this.scene3dNewAttachmentType === 'pendant') {
         placement = { ...placement, offset: [0.04, 0.02, 0.01] as [number,number,number], scale: 1.25 };
-        params = { ...params, dropLength: 0.02, width: 0.01, thickness: 0.002, metalness: 1.0, roughness: 0.28, sparkle: false };
+        params = { ...params, dropLength: 0.02, width: 0.01, thickness: 0.002, metalness: 1.0, roughness: 0.28 };
       }
       if (this.scene3dNewAttachmentType === 'watch') {
         placement = { ...placement, joint: 'lowerarm_l' };
-        params = { ...params, position: 1.0, thickness: 0.001, width: 0.01, height: 0.01, metalness: 1.0, roughness: 0.28, sparkle: false };
+        params = { ...params, position: 1.0, thickness: 0.001, width: 0.01, height: 0.01, metalness: 1.0, roughness: 0.28 };
       }
       if (this.scene3dNewAttachmentType === 'bracelet') {
         placement = { ...placement, joint: 'lowerarm_l' };
-        params = { ...params, position: 0.80, thickness: 0.001, metalness: 1.0, roughness: 0.28, sparkle: false };
+        params = { ...params, position: 0.80, thickness: 0.001, metalness: 1.0, roughness: 0.28 };
       }
       newId = sm.addAttachment3D(id, this.scene3dNewAttachmentType as any, placement, params) ?? null;
     }
