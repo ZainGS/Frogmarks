@@ -3,6 +3,7 @@ import { Router, ActivatedRoute } from '@angular/router';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } from '@zaings/salsa';
 import { PlayerCartService } from '../shared/services/player-cart.service';
+import { resetEngineTo2DView } from '../shared/utilities/engine-view-reset';
 
 @Component({
   selector: 'app-player',
@@ -92,6 +93,9 @@ export class PlayerComponent implements OnInit, OnDestroy {
       }
       this._sm = ShapeManager.getInstance();
       await this._sm.whenWebGPUReady();
+      // mobile-parity 7.3c: the engine outlives every route — the previous screen's 3D view / Play / edit mode must not
+      // stay on under the cart (the cart's own document restores its view state).
+      this.ngZone.runOutsideAngular(() => resetEngineTo2DView(this._sm));
 
       const result = await this.ngZone.runOutsideAngular(() => this._sm.importFrogcart(blob));
       if (!result) throw new Error('importFrogcart returned null');

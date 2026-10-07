@@ -19,6 +19,21 @@ import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
 import { toggleAppFullscreen } from 'app/shared/utilities/app-fullscreen';
 import { FrameCoalescer } from 'app/shared/utilities/frame-coalescer';
+import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
+import { startBlankEngineDocument } from 'app/illustrate/utils/blank-engine-document';
+
+/**
+ * A board starts from a CLEAN engine (mobile-parity 7.3c). The engine outlives every route, so the screen before (an
+ * illustration in free3D, Play, Edit Mesh ...) left its 3D view on: the orbit controller re-attached to the board's
+ * canvas and owned pan / zoom, the 3D workspace backdrop replaced the board's background, and the previous document's
+ * raster layers (a 3D Scene layer drops the 2D zoom clamps) and 3D nodes were still loaded. Reset the view to 2D, then
+ * replace the engine document with a blank one (no document id: the engine saves nothing; the board saves its own
+ * scene graph). The board's scene graph is applied over it afterwards.
+ */
+export async function startCleanBoardEngine(sm: ShapeManager): Promise<void> {
+  resetEngineTo2DView(sm);
+  await startBlankEngineDocument(sm);
+}
 
 @Component({
   selector: 'app-board',
@@ -737,6 +752,9 @@ onNodeFillColorSelected(layerId: string, color: string) {
     this.autoSaveSubscription?.unsubscribe();
     this.thumbnailSaveSubscription?.unsubscribe();
     this.selectionChangedSubscription?.unsubscribe();
+    // The previous board's engine-event subscriptions must not see the clean-engine reset below as a change of THIS board
+    this._sceneGraphChangedSub?.unsubscribe(); this._sceneGraphChangedSub = null;
+    this._sceneAppliedOnceSub?.unsubscribe(); this._sceneAppliedOnceSub = null;
     this.resetSceneState();
     this.lastSavedThumbnailJSON = '';
     this.lastThumbnailTime = 0;
@@ -749,6 +767,8 @@ onNodeFillColorSelected(layerId: string, color: string) {
     } else {
       await this.ngZone.runOutsideAngular(() => reinitializeWebGPURendering("webgpuCanvas"));
     }
+    // Before afterRendererBoot subscribes: the blank-document reset's scene-changed event is not this board's load
+    await this.ngZone.runOutsideAngular(() => startCleanBoardEngine(ShapeManager.getInstance()));
     this.ngZone.run(() => this.afterRendererBoot());
 
     this.canvas = this.canvasRef.nativeElement;
@@ -1404,6 +1424,9 @@ onNodeFillColorSelected(layerId: string, color: string) {
       this.selectionChangedSubscription.unsubscribe();
     }
     this._sceneGraphChangedSub?.unsubscribe();
+    // Only released by its own first event: a board left before that (an empty board, a failed load) kept it, and the
+    // next editor's document load then ran this board's thumbnail save (with this.board null on a failed load).
+    this._sceneAppliedOnceSub?.unsubscribe(); this._sceneAppliedOnceSub = null;
     this._engineEvents.cancel();
 
     if (this.onMouseMove) document.removeEventListener("mousemove", this.onMouseMove);
@@ -1475,6 +1498,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
   private readonly _engineEvents = new FrameCoalescer<'selection' | 'scene'>(dirty => this.ngZone.run(() => this._flushEngineEvents(dirty)));
   private _pendingSelectionIds: string[] | null = null;
   private _sceneGraphChangedSub: { unsubscribe(): void } | null = null;
+  private _sceneAppliedOnceSub: { unsubscribe(): void } | null = null;
 
   private _markEngineEvent(kind: 'selection' | 'scene'): void {
     this._engineEvents.mark(kind);
@@ -1518,11 +1542,12 @@ onNodeFillColorSelected(layerId: string, color: string) {
     // Loading screen state:
     this.markLoaded('renderer');
     // One-time scene-applied signal (fires after setSceneGraphJSON or any scene change)
-    const sceneAppliedOnce = this.shapeManager.interactionService.onSceneGraphChanged
+    this._sceneAppliedOnceSub?.unsubscribe();
+    this._sceneAppliedOnceSub = this.shapeManager.interactionService.onSceneGraphChanged
       .subscribe(() => this.ngZone.run(() => {
         this.markLoaded('sceneApplied');
-        sceneAppliedOnce.unsubscribe();
-        if(!this.board.isCustomThumbnail) {
+        this._sceneAppliedOnceSub?.unsubscribe(); this._sceneAppliedOnceSub = null;
+        if (this.board && !this.board.isCustomThumbnail) {
           void this.saveThumbnail();
         }
       }));

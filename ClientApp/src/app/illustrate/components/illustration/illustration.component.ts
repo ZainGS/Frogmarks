@@ -87,6 +87,7 @@ import { RasterAnimationService } from 'app/shared/services/raster/raster-animat
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { HiddenUiWake } from '../../utils/hidden-ui-wake';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
+import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
 import {
   SelectionTool, CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS, ArrowheadStyle,
   ARROWHEAD_OPTIONS,
@@ -1735,6 +1736,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   /** Route guard (canDeactivate): leaving the editor saves the pending change first instead of dropping it. */
   async flushBeforeLeave(): Promise<boolean> {
+    // Play blocks every save (the engine's busy gate) and is non-destructive: stop it FIRST, so the flush below saves
+    // the editor state. Left playing, the last changes were never saved (7.3c: leaving mid-Play lost the 3D scene).
+    const sm = this.shapeManager;
+    if (sm?.isPlaying3D) {
+      try { this.ngZone.runOutsideAngular(() => sm.exitPlayMode3D()); } catch (e) { console.warn('[illustration] stopping Play before leaving failed', e); }
+    }
     // Bounded: a slow network must not trap the user in the editor (the save keeps running in the background)
     await Promise.race([this.persist.flushPendingSave(), new Promise(r => setTimeout(r, 5000))]);
     return true;
@@ -1769,8 +1776,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Between boot and afterRendererBoot: the engine outlives every document, so each one starts from a BLANK engine
     // document (else a new / unsaved document opened on the previous one's content). Before afterRendererBoot
     // subscribes, so the reset's scene-changed event isn't taken as this document's load.
-    const startBlank = () => this.ngZone.runOutsideAngular(() =>
-      this.persist.startBlankDocument(ShapeManager.getInstance(), this.persist.isLocalMode ? illustrationUid : null));
+    // The engine also starts from the plain 2D VIEW (mobile-parity 7.3c): no Play / Edit Mesh / free3D orbit of whatever
+    // screen ran before; a document saved in a 3D camera mode restores it on load.
+    const startBlank = () => this.ngZone.runOutsideAngular(() => {
+      const engine = ShapeManager.getInstance();
+      resetEngineTo2DView(engine);
+      return this.persist.startBlankDocument(engine, this.persist.isLocalMode ? illustrationUid : null);
+    });
     if (!isRendererLive) {
       await this.ngZone.runOutsideAngular(() => startWebGPURendering('webgpuCanvas'));
       perfMark('reinit-done');
@@ -2990,6 +3002,15 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (this.uv.uvEditorOpen || this.uv.scene3dClothingPaintActive) {
       try { this.uv.closeUVEditor(); } catch (e) { console.warn('[illustration] UV editor close on destroy failed', e); }
     }
+    // mobile-parity 7.3c: leave the 3D context (sub-modes, 3D pointer controllers, hover, camera-sync listeners) and put
+    // the engine back into the plain 2D view — Play off, Edit Mesh off, free3D orbit + nav gizmo released, 2D pan / zoom
+    // owned by the 2D view. Without it the next screen (a board) got the orbit controller on ITS canvas and could not
+    // pan / zoom. The leave guard (flushBeforeLeave) has saved the document and autosave is off, so its saved view mode
+    // is unaffected: reopening it restores free3D.
+    if (this.editorState.scene3dPanelVisible) {
+      try { this._leave3dContext(); } catch (e) { console.warn('[illustration] leaving the 3D context on destroy failed', e); }
+    }
+    this.ngZone.runOutsideAngular(() => resetEngineTo2DView(this.shapeManager));
 
     this.ribbon.stopHandleLoop();
 

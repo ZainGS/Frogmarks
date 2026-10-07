@@ -17,4 +17,14 @@ describe('startBlankPackageDocument (package editor document isolation)', () => 
     const sm = { startBlankDocument: () => Promise.reject(new Error('boom')) };
     await expectAsync(startBlankPackageDocument(sm as any, { disable: () => {} } as any, 'local-x', 'X')).toBeResolved();
   });
+
+  it('puts the engine back into the 2D view (mobile-parity 7.3c) after unbinding autosave and before the blank document', async () => {
+    const order: string[] = [];
+    const sm = {
+      resetTo2DEditingView: () => order.push('2D view'),
+      startBlankDocument: async () => { order.push('blank'); },
+    };
+    await startBlankPackageDocument(sm as any, { disable: () => order.push('autosave off') } as any, 'local-pkg-2', 'Box');
+    expect(order).toEqual(['autosave off', '2D view', 'blank']);
+  });
 });

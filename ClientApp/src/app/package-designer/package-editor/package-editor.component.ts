@@ -10,16 +10,21 @@ import { LocalIllustrationService } from 'app/shared/services/illustrate/local-i
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { PackagingStateDto } from 'app/shared/services/illustrate/illustration.service';
 import { startBlankEngineDocument } from 'app/illustrate/utils/blank-engine-document';
+import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
 
 /**
  * Document isolation (mobile-parity 7.2), like the illustration editor's load: the engine outlives every document, so
  * a package opens on a BLANK engine document — nothing of the previous document (layers, pixels, shapes, 3D, packages,
- * settings, undo) leaks in and gets saved as this package's. Autosave is unbound first, so no pending save of the
- * previous document can run during the reset. A package with a save restores over the blank one afterwards.
+ * settings, undo) leaks in and gets saved as this package's, and no 3D view / edit mode of the previous screen stays
+ * on (7.3c). Autosave is unbound first, so no pending save of the previous document can run during the reset. A
+ * package with a save restores over the blank one afterwards.
  */
 export async function startBlankPackageDocument(sm: ShapeManager, autoSave: Pick<RasterAutoSaveService, 'disable'>,
                                                 docId: string, name: string): Promise<void> {
   autoSave.disable();
+  // mobile-parity 7.3c: the 3D view the previous screen left on (free3D orbit, Play, Edit Mesh ...) goes too — the
+  // package's own 3D editor (packaging.enterEditor) then claims the camera from the plain 2D view.
+  resetEngineTo2DView(sm);
   await startBlankEngineDocument(sm, docId, name);
 }
 
