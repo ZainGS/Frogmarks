@@ -1489,6 +1489,14 @@ svg {
 .scene3d-sh-axis-y { color: #50d050; }
 .scene3d-sh-axis-z { color: #5090ff; }
 
+.scene3d-sh-seg { color: rgba(255, 255, 255, 0.8); }
+.scene3d-sh-snap {
+    color: #c8ede3;
+    background: #3b6151;
+    padding: 0 5px;
+    letter-spacing: 0.06em;
+}
+
 .scene3d-sh-value {
     color: #ffe080;
     font-variant-numeric: tabular-nums;

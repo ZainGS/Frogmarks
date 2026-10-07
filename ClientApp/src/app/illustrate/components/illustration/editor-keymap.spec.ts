@@ -535,6 +535,104 @@ describe('editor keymap', () => {
       expect(activeContextPill(host({ editing: true, tool: 'knife' }) as any)).toBe(CONTEXT_PILLS.knife);
     });
 
+    it('Edit Mesh shading (newer dist): Smooth / Flat with faces selected, Mark / Clear Sharp with edges; hidden otherwise', () => {
+      const ed = host({ editing: true });
+      const sel = { faces: new Set<number>(), edges: new Set<number>(), vertices: new Set<number>() };
+      ed.shapeManager.getEditSelection3D = () => sel;
+      ed.shapeManager.setFacesSmooth3D = jasmine.createSpy('setFacesSmooth3D').and.returnValue(true);
+      ed.shapeManager.setSharpEdges3D = jasmine.createSpy('setSharpEdges3D').and.returnValue(true);
+      const ids = () => pillButtons(activeContextPill(ed as any)!, ed as any).map(b => b.id);
+      expect(ids()).toEqual(['multi', 'frame', 'grab', 'rotate', 'scale']);   // nothing selected
+      sel.faces.add(2); sel.faces.add(5);
+      expect(ids()).toEqual(['multi', 'frame', 'grab', 'rotate', 'scale', 'smooth', 'flat']);
+      btn(ed, 'smooth').run(ed as any);
+      btn(ed, 'flat').run(ed as any);
+      expect(ed.shapeManager.setFacesSmooth3D.calls.allArgs()).toEqual([['m1', new Set([2, 5]), true], ['m1', new Set([2, 5]), false]]);
+      sel.faces.clear(); sel.edges.add(7);
+      expect(ids()).toEqual(['multi', 'frame', 'grab', 'rotate', 'scale', 'sharp', 'unsharp']);
+      btn(ed, 'sharp').run(ed as any);
+      btn(ed, 'unsharp').run(ed as any);
+      expect(ed.shapeManager.setSharpEdges3D.calls.allArgs()).toEqual([['m1', [7], true], ['m1', [7], false]]);
+      // an old dist (no API): hidden even with a selection
+      const old = host({ editing: true });
+      old.shapeManager.getEditSelection3D = () => ({ faces: new Set([1]), edges: new Set([3]), vertices: new Set() });
+      expect(pillButtons(activeContextPill(old as any)!, old as any).map(b => b.id)).toEqual(['multi', 'frame', 'grab', 'rotate', 'scale']);
+    });
+
+    it('Edit Mesh Chamfer (newer dist): the pill button starts it; its pill picks, then sets amount / segments / snap; Apply / Cancel', () => {
+      const ed = host({ editing: true });
+      let st: any = null;
+      ed.shapeManager.beginBevel3D = jasmine.createSpy('beginBevel3D').and.callFake(() => {
+        st = { phase: 'pick', kind: null, amount: 0, maxAmount: 0, segments: 1, snap: false, snapStep: 0.05, targets: 0, hint: 'Tap a corner or edge to chamfer', dragging: false };
+        return true;
+      });
+      ed.shapeManager.getBevelState3D = () => st;
+      ed.shapeManager.setBevelAmount3D = jasmine.createSpy('setBevelAmount3D').and.callFake((a: number) => { st.amount = a; });
+      ed.shapeManager.setBevelSegments3D = jasmine.createSpy('setBevelSegments3D').and.callFake((n: number) => { st.segments = n; });
+      ed.shapeManager.setBevelSnap3D = jasmine.createSpy('setBevelSnap3D').and.callFake((on: boolean) => { st.snap = on; });
+      ed.shapeManager.commitBevel3D = jasmine.createSpy('commitBevel3D').and.callFake(() => { st = null; return true; });
+      ed.shapeManager.cancelBevel3D = jasmine.createSpy('cancelBevel3D').and.callFake(() => { st = null; });
+      expect(pillButtons(activeContextPill(ed as any)!, ed as any).map(b => b.id)).toContain('chamfer');
+      btn(ed, 'chamfer').run(ed as any);
+      expect(ed.shapeManager.beginBevel3D).toHaveBeenCalledTimes(1);
+      // pick phase: the hint, no tools, the field off, no Apply
+      let pill = activeContextPill(ed as any)!;
+      expect(pill).toBe(CONTEXT_PILLS.bevel);
+      expect(pill.hintFor!(ed as any)).toBe('Tap a corner or edge to chamfer');
+      expect(pillButtons(pill, ed as any)).toEqual([]);
+      expect(pill.numericEnabled!(ed as any)).toBeFalse();
+      expect(pill.apply!.available!(ed as any)).toBeFalse();
+      // a corner was tapped (the engine moved to adjust)
+      st.phase = 'adjust'; st.kind = 'vertex'; st.maxAmount = 1; st.targets = 1;
+      pill = activeContextPill(ed as any)!;
+      expect(pillButtons(pill, ed as any).map(b => b.id)).toEqual(['seg-', 'seg+', 'bevel-snap']);
+      expect(pill.hintFor!(ed as any)).toBe('Chamfer · 1 seg');
+      pill.numericRun!(ed as any, '0.25');
+      expect(ed.shapeManager.setBevelAmount3D).toHaveBeenCalledOnceWith(0.25);
+      pill.numericRun!(ed as any, 'abc');
+      expect(ed.shapeManager.setBevelAmount3D).toHaveBeenCalledTimes(1);   // junk ignored
+      expect(pill.numericValue!(ed as any)).toBe('0.250');
+      btn(ed, 'seg+').run(ed as any); btn(ed, 'seg+').run(ed as any); btn(ed, 'seg-').run(ed as any);
+      expect(st.segments).toBe(2);
+      btn(ed, 'bevel-snap').run(ed as any);
+      expect(btn(ed, 'bevel-snap').pressed!(ed as any)).toBeTrue();
+      pill.apply!.run(ed as any);
+      expect(ed.shapeManager.commitBevel3D).toHaveBeenCalledTimes(1);
+      expect(activeContextPill(ed as any)).toBe(CONTEXT_PILLS.meshEdit);
+      // an old dist: no Chamfer button
+      const old = host({ editing: true });
+      expect(pillButtons(activeContextPill(old as any)!, old as any).map(b => b.id)).not.toContain('chamfer');
+    });
+
+    it('Chamfer keys: Ctrl+B starts it in Edit Mesh, Enter applies, Esc cancels', () => {
+      let active = false;
+      const sm: any = {
+        beginBevel3D: jasmine.createSpy('beginBevel3D').and.callFake(() => { active = true; return true; }),
+        getBevelState3D: () => (active ? { phase: 'adjust', kind: 'edge', amount: 0.1, maxAmount: 1, segments: 1, snap: false, snapStep: 0.05, targets: 1, hint: '', dragging: false } : null),
+        commitBevel3D: jasmine.createSpy('commitBevel3D').and.callFake(() => { active = false; return true; }),
+        cancelBevel3D: jasmine.createSpy('cancelBevel3D').and.callFake(() => { active = false; }),
+        interactionService: { selectedNodes: new Set(), suppressBoxSelect: false },
+      };
+      const ed: any = {
+        shapeManager: sm,
+        editorState: { scene3dPanelVisible: true, scene3dSelectedMeshId: 'm1' },
+        meshEdit: { scene3dIsEditingMesh: true, scene3dEditTool: 'select', cancelKnifeCut: () => {} },
+        decal: { scene3dDecalToolActive: false },
+        rasterSelectionService: { info: { isTransforming: false, hasSelection: false } },
+        uv: null,
+      };
+      expect(dispatchKey(MOD_KEYMAP, ed, key('b'), true)).toBeTrue();
+      expect(sm.beginBevel3D).toHaveBeenCalledTimes(1);
+      expect(dispatchKey(MOD_KEYMAP, ed, key('Enter'), false)).toBeTrue();
+      expect(sm.commitBevel3D).toHaveBeenCalledTimes(1);
+      dispatchKey(MOD_KEYMAP, ed, key('b'), true);
+      expect(dispatchKey(TOOL_KEYMAP, ed, key('Escape'), false)).toBeTrue();
+      expect(sm.cancelBevel3D).toHaveBeenCalledTimes(1);
+      // outside Edit Mesh Ctrl+B is not ours
+      ed.meshEdit.scene3dIsEditingMesh = false;
+      expect(dispatchKey(MOD_KEYMAP, ed, key('b'), true)).toBeFalse();
+    });
+
     it('during the 3D transform: X / Y / Z pick the axis, the field sends the digits, Apply / Cancel = Enter / Esc', () => {
       const ed = host({ editing: true, shortcut: true, axis: 'y' });
       const pill = activeContextPill(ed as any)!;

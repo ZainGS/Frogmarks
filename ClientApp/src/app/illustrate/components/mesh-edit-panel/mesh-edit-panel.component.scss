@@ -214,6 +214,17 @@ $danger:  #c0392b;
   gap: 6px;
 }
 
+// A chip that is on (the Chamfer's Snap).
+.me-chip.me-chip-on { background: rgba($accent, 0.45); color: #fff; }
+
+// Two equal buttons side by side (Shade Smooth / Flat, Mark / Clear Sharp).
+.me-op-pair {
+  display: flex;
+  gap: 6px;
+
+  .me-op-btn { flex: 1; }
+}
+
 .me-op-btn {
   background: #2a2a2a;
   border: 1px solid #555;

@@ -837,10 +837,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (activeContextPill(this) !== spec || !spec.buttons?.includes(btn)) return;
     btn.run(this);
   }
-  /** The pill's number field: the typed amount of the 3D keyboard transform (the digits the keys would send). */
+  /** The pill's number field: the typed amount of the 3D keyboard transform (the digits the keys would send), or the
+   *  mode's own (the Chamfer amount). */
   runContextPillNumeric(spec: ContextPillSpec, text: string): void {
     if (activeContextPill(this) !== spec || !spec.numeric) return;
-    TOOL3D_ACTIONS.setValue(this, text);
+    if (spec.numericRun) spec.numericRun(this, text);
+    else TOOL3D_ACTIONS.setValue(this, text);
   }
 
   /** Brush list auto-close on touch: <app-brush-options> picked a brush; tapping the tool again reopens the panel. */

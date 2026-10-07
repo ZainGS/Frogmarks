@@ -186,6 +186,99 @@ export const TOOL3D_ACTIONS = {
 };
 
 /**
+ * Edit Mesh engine APIs newer than the Salsa dist Frogmarks may be building against (salsa
+ * docs/specs/edit-mesh-topology.md): face shading and sharp edges. Feature-detected — a button whose API is missing is
+ * hidden (in the touch pill and in the Mesh Edit panel).
+ */
+export interface MeshEditTools3D {
+  setFacesSmooth3D?(meshId: string, faces: Set<number> | null, smooth: boolean): boolean;
+  setSharpEdges3D?(meshId: string, halfEdges: number[], sharp: boolean): boolean;
+  // the interactive Chamfer / Bevel (salsa docs/specs/edit-mesh-topology.md §8)
+  beginBevel3D?(opts?: { segments?: number; kind?: 'vertex' | 'edge'; snap?: boolean }): boolean;
+  getBevelState3D?(): BevelState | null;
+  setBevelAmount3D?(amount: number): void;
+  setBevelSegments3D?(segments: number): void;
+  setBevelSnap3D?(on: boolean, step?: number): void;
+  commitBevel3D?(): boolean;
+  cancelBevel3D?(): void;
+}
+/** The engine's Chamfer tool state (sm.getBevelState3D). */
+export interface BevelState {
+  phase: 'pick' | 'adjust';
+  kind: 'vertex' | 'edge' | null;
+  amount: number;
+  maxAmount: number;
+  segments: number;
+  snap: boolean;
+  snapStep: number;
+  targets: number;
+  hint: string;
+  dragging: boolean;
+}
+export function meshEditTools(sm: unknown): MeshEditTools3D { return (sm ?? {}) as MeshEditTools3D; }
+type MeshEditActionHost = Pick<ModeHost, 'shapeManager'> & Partial<Pick<ModeHost, 'editorState'>>;
+function editSelection(ed: MeshEditActionHost): { faces: Set<number>; edges: Set<number> } | null {
+  const id = ed.editorState?.scene3dSelectedMeshId;
+  const sm = ed.shapeManager as unknown as { getEditSelection3D?(id: string): { faces: Set<number>; edges: Set<number> } | null } | undefined;
+  return id && typeof sm?.getEditSelection3D === 'function' ? sm.getEditSelection3D(id) : null;
+}
+
+/** Edit Mesh shading (the panel's and the touch pill's Shade Smooth / Flat, Mark / Clear Sharp). Undoable (the engine
+ *  pushes one 3D undo step each). */
+export const MESH_EDIT_ACTIONS = {
+  hasShading: (ed: Pick<ModeHost, 'shapeManager'>): boolean => typeof meshEditTools(ed.shapeManager).setFacesSmooth3D === 'function',
+  hasSharp: (ed: Pick<ModeHost, 'shapeManager'>): boolean => typeof meshEditTools(ed.shapeManager).setSharpEdges3D === 'function',
+  selectedFaces: (ed: MeshEditActionHost): number[] => [...(editSelection(ed)?.faces ?? [])],
+  selectedEdges: (ed: MeshEditActionHost): number[] => [...(editSelection(ed)?.edges ?? [])],
+  /** Shade Smooth / Flat: the selected faces; none selected → every face (the engine's rule, as Blender's object-mode
+   *  Shade Smooth). */
+  shade: (ed: MeshEditActionHost, smooth: boolean): boolean => {
+    const id = ed.editorState?.scene3dSelectedMeshId, t = meshEditTools(ed.shapeManager);
+    if (!id || typeof t.setFacesSmooth3D !== 'function') return false;
+    const faces = MESH_EDIT_ACTIONS.selectedFaces(ed);
+    return t.setFacesSmooth3D(id, faces.length ? new Set(faces) : null, smooth);
+  },
+  /** Mark / Clear Sharp on the selected edges (drawn cyan in the overlay; smooth shading never blends across them). */
+  markSharp: (ed: MeshEditActionHost, sharp: boolean): boolean => {
+    const id = ed.editorState?.scene3dSelectedMeshId, t = meshEditTools(ed.shapeManager);
+    const edges = MESH_EDIT_ACTIONS.selectedEdges(ed);
+    if (!id || typeof t.setSharpEdges3D !== 'function' || edges.length === 0) return false;
+    return t.setSharpEdges3D(id, edges, sharp);
+  },
+};
+
+/**
+ * The interactive Chamfer / Bevel (Edit Mesh): one implementation for the panel's buttons, the touch pill and the keys
+ * (Ctrl+B starts it; Enter / Esc apply / cancel; + / − or the wheel set the segments; Ctrl snaps while dragging).
+ * Feature-detected (an older Salsa dist has no tool: the buttons are hidden).
+ */
+export const BEVEL_ACTIONS = {
+  has: (ed: Pick<ModeHost, 'shapeManager'>): boolean => typeof meshEditTools(ed.shapeManager).beginBevel3D === 'function',
+  state: (ed: Pick<ModeHost, 'shapeManager'>): BevelState | null => meshEditTools(ed.shapeManager).getBevelState3D?.() ?? null,
+  active: (ed: Pick<ModeHost, 'shapeManager'>): boolean => !!BEVEL_ACTIONS.state(ed),
+  /** Chamfer: on the selected vertices / edges, else wait for a tap on a corner or edge. */
+  begin: (ed: Pick<ModeHost, 'shapeManager'>): boolean => !!meshEditTools(ed.shapeManager).beginBevel3D?.(),
+  /** The pill's / panel's amount field (object units; the engine clamps). Junk is ignored. */
+  setAmount: (ed: Pick<ModeHost, 'shapeManager'>, text: string): void => {
+    const v = parseFloat(text);
+    if (Number.isFinite(v)) meshEditTools(ed.shapeManager).setBevelAmount3D?.(v);
+  },
+  /** Segments − / + (1 = flat chamfer, more = rounded). */
+  stepSegments: (ed: Pick<ModeHost, 'shapeManager'>, delta: number): void => {
+    const s = BEVEL_ACTIONS.state(ed);
+    if (s) meshEditTools(ed.shapeManager).setBevelSegments3D?.(s.segments + delta);
+  },
+  toggleSnap: (ed: Pick<ModeHost, 'shapeManager'>): void => {
+    const s = BEVEL_ACTIONS.state(ed);
+    if (s) meshEditTools(ed.shapeManager).setBevelSnap3D?.(!s.snap);
+  },
+  commit: (ed: Pick<ModeHost, 'shapeManager'>): void => { meshEditTools(ed.shapeManager).commitBevel3D?.(); },
+  cancel: (ed: Pick<ModeHost, 'shapeManager'>): void => { meshEditTools(ed.shapeManager).cancelBevel3D?.(); },
+  /** The live amount as the field / HUD shows it. */
+  amountText: (s: BevelState | null): string => (s ? s.amount.toFixed(3) : ''),
+};
+
+/**
  * Leaving the editor's modal states: ONE implementation shared by the keys (Esc / Enter: the tables below and
  * IllustrationComponent.handleHotkeys) and the touch Apply / Cancel pill (CONTEXT_PILLS), so a tap does exactly what
  * the key does.
@@ -206,9 +299,14 @@ export const MODE_ACTIONS = {
   cancelTransform: (ed: Pick<ModeHost, 'rasterSelectionService'>): void => { ed.rasterSelectionService.cancelTransform(); },
 };
 
-export type ContextPillMode = 'liveText' | 'decal' | 'knife' | 'transform' | 'transform3d' | 'meshEdit' | 'object3d';
+export type ContextPillMode = 'liveText' | 'decal' | 'knife' | 'bevel' | 'transform' | 'transform3d' | 'meshEdit' | 'object3d';
 
-export interface ContextPillAction { label: string; run: (ed: ModeHost) => void }
+export interface ContextPillAction {
+  label: string;
+  run: (ed: ModeHost) => void;
+  /** False = hidden right now (e.g. Apply before anything was picked). Absent = always shown. */
+  available?: (ed: ModeHost) => boolean;
+}
 /** A tool button in the pill (TOUCH-10): a one-shot action, or a toggle when it has `pressed`. */
 export interface ContextPillButton {
   id: string;
@@ -225,10 +323,18 @@ export interface ContextPillSpec {
   mode: ContextPillMode;
   /** Optional hint before the buttons (what the mode is waiting for). */
   hint?: string;
+  /** A hint that follows the mode's state (wins over `hint`; '' = none). */
+  hintFor?: (ed: ModeHost) => string;
   /** Tool buttons before Cancel / Apply. */
   buttons?: readonly ContextPillButton[];
   /** Show a number field for the typed amount (the keyboard 3D transform's digits). */
   numeric?: boolean;
+  /** The field's live value (shown while it is not being typed in). Absent = whatever was typed. */
+  numericValue?: (ed: ModeHost) => string;
+  /** The field takes input (default: once the 3D transform has an axis). */
+  numericEnabled?: (ed: ModeHost) => boolean;
+  /** What a typed value does (default: the 3D transform's digits — TOOL3D_ACTIONS.setValue). */
+  numericRun?: (ed: ModeHost, text: string) => void;
   apply?: ContextPillAction;
   cancel?: ContextPillAction;
 }
@@ -247,6 +353,38 @@ const transformBtn = (mode: Transform3DMode, label: string, key: string): Contex
   run: (ed) => TOOL3D_ACTIONS.begin(ed, mode),
   available: (ed) => !!ed.editorState?.scene3dSelectedMeshId,
 });
+/** Start the Chamfer / Bevel (on the selection, or wait for a tap on a corner / edge). Hidden on an older dist. */
+const CHAMFER_BTN: ContextPillButton = {
+  id: 'chamfer', label: 'Chamfer', title: 'Chamfer / bevel the selected corners or edges, or tap one (Ctrl+B)',
+  run: (ed) => { BEVEL_ACTIONS.begin(ed); },
+  available: (ed) => BEVEL_ACTIONS.has(ed),
+};
+const bevelAdjusting = (ed: ModeHost): boolean => BEVEL_ACTIONS.state(ed)?.phase === 'adjust';
+const bevelSegBtn = (delta: 1 | -1): ContextPillButton => ({
+  id: delta > 0 ? 'seg+' : 'seg-', label: delta > 0 ? 'Seg +' : 'Seg −',
+  title: delta > 0 ? 'More segments: a rounder bevel (+ / wheel)' : 'Fewer segments (1 = a flat chamfer) (− / wheel)',
+  run: (ed) => BEVEL_ACTIONS.stepSegments(ed, delta),
+  available: bevelAdjusting,
+});
+const BEVEL_SNAP_BTN: ContextPillButton = {
+  id: 'bevel-snap', label: 'Snap', title: 'Round the amount to grid steps (Ctrl while dragging)',
+  run: (ed) => BEVEL_ACTIONS.toggleSnap(ed), pressed: (ed) => !!BEVEL_ACTIONS.state(ed)?.snap, available: bevelAdjusting,
+};
+
+/** Shade Smooth / Flat for the selected faces (shown while faces are selected and the dist has the API). */
+const shadeBtn = (smooth: boolean): ContextPillButton => ({
+  id: smooth ? 'smooth' : 'flat', label: smooth ? 'Smooth' : 'Flat',
+  title: smooth ? 'Shade the selected faces smooth' : 'Shade the selected faces flat',
+  run: (ed) => { MESH_EDIT_ACTIONS.shade(ed, smooth); },
+  available: (ed) => MESH_EDIT_ACTIONS.hasShading(ed) && MESH_EDIT_ACTIONS.selectedFaces(ed).length > 0,
+});
+/** Mark / Clear Sharp for the selected edges (shown while edges are selected and the dist has the API). */
+const sharpBtn = (sharp: boolean): ContextPillButton => ({
+  id: sharp ? 'sharp' : 'unsharp', label: sharp ? 'Mark Sharp' : 'Clear Sharp',
+  title: sharp ? 'Mark the selected edges sharp (hard)' : 'Clear sharp from the selected edges',
+  run: (ed) => { MESH_EDIT_ACTIONS.markSharp(ed, sharp); },
+  available: (ed) => MESH_EDIT_ACTIONS.hasSharp(ed) && MESH_EDIT_ACTIONS.selectedEdges(ed).length > 0,
+});
 const axisBtn = (axis: 'x' | 'y' | 'z'): ContextPillButton => ({
   id: axis, label: axis.toUpperCase(), title: `Along ${axis.toUpperCase()} (${axis.toUpperCase()})`,
   run: (ed) => TOOL3D_ACTIONS.axis(ed, axis),
@@ -259,6 +397,24 @@ export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> =
   liveText: { mode: 'liveText', apply: { label: 'Done editing text', run: MODE_ACTIONS.endLiveText } },
   decal: { mode: 'decal', apply: { label: 'Done placing decals', run: MODE_ACTIONS.exitDecalPlacement } },
   knife: { mode: 'knife', hint: 'Drag across the mesh to cut', cancel: { label: 'Cancel knife', run: MODE_ACTIONS.cancelKnife } },
+  /** Edit Mesh Chamfer / Bevel: pick (a tap on a corner / edge), then drag; the amount, segments − / +, Snap,
+   *  Apply (Enter) / Cancel (Esc). */
+  bevel: {
+    mode: 'bevel',
+    hintFor: (ed) => {
+      const s = BEVEL_ACTIONS.state(ed);
+      if (!s) return '';
+      if (s.phase === 'pick') return s.hint;
+      return `${s.kind === 'edge' ? 'Bevel' : 'Chamfer'} · ${s.segments} seg`;
+    },
+    buttons: [bevelSegBtn(-1), bevelSegBtn(1), BEVEL_SNAP_BTN],
+    numeric: true,
+    numericValue: (ed) => BEVEL_ACTIONS.amountText(BEVEL_ACTIONS.state(ed)),
+    numericEnabled: bevelAdjusting,
+    numericRun: (ed, text) => BEVEL_ACTIONS.setAmount(ed, text),
+    apply: { label: 'Apply', run: (ed) => BEVEL_ACTIONS.commit(ed), available: bevelAdjusting },
+    cancel: { label: 'Cancel', run: (ed) => BEVEL_ACTIONS.cancel(ed) },
+  },
   transform: {
     mode: 'transform',
     apply: { label: 'Apply transform', run: MODE_ACTIONS.commitTransform },
@@ -272,10 +428,12 @@ export const CONTEXT_PILLS: Readonly<Record<ContextPillMode, ContextPillSpec>> =
     apply: { label: 'Apply', run: TOOL3D_ACTIONS.commit },
     cancel: { label: 'Cancel', run: TOOL3D_ACTIONS.cancel },
   },
-  /** Edit Mesh (select tool): Shift-select, frame, and the G / R / S keyboard transform. */
+  /** Edit Mesh (select tool): Shift-select, frame, the G / R / S keyboard transform, and (on a newer dist, with faces /
+   *  edges selected) Shade Smooth / Flat and Mark / Clear Sharp. */
   meshEdit: {
     mode: 'meshEdit',
-    buttons: [MULTI_BTN, FRAME_BTN, transformBtn('grab', 'Grab', 'G'), transformBtn('rotate', 'Rotate', 'R'), transformBtn('scale', 'Scale', 'S')],
+    buttons: [MULTI_BTN, FRAME_BTN, transformBtn('grab', 'Grab', 'G'), transformBtn('rotate', 'Rotate', 'R'), transformBtn('scale', 'Scale', 'S'),
+      CHAMFER_BTN, shadeBtn(true), shadeBtn(false), sharpBtn(true), sharpBtn(false)],
   },
   /** A 3D object selected (no sub-mode): Shift-select, Ctrl-snap, frame. */
   object3d: { mode: 'object3d', buttons: [MULTI_BTN, SNAP_BTN, FRAME_BTN] },
@@ -294,6 +452,7 @@ export function activeContextPill(ed: Pick<ModeHost, 'shapeManager' | 'decal' | 
   if (ed.liveTextOptions?.liveTextIsEditing) return CONTEXT_PILLS.liveText;
   if (ed.decal.scene3dDecalToolActive) return CONTEXT_PILLS.decal;
   if (ed.meshEdit.scene3dIsEditingMesh && ed.meshEdit.scene3dEditTool === 'knife') return CONTEXT_PILLS.knife;
+  if (ed.meshEdit.scene3dIsEditingMesh && BEVEL_ACTIONS.active(ed)) return CONTEXT_PILLS.bevel;
   if (ed.rasterSelectionService.info.isTransforming) return CONTEXT_PILLS.transform;
   const es = ed.editorState;
   if (!es?.scene3dPanelVisible) return null;
@@ -346,9 +505,15 @@ export const MOD_KEYMAP: KeyBinding[] = [
     if (!ed.rasterSelectionService.info.hasSelection) return false;
     ed.rasterSelectionService.beginTransform();
   } },
-  { keys: ['Enter'], group: 'Selection', help: 'Commit transform', run: (ed) => {
+  { keys: ['Enter'], group: 'Selection', help: 'Commit transform / chamfer', run: (ed) => {
+    if (ed.meshEdit.scene3dIsEditingMesh && BEVEL_ACTIONS.active(ed)) { BEVEL_ACTIONS.commit(ed); return; }
     if (!ed.rasterSelectionService.info.isTransforming) return false;
     MODE_ACTIONS.commitTransform(ed);
+  } },
+  // Blender's Ctrl+B: bevel the selected edges / chamfer the selected corners (nothing selected: tap one)
+  { keys: ['b', 'B'], mod: true, group: '3D', help: 'Chamfer / bevel (Edit Mesh)', run: (ed) => {
+    if (!(ed.editorState.scene3dPanelVisible && ed.meshEdit.scene3dIsEditingMesh && BEVEL_ACTIONS.has(ed))) return false;
+    if (!BEVEL_ACTIONS.active(ed)) BEVEL_ACTIONS.begin(ed);
   } },
 ];
 
@@ -357,6 +522,8 @@ export const TOOL_KEYMAP: KeyBinding[] = [
   { keys: ['Escape'], group: 'Selection', help: 'Cancel / cursor tool', run: (ed) => {
     if (ed.decal.scene3dDecalToolActive) {
       MODE_ACTIONS.exitDecalPlacement(ed);
+    } else if (ed.meshEdit.scene3dIsEditingMesh && BEVEL_ACTIONS.active(ed)) {
+      BEVEL_ACTIONS.cancel(ed);
     } else if (ed.meshEdit.scene3dIsEditingMesh && ed.meshEdit.scene3dEditTool === 'knife') {
       MODE_ACTIONS.cancelKnife(ed);
     } else if (ed.rasterSelectionService.info.isTransforming) {

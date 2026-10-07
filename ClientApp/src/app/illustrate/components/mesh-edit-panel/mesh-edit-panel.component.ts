@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { meshEditTools, BEVEL_ACTIONS, type BevelState } from '../illustration/editor-keymap';
 
 export interface MeshModifier {
   type: 'mirror' | 'subdivision' | 'displace';
@@ -142,6 +143,42 @@ export class MeshEditPanelComponent implements OnChanges {
     if (isNaN(idx)) return;
     this.sm?.selectEdge3D(this.meshId, idx);
   }
+
+  // ── Shading (feature-detected: hidden on a Salsa dist without the API) ──
+
+  /** Shade Smooth / Flat available (sm.setFacesSmooth3D). */
+  get hasShading(): boolean { return typeof meshEditTools(this.sm).setFacesSmooth3D === 'function'; }
+  /** Mark / Clear Sharp available (sm.setSharpEdges3D). */
+  get hasSharp(): boolean { return typeof meshEditTools(this.sm).setSharpEdges3D === 'function'; }
+
+  /** Shade the selected faces smooth / flat — every face when none is selected (one undo step). */
+  shade(smooth: boolean): void {
+    const t = meshEditTools(this.sm);
+    if (!this.meshId || typeof t.setFacesSmooth3D !== 'function') return;
+    const faces = this.selectedFaces;
+    t.setFacesSmooth3D(this.meshId, faces.length ? new Set(faces) : null, smooth);
+  }
+
+  /** Mark / clear the selected edges sharp (drawn cyan; one undo step). */
+  markSharp(sharp: boolean): void {
+    const t = meshEditTools(this.sm);
+    const edges = this.selectedEdges;
+    if (!this.meshId || typeof t.setSharpEdges3D !== 'function' || edges.length === 0) return;
+    t.setSharpEdges3D(this.meshId, edges, sharp);
+  }
+
+  // ── Chamfer / Bevel (the engine's interactive tool; hidden on a Salsa dist without it) ──
+
+  get hasBevel(): boolean { return !!this.sm && BEVEL_ACTIONS.has({ shapeManager: this.sm }); }
+  /** The running Chamfer (null = not running). */
+  get bevel(): BevelState | null { return this.sm ? BEVEL_ACTIONS.state({ shapeManager: this.sm }) : null; }
+  /** Chamfer the selected corners (Vertex mode) / bevel the selected edges (Edge mode); nothing selected: tap one. */
+  startBevel(): void { if (this.sm) { if (this.activeTool === 'knife') this.toolChange.emit('select'); BEVEL_ACTIONS.begin({ shapeManager: this.sm }); } }
+  setBevelAmount(text: string): void { if (this.sm) BEVEL_ACTIONS.setAmount({ shapeManager: this.sm }, text); }
+  stepBevelSegments(delta: number): void { if (this.sm) BEVEL_ACTIONS.stepSegments({ shapeManager: this.sm }, delta); }
+  toggleBevelSnap(): void { if (this.sm) BEVEL_ACTIONS.toggleSnap({ shapeManager: this.sm }); }
+  applyBevel(): void { if (this.sm) BEVEL_ACTIONS.commit({ shapeManager: this.sm }); }
+  cancelBevel(): void { if (this.sm) BEVEL_ACTIONS.cancel({ shapeManager: this.sm }); }
 
   // ── Operations ───────────────────────────────────────────────────
 

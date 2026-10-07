@@ -2,6 +2,7 @@ import { Injectable, OnDestroy, NgZone } from '@angular/core';
 import { formatNumber } from '@angular/common';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
+import { BEVEL_ACTIONS } from '../components/illustration/editor-keymap';
 
 import { EditorStateService } from './editor-state.service';
 /** Exactly the editor state the 3D viewport HUD reads. */
@@ -78,6 +79,18 @@ export class ViewportHudService implements OnDestroy {
     if (!inInput) {
       const sm = this.shapeManager;
       const key = e.key.toLowerCase();
+
+      // Edit Mesh Chamfer / Bevel running: Enter / Esc apply / cancel, + / − the segments; the G / R / S transform keys
+      // wait until it is done (Ctrl snaps while dragging — the engine reads it off the pointer)
+      if (BEVEL_ACTIONS.active({ shapeManager: sm })) {
+        const ed = { shapeManager: sm };
+        if (key === 'enter') { BEVEL_ACTIONS.commit(ed); e.preventDefault(); return; }
+        if (key === 'escape') { BEVEL_ACTIONS.cancel(ed); e.preventDefault(); return; }
+        if (e.key === '+' || e.key === '=') { BEVEL_ACTIONS.stepSegments(ed, 1); e.preventDefault(); return; }
+        if (e.key === '-' || e.key === '_') { BEVEL_ACTIONS.stepSegments(ed, -1); e.preventDefault(); return; }
+        if ((key === 'g' || key === 'r' || key === 's') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); return; }
+        return;
+      }
 
       if (key === 'g') { sm.beginTransform3D('grab');   e.preventDefault(); this._syncShortcutHud(); return; }
       if (key === 'r') { sm.beginTransform3D('rotate');  e.preventDefault(); this._syncShortcutHud(); return; }

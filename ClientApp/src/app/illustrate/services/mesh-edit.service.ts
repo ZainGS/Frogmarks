@@ -1,6 +1,7 @@
 import { Injectable, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
+import { BEVEL_ACTIONS, type BevelState } from '../components/illustration/editor-keymap';
 
 import { EditorStateService } from './editor-state.service';
 /** Exactly the editor state mesh edit mode uses. */
@@ -167,7 +168,22 @@ export class MeshEditService {
   }
 
   toggleKnifeTool(): void {
+    if (this.scene3dEditTool !== 'knife') BEVEL_ACTIONS.cancel(this.host);   // one tool at a time
     this.scene3dEditTool = this.scene3dEditTool === 'knife' ? 'select' : 'knife';
     if (this.scene3dEditTool === 'select') this._clearKnifePreview();
+  }
+
+  // ── Chamfer / Bevel (the engine's tool: salsa docs/specs/edit-mesh-topology.md §8) ──
+
+  /** The Chamfer tool's state for the HUD readout / panel (null = not running, or an older Salsa dist). */
+  get bevelState(): BevelState | null {
+    return this.scene3dIsEditingMesh && this.host?.shapeManager ? BEVEL_ACTIONS.state(this.host) : null;
+  }
+
+  /** Start the Chamfer (on the selection, else wait for a tap on a corner / edge); drops the knife. */
+  startBevel(): void {
+    if (!this.scene3dIsEditingMesh) return;
+    if (this.scene3dEditTool === 'knife') this.cancelKnifeCut();
+    BEVEL_ACTIONS.begin(this.host);
   }
 }

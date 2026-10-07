@@ -44,7 +44,7 @@
       </ng-container>
       <span class="me-sel-hint">
         <ng-container *ngIf="selectionMode !== 'edge'">Click canvas to select · Shift+click to add</ng-container>
-        <ng-container *ngIf="selectionMode === 'edge'">Enter half-edge index below to select an edge</ng-container>
+        <ng-container *ngIf="selectionMode === 'edge'">Click an edge to select · Shift+click to add (or enter a half-edge index below)</ng-container>
       </span>
     </div>
 
@@ -95,6 +95,17 @@
                 style="margin-top:4px"
                 [disabled]="selectedFaces.length === 0"
                 (click)="separateFaces()">Separate Faces</button>
+
+        <ng-container *ngIf="hasShading">
+          <div class="me-op-sep"></div>
+          <div class="me-op-pair">
+            <button class="me-op-btn" (click)="shade(true)"
+                    [title]="selectedFaces.length ? 'Shade the selected faces smooth' : 'Shade every face smooth (no face selected)'">Shade Smooth</button>
+            <button class="me-op-btn" (click)="shade(false)"
+                    [title]="selectedFaces.length ? 'Shade the selected faces flat' : 'Shade every face flat (no face selected)'">Shade Flat</button>
+          </div>
+          <div class="me-hint" *ngIf="selectedFaces.length === 0">No face selected: applies to the whole mesh.</div>
+        </ng-container>
       </ng-container>
 
       <!-- Vertex ops: weld + bevel vertex -->
@@ -127,6 +138,41 @@
                 (click)="bevelVertex()"
                 title="Fan out a vertex into a polygon ring">Bevel Vertex</button>
       </ng-container>
+    </div>
+
+    <!-- ── Chamfer / Bevel (interactive) ─────────────────────── -->
+    <div class="me-section" *ngIf="hasBevel">
+      <div class="me-section-title">Chamfer / Bevel</div>
+      <ng-container *ngIf="bevel as bv; else bevelIdle">
+        <div class="me-hint" *ngIf="bv.phase === 'pick'">{{ bv.hint }}</div>
+        <ng-container *ngIf="bv.phase === 'adjust'">
+          <div class="me-hint">{{ bv.kind === 'edge' ? 'Bevel' : 'Chamfer' }} {{ bv.targets }} {{ bv.kind === 'edge' ? 'edge(s)' : 'corner(s)' }} · drag on the canvas</div>
+          <div class="me-op-inline">
+            <span class="me-label">Amount</span>
+            <input type="number" class="me-num" min="0" step="0.01" [attr.max]="bv.maxAmount"
+                   [value]="bv.amount.toFixed(3)" (change)="setBevelAmount($any($event.target).value)">
+            <span class="me-label">max {{ bv.maxAmount | number:'1.2-2' }}</span>
+          </div>
+          <div class="me-op-inline" style="margin-top:6px">
+            <span class="me-label">Segments</span>
+            <button class="me-chip" (click)="stepBevelSegments(-1)" title="Fewer segments (1 = flat chamfer) — − / wheel">−</button>
+            <span class="me-val">{{ bv.segments }}</span>
+            <button class="me-chip" (click)="stepBevelSegments(1)" title="More segments: a rounder bevel — + / wheel">+</button>
+            <button class="me-chip" [class.me-chip-on]="bv.snap" (click)="toggleBevelSnap()" title="Round the amount to grid steps (Ctrl while dragging)">Snap</button>
+          </div>
+        </ng-container>
+        <div class="me-op-pair" style="margin-top:6px">
+          <button class="me-op-btn" (click)="cancelBevel()">Cancel <span class="me-kbd">Esc</span></button>
+          <button class="me-op-btn" [disabled]="bv.phase !== 'adjust' || bv.amount <= 0" (click)="applyBevel()">Apply <span class="me-kbd">↵</span></button>
+        </div>
+      </ng-container>
+      <ng-template #bevelIdle>
+        <button class="me-op-btn me-op-full" (click)="startBevel()"
+                title="Chamfer the selected corners (Vertex mode) or bevel the selected edges (Edge mode); nothing selected: tap one">
+          Chamfer <span class="me-kbd">Ctrl+B</span>
+        </button>
+        <div class="me-hint" style="margin-top:4px">Select corners / edges first, or start and tap one. Drag to set the amount.</div>
+      </ng-template>
     </div>
 
     <!-- ── Mesh Cleanup ──────────────────────────────────────── -->
@@ -227,6 +273,16 @@
           <span class="me-kbd">Ctrl+B</span>
         </div>
       </div>
+
+      <ng-container *ngIf="hasSharp && selectionMode === 'edge'">
+        <div class="me-op-sep"></div>
+        <div class="me-op-pair">
+          <button class="me-op-btn" [disabled]="selectedEdges.length === 0" (click)="markSharp(true)"
+                  title="Mark the selected edges sharp: smooth shading never blends across them (drawn cyan)">Mark Sharp</button>
+          <button class="me-op-btn" [disabled]="selectedEdges.length === 0" (click)="markSharp(false)"
+                  title="Clear sharp from the selected edges">Clear Sharp</button>
+        </div>
+      </ng-container>
 
       <div class="me-op-sep"></div>
 

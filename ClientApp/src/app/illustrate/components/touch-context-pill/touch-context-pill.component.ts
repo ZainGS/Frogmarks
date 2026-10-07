@@ -4,8 +4,9 @@ import { pillButtons, type ContextPillButton, type ContextPillSpec, type ModeHos
 /**
  * Contextual touch pill (mobile-parity TOUCH-10; replaced the floating Undo / Redo / Del / Dup / Esc / ✓ bar).
  * The editor shows it on a coarse (touch) pointer only:
- *  - while a modal state is waiting for Enter / Esc (a selection transform, the mesh-edit knife, decal placement,
- *    LiveText editing, the 3D keyboard transform): Apply / Cancel;
+ *  - while a modal state is waiting for Enter / Esc (a selection transform, the mesh-edit knife, the Edit Mesh Chamfer
+ *    — its amount field, segments − / + and Snap —, decal placement, LiveText editing, the 3D keyboard transform):
+ *    Apply / Cancel;
  *  - in the 3D view: the modifier keys / shortcuts a tablet lacks, as tool buttons (Multi = Shift-select, Snap = Ctrl,
  *    Frame, and in Edit Mesh Grab / Rotate / Scale; during that transform X / Y / Z + the typed amount).
  * The buttons run the same actions the keys run (editor-keymap CONTEXT_PILLS), through IllustrationComponent.
@@ -40,6 +41,26 @@ export class TouchContextPillComponent {
 
   /** The number field waits for an axis (the engine ignores digits without one). */
   get axisPicked(): boolean { return !!this.ed?.shapeManager?.shortcutAxis3D; }
+
+  /** The number field takes input: the spec's rule (the Chamfer: once something is picked), else an axis is picked. */
+  get numericEnabled(): boolean {
+    return this.spec?.numericEnabled ? (!!this.ed && this.spec.numericEnabled(this.ed)) : this.axisPicked;
+  }
+
+  /** The field's text: the spec's live value (the Chamfer amount while dragging) — but never under the user's caret. */
+  get numericText(): string {
+    const el = this.numEl?.nativeElement;
+    if (!this.spec?.numericValue || !this.ed || (el && typeof document !== 'undefined' && document.activeElement === el)) return el?.value ?? '';
+    return this.spec.numericValue(this.ed);
+  }
+
+  /** The hint line: the spec's live hint (the Chamfer's phase / segments) or its fixed one. */
+  get hintText(): string {
+    return this.spec?.hintFor && this.ed ? this.spec.hintFor(this.ed) : (this.spec?.hint ?? '');
+  }
+
+  /** Apply is shown (the Chamfer hides it until a corner / edge is picked). */
+  get applyAvailable(): boolean { return !this.spec?.apply?.available || (!!this.ed && this.spec.apply.available(this.ed)); }
 
   trackButton(_: number, b: ContextPillButton): string { return b.id; }
 

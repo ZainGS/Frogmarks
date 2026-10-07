@@ -147,6 +147,19 @@
           <span *ngIf="!touchUi.coarse" class="scene3d-sh-confirm">↵ confirm · Esc cancel</span>
         </div>
 
+        <!-- Edit Mesh Chamfer / Bevel readout (the live amount; on touch at the top — the pill owns the bottom) -->
+        <div *ngIf="meshEdit.bevelState as bv" class="scene3d-shortcut-hud scene3d-bevel-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
+          <span class="scene3d-sh-mode">{{ bv.kind === 'edge' ? 'BEVEL' : 'CHAMFER' }}</span>
+          <ng-container *ngIf="bv.phase === 'adjust'; else bevelPick">
+            <span class="scene3d-sh-value">{{ bv.amount | number:'1.3-3' }}</span>
+            <span class="scene3d-sh-sep">·</span>
+            <span class="scene3d-sh-seg">{{ bv.segments }} seg</span>
+            <span *ngIf="bv.snap" class="scene3d-sh-snap">SNAP</span>
+            <span *ngIf="!touchUi.coarse" class="scene3d-sh-confirm">drag · wheel / + − segments · Ctrl snap · ↵ apply · Esc cancel</span>
+          </ng-container>
+          <ng-template #bevelPick><span class="scene3d-sh-hint">{{ bv.hint }}</span></ng-template>
+        </div>
+
         <!-- GPU device-lost banner (Salsa sm.onDeviceStatusChange): recovering → recovered | couldn't recover -->
         <div *ngIf="engineStatus.deviceBanner" class="device-banner" [class.device-banner--failed]="engineStatus.deviceBanner === 'failed'"
              [class.device-banner--ok]="engineStatus.deviceBanner === 'recovered'" role="status" aria-live="polite">
