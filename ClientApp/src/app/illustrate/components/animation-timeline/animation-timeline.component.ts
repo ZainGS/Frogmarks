@@ -251,7 +251,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     { key: 'rotation', label: 'Rotation',  color: '#aed581' },
     { key: 'scale',    label: 'Scale',     color: '#ffb74d' },
     { key: 'opacity',  label: 'Opacity',   color: '#f48fb1' },
-    { key: 'visible',  label: 'Visible',   color: '#ce93d8' },
+    { key: 'visible',  label: 'Visible',   color: '#fff176' },
   ];
 
   readonly camera3dTrackDefs: { key: string; label: string; color: string }[] = [

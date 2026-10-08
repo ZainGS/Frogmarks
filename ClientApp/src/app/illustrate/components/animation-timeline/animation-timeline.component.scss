@@ -1,19 +1,41 @@
 /* ═══════════════════════════════════════════════════════════════
    Animation Timeline — dark theme, bottom panel
+   Retro-chrome colours (retro-chrome-theme.scss --rc-*; the fallbacks are the same values, so the plain theme
+   matches): green = current / active / selected, bevelled square buttons. No purple.
    ═══════════════════════════════════════════════════════════════ */
 
-$bg: #1a1a1a;
-$surface: #2a2a2a;
+$bg: var(--rc-panel-bg, #1a1a1a);
+$surface: var(--rc-surface, #242424);
+$surface-hi: var(--rc-surface-hi, #2e2e2e);
 $border: #444;
-$text: #e0e0e0;
-$muted: #999;
-$accent: #9B59B6;
-$accent-light: #b87fd9;
-$cel-fill: #4a3a5c;
-$cel-hold: #3a3044;
+$text: var(--rc-text, #c8c8c8);
+$muted: var(--rc-text-muted, #a8a8a8);
+$green: var(--rc-green, #3b6151);
+$green-hi: var(--rc-green-hi, #4f7a68);
+$green-txt: var(--rc-green-txt, #c8ede3);
+$bevel-lt: var(--rc-bevel-lt, #6a6a6a);
+$bevel-dk: var(--rc-bevel-dk, #111111);
+$bevel-mid: var(--rc-bevel-mid, #3a3a3a);
+$danger: var(--rc-danger, #8b1a1a);
+$danger-hi: var(--rc-danger-hi, #c0392b);
+$danger-txt: #ffaaaa;
+// Translucent greens (a CSS variable can't take an alpha): --rc-green-hi #4f7a68 / --rc-green #3b6151.
+$current-frame: rgba(79, 122, 104, 0.35);
+$play-range: rgba(59, 97, 81, 0.16);
+// Drawings: a cel's first frame = the theme green, its held frames = a dim green (key ◆ vs inbetween ○ by glyph).
+$cel-fill: $green;
+$cel-fill-current: $green-hi;
+$cel-hold: #263a31;
+$cel-hold-current: #31493e;
 $blank: transparent;
-$current-frame: rgba($accent, 0.35);
-$play-range: rgba($accent, 0.08);
+// 3D dope-sheet rows: neutral greys under a faint green header.
+$row-3d-head: rgba(59, 97, 81, 0.16);
+$row-3d-line: #3a3a3a;
+$row-3d-bg: #161616;
+
+// Raised / sunken chrome bevels (2 px, square)
+@mixin raised { border: 2px solid; border-color: $bevel-lt $bevel-dk $bevel-dk $bevel-lt; border-radius: 0; }
+@mixin sunken { border: 2px solid; border-color: $bevel-dk $bevel-lt $bevel-lt $bevel-dk; border-radius: 0; }
 
 :host {
   display: block;
@@ -25,7 +47,7 @@ $play-range: rgba($accent, 0.08);
   display: flex;
   flex-direction: column;
   background: $bg;
-  border-top: 2px solid $accent;
+  border-top: 2px solid $green-hi;
   color: $text;
   font-size: 11px;
   user-select: none;
@@ -145,11 +167,11 @@ $play-range: rgba($accent, 0.08);
   &:hover { background: rgba(255, 255, 255, 0.05); }
   // (no font-weight here: it re-laid out the header on every frame of playback — colour + background only)
   &.current {
-    background: $current-frame;
-    color: $accent-light;
+    background: $green;
+    color: $green-txt;
   }
   &.in-range { background: $play-range; }
-  &.current.in-range { background: $current-frame; }
+  &.current.in-range { background: $green; }
 }
 
 /* ── Play range drag handles ─────────────────────────────────── */
@@ -169,8 +191,7 @@ $play-range: rgba($accent, 0.08);
     bottom: 3px;
     left: 2px;
     width: 2px;
-    background: $accent-light;
-    border-radius: 1px;
+    background: $green-txt;
     opacity: 0.85;
   }
 
@@ -193,12 +214,11 @@ $play-range: rgba($accent, 0.08);
   height: 100%;
   background: repeating-linear-gradient(
     90deg,
-    rgba($accent, 0.1) 0px,
-    rgba($accent, 0.1) 4px,
+    rgba(59, 97, 81, 0.18) 0px,
+    rgba(59, 97, 81, 0.18) 4px,
     transparent 4px,
     transparent 8px
   );
-  border-radius: 2px;
 }
 
 /* Animated layer cells */
@@ -222,12 +242,12 @@ $play-range: rgba($accent, 0.08);
 
   &.cel-start {
     background: $cel-fill;
-    &.current { background: lighten($cel-fill, 10%); }
+    &.current { background: $cel-fill-current; }
   }
 
   &.cel-hold {
     background: $cel-hold;
-    &.current { background: lighten($cel-hold, 8%); }
+    &.current { background: $cel-hold-current; }
   }
 
   &.blank {
@@ -236,7 +256,7 @@ $play-range: rgba($accent, 0.08);
 }
 
 .cel-marker {
-  color: $accent-light;
+  color: $green-txt;
   font-size: 10px;
   line-height: 1;
 }
@@ -256,11 +276,10 @@ $play-range: rgba($accent, 0.08);
   bottom: 0;
   left: 0;
   width: 2px;
-  background: $accent;
+  background: $green-txt;
   z-index: 5;
   pointer-events: none;
   will-change: transform;
-  box-shadow: 0 0 4px rgba($accent, 0.5);
 }
 
 /* ── 3D Dope Sheet rows ───────────────────────────────────────── */
@@ -273,12 +292,12 @@ $play-range: rgba($accent, 0.08);
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  background: rgba(#4a3060, 0.45);
-  border-top: 1px solid #5a4080;
-  border-bottom: 1px dashed #5a4080;
+  background: $row-3d-head;
+  border-top: 1px solid $row-3d-line;
+  border-bottom: 1px dashed $row-3d-line;
   font-size: 10px;
   font-weight: 700;
-  color: #ce93d8;
+  color: $green-hi;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -292,9 +311,9 @@ $play-range: rgba($accent, 0.08);
   align-items: center;
   padding: 0 8px 0 12px;
   border-left: 3px solid currentColor;
-  background: rgba(#1a1a2e, 0.6);
+  background: $row-3d-bg;
   font-size: 9px;
-  color: #aaa;
+  color: $muted;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -303,9 +322,9 @@ $play-range: rgba($accent, 0.08);
 // Grid-side 3D rows
 .tl-3d-header-row {
   display: flex;
-  background: rgba(#4a3060, 0.35);
-  border-top: 1px solid #5a4080;
-  border-bottom: 1px dashed #5a4080;
+  background: $row-3d-head;
+  border-top: 1px solid $row-3d-line;
+  border-bottom: 1px dashed $row-3d-line;
   position: relative;
 }
 
@@ -316,14 +335,14 @@ $play-range: rgba($accent, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid rgba(#5a4080, 0.4);
+  border-right: 1px solid rgba($border, 0.3);
   cursor: pointer;
 
   &.current { background: $current-frame; }
 
   .kf-any {
     font-size: 8px;
-    color: #ce93d8;
+    color: $green-txt;
     line-height: 1;
   }
 }
@@ -331,7 +350,7 @@ $play-range: rgba($accent, 0.08);
 .tl-3d-track-row {
   display: flex;
   position: relative;
-  background: rgba(#1a1a2e, 0.5);
+  background: $row-3d-bg;
 }
 
 .tl-3d-cell {
@@ -361,24 +380,26 @@ $play-range: rgba($accent, 0.08);
 .tl-cam-preview-btn {
   margin-left: auto;
   font-size: 8px;
-  background: none;
-  border: 1px solid #5a4080;
-  color: #ce93d8;
-  border-radius: 3px;
+  background: $surface;
+  border: 1px solid;
+  border-color: $bevel-lt $bevel-dk $bevel-dk $bevel-lt;
+  color: $green-txt;
+  border-radius: 0;
   padding: 1px 5px;
   cursor: pointer;
   line-height: 1;
   flex-shrink: 0;
 
   &.active {
-    background: #ce93d8;
-    color: #1a1a2e;
+    background: $green;
+    border-color: $bevel-dk $bevel-lt $bevel-lt $bevel-dk;
+    color: $green-txt;
   }
 }
 
 .tl-camera-cut-row {
   cursor: crosshair;
-  background: rgba(#2a1a3e, 0.6);
+  background: #141414;
 }
 
 .tl-cut-marker {
@@ -407,7 +428,7 @@ $play-range: rgba($accent, 0.08);
   gap: 12px;
   padding: 4px 10px;
   border-top: 1px solid $border;
-  background: darken($bg, 2%);
+  background: $bg;
   flex-wrap: wrap;
 }
 
@@ -419,9 +440,8 @@ $play-range: rgba($accent, 0.08);
 
 .transport-btn {
   background: $surface;
-  border: 1px solid $border;
+  @include raised;
   color: $text;
-  border-radius: 4px;
   width: 28px;
   height: 24px;
   display: flex;
@@ -432,8 +452,9 @@ $play-range: rgba($accent, 0.08);
   transition: all 0.12s;
   padding: 0;
 
-  &:hover { background: lighten($surface, 10%); border-color: $accent; }
-  &.active { background: rgba($accent, 0.25); border-color: $accent; }
+  &:hover { background: $surface-hi; }
+  &:active, &.active { @include sunken; }
+  &.active { background: $green; color: $green-txt; }
 }
 
 .play-btn {
@@ -448,11 +469,12 @@ $play-range: rgba($accent, 0.08);
 .record-kf-btn {
   width: auto !important;
   padding: 0 8px !important;
-  color: #f48fb1;
+  color: $danger-txt;
   font-weight: 700;
   font-size: 11px;
-  border-color: rgba(#f48fb1, 0.5);
-  &:hover { border-color: #f48fb1; background: rgba(#f48fb1, 0.15); }
+  background: rgba(139, 26, 26, 0.3);
+  border-color: $danger-hi;
+  &:hover { background: rgba(139, 26, 26, 0.5); }
 }
 
 .transport-label {
@@ -465,15 +487,14 @@ $play-range: rgba($accent, 0.08);
 
 .transport-input {
   width: 44px;
-  background: $surface;
-  border: 1px solid $border;
-  border-radius: 3px;
+  background: #111;
+  @include sunken;
   color: $text;
   text-align: center;
   font-size: 11px;
   padding: 2px 4px;
 
-  &:focus { outline: 2px solid $accent; }
+  &:focus { outline: 1px solid $green-hi; }
 }
 
 .fps-presets {
@@ -482,23 +503,23 @@ $play-range: rgba($accent, 0.08);
 }
 
 .fps-btn {
-  background: transparent;
-  border: 1px solid rgba($border, 0.5);
+  background: $surface;
+  border: 1px solid $bevel-mid;
   color: $muted;
-  border-radius: 3px;
+  border-radius: 0;
   font-size: 9px;
   padding: 1px 5px;
   cursor: pointer;
   transition: all 0.12s;
 
-  &:hover { border-color: $accent; color: $text; }
-  &.active { background: rgba($accent, 0.2); border-color: $accent; color: $accent-light; }
+  &:hover { background: $surface-hi; color: $text; }
+  &.active { background: $green; color: $green-txt; }
 }
 
 .frame-counter {
   font-family: monospace;
   font-size: 12px;
-  color: $accent-light;
+  color: $green-hi;
   font-weight: 600;
   min-width: 50px;
   text-align: center;
@@ -512,8 +533,8 @@ $play-range: rgba($accent, 0.08);
 
 .segment-row {
   display: flex;
-  border: 1px solid $border;
-  border-radius: 4px;
+  border: 1px solid $bevel-mid;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -526,9 +547,9 @@ $play-range: rgba($accent, 0.08);
   cursor: pointer;
   transition: all 0.12s;
 
-  &:not(:last-child) { border-right: 1px solid $border; }
+  &:not(:last-child) { border-right: 1px solid $bevel-mid; }
   &:hover { background: rgba(255, 255, 255, 0.05); }
-  &.active { background: rgba($accent, 0.25); color: $accent-light; }
+  &.active { background: $green; color: $green-txt; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -538,9 +559,8 @@ $play-range: rgba($accent, 0.08);
 .floating-panel {
   position: absolute;
   bottom: 100%;
-  background: darken($bg, 3%);
-  border: 1px solid $border;
-  border-radius: 6px;
+  background: $bg;
+  @include raised;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
   z-index: 100;
   min-width: 220px;
@@ -555,21 +575,22 @@ $play-range: rgba($accent, 0.08);
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  border-bottom: 1px solid $border;
+  background: $green;
+  color: $green-txt;
+  border-bottom: 2px solid $bevel-lt;
   font-weight: 700;
   font-size: 12px;
 }
 
 .fp-close {
-  background: none;
-  border: none;
-  color: $muted;
+  background: $surface;
+  @include raised;
+  color: $text;
   cursor: pointer;
   font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 0 4px;
 
-  &:hover { background: rgba(255, 255, 255, 0.08); color: $text; }
+  &:hover { background: $surface-hi; }
 }
 
 .fp-body {
@@ -585,7 +606,7 @@ $play-range: rgba($accent, 0.08);
 
   input[type='range'] {
     flex: 1;
-    accent-color: $accent;
+    accent-color: $green-hi;
     height: 4px;
   }
 }
@@ -610,7 +631,7 @@ $play-range: rgba($accent, 0.08);
   margin: 3px 0;
   font-size: 12px;
 
-  input[type='checkbox'] { accent-color: $accent; }
+  input[type='checkbox'] { accent-color: $green-hi; }
 }
 
 /* Tint swatches */
@@ -629,13 +650,13 @@ $play-range: rgba($accent, 0.08);
 .tint-swatch {
   width: 18px;
   height: 18px;
-  border-radius: 3px;
-  border: 2px solid transparent;
+  border-radius: 0;
+  border: 2px solid $bevel-mid;
   cursor: pointer;
   transition: border-color 0.12s;
 
   &:hover { border-color: rgba(255, 255, 255, 0.4); }
-  &.active { border-color: $text; }
+  &.active { border-color: $green-txt; }
 }
 
 /* Settings panel inputs */
@@ -648,15 +669,14 @@ $play-range: rgba($accent, 0.08);
 
 .setting-input {
   width: 60px;
-  background: $surface;
-  border: 1px solid $border;
-  border-radius: 3px;
+  background: #111;
+  @include sunken;
   color: $text;
   padding: 2px 6px;
   font-size: 11px;
   text-align: right;
 
-  &:focus { outline: 2px solid $accent; }
+  &:focus { outline: 1px solid $green-hi; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -666,9 +686,8 @@ $play-range: rgba($accent, 0.08);
 .ctx-menu {
   position: fixed;
   z-index: 9999;
-  background: darken($bg, 5%);
-  border: 1px solid $border;
-  border-radius: 4px;
+  background: $bg;
+  @include raised;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   min-width: 140px;
   padding: 4px 0;
@@ -680,16 +699,17 @@ $play-range: rgba($accent, 0.08);
   cursor: pointer;
   transition: background 0.1s;
 
-  &:hover { background: rgba($accent, 0.2); }
+  &:hover { background: $green; color: $green-txt; }
 
   &.ctx-item-active {
-    color: $accent;
+    color: $green-txt;
+    background: rgba(59, 97, 81, 0.35);
     font-weight: 600;
   }
 
   &.ctx-item-danger {
-    color: #f48fb1;
-    &:hover { background: rgba(#f48fb1, 0.15); }
+    color: $danger-txt;
+    &:hover { background: $danger; color: #fff; }
   }
 }
 
@@ -702,9 +722,9 @@ $play-range: rgba($accent, 0.08);
 /* ── Cel drag states ────────────────────────────────────────── */
 
 .tl-cell.drag-ghost {
-  outline: 2px solid $accent;
+  outline: 2px solid $green-txt;
   outline-offset: -2px;
-  background: rgba($accent, 0.15) !important;
+  background: rgba(79, 122, 104, 0.3) !important;
 }
 
 .tl-cell.drag-swap {
@@ -731,7 +751,7 @@ $play-range: rgba($accent, 0.08);
 
   &:hover {
     color: #fff;
-    background: rgba($accent, 0.3);
+    background: rgba(200, 237, 227, 0.25);
   }
 }
 
@@ -741,7 +761,6 @@ $play-range: rgba($accent, 0.08);
   transform: scale(1.6) !important;
   filter: drop-shadow(0 0 3px currentColor);
   outline: 1px solid currentColor;
-  border-radius: 1px;
 }
 
 .kf-bulk-bar {
@@ -750,8 +769,8 @@ $play-range: rgba($accent, 0.08);
   left: 140px;
   right: 0;
   height: 24px;
-  background: rgba(#4a3060, 0.97);
-  border-bottom: 1px solid #8a6090;
+  background: $green;
+  border-bottom: 2px solid $bevel-lt;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -769,12 +788,12 @@ $play-range: rgba($accent, 0.08);
 
 .kf-bulk-count {
   font-size: 10px;
-  color: #ce93d8;
+  color: $green-txt;
   margin-right: 4px;
 }
 
 .kf-bulk-delete-btn {
-  color: #f48fb1;
+  color: $danger-txt;
 }
 
 /* ── Keyframe drag states ───────────────────────────────────── */
