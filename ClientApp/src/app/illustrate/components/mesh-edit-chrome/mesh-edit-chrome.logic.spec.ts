@@ -1,8 +1,7 @@
 import {
   DEFAULT_MESH_TOOL_PARAMS, MESH_TOOL_IDS, NEEDS_ENGINE_UPDATE, buildMeshOp, followClassicSetting, lastOpParams, meshChromeCaps,
-  meshMenuItems, meshRadialItems, meshTools, planMeshTool, selectActions, type MeshChromeCaps, type MeshOpInput,
+  meshPanelTools, meshRadialItems, meshToolAppliesTo, planMeshTool, type MeshChromeCaps, type MeshOpInput,
 } from './mesh-edit-chrome.logic';
-import { MESH_EDIT_KEYS } from '../illustration/mode-keymap';
 
 const OLD: MeshChromeCaps = {
   activeTool: false, gizmo: false, bevel: false, knifePoints: false, pick: false, lastOp: false, dragMoves: false,
@@ -66,34 +65,42 @@ describe('Edit Mesh chrome logic', () => {
     });
   });
 
-  describe('tool strip', () => {
-    it('nine tools in two groups, keys + hints from the keymap', () => {
-      const tools = meshTools(NEW);
-      expect(tools.map(t => t.id)).toEqual(['select', 'move', 'rotate', 'scale', 'extrude', 'inset', 'loopcut', 'knife', 'bevel']);
-      expect(tools.map(t => t.group)).toEqual(['xf', 'xf', 'xf', 'xf', 'op', 'op', 'op', 'op', 'op']);
-      const by = (id: string) => tools.find(t => t.id === id)!;
-      expect(by('move').key).toBe('G');
-      expect(by('extrude').key).toBe('E');
-      expect(by('inset').key).toBe('I');
-      expect(by('loopcut').key).toBe('Ctrl+R');
-      expect(by('knife').key).toBe('K');
-      expect(by('bevel').key).toBe('Ctrl+B');
-      expect(by('select').key).toBeUndefined();
-      expect(by('extrude').hint).toContain(MESH_EDIT_KEYS.extrude.help);
-      expect(by('move').hint).toContain(MESH_EDIT_KEYS.move.help);
-      expect(by('select').hint).toContain('A all');
-      for (const t of tools) expect(t.icon).toBe(`svg:${t.id}`);
+  describe('right panel tools (round-2 feedback: only what applies to the selection type)', () => {
+    const none = { vertices: 0, edges: 0, faces: 0 };
+    const ids = (mode: 'vertex' | 'edge' | 'face', caps = NEW, sel = none, bridge = false) => meshPanelTools(mode, caps, sel, bridge).map(t => t.id);
+    it('face: Extrude / Inset / Loop Cut / Knife, then Delete / Subdivide / Flip / Separate', () => {
+      expect(ids('face')).toEqual(['extrude', 'inset', 'loopcut', 'knife', 'delete', 'subdivide', 'flip', 'separate']);
+      const tools = meshPanelTools('face', NEW, none, false);
+      expect(tools.filter(t => t.kind === 'tool').map(t => t.id)).toEqual(['extrude', 'inset', 'loopcut', 'knife']);
+      expect(tools.filter(t => t.kind === 'verb').every(t => t.disabled)).toBeTrue();       // nothing selected yet
+      expect(meshPanelTools('face', NEW, { ...none, faces: 2 }, false).some(t => t.disabled)).toBeFalse();
     });
-
-    it('the old dist: Bevel is disabled with "Needs the engine update"; Knife / Loop Cut hints describe the fallbacks', () => {
-      const tools = meshTools(OLD);
-      const bevel = tools.find(t => t.id === 'bevel')!;
-      expect(bevel.disabled).toBeTrue();
-      expect(bevel.hint).toBe(NEEDS_ENGINE_UPDATE);
-      expect(tools.find(t => t.id === 'knife')!.hint).toContain('Drag');
-      expect(tools.find(t => t.id === 'loopcut')!.hint).toContain('select an edge');
-      expect(tools.filter(t => t.disabled).length).toBe(1);
-      expect(meshTools(NEW).find(t => t.id === 'knife')!.hint).toContain('Tap points');
+    it('edge: Loop Cut / Bevel / Knife, then Dissolve / Bridge', () => {
+      expect(ids('edge')).toEqual(['loopcut', 'bevel', 'knife', 'dissolve', 'bridge']);
+      expect(meshPanelTools('edge', OLD, none, false).find(t => t.id === 'bevel')!.title).toBe(NEEDS_ENGINE_UPDATE);
+      expect(meshPanelTools('edge', NEW, none, true).find(t => t.id === 'bridge')!.disabled).toBeFalse();
+    });
+    it('vertex: Chamfer / Knife, then Merge (two or more) / Bridge', () => {
+      expect(ids('vertex')).toEqual(['bevel', 'knife', 'merge', 'bridge']);
+      const v = meshPanelTools('vertex', NEW, { ...none, vertices: 1 }, false);
+      expect(v[0].label).toBe('Chamfer');
+      expect(v.find(t => t.id === 'merge')!.disabled).toBeTrue();
+      expect(meshPanelTools('vertex', NEW, { ...none, vertices: 2 }, false).find(t => t.id === 'merge')!.disabled).toBeFalse();
+    });
+    it('icon-only: every button has a tooltip (with the key) and an icon', () => {
+      for (const mode of ['vertex', 'edge', 'face'] as const) {
+        for (const t of meshPanelTools(mode, NEW, none, false)) {
+          expect(t.title).withContext(t.id).toBeTruthy();
+          expect(t.icon).withContext(t.id).toBeTruthy();
+        }
+      }
+      expect(meshPanelTools('face', NEW, none, false).find(t => t.id === 'extrude')!.title).toBe('Extrude (E)');
+    });
+    it('a selection-type switch keeps only the tools the new type offers', () => {
+      expect(meshToolAppliesTo('extrude', 'edge')).toBeFalse();
+      expect(meshToolAppliesTo('loopcut', 'edge')).toBeTrue();
+      expect(meshToolAppliesTo('bevel', 'face')).toBeFalse();
+      for (const t of ['select', 'move', 'rotate', 'scale'] as const) expect(meshToolAppliesTo(t, 'vertex')).toBeTrue();
     });
   });
 
@@ -105,7 +112,6 @@ describe('Edit Mesh chrome logic', () => {
       expect(none.applyLabel).toBe('Extrude');
       const some = buildMeshOp(input({ tool: 'extrude', sel: { vertices: 0, edges: 0, faces: 2 } }));
       expect(some.applyDisabled).toBeFalse();
-      expect(some.note).toBe('2 faces');
     });
 
     it('Inset: thickness + depth (depth needs the engine update on the old dist)', () => {
@@ -121,26 +127,29 @@ describe('Edit Mesh chrome logic', () => {
     it('Loop Cut: count + position; count needs loopCuts3D', () => {
       const v = buildMeshOp(input({ tool: 'loopcut', params: { ...DEFAULT_MESH_TOOL_PARAMS, loopCutCount: 3, loopCutPosition: 0.25 } }));
       expect(v.params.map(p => [p.id, p.kind, p.value])).toEqual([['count', 'int', 3], ['position', 'number', 0.25]]);
-      expect(v.note).toBe('Tap an edge to cut');
       expect(buildMeshOp(input({ tool: 'loopcut', caps: OLD })).params[0].disabled).toBeTrue();
       expect(buildMeshOp(input({ tool: 'loopcut', sel: { vertices: 0, edges: 1, faces: 0 } })).applyDisabled).toBeFalse();
     });
 
-    it('Knife: the point count, Cut from two points, Clear drops them; the old dist explains the drag knife', () => {
+    it('Knife: Cut from two points (the old dist: the drag knife cuts on release, no Cut)', () => {
       expect(buildMeshOp(input({ tool: 'knife', knifePoints: 1 })).applyDisabled).toBeTrue();
-      const two = buildMeshOp(input({ tool: 'knife', knifePoints: 2 }));
-      expect(two.applyDisabled).toBeFalse();
-      expect(two.cancelLabel).toBe('Clear');
-      expect(two.note).toContain('2 points');
-      const old = buildMeshOp(input({ tool: 'knife', caps: OLD }));
-      expect(old.note).toContain('Drag');
-      expect(old.applyDisabled).toBeTrue();
+      expect(buildMeshOp(input({ tool: 'knife', knifePoints: 2 })).applyDisabled).toBeFalse();
+      expect(buildMeshOp(input({ tool: 'knife', caps: OLD })).applyDisabled).toBeTrue();
+    });
+
+    it('no hint text in the pill (round-2 feedback: the name is enough)', () => {
+      const states: Partial<MeshOpInput>[] = [
+        { tool: 'extrude' }, { tool: 'inset' }, { tool: 'loopcut' }, { tool: 'knife' }, { tool: 'knife', caps: OLD }, { tool: 'bevel' },
+        { tool: 'bevel', caps: OLD }, { transform: { mode: 'grab', axis: null, display: '' } },
+        { bevel: { phase: 'pick', kind: 'edge', amount: 0, maxAmount: 0, segments: 1, snap: false, snapStep: 0.1, targets: 0, hint: 'Tap an edge', dragging: false } },
+      ];
+      for (const st of states) expect((buildMeshOp(input(st)) as { note?: string }).note).withContext(JSON.stringify(st)).toBeUndefined();
     });
 
     it('Bevel: Start when idle; amount + segments + snap while it runs', () => {
       const idle = buildMeshOp(input({ tool: 'bevel' }));
       expect(idle.params.map(p => p.id)).toEqual(['start']);
-      expect(buildMeshOp(input({ tool: 'bevel', caps: OLD })).note).toBe(NEEDS_ENGINE_UPDATE);
+      expect(buildMeshOp(input({ tool: 'bevel', caps: OLD })).params).toEqual([]);
       const running = buildMeshOp(input({
         tool: 'select',
         bevel: { phase: 'adjust', kind: 'edge', amount: 0.2, maxAmount: 0.5, segments: 3, snap: false, snapStep: 0.1, targets: 2, hint: '', dragging: false },
@@ -151,11 +160,13 @@ describe('Edit Mesh chrome logic', () => {
       expect(running.showApplyCancel).toBeTrue();
     });
 
-    it('Move / Rotate / Scale: Start (G / R / S); while it runs: axis chips + the typed amount + Apply / Cancel', () => {
-      const idle = buildMeshOp(input({ tool: 'rotate', sel: { vertices: 0, edges: 0, faces: 1 } }));
-      expect(idle.params[0].id).toBe('start');
-      expect(idle.params[0].label).toBe('Start (R)');
-      expect(buildMeshOp(input({ tool: 'rotate' })).params[0].disabled).toBeTrue();
+    it('Select / Move / Rotate / Scale (the main toolbar): an empty pill (just Frame); a running transform: axis + amount + Apply', () => {
+      for (const tool of ['select', 'move', 'rotate', 'scale'] as const) {
+        const idle = buildMeshOp(input({ tool, sel: { vertices: 0, edges: 0, faces: 1 } }));
+        expect(idle.title).withContext(tool).toBe('');
+        expect(idle.params).withContext(tool).toEqual([]);
+        expect(idle.showApplyCancel).withContext(tool).toBeFalse();
+      }
       const xf = buildMeshOp(input({ tool: 'move', transform: { mode: 'rotate', axis: 'z', display: '45' } }));
       expect(xf.kind).toBe('transform');
       expect(xf.title).toBe('Rotate');
@@ -166,25 +177,12 @@ describe('Edit Mesh chrome logic', () => {
       expect(noAxis.params[1].disabled).toBeTrue();
     });
 
-    it('Select: All / None / Invert, then the ops that fit the selection (no Apply / Cancel)', () => {
-      const ids = (mode: 'vertex' | 'edge' | 'face', v: number, e: number, f: number, bridge = false) =>
-        selectActions(mode, { vertices: v, edges: e, faces: f }, bridge).map(p => p.id);
-      expect(ids('face', 0, 0, 0)).toEqual(['sel-all', 'sel-none', 'sel-invert']);
-      expect(ids('face', 0, 0, 2)).toEqual(['sel-all', 'sel-none', 'sel-invert', 'delete', 'subdivide', 'flip', 'separate']);
-      expect(ids('edge', 0, 1, 0)).toEqual(['sel-all', 'sel-none', 'sel-invert', 'delete']);
-      expect(ids('vertex', 4, 0, 0, true)).toEqual(['sel-all', 'sel-none', 'sel-invert', 'merge', 'bridge']);
-      const v = buildMeshOp(input({ sel: { vertices: 0, edges: 0, faces: 1 } }));
-      expect(v.showApplyCancel).toBeFalse();
-      expect(v.note).toBe('1 face selected');
-    });
-
-    it('adjust last: the last op wins over the tool, with its params; Done / Undo', () => {
+    it('adjust last: the last op wins over the tool, with its params; Apply (no Done)', () => {
       const v = buildMeshOp(input({ tool: 'extrude', lastOp: { op: 'insetRegion', params: { amount: 0.1, depth: 0 } } }));
       expect(v.kind).toBe('adjust');
       expect(v.title).toBe('Adjust last: Inset');
       expect(v.params.map(p => [p.id, p.label, p.value])).toEqual([['amount', 'Amount', 0.1], ['depth', 'Depth', 0]]);
-      expect(v.applyLabel).toBe('Done');
-      expect(v.cancelLabel).toBe('Undo');
+      expect(v.applyLabel).toBe('Apply');
       // a running transform / Chamfer still comes first
       expect(buildMeshOp(input({ lastOp: { op: 'bevel', params: {} }, transform: { mode: 'grab', axis: 'x', display: '1' } })).kind).toBe('transform');
     });
@@ -211,18 +209,6 @@ describe('Edit Mesh chrome logic', () => {
       expect(meshRadialItems('vertex', NEW, sel).map(i => i.id)).toEqual(['merge', 'bevel', 'fill']);
       expect(meshRadialItems('vertex', NEW, { ...sel, vertices: 1 })[0].disabled).toBeTrue();
       expect(meshRadialItems('vertex', NEW, { ...sel, vertices: 2 })[0].disabled).toBeFalse();
-    });
-  });
-
-  describe('⋯ menu', () => {
-    it('the background (checked), Drag moves selection on a newer dist, Open UV editor, Keyboard shortcuts', () => {
-      const items = meshMenuItems('wavy', true);
-      expect(items.filter(i => i.id.startsWith('bg:')).map(i => [i.id, i.checked])).toEqual([
-        ['bg:gradient', false], ['bg:wavy', true], ['bg:checkers', false], ['bg:dim', false], ['bg:solid', false], ['bg:none', false],
-      ]);
-      expect(items.find(i => i.id === 'drag-moves')!.checked).toBeTrue();
-      expect(items.map(i => i.id).slice(-2)).toEqual(['uv', 'shortcuts']);
-      expect(meshMenuItems('gradient', null).some(i => i.id === 'drag-moves')).toBeFalse();
     });
   });
 

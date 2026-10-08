@@ -3,10 +3,12 @@ import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { BEVEL_ACTIONS, type BevelState } from '../components/illustration/editor-keymap';
 import {
-  DEFAULT_MESH_TOOL_PARAMS, meshChromeApi, meshChromeCaps, planMeshTool, type MeshBgMode, type MeshToolId, type MeshToolParams,
+  DEFAULT_MESH_TOOL_PARAMS, meshChromeApi, meshChromeCaps, meshToolAppliesTo, planMeshTool, type MeshBgMode, type MeshToolId,
+  type MeshToolParams, type MeshVerbId,
 } from '../components/mesh-edit-chrome/mesh-edit-chrome.logic';
 import * as ops from './mesh-edit-ops';
 import { NotifyService } from '../../shared/services/notify/notify.service';
+import { ModeUndoScope } from './mode-undo-scope';
 
 import { EditorStateService } from './editor-state.service';
 
@@ -49,6 +51,9 @@ export class MeshEditService {
   /** The pointer drawing the knife line: only it moves the preview and cuts on release (a 2nd finger used to restart
    *  the line at its own position and cut on ITS release). */
   private _knifePointerId: number | null = null;
+  /** Undo scope (round-2 feedback): undo stops at the 3D step on top when Edit Mesh was entered, redo after the steps
+   *  undone in it (ModeUndoScope — shared with the Armature). */
+  private readonly _undoScope = new ModeUndoScope(() => this.host?.shapeManager);
 
   enterMeshEditMode(): void {
     if (!this.editorState.scene3dSelectedMeshId) return;
@@ -63,6 +68,7 @@ export class MeshEditService {
     const canvas = this.host.canvasRef?.nativeElement;
     sm.enterMeshEditMode3D(meshId);
     this.scene3dIsEditingMesh = true;
+    this._undoScope.enter();
     // Every entry starts in Face mode — the engine's picker too (it kept the last session's mode while the panel showed
     // Face, so taps picked vertices under a "Face" tab)
     this.selectionMode = 'face';
@@ -121,8 +127,37 @@ export class MeshEditService {
     if (plan.beginTransform) { sm.beginTransform3D(plan.beginTransform); this.host.hud?.syncShortcutHud(); }
     this.scene3dEditTool = plan.legacyKnife ? 'knife' : 'select';
     if (plan.beginBevel && !BEVEL_ACTIONS.active(this.host)) BEVEL_ACTIONS.begin(this.host);
+    // The main toolbar's Move / Rotate / Scale show the Edit Mesh tool (Select and the panel tools: none of them)
+    if (this.chromeOn && 'scene3dGizmoMode' in this.host) {
+      this.host.scene3dGizmoMode = tool === 'move' || tool === 'rotate' || tool === 'scale' ? tool : null;
+    }
     sm.requestRender3D?.();
   }
+
+  /** A one-shot op on the selection (the right panel's verb buttons, the radial menu). False = nothing to act on. */
+  runVerb(id: MeshVerbId | 'fill'): boolean {
+    const sm = this.shapeManager, id3 = this._editId;
+    if (!sm || !id3) return false;
+    const sel = this.selection;
+    switch (id) {
+      case 'delete': case 'dissolve': return this.deleteSelectedElements();
+      case 'subdivide': if (!sel.faces.length) return false; ops.subdivideFaces(sm, id3, sel.faces); return true;
+      case 'flip': if (!sel.faces.length) return false; ops.flipFaces(sm, id3, sel.faces); return true;
+      case 'separate': if (!sel.faces.length) return false; ops.separateFaces(sm, id3, sel.faces); return true;
+      case 'merge': return ops.mergeVertices(sm, id3, sel.vertices);
+      case 'bridge': return ops.bridgeLoops(sm, id3, sel);
+      case 'fill': return ops.fillHoles(sm, id3) > 0;
+    }
+  }
+
+  // ── Undo / Redo while in Edit Mesh (the top bar's buttons, Ctrl+Z / Ctrl+Y, two- / three-finger taps) ──
+
+  /**
+   * Edit Mesh owns undo / redo while it is on: only the steps made in it. Undo stops at the step that was on top when
+   * Edit Mesh was entered (an older Salsa without peekUndoCommand3D: no floor); redo only re-does what was undone in
+   * Edit Mesh. Returns whether the step may run (the caller runs it: scene3dUndo / scene3dRedo) and counts it.
+   */
+  takeUndoStep(redo: boolean): boolean { return this._undoScope.takeStep(redo); }
 
   /** E / I: the Extrude / Inset tool (chrome), run at once on the selected faces with the tool's amount. */
   toolKey(tool: 'extrude' | 'inset'): void {
@@ -169,6 +204,13 @@ export class MeshEditService {
     return true;
   }
 
+  /** Leave Edit Mesh from the mode itself (Esc, the main toolbar's other tools): the focus background goes too. */
+  leave(): void {
+    if (!this.scene3dIsEditingMesh) return;
+    this.shapeManager?.setMeshEditBgMode3D?.({ mode: 'none' });
+    this.exitMeshEditMode();
+  }
+
   exitMeshEditMode(): void {
     const sm = this.shapeManager;
     sm.detachMeshEditPointerHandlers();
@@ -179,6 +221,7 @@ export class MeshEditService {
       sm.setGizmoMode3D(this.host.scene3dGizmoMode);
     }
     this.scene3dIsEditingMesh = false;
+    this._undoScope.leave();
     this.scene3dEditTool = 'select';
     this._knifeStart = null;
     this._knifePointerId = null;
@@ -304,6 +347,8 @@ export class MeshEditService {
   /** Vertex / Edge / Face (the panel's tabs, 1 / 2 / 3): the engine's picker switches and the selection is cleared. */
   setSelectionMode(mode: MeshEditSelectMode): void {
     this.selectionMode = mode;
+    // The chrome: a panel tool the new selection type doesn't offer goes off (Select)
+    if (this.chromeOn && !meshToolAppliesTo(this.tool, mode)) this.setTool('select');
     const sm = this.shapeManager, id = this._editId;
     sm.setMeshEditSelectionMode(mode);
     if (id) sm.clearEditSelection3D(id);

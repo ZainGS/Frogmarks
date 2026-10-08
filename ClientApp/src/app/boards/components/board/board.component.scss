@@ -1029,7 +1029,6 @@ svg {
     color: var(--rc-green-txt, #c8ede3);
     &:hover { background: var(--rc-green-hi, #4f7a68); }
   }
-  @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 18px; }
 }
 .board-save-failed {
   position: fixed;

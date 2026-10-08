@@ -1,17 +1,261 @@
-@import '../../styles/mode-chrome';
+// The old Edit Mesh panel's look (aa753db mesh-edit-panel.component.scss; retro-chrome-theme.scss § 6 restyles the
+// same .me-* classes globally: green section titles, bevel buttons). Desktop sizes on touch too (round-2 feedback).
+$accent:  #7b5ea7;
+$muted:   rgba(255, 255, 255, 0.45);
+$danger:  #c0392b;
 
 :host { display: block; }
 
-.mep-selection {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--rc-bevel-mid, #3a3a3a);
+.me-body {
+  padding: 8px 12px 16px;
   font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  user-select: none;
+}
+:host-context(body.theme-retro-chrome) .me-body * { font-family: 'Courier New', Courier, monospace; }
+
+// ── Selection type + Deselect all ─────────────────────────────────
+
+.me-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
-.mep-num { width: 72px; }
-.mep-range { flex: 1; min-width: 80px; accent-color: var(--rc-green, #3d5c50); }
-.mep-val { min-width: 36px; text-align: right; color: var(--rc-text, #c8c8c8); }
-.mep-actions { justify-content: flex-end; }
-.mep-off .mode-row-label { opacity: 0.55; }
-.mep-add { margin-top: 10px; }
-.mep-add-title { margin-bottom: 6px; }
+.me-mode-btn {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: $muted;
+  padding: 5px 0;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover { background: #333; color: #ccc; }
+  &.active {
+    background: rgba($accent, 0.25);
+    border-color: $accent;
+    color: lighten($accent, 30%);
+    font-weight: 600;
+  }
+}
+
+.me-clear-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: 1px solid #555;
+  color: $muted;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { color: #fff; border-color: #888; }
+  &:disabled { opacity: 0.35; cursor: default; }
+}
+
+// ── Tools: the main toolbar's .vertical-tool-button (illustration.component.scss; the retro-chrome theme restyles the
+// class globally, so both themes match the rail) ───────────────────────────────────────────────────────────────
+
+.me-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vertical-tool-button {
+  width: 50px;
+  height: 50px;
+  margin: 0;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #555;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover { background: rgba(255, 255, 255, 0.2); border-color: #777; }
+  &.selected {
+    background: #993FF4;
+    border-color: #bb5fff;
+    box-shadow: 0 0 15px rgba(153, 63, 244, 0.5);
+  }
+  svg { filter: brightness(0.9); }
+  &.selected svg { filter: brightness(1.2); }
+  &:focus-visible { outline: 1px solid #4f7a68; outline-offset: 1px; }
+  // Greyed out (the selection doesn't fit the op yet); the tooltip still shows, so no pointer-events: none
+  &.tool-off { opacity: 0.25; cursor: default; }
+}
+
+// ── Sections ──────────────────────────────────────────────────────
+
+.me-section {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.me-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+
+// ── Buttons + fields ──────────────────────────────────────────────
+
+.me-op-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.me-row-gap { margin-top: 6px; }
+
+.me-op-pair {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  .me-op-btn { flex: 1; }
+}
+
+.me-op-btn {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { background: #383838; color: #fff; }
+  &:disabled { opacity: 0.35; cursor: default; }
+  &.active { background: rgba($accent, 0.25); border-color: $accent; color: lighten($accent, 30%); }
+}
+.me-op-sm { padding: 2px 6px; font-size: 10px; }
+.me-op-full { width: 100%; text-align: center; margin-top: 6px; }
+
+.me-label {
+  font-size: 10px;
+  color: $muted;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.me-num {
+  width: 64px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #252525;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 11px;
+  text-align: right;
+  -moz-appearance: textfield;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button { opacity: 0; }
+  &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+}
+
+.me-select {
+  flex: 1;
+  background: #252525;
+  border: 1px solid #555;
+  color: #ddd;
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:focus { outline: 1px solid rgba($accent, 0.6); border-color: transparent; }
+  option { background: #252525; }
+}
+
+.me-hint {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 4px;
+}
+.me-hint-ok { color: rgba(60, 220, 120, 0.8); }
+
+// ── Modifier stack ────────────────────────────────────────────────
+
+.me-mod-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  &:empty { display: none; }
+}
+
+.me-mod-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+}
+.me-mod-off .me-mod-label { opacity: 0.55; }
+
+.me-mod-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.me-mod-remove:hover:not(:disabled) { color: #f77; border-color: $danger; }
+
+// A card's second row (Rotate plane / Flip side; the Displace summary)
+.me-mod-sub {
+  flex: 1 0 100%;
+  display: flex;
+  gap: 5px;
+}
+
+.me-mod-add-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.me-chip {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #aaa;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:hover { background: rgba($accent, 0.25); border-color: $accent; color: #ddd; }
+  &.me-chip-on { background: rgba($accent, 0.45); color: #fff; }
+}
+
+.me-bg-row { margin-top: 4px; }

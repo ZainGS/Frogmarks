@@ -2,19 +2,19 @@ import { Component, Input, NgZone, OnDestroy, OnInit, inject } from '@angular/co
 import type { IllustrationComponent } from '../illustration/illustration.component';
 import { BEVEL_ACTIONS, TOOL3D_ACTIONS } from '../illustration/editor-keymap';
 import { LongPressDetector, type LongPressPointer } from '../mode-chrome/long-press';
-import type { ModeMenuItem, ModeOpParamChange, ModeRadialItem, ModeTool } from '../mode-chrome/mode-chrome.types';
+import type { ModeOpParamChange, ModeRadialItem } from '../mode-chrome/mode-chrome.types';
 import * as ops from '../../services/mesh-edit-ops';
 import { NotifyService } from '../../../shared/services/notify/notify.service';
 import {
-  MESH_SELECT_SEGMENTS, RADIAL_TITLES, buildMeshOp, meshChromeApi, meshChromeCaps, meshMenuItems, meshRadialItems, meshTools,
-  type MeshBgMode, type MeshChromeCaps, type MeshLastOp, type MeshOpView, type MeshRadialId, type MeshSelCounts,
+  RADIAL_TITLES, buildMeshOp, meshChromeApi, meshChromeCaps, meshRadialItems,
+  type MeshChromeCaps, type MeshLastOp, type MeshOpView, type MeshRadialId, type MeshSelCounts,
   type MeshSelectMode, type MeshToolId,
 } from './mesh-edit-chrome.logic';
 
 /** The editor members the Edit Mesh chrome uses. */
 export type MeshEditChromeHost = Pick<IllustrationComponent,
-  'shapeManager' | 'editorState' | 'meshEdit' | 'editUndo' | 'editRedo' | 'uv' | 'hud' | 'animationEnabled' | 'touchUi' |
-  'canvasRef' | 'scene3dUndo' | 'scene3dMarkDirty' | 'showShortcutCheatsheet' | '_updateGizmoPosition'>;
+  'shapeManager' | 'editorState' | 'meshEdit' | 'uv' | 'hud' | 'animationEnabled' | 'touchUi' |
+  'canvasRef' | 'scene3dUndo' | 'scene3dMarkDirty' | '_updateGizmoPosition'>;
 
 /** The tool param a last-op param also sets (the next run of that tool uses the adjusted value). */
 const LAST_OP_TO_TOOL: Readonly<Record<string, Readonly<Record<string, 'extrudeDistance' | 'insetAmount' | 'insetDepth' | 'loopCutCount' | 'loopCutPosition'>>>> = {
@@ -24,11 +24,14 @@ const LAST_OP_TO_TOOL: Readonly<Record<string, Readonly<Record<string, 'extrudeD
 };
 
 /**
- * Edit Mesh on the shared mode chrome (UI review 2026-10-07 §4; mode-chrome/README.md): the header bar (Vertex / Edge /
- * Face, Multi, Undo / Redo, Frame, ⋯, Done), the tool strip, the op pill (the active tool's live parameters, Apply /
- * Cancel, "adjust last operation"), the properties panel (<app-mesh-edit-props>) and the long-press radial menu.
- * Mounted by the editor while Edit Mesh is active with useModeChrome.meshEdit on (Experimental › Classic Edit Mesh
- * panel turns it off). The state lives in MeshEditService (shared with the keys and the classic panel).
+ * Edit Mesh on the shared mode chrome (UI review 2026-10-07 §4, reworked to the round-2 tablet feedback 2026-10-08;
+ * mode-chrome/README.md): the op pill (Frame, then the active tool's live parameters + Apply, "adjust last
+ * operation"), the right panel (<app-mesh-edit-props>: Vertex / Edge / Face, the tools, modifiers…) and the long-press
+ * radial menu. No header bar / tool strip: the main toolbar's Select / Pan / Move / Rotate / Scale stay (another rail
+ * tool leaves the mode — mode-chrome/mode-toolbar-scope.ts), the top bar's Undo / Redo are scoped to Edit Mesh
+ * (MeshEditService.takeUndoStep), Esc leaves. On touch / pen, taps add to the selection (the engine's additive latch,
+ * on while this is mounted). Mounted by the editor while Edit Mesh is active with useModeChrome.meshEdit on
+ * (Experimental › Classic Edit Mesh panel turns it off). The state lives in MeshEditService.
  */
 @Component({
   selector: 'app-mesh-edit-chrome',
@@ -41,8 +44,6 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
   private readonly ngZone = inject(NgZone);
   private readonly notify = inject(NotifyService, { optional: true });
 
-  readonly segments = MESH_SELECT_SEGMENTS;
-
   radial: { open: boolean; x: number; y: number; items: ModeRadialItem[]; title: string; kind: MeshSelectMode } =
     { open: false, x: 0, y: 0, items: [], title: '', kind: 'face' };
 
@@ -51,8 +52,12 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
   });
   private detachLongPress: (() => void) | null = null;
 
-  /** The adjust-last op the user closed (Done) or moved on from (a tool change) — not shown again until another op. */
+  /** The adjust-last op the user closed (Apply) or moved on from (a tool change) — not shown again until another op. */
   private dismissedLastOp: string | null = null;
+  /** The tool the pill last saw: a tool change (the panel, the rail, a key) dismisses "adjust last". */
+  private seenTool: MeshToolId | null = null;
+  /** The additive latch before this turned it on (touch / pen: taps add / remove), restored on destroy. */
+  private latchBefore: boolean | null = null;
   /** Pill scrubs of "adjust last" waiting for the next animation frame (one re-run per frame). */
   private pendingRedo: Record<string, number | boolean | string> | null = null;
   private redoRaf = 0;
@@ -63,12 +68,21 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     sm?.setMeshEditSelectionMode(this.ed.meshEdit.selectionMode);
     const canvas = this.ed.canvasRef?.nativeElement;
     if (canvas) this.detachLongPress = this.ngZone.runOutsideAngular(() => this.longPress.attach(canvas));
-    this.ed._updateGizmoPosition();   // the 3D nav gizmo moves below the header bar
+    // Multi-select by default on touch / pen (round-2 feedback): every tap adds; a desktop click replaces, Shift adds
+    const api = meshChromeApi(sm);
+    if (this.ed.touchUi.coarse && typeof api.setAdditiveSelect3D === 'function') {
+      this.latchBefore = TOOL3D_ACTIONS.additiveOn(this.ed);
+      api.setAdditiveSelect3D.call(sm, true);
+    }
+    this.ed._updateGizmoPosition();
   }
 
   ngOnDestroy(): void {
     this.detachLongPress?.();
     this.detachLongPress = null;
+    const api = meshChromeApi(this.sm);
+    if (this.latchBefore !== null && typeof api.setAdditiveSelect3D === 'function') api.setAdditiveSelect3D.call(this.sm, this.latchBefore);
+    this.latchBefore = null;
     if (this.redoRaf) cancelAnimationFrame(this.redoRaf);
     this.ed?._updateGizmoPosition();
   }
@@ -81,35 +95,15 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
 
   private capsFor: unknown = null;
   private _caps!: MeshChromeCaps;
-  private _tools: ModeTool[] = [];
   get caps(): MeshChromeCaps {
     if (this.capsFor !== this.sm || !this._caps) {
       this.capsFor = this.sm;
       this._caps = meshChromeCaps(this.sm);
-      this._tools = meshTools(this._caps);
     }
     return this._caps;
   }
-  get tools(): ModeTool[] { void this.caps; return this._tools; }
 
-  // ── Header bar ──
-
-  get selectMode(): MeshSelectMode { return this.ed.meshEdit.selectionMode; }
-  setSelectMode(id: string): void { this.ed.meshEdit.setSelectionMode(id as MeshSelectMode); }
-
-  /** Multi latch (taps add): touch only, and only on a dist with setAdditiveSelect3D (null hides it). */
-  get multi(): boolean | null {
-    if (!this.ed.touchUi.coarse || !this.caps.additive) return null;
-    return TOOL3D_ACTIONS.additiveOn(this.ed);
-  }
-  setMulti(on: boolean): void {
-    if (TOOL3D_ACTIONS.additiveOn(this.ed) !== on) TOOL3D_ACTIONS.toggleAdditive(this.ed);
-  }
-
-  undo(): void { this.ed.editUndo(); }
-  redo(): void { this.ed.editRedo(); }
-
-  /** Frame the selection; nothing selected: the whole mesh. */
+  /** The pill's Frame: frame the selection; nothing selected: the whole mesh. */
   frame(): void {
     const id = this.meshId, sm = this.sm;
     if (!id || !sm) return;
@@ -119,40 +113,10 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     else sm.frameMesh3D(id, 1.4);
   }
 
-  private _menuSig = '';
-  private _menu: ModeMenuItem[] = [];
-  get menuItems(): ModeMenuItem[] {
-    const api = meshChromeApi(this.sm);
-    const drag = this.caps.dragMoves ? !!api.getMeshEditDragMovesSelection3D?.call(this.sm) : null;
-    const sig = `${this.ed.meshEdit.bgMode}|${drag}`;
-    if (sig !== this._menuSig) { this._menuSig = sig; this._menu = meshMenuItems(this.ed.meshEdit.bgMode, drag); }
-    return this._menu;
-  }
-
-  runMenu(id: string): void {
-    const sm = this.sm;
-    if (id.startsWith('bg:')) { this.ed.meshEdit.setBgMode(id.slice(3) as MeshBgMode); return; }
-    if (id === 'drag-moves') {
-      const api = meshChromeApi(sm);
-      if (typeof api.setMeshEditDragMovesSelection3D === 'function') api.setMeshEditDragMovesSelection3D.call(sm, !api.getMeshEditDragMovesSelection3D?.call(sm));
-      return;
-    }
-    if (id === 'uv') { this.ed.uv.openUVEditor(); return; }
-    if (id === 'shortcuts') this.ed.showShortcutCheatsheet = true;
-  }
-
-  /** Done: leave Edit Mesh (the focus background goes, as the classic panel's Exit did). */
-  done(): void {
-    this.sm?.setMeshEditBgMode3D({ mode: 'none' });
-    this.ed.meshEdit.exitMeshEditMode();
-  }
-
-  // ── Tool strip ──
-
-  get tool(): MeshToolId { return this.ed.meshEdit.tool; }
-  setTool(id: string): void {
+  /** A tool change (the radial's Extrude / Inset). */
+  setTool(id: MeshToolId): void {
     this.dismissLastOp();
-    this.ed.meshEdit.setTool(id as MeshToolId);
+    this.ed.meshEdit.setTool(id);
   }
 
   // ── Op pill ──
@@ -188,6 +152,10 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const transform = sm.isShortcutActive3D && sm.shortcutMode3D
       ? { mode: sm.shortcutMode3D, axis: sm.shortcutAxis3D, display: sm.shortcutNumericDisplay3D ?? '' } : null;
     const bevel = BEVEL_ACTIONS.state(this.ed);
+    if (me.tool !== this.seenTool) {   // a new tool (the panel, the rail, a key): its own pill, not the last op's
+      if (this.seenTool !== null) this.dismissLastOp();
+      this.seenTool = me.tool;
+    }
     const last = this.lastOp();
     const counts = this.counts;
     const sel = me.selection;
@@ -278,43 +246,29 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** The pill's buttons: Start (Move / Rotate / Scale / Bevel) and the Select tool's actions. */
+  /** The pill's button: Bevel's Start (after an Esc dropped the running Chamfer). */
   opAction(id: string): void {
-    const me = this.ed.meshEdit;
     if (!this.sm || !this.meshId) return;
-    switch (id) {
-      case 'start':
-        if (me.tool === 'bevel') { if (!BEVEL_ACTIONS.active(this.ed)) BEVEL_ACTIONS.begin(this.ed); return; }
-        if (me.tool === 'move' || me.tool === 'rotate' || me.tool === 'scale') TOOL3D_ACTIONS.begin(this.ed, me.tool === 'move' ? 'grab' : me.tool);
-        return;
-      case 'sel-all': me.deselectAll(); me.toggleSelectAll(); return;
-      case 'sel-none': me.deselectAll(); return;
-      case 'sel-invert': me.invertSelection(); return;
-    }
-    this.runElementOp(id as MeshRadialId | 'flip' | 'separate' | 'bridge');
+    if (id === 'start' && this.ed.meshEdit.tool === 'bevel' && !BEVEL_ACTIONS.active(this.ed)) BEVEL_ACTIONS.begin(this.ed);
   }
 
-  /** An op on the selection (the Select pill's buttons and the radial menu). */
-  private runElementOp(id: MeshRadialId | 'flip' | 'separate' | 'bridge'): void {
+  /** A radial menu pick: an op on the selection. */
+  private runElementOp(id: MeshRadialId): void {
     const me = this.ed.meshEdit, sm = this.sm, meshId = this.meshId;
     if (!sm || !meshId) return;
-    const sel = me.selection;
     switch (id) {
       case 'extrude': this.setTool('extrude'); if (me.runExtrude()) this.opRan(); return;
       case 'inset': this.setTool('inset'); if (me.runInset()) this.opRan(); return;
-      case 'subdivide': ops.subdivideFaces(sm, meshId, sel.faces); this.opRan(); return;
-      case 'delete': me.deleteSelectedElements(); return;
+      case 'subdivide': if (me.runVerb('subdivide')) this.opRan(); return;
+      case 'delete': me.runVerb('delete'); return;
       case 'loopcut': if (me.loopCutSelectedEdge()) this.opRan(); return;
       case 'bevel': if (!BEVEL_ACTIONS.active(this.ed)) BEVEL_ACTIONS.begin(this.ed); return;
-      case 'merge': ops.mergeVertices(sm, meshId, sel.vertices); return;
+      case 'merge': me.runVerb('merge'); return;
       case 'fill': {
         const n = ops.fillHoles(sm, meshId);
         this.notify?.success(n ? (n === 1 ? '1 hole filled' : `${n} holes filled`) : 'No open holes here');
         return;
       }
-      case 'flip': ops.flipFaces(sm, meshId, sel.faces); return;
-      case 'separate': ops.separateFaces(sm, meshId, sel.faces); return;
-      case 'bridge': ops.bridgeLoops(sm, meshId, sel); return;
     }
   }
 

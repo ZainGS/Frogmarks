@@ -217,6 +217,25 @@ export function modifierLabel(m: Pick<MeshModifier, 'type' | 'axis' | 'iteration
   return 'Displace';
 }
 
+// ── Mirror across a plane (round-2 feedback 2026-10-08; Salsa API newer than the dist: feature-detected) ──────────
+
+/** A mirror modifier's plane: 'face' (across a picked face), 'bisect' (through the mesh centre, rotatable), 'axis' (the
+ *  old X / Y / Z mirror). */
+export interface MirrorPlane { mode: 'face' | 'bisect' | 'axis'; point: [number, number, number]; normal: [number, number, number] }
+
+export interface MirrorPlaneApi {
+  /** A mirror across the face (its plane); returns the new modifier's index (< 0 = refused). */
+  addMirrorFromFace3D?(meshId: string, faceIndex: number): number;
+  /** A mirror across a plane through the middle of the mesh; returns the new modifier's index (< 0 = refused). */
+  addMirrorBisect3D?(meshId: string): number;
+  getMirrorPlane3D?(meshId: string, modIndex: number): MirrorPlane | null;
+  /** Swap which side is the real half. */
+  flipMirrorSide3D?(meshId: string, modIndex: number): boolean;
+  /** Show the plane + its rotation handle on the canvas (null hides it). */
+  setMirrorPlaneHandle3D?(meshId: string, modIndex: number | null): void;
+}
+export const mirrorPlaneApi = (sm: unknown): MirrorPlaneApi => (sm ?? {}) as MirrorPlaneApi;
+
 /** Triangles in the mesh's current geometry (0 = none / unknown). */
 export function triangleCount(sm: ShapeManager | null | undefined, meshId: string | null | undefined): number {
   const geom = meshId ? sm?.getMesh3D(meshId)?.geometry : null;

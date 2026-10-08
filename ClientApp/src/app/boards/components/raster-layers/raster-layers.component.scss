@@ -362,13 +362,6 @@ $vector-accent: #3dbfa8;
   color: $muted;
 }
 
-/* Touch: finger-sized ✕ / Undo targets (UI review 2026-10-07 #2 — the ✕ was a 12×10 px glyph) */
-@media (pointer: coarse) {
-  .rl-vector-row { min-height: 44px; }
-  .rl-vector-remove { min-width: 44px; min-height: 44px; font-size: 14px; }
-  .rl-undo-btn, .rl-undo-close { min-height: 44px; min-width: 44px; }
-}
-
 .rl-vec-shape-row {
   display: flex;
   align-items: center;

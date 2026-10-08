@@ -793,51 +793,7 @@ $radius: 6px;
   justify-content: flex-end;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   TOUCH (pointer: coarse): no hover, so the gear is always shown, and every control is a 44 px target
-   ═══════════════════════════════════════════════════════════════ */
-
+/* Touch (pointer: coarse): no hover, so the gear is always shown */
 @media (pointer: coarse) {
-  .brush-row-gear {
-    opacity: 1;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-  }
-
-  .back-btn {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .btn-delete { min-width: 44px; }
-
-  .btn-brush,
-  .segment-btn,
-  .radio-option,
-  .collapsible-header,
-  .check-row,
-  .name-input,
-  .stab-row select,
-  .size-field input[type='number'] {
-    min-height: 44px;
-  }
-
-  .btn-brush,
-  .radio-option {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .slider-row input[type='range'],
-  .quick-row input[type='range'] { min-height: 36px; }
-
-  .hex-input { min-height: 44px; }
-  .color-swatch { width: 44px; height: 44px; }
-
-  .section-toggle,
-  .check-row input[type='checkbox'] { width: 22px; height: 22px; }
-
-  .check-row label { flex: 1; min-height: 44px; display: flex; align-items: center; }
+  .brush-row-gear { opacity: 1; }
 }

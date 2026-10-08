@@ -1,17 +1,13 @@
-<app-mode-header-bar title="Edit Mesh" [subtitle]="meshName"
-    [segments]="segments" [activeSegment]="selectMode" (segmentChange)="setSelectMode($event)"
-    [multiLatch]="multi" (multiLatchChange)="setMulti($event)"
-    [canUndo]="true" [canRedo]="true" (undo)="undo()" (redo)="redo()" (frame)="frame()"
-    [menuItems]="menuItems" (menuAction)="runMenu($event)" (done)="done()"></app-mode-header-bar>
-
-<app-mode-tool-strip [tools]="tools" [activeTool]="tool" (toolChange)="setTool($event)"></app-mode-tool-strip>
-
+<!-- Round-2 feedback (2026-10-08): no header bar or tool strip — the main toolbar's Select / Pan / Move / Rotate / Scale
+     stay, the mode's tools are in the right panel. The pill is always up: Frame, then the active tool's name +
+     parameters + Apply (no Cancel: tapping the tool again turns it off; Esc still cancels). -->
 <app-mode-op-pill *ngIf="op as o" [class.above-timeline]="ed.animationEnabled"
-    [title]="o.title" [params]="o.params" [note]="o.note" [showApplyCancel]="o.showApplyCancel"
-    [applyLabel]="o.applyLabel" [cancelLabel]="o.cancelLabel" [applyDisabled]="o.applyDisabled"
+    [title]="o.title" [params]="o.params" [showApplyCancel]="o.showApplyCancel" [showCancel]="false"
+    [showFrame]="true" (frame)="frame()"
+    [applyLabel]="o.applyLabel" [applyDisabled]="o.applyDisabled"
     (paramChange)="setOpParam($event)" (apply)="applyOp()" (cancel)="cancelOp()" (action)="opAction($event)"></app-mode-op-pill>
 
-<app-mode-props-panel title="Mesh" [class.above-timeline]="ed.animationEnabled">
+<app-mode-props-panel class="mep-props" [class.above-timeline]="ed.animationEnabled">
     <app-mesh-edit-props [ed]="ed"></app-mesh-edit-props>
 </app-mode-props-panel>
 

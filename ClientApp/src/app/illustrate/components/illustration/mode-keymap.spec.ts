@@ -38,6 +38,8 @@ describe('mode keymap', () => {
         toolKey: jasmine.createSpy('toolKey'),
         applyKnifePoints: jasmine.createSpy('applyKnifePoints').and.returnValue(false),
         cancelKnifePoints: jasmine.createSpy('cancelKnifePoints').and.returnValue(false),
+        takeUndoStep: jasmine.createSpy('takeUndoStep').and.returnValue(true),
+        leave: jasmine.createSpy('leave'),
       },
       scene3dArmaturePanelOpen: mode === 'armature',
       uv: { uvEditorOpen: mode === 'uvPaint', scene3dClothingPaintActive: null, closeUVEditor: jasmine.createSpy('closeUVEditor') },
@@ -169,7 +171,31 @@ describe('mode keymap', () => {
       expect(ed.saveNow).toHaveBeenCalledTimes(1);
       expect(ed.meshEdit.toggleKnifeTool).toHaveBeenCalledTimes(1);
       run(ed, key('Escape'));
-      expect(ed.selectCursor).toHaveBeenCalledOnceWith('cursor');
+      expect(ed.meshEdit.leave).toHaveBeenCalledTimes(1);   // round-2 feedback: Esc leaves Edit Mesh (no Done button)
+    });
+
+    it('undo / redo in Edit Mesh: only its own steps (MeshEditService.takeUndoStep decides)', () => {
+      const ed = editor();
+      run(ed, key('z', { ctrl: true }));
+      expect(ed.meshEdit.takeUndoStep).toHaveBeenCalledOnceWith(false);
+      expect(ed.scene3dUndo).toHaveBeenCalledTimes(1);
+      ed.meshEdit.takeUndoStep.and.returnValue(false);   // at the step Edit Mesh was entered on
+      run(ed, key('z', { ctrl: true }));
+      run(ed, key('y', { ctrl: true }));
+      expect(ed.scene3dUndo).toHaveBeenCalledTimes(1);
+      expect(ed.scene3dRedo).not.toHaveBeenCalled();
+    });
+
+    it('Esc waits for a running Chamfer / transform / drag knife line (the global Esc cancels it)', () => {
+      const busy = editor({ shortcut: true });
+      run(busy, key('Escape'));
+      expect(busy.meshEdit.leave).not.toHaveBeenCalled();
+      const knife = editor();
+      knife.meshEdit.scene3dEditTool = 'knife';
+      (knife.meshEdit as any).cancelKnifeCut = jasmine.createSpy('cancelKnifeCut');
+      run(knife, key('Escape'));
+      expect(knife.meshEdit.leave).not.toHaveBeenCalled();
+      expect((knife.meshEdit as any).cancelKnifeCut).toHaveBeenCalledTimes(1);   // the global Esc dropped the line
     });
 
     it('E / I run the Extrude / Inset tool (never the eraser / highlighter); K the knife', () => {
@@ -190,14 +216,14 @@ describe('mode keymap', () => {
       expect(busy.meshEdit.toolKey).not.toHaveBeenCalled();
     });
 
-    it('Enter / Esc go to the knife points first, and fall through to the global keys when there are none', () => {
+    it('Enter / Esc go to the knife points first; with none, Esc leaves Edit Mesh', () => {
       const ed = editor();
       run(ed, key('Escape'));
       expect(ed.meshEdit.cancelKnifePoints).toHaveBeenCalledTimes(1);
-      expect(ed.selectCursor).toHaveBeenCalledOnceWith('cursor');   // declined: the global Esc ran
+      expect(ed.meshEdit.leave).toHaveBeenCalledTimes(1);   // declined: Esc leaves the mode
       ed.meshEdit.cancelKnifePoints.and.returnValue(true);
       run(ed, key('Escape'));
-      expect(ed.selectCursor).toHaveBeenCalledTimes(1);   // claimed: the points were dropped
+      expect(ed.meshEdit.leave).toHaveBeenCalledTimes(1);   // claimed: the points were dropped
       ed.meshEdit.applyKnifePoints.and.returnValue(true);
       const enter = key('Enter');
       expect(run(ed, enter)).toBeTrue();
@@ -258,7 +284,7 @@ describe('mode keymap', () => {
     it('the panel chips come from the bindings', () => {
       expect(meshEditKeyLabels()).toEqual({
         vertexMode: '1', edgeMode: '2', faceMode: '3', selectAll: 'A', deselectAll: 'Alt+A', delete: 'X', loopCut: 'Ctrl+R',
-        extrude: 'E', inset: 'I', knife: 'K', knifeApply: 'Enter', knifeCancel: 'Esc', move: 'G', rotate: 'R', scale: 'S',
+        extrude: 'E', inset: 'I', knife: 'K', knifeApply: 'Enter', knifeCancel: 'Esc', exit: 'Esc', move: 'G', rotate: 'R', scale: 'S',
         chamfer: 'Ctrl+B',
       });
     });

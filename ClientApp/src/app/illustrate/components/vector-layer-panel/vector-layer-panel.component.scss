@@ -137,9 +137,7 @@
 }
 
 @media (pointer: coarse) {
-    .vector-shape-row { min-height: 44px; font-size: 13px; }
-    .vector-row-action { width: 44px; height: 44px; font-size: 15px; }
     .vector-tool-btn { width: 36px; height: 36px; svg { width: 18px; height: 18px; } }
     .vector-align-row { gap: 4px; flex-wrap: wrap; }
-    .vector-row-delete { width: 44px; height: 44px; svg { width: 16px; height: 16px; } }
+    .vector-row-delete { width: 36px; height: 36px; svg { width: 16px; height: 16px; } }
 }

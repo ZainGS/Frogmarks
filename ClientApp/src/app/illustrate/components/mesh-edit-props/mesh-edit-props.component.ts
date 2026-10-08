@@ -1,46 +1,52 @@
-import { Component, DoCheck, Input, inject } from '@angular/core';
+import { Component, DoCheck, Input, OnDestroy, inject } from '@angular/core';
 import type { IllustrationComponent } from '../illustration/illustration.component';
 import * as ops from '../../services/mesh-edit-ops';
-import type { DisplaceParams, MeshModifier, ProportionalFalloff } from '../../services/mesh-edit-ops';
+import type { MeshModifier, ProportionalFalloff } from '../../services/mesh-edit-ops';
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
 import { NotifyService } from '../../../shared/services/notify/notify.service';
-import { selectionLabel } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
+import { modeIconPaths } from '../mode-chrome/mode-icons';
+import {
+  MESH_BG_OPTIONS, MESH_PANEL_ICONS, MESH_SELECT_SEGMENTS, NEEDS_ENGINE_UPDATE, meshChromeCaps, meshPanelTools,
+  type MeshBgMode, type MeshChromeCaps, type MeshPanelTool, type MeshSelectMode, type MeshToolId, type MeshVerbId,
+} from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 
 /** The editor members the properties use. */
 export type MeshEditPropsHost = Pick<IllustrationComponent, 'shapeManager' | 'editorState' | 'meshEdit' | 'scene3dUndo' | 'scene3dMarkDirty'>;
 
-type Axis = 'x' | 'y' | 'z';
-
 /**
- * Edit Mesh properties (the mode chrome's right panel, UI review 2026-10-07 §4 item 4): settings, not verbs — the
- * modifier stack as cards (Mirror X / Y / Z, Subdivision, Displace; Decimate), Shading, Cleanup, Proportional editing,
- * and (Experimental › Developer buttons) the old typed-index tools. The ops are services/mesh-edit-ops.ts (shared with
- * the classic panel).
+ * Edit Mesh right panel (the mode chrome's props panel; round-2 feedback 2026-10-08, the old Edit Mesh panel's look:
+ * green section titles, the classic buttons). Top: Vertex / Edge / Face + Deselect all. Then the mode's tools as
+ * icon-only buttons in the main toolbar's style, only the ones that apply to the selection type (tapping the active
+ * tool again turns it off). Then Modifiers (Mirror across a face / bisect, Subdivision; Bake / ✕), Cleanup,
+ * Proportional editing, the Developer (typed-index) tools behind Experimental › Developer buttons, and the focus
+ * background. The ops are services/mesh-edit-ops.ts (shared with the classic panel).
  */
 @Component({
   selector: 'app-mesh-edit-props',
   templateUrl: './mesh-edit-props.component.html',
   styleUrls: ['./mesh-edit-props.component.scss'],
 })
-export class MeshEditPropsComponent implements DoCheck {
+export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   @Input() ed!: MeshEditPropsHost;
 
   readonly exp = inject(ExperimentalSettingsService);
   private readonly notify = inject(NotifyService, { optional: true });
-  readonly axes: readonly Axis[] = ['x', 'y', 'z'];
+  readonly segments = MESH_SELECT_SEGMENTS;
+  readonly bgOptions = MESH_BG_OPTIONS;
 
   modifiers: MeshModifier[] = [];
+  /** Per modifier index: the plane mode of a mirror (getMirrorPlane3D; 'axis' on an older Salsa / an X / Y / Z mirror). */
+  private mirrorModes = new Map<number, 'face' | 'bisect' | 'axis'>();
   private _modSig = '';
+  private toolSeen: MeshToolId | undefined = undefined;
 
-  /** The Displace card being set up before it is added (null = closed). */
-  displaceDraft: DisplaceParams | null = null;
-  decimateOpen = false;
-  decimateRatio = 0.3;
-  decimateTrisAfter = 0;
+  /** "+ Mirror" is open: Use Face / Bisect Mesh. */
+  mirrorChoice = false;
+  /** The mirror whose plane handle is on the canvas (Rotate plane), else null. */
+  rotatingMirror: number | null = null;
 
   mergeThreshold = 0.001;
   mergeRemovedCount: number | null = null;
-  holesFilled: number | null = null;
 
   proportionalEnabled = false;
   proportionalRadius = 1.0;
@@ -59,46 +65,139 @@ export class MeshEditPropsComponent implements DoCheck {
 
   /** The modifier list follows the engine (undo / redo change it too): re-read, replaced only when it changed. */
   ngDoCheck(): void {
+    // Picking a tool (the panel, the rail, a key) turns Rotate plane off: the plane handle replaces the selection gizmo
+    const tool = this.ed?.meshEdit?.tool;
+    if (tool !== this.toolSeen) {
+      if (this.toolSeen !== undefined) this.hidePlaneHandle();
+      this.toolSeen = tool;
+    }
     const next = ops.readModifiers(this.sm, this.meshId);
     const sig = JSON.stringify(next);
-    if (sig !== this._modSig) { this._modSig = sig; this.modifiers = next; }
+    if (sig === this._modSig) return;
+    this._modSig = sig;
+    this.modifiers = next;
+    const get = ops.mirrorPlaneApi(this.sm).getMirrorPlane3D;
+    this.mirrorModes = new Map();
+    for (const m of next) {
+      if (m.type !== 'mirror') continue;
+      const plane = typeof get === 'function' && this.meshId ? get.call(this.sm, this.meshId, m.index) : null;
+      this.mirrorModes.set(m.index, plane?.mode ?? 'axis');
+    }
+    // The handle's mirror went away (removed, baked, undone): hide the handle
+    if (this.rotatingMirror !== null && !this.isPlaneMirror(this.modifiers[this.rotatingMirror])) this.hidePlaneHandle();
+  }
+
+  ngOnDestroy(): void { this.hidePlaneHandle(); }
+
+  // ── Selection type + tools ──
+
+  private capsFor: unknown = null;
+  private _caps!: MeshChromeCaps;
+  get caps(): MeshChromeCaps {
+    if (this.capsFor !== this.sm || !this._caps) { this.capsFor = this.sm; this._caps = meshChromeCaps(this.sm); }
+    return this._caps;
   }
 
   get sel(): ops.MeshEditSelectionLists { return this.ed.meshEdit.selection; }
-  get selectionLine(): string {
-    const s = this.sel;
-    return selectionLabel(this.ed.meshEdit.selectionMode, { vertices: s.vertices.length, edges: s.edges.length, faces: s.faces.length });
+  get mode(): MeshSelectMode { return this.ed.meshEdit.selectionMode; }
+  get tool(): MeshToolId { return this.ed.meshEdit.tool; }
+  get hasSelection(): boolean { const s = this.sel; return s.vertices.length + s.edges.length + s.faces.length > 0; }
+
+  setMode(id: string): void { this.ed.meshEdit.setSelectionMode(id as MeshSelectMode); }
+  deselectAll(): void { this.ed.meshEdit.deselectAll(); }
+
+  private _toolsSig = '';
+  private _tools: MeshPanelTool[] = [];
+  /** The tools for the selection type (a stable array while nothing they show changed). */
+  get tools(): MeshPanelTool[] {
+    const s = this.sel, sm = this.sm;
+    const counts = { vertices: s.vertices.length, edges: s.edges.length, faces: s.faces.length };
+    const canBridge = ops.canBridge(sm, s);
+    const caps = this.caps;
+    const sig = `${this.mode}|${counts.vertices}|${counts.edges}|${counts.faces}|${canBridge}|${caps.bevel}`;
+    if (sig !== this._toolsSig) { this._toolsSig = sig; this._tools = meshPanelTools(this.mode, caps, counts, canBridge); }
+    return this._tools;
   }
+
+  /** A tool button: a tool goes on (tapping the active one turns it off: Select); a verb runs on the selection. */
+  tapTool(t: MeshPanelTool): void {
+    if (t.disabled) return;
+    const me = this.ed.meshEdit;
+    if (t.kind === 'tool') me.setTool(me.tool === t.id ? 'select' : t.id as MeshToolId);
+    else me.runVerb(t.id as MeshVerbId);
+  }
+
+  iconPaths(icon: string): readonly string[] { return modeIconPaths(icon) ?? MESH_PANEL_ICONS[icon] ?? []; }
+
+  trackTool(_: number, t: MeshPanelTool): string { return t.id; }
 
   // ── Modifiers ──
 
-  get mirrors(): MeshModifier[] { return this.modifiers.filter(m => m.type === 'mirror'); }
-  get others(): MeshModifier[] { return this.modifiers.filter(m => m.type !== 'mirror'); }
-  mirrorOn(axis: Axis): MeshModifier | undefined { return this.mirrors.find(m => (m.axis ?? 'x') === axis); }
-  label(m: MeshModifier): string { return ops.modifierLabel(m); }
+  label(m: MeshModifier): string { return this.isPlaneMirror(m) ? 'Mirror' : ops.modifierLabel(m); }
 
-  /** Mirror card chips: an axis on adds a Mirror modifier for it, off removes it (undoable, with an Undo toast). */
-  toggleMirror(axis: Axis): void {
-    const id = this.meshId, sm = this.sm;
-    if (!id || !sm) return;
-    const on = this.mirrorOn(axis);
-    if (on) this.removeModifier(on);
-    else sm.addMirrorModifier3D(id, axis);
+  /** A mirror across a face / a bisect plane (Rotate plane, Flip side); an X / Y / Z mirror is not. */
+  isPlaneMirror(m: MeshModifier | undefined): boolean {
+    if (!m || m.type !== 'mirror') return false;
+    const mode = this.mirrorModes.get(m.index);
+    return mode === 'face' || mode === 'bisect';
+  }
+
+  get hasMirrorFace(): boolean { return typeof ops.mirrorPlaneApi(this.sm).addMirrorFromFace3D === 'function'; }
+  get hasMirrorBisect(): boolean { return typeof ops.mirrorPlaneApi(this.sm).addMirrorBisect3D === 'function'; }
+  /** Use Face needs exactly one selected face. */
+  get canMirrorFace(): boolean { return this.hasMirrorFace && this.sel.faces.length === 1; }
+  get mirrorFaceTitle(): string {
+    if (!this.hasMirrorFace) return NEEDS_ENGINE_UPDATE;
+    return this.sel.faces.length === 1 ? 'Mirror the mesh across the selected face' : 'Select exactly one face first';
+  }
+  get mirrorBisectTitle(): string {
+    return this.hasMirrorBisect ? 'Mirror the mesh across a plane through its middle (Rotate plane turns it)' : NEEDS_ENGINE_UPDATE;
+  }
+
+  addMirrorFace(): void {
+    const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).addMirrorFromFace3D;
+    if (!id || typeof f !== 'function' || this.sel.faces.length !== 1) return;
+    f.call(this.sm, id, this.sel.faces[0]);
+    this.mirrorChoice = false;
     this.ngDoCheck();
   }
+
+  addMirrorBisect(): void {
+    const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).addMirrorBisect3D;
+    if (!id || typeof f !== 'function') return;
+    f.call(this.sm, id);
+    this.mirrorChoice = false;
+    this.ngDoCheck();
+  }
+
+  /** Rotate plane: the plane + its rotation handle on the canvas (again: hidden). One mirror's handle at a time. */
+  toggleRotatePlane(m: MeshModifier): void {
+    const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).setMirrorPlaneHandle3D;
+    if (!id || typeof f !== 'function') return;
+    const next = this.rotatingMirror === m.index ? null : m.index;
+    f.call(this.sm, id, next);
+    this.rotatingMirror = next;
+  }
+
+  private hidePlaneHandle(): void {
+    if (this.rotatingMirror === null) return;
+    this.rotatingMirror = null;
+    const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).setMirrorPlaneHandle3D;
+    if (id && typeof f === 'function') f.call(this.sm, id, null);
+  }
+
+  /** Flip side: the other side becomes the real half. */
+  flipSide(m: MeshModifier): void {
+    const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).flipMirrorSide3D;
+    if (id && typeof f === 'function') f.call(this.sm, id, m.index);
+  }
+
+  get canRotatePlane(): boolean { return typeof ops.mirrorPlaneApi(this.sm).setMirrorPlaneHandle3D === 'function'; }
+  get canFlipSide(): boolean { return typeof ops.mirrorPlaneApi(this.sm).flipMirrorSide3D === 'function'; }
 
   addSubdivision(iterations: 1 | 2): void {
     const id = this.meshId;
     if (id) this.sm?.addSubdivisionModifier3D(id, iterations);
-    this.ngDoCheck();
-  }
-
-  openDisplace(): void { this.displaceDraft = { strength: 0.3, frequency: 2, octaves: 3, seed: 42, direction: 'y' }; }
-  addDisplace(): void {
-    const id = this.meshId, d = this.displaceDraft;
-    if (!id || !d) return;
-    this.sm?.addDisplaceModifier3D(id, { ...d });
-    this.displaceDraft = null;
     this.ngDoCheck();
   }
 
@@ -108,8 +207,10 @@ export class MeshEditPropsComponent implements DoCheck {
     this.ngDoCheck();
   }
 
-  applyModifier(m: MeshModifier): void {
+  /** Bake: the modifier into the mesh (undoable). */
+  bakeModifier(m: MeshModifier): void {
     const id = this.meshId;
+    if (this.rotatingMirror === m.index) this.hidePlaneHandle();
     if (id) this.sm?.applyModifier3D(id, m.index);
     this.ngDoCheck();
   }
@@ -118,29 +219,11 @@ export class MeshEditPropsComponent implements DoCheck {
   removeModifier(m: MeshModifier): void {
     const id = this.meshId;
     if (!id || !this.sm) return;
+    if (this.rotatingMirror === m.index) this.hidePlaneHandle();
     this.sm.removeModifier3D(id, m.index);
     this.ngDoCheck();
-    const ref = this.notify?.success(`Removed ${ops.modifierLabel(m)}`, 'Undo');
+    const ref = this.notify?.success(`Removed ${this.label(m)}`, 'Undo');
     ref?.onAction().subscribe(() => { this.ed.scene3dUndo(); this.ed.scene3dMarkDirty(); });
-  }
-
-  get triangles(): number { return ops.triangleCount(this.sm, this.meshId); }
-  decimate(): void {
-    const id = this.meshId;
-    if (id && this.sm) this.decimateTrisAfter = ops.decimate(this.sm, id, this.decimateRatio);
-  }
-
-  // ── Shading ──
-
-  get hasShading(): boolean { return ops.hasShading(this.sm); }
-  get hasSharp(): boolean { return ops.hasSharp(this.sm); }
-  shade(smooth: boolean): void {
-    const id = this.meshId;
-    if (id && this.sm) ops.shadeFaces(this.sm, id, this.sel.faces, smooth);
-  }
-  markSharp(sharp: boolean): void {
-    const id = this.meshId;
-    if (id && this.sm) ops.markSharpEdges(this.sm, id, this.sel.edges, sharp);
   }
 
   // ── Cleanup ──
@@ -151,7 +234,7 @@ export class MeshEditPropsComponent implements DoCheck {
   }
   fillHoles(): void {
     const id = this.meshId;
-    if (id && this.sm) this.holesFilled = ops.fillHoles(this.sm, id);
+    if (id && this.sm) ops.fillHoles(this.sm, id);
   }
 
   // ── Proportional ──
@@ -164,7 +247,12 @@ export class MeshEditPropsComponent implements DoCheck {
     if (this.sm) ops.setProportional(this.sm, this.meshId, this.proportionalEnabled, this.proportionalRadius, this.proportionalFalloff);
   }
 
-  // ── Developer buttons: typed indices (the chrome's tools act on the selection / a tap instead) ──
+  // ── Background ──
+
+  get bgMode(): MeshBgMode { return this.ed.meshEdit.bgMode; }
+  setBgMode(mode: string): void { this.ed.meshEdit.setBgMode(mode as MeshBgMode); }
+
+  // ── Developer buttons: typed indices (the tools act on the selection / a tap instead) ──
 
   devSelectEdge(): void {
     const id = this.meshId, he = ops.parseIndex(this.devHalfEdge);

@@ -66,6 +66,10 @@ export const MESH_EDIT_KEYS = {
     run: (ed) => ed.meshEdit.applyKnifePoints() },
   knifeCancel: { keys: ['Escape'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife: drop the tapped points',
     run: (ed) => ed.meshEdit.cancelKnifePoints() },
+  // Esc with nothing to cancel leaves Edit Mesh (round-2 feedback: no Done button; a running Chamfer / transform / drag
+  // knife line takes the Esc first — declined here, the global Esc cancels it)
+  exit: { keys: ['Escape'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Leave Edit Mesh',
+    run: (ed) => { if (meshEditBusy(ed) || ed.meshEdit.scene3dEditTool === 'knife') return false; ed.meshEdit.leave(); } },
   // G / R / S: run by the HUD's keyboard transform (ViewportHudService.handleTransformKey), which claims the key before
   // this table. Listed here so the tool strip / cheatsheet show them; declined if it ever gets here.
   move: { keys: ['g', 'G'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Move the selection (then X / Y / Z, a number, Enter)',
@@ -87,6 +91,8 @@ export interface ArmatureKeyTarget {
   setTool(id: string): void;
   setSegment(id: string): void;
   keyPose(): void;
+  /** Esc: close the radial / drop a pending rename; false = nothing to cancel (Esc then leaves Armature). */
+  cancelOverlay?(): boolean;
 }
 function armatureTarget(ed: unknown): ArmatureKeyTarget | null {
   return (ed as { armatureMode?: ArmatureKeyTarget | null } | null)?.armatureMode ?? null;
@@ -118,6 +124,10 @@ export const ARMATURE_KEYS = {
   pose: { keys: ['1'], mod: false, alt: false, group: 'Armature', help: 'Pose (Rotate tool)', run: armSegment('pose') },
   editBones: { keys: ['2'], mod: false, alt: false, group: 'Armature', help: 'Edit Bones (Move tool)', run: armSegment('edit') },
   weightMode: { keys: ['3'], mod: false, alt: false, group: 'Armature', help: 'Weight (Weight Brush tool)', run: armSegment('weight') },
+  // Esc leaves Armature (round-2 feedback: no Done button); an open radial / pending rename takes it first. A one-shot
+  // joint pick takes Esc before the keymap (ArmPickService). The classic panel declines (the global Esc, as before).
+  exit: { keys: ['Escape'], mod: false, shift: false, alt: false, group: 'Armature', help: 'Leave Armature',
+    run: (ed) => { const t = armatureTarget(ed); if (!t) return false; if (t.cancelOverlay?.()) return; ed.closeArmaturePanel(); } },
 } satisfies Record<string, KeyBinding>;
 
 export const ARMATURE_KEYMAP: KeyBinding[] = Object.values(ARMATURE_KEYS);

@@ -90,13 +90,6 @@
   &.open { right: 284px; }
   &:hover { background: var(--rc-surface-hi, #2e2e2e); }
   &:active { background: var(--rc-surface-hi, #2e2e2e); }
-
-  @media (pointer: coarse) {
-    width: 44px;
-    height: 72px;
-    top: calc((100dvh + var(--mpp-top) - var(--mpp-bottom)) / 2 - 36px);
-    font-size: 26px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

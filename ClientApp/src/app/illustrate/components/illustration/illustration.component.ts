@@ -35,6 +35,7 @@ import { ArtboardService } from '../../services/artboard.service';
 import { CanvasAppearanceService } from '../../services/canvas-appearance.service';
 import { EngineStatusService } from '../../services/engine-status.service';
 import { MeshEditService } from '../../services/mesh-edit.service';
+import { ModeUndoScope } from '../../services/mode-undo-scope';
 import { followClassicSetting } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 import { ViewportHudService } from '../../services/viewport-hud.service';
 import { RibbonService } from '../../services/ribbon.service';
@@ -97,6 +98,7 @@ import { applyStoredRetroTheme, isRetroThemeOn, setRetroTheme } from 'app/shared
 import { OverlayManagerService } from 'app/shared/services/overlay/overlay-manager.service';
 import { installEditorChrome } from './editor-chrome';
 import type { ModeChromeId } from '../mode-chrome/mode-chrome.types';
+import { installModeRailExit } from '../mode-chrome/mode-toolbar-scope';
 import { ArmatureModeComponent } from '../armature-mode/armature-mode.component';
 import { followClassicArmature } from '../armature-mode/armature-mode.logic';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
@@ -276,6 +278,24 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
   /** Mount the chrome components: a mode is active and the UI is not hidden (X / Toggle UI). */
   get modeChromeVisible(): boolean { return !!this.activeModeChrome && !this.uiHidden; }
+  /** Leave the active mode (the main toolbar's other tools: mode-chrome/mode-toolbar-scope.ts). */
+  exitModeChrome(): void {
+    const mode = this.activeModeChrome;
+    if (mode === 'meshEdit') this.meshEdit.leave();
+    else if (mode === 'armature') this.closeArmaturePanel();
+  }
+  /** The main toolbar (the rail): a tap on a tool the active mode doesn't use leaves the mode first
+   *  (mode-chrome/mode-toolbar-scope.ts MODE_RAIL_TOOLS). */
+  @ViewChild('railPanel') set railPanelRef(ref: ElementRef<HTMLElement> | undefined) {
+    this._railExitOff?.();
+    this._railExitOff = ref ? installModeRailExit(ref.nativeElement, this) : null;
+  }
+  private _railExitOff: (() => void) | null = null;
+  /** The rail's Select button is lit: in Edit Mesh (the chrome) while its Select tool is on, else the cursor tool. */
+  get railSelectOn(): boolean {
+    if (this.activeModeChrome === 'armature' && this.armatureMode) return this.armatureMode.tool === 'select' && !this.panHandSelected;
+    return this.activeModeChrome === 'meshEdit' ? this.meshEdit.tool === 'select' && !this.panHandSelected : this.cursorSelected;
+  }
 
   // ── Auto-save state ───────────────────────────────────────────
   selectedAutoSaveInterval = 30_000;
@@ -383,8 +403,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   /** Open the canvas menu at a viewport point, kept on screen. */
   openContextMenu(clientX: number, clientY: number): void {
     this.closeAllMenus();
-    const coarse = this.touchUi.coarse;
-    const w = coarse ? 220 : 200, h = 7 * (coarse ? 44 : 32) + 2 * 9 + 8;
+    const w = 200, h = 7 * 32 + 2 * 9 + 8;
     const p = clampMenuPosition(clientX, clientY, w, h, window.innerWidth, window.innerHeight);
     this.contextMenu = { visible: true, x: p.x, y: p.y };
   }
@@ -584,10 +603,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // Ribbon mesh
   // ── Armature state ─────────────────────────────────────────
   scene3dArmaturePanelOpen = false;
+  /** Undo / redo while the Armature is open (Rig and Animate, mode chrome and classic panel): only the 3D steps made in
+   *  it ('Move joint', …) — editor-keymap routeUndo; the same scope Edit Mesh uses. */
+  readonly armatureUndo = new ModeUndoScope(() => this.shapeManager);
 
   openArmaturePanel(): void {
     this._exitAllScene3dModes();
     this.scene3dArmaturePanelOpen = true;
+    this.armatureUndo.enter();
     this.arrayTool.scene3dDeactivateArrayTool();
     this.scene3dGizmoMode = null;
     const sm = this.shapeManager;
@@ -601,10 +624,18 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   closeArmaturePanel(): void {
     this.armatureMode?.restoreTimeline();
     this.scene3dArmaturePanelOpen = false;
+    this.armatureUndo.leave();
+    if (this.useModeChrome.armature) this.scene3dGizmoMode = null;   // it mirrored the joint tool (onArmatureToolChange)
   }
 
   /** The mode chrome's Armature (Rig | Animate), while mounted: the Armature keys drive it (mode-keymap ArmatureKeyTarget). */
   @ViewChild(ArmatureModeComponent) armatureMode?: ArmatureModeComponent;
+
+  /** <app-armature-mode> (toolChange): the main toolbar's Move / Rotate show the joint tool pressed (scene3dGizmoMode
+   *  mirrors it; the engine's object gizmo stays off — scene3dSetGizmoMode routes to the joint tools in Armature). */
+  onArmatureToolChange(tool: string): void {
+    this.scene3dGizmoMode = tool === 'move' || tool === 'rotate' ? tool : null;
+  }
 
   /** True while any exclusive 3D sub-mode is active. */
   get scene3dInSubMode(): boolean {
@@ -1547,6 +1578,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 // ── Canvas Grid ────────────────────────────────────────────
 
   scene3dSetGizmoMode(mode: 'move' | 'rotate' | 'scale'): void {
+    // Edit Mesh (the chrome): the rail's Move / Rotate / Scale are its element tools (again: back to Select)
+    if (this.activeModeChrome === 'meshEdit') { this.meshEdit.setTool(this.meshEdit.tool === mode ? 'select' : mode); return; }
+    // Armature (mode chrome): the main toolbar's Move / Rotate are the joint tools; tapping the pressed one again goes
+    // back to Select, like the object gizmo toggling off.
+    if (this.activeModeChrome === 'armature' && this.armatureMode && (mode === 'move' || mode === 'rotate')) {
+      this.armatureMode.setTool(this.armatureMode.tool === mode ? 'select' : mode);
+      return;
+    }
     this.arrayTool.scene3dDeactivateArrayTool();
     const next = this.scene3dGizmoMode === mode ? null : mode;
     this.scene3dGizmoMode = next;
@@ -2089,7 +2128,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       // Mode chrome: below its header bar and the tool hint line (the chrome calls this when it mounts / unmounts)
       let chromeY = 0;
       if (this.activeModeChrome) {
-        try { chromeY = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fm-modebar-h')) || 40) + 30; } catch { chromeY = 70; }
+        // (only while a header bar publishes its height; without one the gizmo keeps its place)
+        try { const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fm-modebar-h')); chromeY = h > 0 ? h + 30 : 0; } catch { chromeY = 0; }
       }
       this.shapeManager?.setViewGizmoPosition3D({
         corner: 'top-left',
@@ -2677,6 +2717,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     switch (cursor) {
       case 'cursor':
         this.cursorSelected = true; this.panHandSelected = false; this.shapeManager.disablePanningTool(); this.setActiveTool('');
+        if (this.activeModeChrome === 'armature') this.armatureMode?.setTool('select');   // Armature: the joint Select tool
+        if (this.activeModeChrome === 'meshEdit' && this.meshEdit.tool !== 'select') this.meshEdit.setTool('select');   // Edit Mesh: taps select, no gizmo
         return;
       case 'panhand':
         this.cursorSelected = false; this.panHandSelected = true; this.setActiveTool(''); this.shapeManager.enablePanningTool();

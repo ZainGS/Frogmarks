@@ -1,165 +1,123 @@
-<div class="mep-selection mode-muted" aria-live="polite">{{ selectionLine }}</div>
+<div class="me-body">
 
-<!-- Modifiers: Mirror X / Y / Z, then the stack's other cards; + adds -->
-<section class="mode-props-section">
-    <h3 class="mode-props-section-title">Modifiers</h3>
-
-    <div class="mode-card" data-card="mirror">
-        <div class="mode-card-header">
-            <span class="mode-card-title">Mirror</span>
-            <div class="mode-chips" role="group" aria-label="Mirror axes">
-                <button *ngFor="let a of axes" type="button" class="mode-btn mode-btn-sm" [class.on]="!!mirrorOn(a)"
-                        [attr.aria-pressed]="!!mirrorOn(a)" [attr.data-axis]="a" (click)="toggleMirror(a)"
-                        [title]="mirrorOn(a) ? 'Remove the ' + a.toUpperCase() + ' mirror' : 'Mirror across ' + a.toUpperCase()">{{ a.toUpperCase() }}</button>
-            </div>
-        </div>
-        <div *ngFor="let m of mirrors; trackBy: trackIndex" class="mode-row" [class.mep-off]="!m.enabled">
-            <span class="mode-row-label">{{ m.axis?.toUpperCase() ?? 'X' }} mirror</span>
-            <button type="button" class="mode-btn mode-btn-sm" [class.on]="m.enabled" [attr.aria-pressed]="m.enabled"
-                    (click)="toggleModifier(m)" [title]="m.enabled ? 'Turn off (keep it)' : 'Turn on'">{{ m.enabled ? 'On' : 'Off' }}</button>
-            <button type="button" class="mode-btn mode-btn-sm" (click)="applyModifier(m)" title="Bake into the mesh (can be undone)">Apply</button>
-        </div>
-        <div *ngIf="!mirrors.length" class="mode-muted">Tap an axis to mirror the mesh across it.</div>
+    <!-- Selection type (1 / 2 / 3) + Deselect all -->
+    <div class="me-mode-row" role="group" aria-label="Select">
+        <button *ngFor="let s of segments" type="button" class="me-mode-btn" [class.active]="mode === s.id"
+                [attr.aria-pressed]="mode === s.id" [title]="s.title" (click)="setMode(s.id)">{{ s.label }}</button>
+        <button type="button" class="me-clear-btn" [disabled]="!hasSelection" (click)="deselectAll()"
+                title="Deselect all (Alt+A)">Deselect all</button>
     </div>
 
-    <div *ngFor="let m of others; trackBy: trackIndex" class="mode-card" [class.disabled]="!m.enabled" [attr.data-card]="m.type">
-        <div class="mode-card-header">
-            <span class="mode-card-title">{{ label(m) }}</span>
-            <div class="mode-card-actions">
-                <button type="button" class="mode-btn mode-btn-sm" [class.on]="m.enabled" [attr.aria-pressed]="m.enabled"
+    <!-- The tools for this selection type: icon-only, the main toolbar's buttons (tap the active tool again: off) -->
+    <div class="me-tools" role="toolbar" aria-label="Edit Mesh tools">
+        <div *ngFor="let t of tools; trackBy: trackTool" class="vertical-tool-button" role="button"
+             [attr.tabindex]="t.disabled ? -1 : 0" [class.selected]="t.kind === 'tool' && tool === t.id"
+             [class.tool-off]="t.disabled" [attr.aria-disabled]="t.disabled"
+             [attr.aria-pressed]="t.kind === 'tool' ? tool === t.id : null" [attr.aria-label]="t.label"
+             [attr.data-id]="t.id" [title]="t.title"
+             (click)="tapTool(t)" (keydown.enter)="tapTool(t)" (keydown.space)="$event.preventDefault(); tapTool(t)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true"><path *ngFor="let d of iconPaths(t.icon)" [attr.d]="d"/></svg>
+        </div>
+    </div>
+
+    <!-- ── Modifiers ─────────────────────────────────────────── -->
+    <div class="me-section">
+        <div class="me-section-title">Modifiers</div>
+
+        <div class="me-mod-list">
+            <div *ngFor="let m of modifiers; trackBy: trackIndex" class="me-mod-row" [class.me-mod-off]="!m.enabled" [attr.data-card]="m.type">
+                <span class="me-mod-label">{{ label(m) }}</span>
+                <button type="button" class="me-op-btn me-op-sm" [class.active]="m.enabled" [attr.aria-pressed]="m.enabled"
                         (click)="toggleModifier(m)" [title]="m.enabled ? 'Turn off (keep it)' : 'Turn on'">{{ m.enabled ? 'On' : 'Off' }}</button>
-                <button type="button" class="mode-btn mode-btn-sm" (click)="applyModifier(m)" title="Bake into the mesh (can be undone)">Apply</button>
-                <button type="button" class="mode-btn mode-btn-sm danger" (click)="removeModifier(m)" [attr.aria-label]="'Remove ' + label(m)" title="Remove">✕</button>
+                <button type="button" class="me-op-btn me-op-sm" (click)="bakeModifier(m)" title="Bake into the mesh (can be undone)">Bake</button>
+                <button type="button" class="me-op-btn me-op-sm me-mod-remove" (click)="removeModifier(m)"
+                        [attr.aria-label]="'Remove ' + label(m)" title="Remove">✕</button>
+                <div *ngIf="isPlaneMirror(m)" class="me-mod-sub">
+                    <button type="button" class="me-op-btn me-op-sm" [class.active]="rotatingMirror === m.index"
+                            [attr.aria-pressed]="rotatingMirror === m.index" [disabled]="!canRotatePlane"
+                            (click)="toggleRotatePlane(m)" title="Show the plane's rotation handle on the canvas">Rotate plane</button>
+                    <button type="button" class="me-op-btn me-op-sm" [disabled]="!canFlipSide" (click)="flipSide(m)"
+                            title="Make the other side the real half">Flip side</button>
+                </div>
+                <div *ngIf="m.type === 'displace'" class="me-hint me-mod-sub">Strength {{ m.strength ?? 0 }} · frequency {{ m.frequency ?? 0 }} · {{ m.direction ?? 'normal' }}</div>
             </div>
         </div>
-        <div *ngIf="m.type === 'displace'" class="mode-muted">Strength {{ m.strength ?? 0 }} · frequency {{ m.frequency ?? 0 }} · {{ m.direction ?? 'normal' }}</div>
-    </div>
 
-    <!-- Displace: set it up, then Add -->
-    <div *ngIf="displaceDraft as d" class="mode-card" data-card="displace-draft">
-        <div class="mode-card-header"><span class="mode-card-title">New Displace</span></div>
-        <label class="mode-row"><span class="mode-row-label">Strength</span>
-            <input type="number" class="mode-input mep-num" min="0" step="0.05" [(ngModel)]="d.strength"></label>
-        <label class="mode-row"><span class="mode-row-label">Frequency</span>
-            <input type="number" class="mode-input mep-num" min="0.1" step="0.5" [(ngModel)]="d.frequency"></label>
-        <label class="mode-row"><span class="mode-row-label">Octaves</span>
-            <input type="number" class="mode-input mep-num" min="1" max="8" step="1" [(ngModel)]="d.octaves"></label>
-        <label class="mode-row"><span class="mode-row-label">Seed</span>
-            <input type="number" class="mode-input mep-num" min="0" step="1" [(ngModel)]="d.seed"></label>
-        <label class="mode-row"><span class="mode-row-label">Direction</span>
-            <select class="mode-select" [(ngModel)]="d.direction">
-                <option value="x">X</option><option value="y">Y</option><option value="z">Z</option>
-                <option value="normal">Along the surface</option>
-            </select></label>
-        <div class="mode-muted">Tip: add Subdivision first for smooth results.</div>
-        <div class="mode-row mep-actions">
-            <button type="button" class="mode-btn" (click)="displaceDraft = null">Cancel</button>
-            <button type="button" class="mode-btn primary" (click)="addDisplace()">Add Displace</button>
+        <div class="me-mod-add-row">
+            <button type="button" class="me-chip" [class.me-chip-on]="mirrorChoice" [attr.aria-expanded]="mirrorChoice"
+                    (click)="mirrorChoice = !mirrorChoice" title="Mirror the mesh">+ Mirror</button>
+            <button type="button" class="me-chip" (click)="addSubdivision(1)" title="Smooth the mesh (one level)">+ Subdivision</button>
+            <button type="button" class="me-chip" (click)="addSubdivision(2)" title="Smooth the mesh (two levels)">+ Subdivision ×2</button>
+        </div>
+        <div *ngIf="mirrorChoice" class="me-op-pair" data-section="mirror-choice">
+            <button type="button" class="me-op-btn" [disabled]="!canMirrorFace" [title]="mirrorFaceTitle" (click)="addMirrorFace()">Use Face</button>
+            <button type="button" class="me-op-btn" [disabled]="!hasMirrorBisect" [title]="mirrorBisectTitle" (click)="addMirrorBisect()">Bisect Mesh</button>
         </div>
     </div>
 
-    <!-- Decimate: a one-off reduction (not a stack card) -->
-    <div *ngIf="decimateOpen" class="mode-card" data-card="decimate">
-        <div class="mode-card-header">
-            <span class="mode-card-title">Decimate</span>
-            <div class="mode-card-actions">
-                <button type="button" class="mode-btn mode-btn-sm" (click)="decimateOpen = false" aria-label="Close Decimate" title="Close">✕</button>
-            </div>
+    <!-- ── Cleanup ───────────────────────────────────────────── -->
+    <div class="me-section">
+        <div class="me-section-title">Cleanup</div>
+        <div class="me-op-inline">
+            <button type="button" class="me-op-btn" (click)="mergeByDistance()" title="Weld vertices closer than the distance">Merge by Distance</button>
+            <input type="number" class="me-num" step="0.0001" min="0.00001" [(ngModel)]="mergeThreshold" aria-label="Merge distance">
         </div>
-        <label class="mode-row"><span class="mode-row-label">Keep</span>
-            <input type="range" class="mep-range" min="0.1" max="1" step="0.05" [(ngModel)]="decimateRatio">
-            <span class="mep-val">{{ (decimateRatio * 100) | number:'1.0-0' }}%</span></label>
-        <div class="mode-muted" *ngIf="triangles > 0">{{ triangles | number }} triangles<ng-container *ngIf="decimateTrisAfter > 0"> (was reduced to {{ decimateTrisAfter | number }})</ng-container></div>
-        <div class="mode-row mep-actions">
-            <button type="button" class="mode-btn primary" (click)="decimate()" title="Reduce the triangles (can be undone)">Decimate</button>
-        </div>
-    </div>
-
-    <div class="mep-add" role="group" aria-label="Add a modifier">
-        <div class="mode-props-section-title mep-add-title">Add a modifier</div>
-        <div class="mode-chips">
-        <button type="button" class="mode-btn mode-btn-sm" (click)="addSubdivision(1)" title="Smooth the mesh (one level)">+ Subdivision</button>
-        <button type="button" class="mode-btn mode-btn-sm" (click)="addSubdivision(2)" title="Smooth the mesh (two levels)">+ Subdivision ×2</button>
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!!displaceDraft" (click)="openDisplace()" title="Roughen the surface with noise">+ Displace</button>
-        <button type="button" class="mode-btn mode-btn-sm" [class.on]="decimateOpen" (click)="decimateOpen = !decimateOpen" title="Use fewer triangles">Decimate…</button>
-        </div>
-    </div>
-</section>
-
-<!-- Shading -->
-<section class="mode-props-section" *ngIf="hasShading || hasSharp">
-    <h3 class="mode-props-section-title">Shading</h3>
-    <div class="mode-row" *ngIf="hasShading">
-        <button type="button" class="mode-btn" (click)="shade(true)"
-                [title]="sel.faces.length ? 'Shade the selected faces smooth' : 'Shade every face smooth'">Smooth</button>
-        <button type="button" class="mode-btn" (click)="shade(false)"
-                [title]="sel.faces.length ? 'Shade the selected faces flat' : 'Shade every face flat'">Flat</button>
-        <span class="mode-muted">{{ sel.faces.length ? 'Selected faces' : 'Whole mesh' }}</span>
-    </div>
-    <div class="mode-row" *ngIf="hasSharp">
-        <button type="button" class="mode-btn" [disabled]="!sel.edges.length" (click)="markSharp(true)"
-                title="Smooth shading never blends across these edges (drawn cyan)">Mark Sharp</button>
-        <button type="button" class="mode-btn" [disabled]="!sel.edges.length" (click)="markSharp(false)">Clear Sharp</button>
-        <span class="mode-muted" *ngIf="!sel.edges.length">Select edges</span>
-    </div>
-</section>
-
-<!-- Cleanup -->
-<section class="mode-props-section">
-    <h3 class="mode-props-section-title">Cleanup</h3>
-    <div class="mode-row">
-        <button type="button" class="mode-btn" (click)="mergeByDistance()" title="Weld vertices closer than the distance">Merge by Distance</button>
-        <input type="number" class="mode-input mep-num" step="0.0001" min="0.00001" [(ngModel)]="mergeThreshold" aria-label="Merge distance">
-    </div>
-    <div class="mode-muted" *ngIf="mergeRemovedCount !== null">{{ mergeRemovedCount }} {{ mergeRemovedCount === 1 ? 'vertex' : 'vertices' }} merged</div>
-    <div class="mode-row">
-        <button type="button" class="mode-btn" (click)="fillHoles()"
+        <div class="me-hint me-hint-ok" *ngIf="mergeRemovedCount !== null">{{ mergeRemovedCount }} {{ mergeRemovedCount === 1 ? 'vertex' : 'vertices' }} merged</div>
+        <button type="button" class="me-op-btn me-op-full" (click)="fillHoles()"
                 title="Cap every open hole with a face (select a vertex or edge on a hole to fill only that one)">Fill Holes</button>
-        <span class="mode-muted" *ngIf="holesFilled !== null">{{ holesFilled === 0 ? 'No open holes' : holesFilled + (holesFilled === 1 ? ' hole filled' : ' holes filled') }}</span>
     </div>
-</section>
 
-<!-- Proportional editing -->
-<section class="mode-props-section">
-    <h3 class="mode-props-section-title">Proportional editing</h3>
-    <div class="mode-row">
-        <button type="button" class="mode-btn" [class.on]="proportionalEnabled" [attr.aria-pressed]="proportionalEnabled"
-                (click)="setProportional(!proportionalEnabled)">{{ proportionalEnabled ? 'On' : 'Off' }}</button>
-        <span class="mode-muted">Nearby vertices follow the moved ones</span>
+    <!-- ── Proportional editing ──────────────────────────────── -->
+    <div class="me-section">
+        <div class="me-section-title">Proportional editing</div>
+        <div class="me-op-inline">
+            <button type="button" class="me-op-btn" [class.active]="proportionalEnabled" [attr.aria-pressed]="proportionalEnabled"
+                    (click)="setProportional(!proportionalEnabled)">{{ proportionalEnabled ? 'On' : 'Off' }}</button>
+            <span class="me-label">Nearby vertices follow the moved ones</span>
+        </div>
+        <ng-container *ngIf="proportionalEnabled">
+            <label class="me-op-inline me-row-gap"><span class="me-label">Radius</span>
+                <input type="number" class="me-num" min="0.01" step="0.1" [(ngModel)]="proportionalRadius" (change)="applyProportional()"></label>
+            <label class="me-op-inline me-row-gap"><span class="me-label">Falloff</span>
+                <select class="me-select" [(ngModel)]="proportionalFalloff" (change)="applyProportional()">
+                    <option value="smooth">Smooth</option><option value="linear">Linear</option><option value="sharp">Sharp</option>
+                </select></label>
+        </ng-container>
     </div>
-    <ng-container *ngIf="proportionalEnabled">
-        <label class="mode-row"><span class="mode-row-label">Radius</span>
-            <input type="number" class="mode-input mep-num" min="0.01" step="0.1" [(ngModel)]="proportionalRadius" (change)="applyProportional()"></label>
-        <label class="mode-row"><span class="mode-row-label">Falloff</span>
-            <select class="mode-select" [(ngModel)]="proportionalFalloff" (change)="applyProportional()">
-                <option value="smooth">Smooth</option><option value="linear">Linear</option><option value="sharp">Sharp</option>
-            </select></label>
-    </ng-container>
-</section>
 
-<!-- Experimental › Developer buttons: the old typed-index tools -->
-<section class="mode-props-section" *ngIf="exp.devTools" data-section="developer">
-    <h3 class="mode-props-section-title">Developer (by index)</h3>
-    <label class="mode-row"><span class="mode-row-label">Half-edge</span>
-        <input type="number" class="mode-input mep-num" min="0" placeholder="index" [(ngModel)]="devHalfEdge"></label>
-    <div class="mode-row">
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devHalfEdge)" (click)="devSelectEdge()">Select</button>
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devHalfEdge)" (click)="devLoopCut()">Loop Cut</button>
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devHalfEdge)" (click)="devDissolve()">Dissolve</button>
+    <!-- Experimental › Developer buttons: the old typed-index tools -->
+    <div class="me-section" *ngIf="exp.devTools" data-section="developer">
+        <div class="me-section-title">Developer (by index)</div>
+        <label class="me-op-inline"><span class="me-label">Half-edge</span>
+            <input type="number" class="me-num" min="0" placeholder="index" [(ngModel)]="devHalfEdge"></label>
+        <div class="me-op-inline me-row-gap">
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devHalfEdge)" (click)="devSelectEdge()">Select</button>
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devHalfEdge)" (click)="devLoopCut()">Loop Cut</button>
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devHalfEdge)" (click)="devDissolve()">Dissolve</button>
+        </div>
+        <label class="me-op-inline me-row-gap"><span class="me-label">Bevel edge</span>
+            <input type="number" class="me-num" min="0" max="1" step="0.05" [(ngModel)]="devBevelEdgeAmount">
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devHalfEdge)" (click)="devBevelEdge()">Bevel</button></label>
+        <div class="me-op-inline me-row-gap">
+            <span class="me-label">Weld</span>
+            <input type="number" class="me-num" min="0" placeholder="V1" [(ngModel)]="devWeldV1" aria-label="Keep vertex">
+            <input type="number" class="me-num" min="0" placeholder="V2" [(ngModel)]="devWeldV2" aria-label="Merge vertex">
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devWeldV1) || !idx(devWeldV2)" (click)="devWeld()">Weld V2 into V1</button>
+        </div>
+        <div class="me-op-inline me-row-gap">
+            <span class="me-label">Bevel vertex</span>
+            <input type="number" class="me-num" min="0" placeholder="index" [(ngModel)]="devBevelVertexIdx" aria-label="Vertex index">
+            <input type="number" class="me-num" min="0" step="0.05" [(ngModel)]="devBevelVertexAmount" aria-label="Amount">
+            <button type="button" class="me-op-btn me-op-sm" [disabled]="!idx(devBevelVertexIdx)" (click)="devBevelVertex()">Bevel</button>
+        </div>
     </div>
-    <label class="mode-row"><span class="mode-row-label">Bevel edge</span>
-        <input type="number" class="mode-input mep-num" min="0" max="1" step="0.05" [(ngModel)]="devBevelEdgeAmount">
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devHalfEdge)" (click)="devBevelEdge()">Bevel</button></label>
-    <div class="mode-row">
-        <span class="mode-row-label">Weld</span>
-        <input type="number" class="mode-input mep-num" min="0" placeholder="V1" [(ngModel)]="devWeldV1" aria-label="Keep vertex">
-        <input type="number" class="mode-input mep-num" min="0" placeholder="V2" [(ngModel)]="devWeldV2" aria-label="Merge vertex">
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devWeldV1) || !idx(devWeldV2)" (click)="devWeld()">Weld V2 into V1</button>
+
+    <!-- The focus background behind the mesh (the old panel's header dropdown) -->
+    <div class="me-op-inline me-bg-row">
+        <span class="me-label">Background</span>
+        <select class="me-select" [value]="bgMode" (change)="setBgMode($any($event.target).value)" aria-label="Background">
+            <option *ngFor="let b of bgOptions" [value]="b.id" [selected]="b.id === bgMode">{{ b.label }}</option>
+        </select>
     </div>
-    <div class="mode-row">
-        <span class="mode-row-label">Bevel vertex</span>
-        <input type="number" class="mode-input mep-num" min="0" placeholder="index" [(ngModel)]="devBevelVertexIdx" aria-label="Vertex index">
-        <input type="number" class="mode-input mep-num" min="0" step="0.05" [(ngModel)]="devBevelVertexAmount" aria-label="Amount">
-        <button type="button" class="mode-btn mode-btn-sm" [disabled]="!idx(devBevelVertexIdx)" (click)="devBevelVertex()">Bevel</button>
-    </div>
-</section>
+</div>

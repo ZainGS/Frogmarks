@@ -36,8 +36,7 @@ $mode-font: 500 12px/1.3 system-ui, sans-serif;
   &:active:not(:disabled) { @include mode-sunken; background: var(--rc-surface-hi, #2e2e2e); }
   &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
   &:disabled { opacity: 0.4; cursor: default; }
-
-  @media (pointer: coarse) { min-height: 44px; min-width: 44px; font-size: 14px; padding: 0 12px; }
+  // (desktop sizes on touch too: round-2 feedback 2026-10-08)
 }
 
 @mixin mode-btn-on {

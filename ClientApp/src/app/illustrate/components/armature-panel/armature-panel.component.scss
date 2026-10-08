@@ -129,10 +129,3 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: lighten($accent, 18%);
   flex-shrink: 0;
 }
-
-// Touch: 44 px targets for the header (Close, background, ↺). The section controls are in arm-sections.scss.
-@media (pointer: coarse) {
-  .ar-exit-btn,
-  .ar-bg-select { min-height: 44px; }
-  .ar-refresh-btn { width: 44px; height: 44px; }
-}

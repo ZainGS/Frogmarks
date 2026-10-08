@@ -1896,6 +1896,13 @@ body.theme-retro-chrome::before {
   pointer-events: none;
 }
 
+/* A mode (Edit Mesh / Armature: the editor's .mode-chrome-active) hides the colour picker: the bottom strip starts at
+   the rail instead, so the green frame stays closed where the picker was (illustration.component.scss runs the
+   "3D TOOLS" strip down to it). */
+body.theme-retro-chrome:has(.mode-chrome-active)::before {
+  left: 70px;
+}
+
 /* Toggle UI: the screen-edge strips go away with the rest of the chrome. */
 body.theme-retro-chrome:has(.board-shell.ui-hidden)::after,
 body.theme-retro-chrome:has(.board-shell.ui-hidden)::before {

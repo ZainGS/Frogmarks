@@ -1,6 +1,10 @@
 <div #pill class="mode-op-pill" role="group" [attr.aria-label]="title" (keydown)="onKeyDown($event)">
     <div class="mop-head">
-        <span class="mop-title">{{ title }}</span>
+        <button *ngIf="showFrame" type="button" class="mop-btn mop-frame" (click)="frame.emit()"
+                title="Frame the selection" aria-label="Frame the selection">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5M10 12h4M12 10v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>
+        </button>
+        <span *ngIf="title" class="mop-title">{{ title }}</span>
         <span *ngIf="note" class="mop-note" [title]="note">{{ note }}</span>
     </div>
 
@@ -66,7 +70,7 @@
     </div>
 
     <div *ngIf="showApplyCancel" class="mop-actions">
-        <button type="button" class="mop-btn mop-cancel" (click)="cancel.emit()" title="Cancel (Esc)">{{ cancelLabel }}</button>
+        <button *ngIf="showCancel" type="button" class="mop-btn mop-cancel" (click)="cancel.emit()" title="Cancel (Esc)">{{ cancelLabel }}</button>
         <button type="button" class="mop-btn mop-apply" [disabled]="applyDisabled" (click)="apply.emit()" title="Apply (Enter)">{{ applyLabel }}</button>
     </div>
 </div>

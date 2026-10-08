@@ -1,2 +1,9 @@
 // The chrome pieces are fixed-position (mode-chrome/README.md): this host adds no box of its own.
 :host { display: contents; }
+
+// The right panel: no header bar above it (round-2 feedback), so it starts right below the editor's top bar, and its
+// own title row goes (Vertex / Edge / Face sit at the top instead).
+app-mode-props-panel.mep-props {
+  --mpp-top: var(--fm-topbar-h, 40px);
+  ::ng-deep .mpp-header { display: none; }
+}

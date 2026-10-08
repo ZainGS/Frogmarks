@@ -1,4 +1,4 @@
-// Ephemera panel — retro-chrome tokens (--rc-*) with fallbacks, sharp corners, 44 px targets on coarse pointers.
+// Ephemera panel — retro-chrome tokens (--rc-*) with fallbacks, sharp corners.
 $accent:  #3dbfa8;
 $border:  rgba(255, 255, 255, 0.1);
 $muted:   rgba(255, 255, 255, 0.5);
@@ -415,16 +415,4 @@ $muted:   rgba(255, 255, 255, 0.5);
   font-weight: 600;
   color: lighten($accent, 10%);
   margin-bottom: 2px;
-}
-
-// ── Touch: 44 px targets, 24 px checkboxes ───────────────────
-
-@media (pointer: coarse) {
-  .ep-exit-btn, .ep-refresh-btn, .ep-btn, .ep-btn-xs, .ep-seg-btn { min-height: 44px; min-width: 44px; }
-  .ep-text, .ep-num { min-height: 44px; font-size: 13px; }
-  .ep-grid-item { min-height: 44px; font-size: 12px; }
-  .ep-color { width: 44px; height: 44px; }
-  .ep-check { min-height: 44px; margin-top: 0; font-size: 13px; }
-  .ep-check input[type="checkbox"] { width: 24px; height: 24px; }
-  .ep-range { min-height: 32px; }
 }

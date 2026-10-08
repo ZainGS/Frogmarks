@@ -1,21 +1,71 @@
-@import '../../styles/mode-chrome-mixins';
-
 // The chrome pieces are fixed-position components; the host only groups them.
 :host { display: contents; }
 
-// A one-shot "tap a joint" pick is waiting (constraint target / IK pole / weight joint).
-.arm-pick-banner {
-  @include mode-sunken;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+// The right panel: no header bar above it (round-2 feedback), so it starts right below the editor's top bar, and its
+// own title row goes (Rig | Animate sit at the top instead).
+app-mode-props-panel.arm-props {
+  --mpp-top: var(--fm-topbar-h, 40px);
+  ::ng-deep .mpp-header { display: none; }
+}
+
+// The old Armature panel's body (aa753db armature-panel .ar-body): its padding; the sections bring the green titles.
+.arm-body {
+  display: block;
+  padding: 8px 12px 16px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  user-select: none;
+}
+
+.arm-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// Pose / Edit Bones / Weight + Deselect all on one line in the 280 px panel.
+.arm-seg-row {
+  align-items: center;
+  .ar-op-btn { min-width: 0; padding-left: 6px; padding-right: 6px; }
+  .arm-deselect { flex: 0 0 auto; margin-left: auto; }
+}
+
+// The mode tools: icon-only buttons, the main toolbar's .vertical-tool-button look (illustration.component.scss; the
+// retro-chrome theme restyles the class globally, so both themes match the rail).
+.arm-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  &:empty { display: none; }
+}
+
+.vertical-tool-button {
+  width: 50px;
+  height: 50px;
+  margin: 0;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #555;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0;
-  padding: 6px 12px;
-  background: var(--rc-green, #3b6151);
-  color: var(--rc-green-txt, #c8ede3);
-  font: $mode-font;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #777;
+  }
+  &.selected {
+    background: #993FF4;
+    border-color: #bb5fff;
+    box-shadow: 0 0 15px rgba(153, 63, 244, 0.5);
+  }
+  svg { filter: brightness(0.9); }
+  &.selected svg { filter: brightness(1.2); }
+  &:focus-visible { outline: 1px solid #4f7a68; outline-offset: 1px; }
 }
+
+.arm-bg-row { margin-top: 4px; }

@@ -14,7 +14,8 @@ import { ExperimentalSettingsService } from '../../../services/experimental-sett
   templateUrl: './arm-pose-library-section.component.html',
 })
 export class ArmPoseLibrarySectionComponent {
-  /** Mode chrome: the developer "Copy pose + body for Claude" lives in the header's ⋯ menu instead. */
+  /** true hides the developer "Copy pose + body for Claude" button (the Armature mode no longer sets it: since the
+   *  round-2 feedback the button is here in both layouts, behind Experimental › Developer buttons). */
   @Input() chrome = false;
 
   constructor(public binding: ArmBindingService, public library: ArmLibraryService, public exp: ExperimentalSettingsService) {}

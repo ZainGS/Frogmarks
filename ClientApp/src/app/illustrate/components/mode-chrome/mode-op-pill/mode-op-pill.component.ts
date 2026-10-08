@@ -33,8 +33,13 @@ export class ModeOpPillComponent {
   @Input() note?: string;
   /** Apply is shown but greyed out (e.g. nothing selected for the op yet); Enter does nothing then. */
   @Input() applyDisabled = false;
+  /** false = Apply only (Edit Mesh / Armature: turning the tool off replaces Cancel; Esc still cancels). */
+  @Input() showCancel = true;
+  /** A Frame button (frame the selection) at the start of the pill; emits frame. */
+  @Input() showFrame = false;
 
   @Output() paramChange = new EventEmitter<ModeOpParamChange>();
+  @Output() frame = new EventEmitter<void>();
   @Output() apply = new EventEmitter<void>();
   @Output() cancel = new EventEmitter<void>();
   @Output() action = new EventEmitter<string>();

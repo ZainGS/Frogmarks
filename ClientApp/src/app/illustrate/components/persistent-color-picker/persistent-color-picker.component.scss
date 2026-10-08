@@ -90,10 +90,6 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
 }
 
-@media (pointer: coarse) {
-    .picker-action-btn { width: 44px; height: 44px; }
-}
-
 .reset-icon {
     position: relative;
     display: inline-block;

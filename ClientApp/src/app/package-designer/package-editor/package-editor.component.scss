@@ -80,8 +80,6 @@ $accent:  var(--rc-green-hi, #4f7a68);
   &:hover { background: var(--rc-surface-hi, #2e2e2e); color: #fff; }
   &:active { @include sunken; }
   &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
-
-  @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 14px; font-size: 13px; }
 }
 
 .pkg-back-btn { flex-shrink: 0; }
@@ -112,8 +110,6 @@ $accent:  var(--rc-green-hi, #4f7a68);
 
   &:hover { border-color: $border; }
   &:focus { @include sunken; outline: none; background: var(--rc-canvas-bg, #0a0a0a); }
-
-  @media (pointer: coarse) { height: 44px; }
 }
 
 // ── Body ───────────────────────────────────────────────────────
@@ -163,8 +159,6 @@ $accent:  var(--rc-green-hi, #4f7a68);
   min-height: 30px;
 
   &:last-child { margin-bottom: 0; }
-
-  @media (pointer: coarse) { min-height: 44px; margin-bottom: 4px; }
 }
 
 .pkg-row-label {
@@ -179,8 +173,6 @@ input[type=range] {
   min-width: 0;
   margin: 0;
   accent-color: $accent;
-
-  @media (pointer: coarse) { height: 44px; }
 }
 
 .pkg-num {
@@ -196,8 +188,6 @@ input[type=range] {
   text-align: right;
 
   &:focus { outline: 2px solid $accent; outline-offset: 0; }
-
-  @media (pointer: coarse) { height: 40px; font-size: 14px; }
 }
 
 .pkg-val {

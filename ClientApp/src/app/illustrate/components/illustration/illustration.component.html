@@ -135,9 +135,9 @@
             <div *ngIf="stats.scene3dStats.gpuName" class="scene3d-stats-gpu">{{ stats.scene3dStats.gpuName }}</div>
         </div>
 
-        <!-- Viewport transform shortcut HUD (G/R/S state machine) -->
+        <!-- Viewport transform shortcut HUD (G/R/S state machine). Not in Edit Mesh: its op pill shows the transform. -->
         <!-- On touch the readout moves to the top: the touch pill (X / Y / Z, the amount, Apply / Cancel) owns the bottom. -->
-        <div *ngIf="hud.scene3dShortcutActive" class="scene3d-shortcut-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
+        <div *ngIf="hud.scene3dShortcutActive && activeModeChrome !== 'meshEdit'" class="scene3d-shortcut-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
           <span class="scene3d-sh-mode">{{ hud.scene3dShortcutMode | uppercase }}</span>
           <ng-container *ngIf="hud.scene3dShortcutAxis">
             <span class="scene3d-sh-sep">›</span>
@@ -148,8 +148,8 @@
           <span *ngIf="!touchUi.coarse" class="scene3d-sh-confirm">↵ confirm · Esc cancel</span>
         </div>
 
-        <!-- Edit Mesh Chamfer / Bevel readout (the live amount; on touch at the top — the pill owns the bottom) -->
-        <div *ngIf="meshEdit.bevelState as bv" class="scene3d-shortcut-hud scene3d-bevel-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
+        <!-- Edit Mesh Chamfer / Bevel readout (the classic panel only; the mode chrome's op pill shows it) -->
+        <div *ngIf="activeModeChrome !== 'meshEdit' && meshEdit.bevelState as bv" class="scene3d-shortcut-hud scene3d-bevel-hud" [class.scene3d-shortcut-hud--top]="touchUi.coarse">
           <span class="scene3d-sh-mode">{{ bv.kind === 'edge' ? 'BEVEL' : 'CHAMFER' }}</span>
           <ng-container *ngIf="bv.phase === 'adjust'; else bevelPick">
             <span class="scene3d-sh-value">{{ bv.amount | number:'1.3-3' }}</span>
@@ -265,16 +265,16 @@
             (closeRequest)="closeArmaturePanel()">
         </app-armature-panel>
 
-        <!-- Armature on the mode chrome (components/armature-mode): Rig | Animate. Mounted for the whole mode (the
-             engine session); the chrome itself hides with the UI (chromeVisible). -->
+        <!-- Armature on the mode chrome (components/armature-mode): Rig | Animate in the right panel, the main toolbar's
+             Select / Move / Rotate drive the joint tools. Mounted for the whole mode (the engine session); the chrome
+             itself hides with the UI (chromeVisible). Undo / Redo = the top bar's buttons (editUndo / editRedo). -->
         <app-armature-mode *ngIf="activeModeChrome === 'armature'"
             [shapeManager]="shapeManager"
             [initialMeshId]="editorState.scene3dSelectedMeshId ?? ''"
             [canvasEl]="canvas"
             [chromeVisible]="modeChromeVisible"
             [aboveTimeline]="animationEnabled"
-            (undo)="editUndo()" (redo)="editRedo()" (done)="closeArmaturePanel()"
-            (shortcuts)="showShortcutCheatsheet = true" (chromeLayout)="_updateGizmoPosition()">
+            (chromeLayout)="_updateGizmoPosition()" (toolChange)="onArmatureToolChange($event)">
         </app-armature-mode>
 
         <!-- Mode chrome (components/mode-chrome/README.md): while useModeChrome[mode] is on, that mode mounts its
@@ -993,11 +993,13 @@
     </div>
 
     <!-- Vertical Control Panel -->
-    <div class="vertical-control-panel" [class.rail-hidden]="uiHidden">
+    <!-- #railPanel: in a mode, a tap on a tool the mode doesn't use (no data-rail-tool in its list) leaves the mode first
+         (mode-chrome/mode-toolbar-scope.ts) -->
+    <div #railPanel class="vertical-control-panel" [class.rail-hidden]="uiHidden">
         <!-- Cursor Controls -->
         <div class="cursor-controls">
-            <div class="vertical-tool-button" 
-                 [class.selected]="cursorSelected"
+            <div class="vertical-tool-button" data-rail-tool="select"
+                 [class.selected]="railSelectOn"
                  (click)="selectCursor('cursor')">
                 <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
@@ -1008,7 +1010,7 @@
                 </svg>
             </div>
             
-            <div class="vertical-tool-button" 
+            <div class="vertical-tool-button" data-rail-tool="pan"
                  [class.selected]="panHandSelected"
                  (click)="selectCursor('panhand')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1309,9 +1311,9 @@
                 </svg>
             </div>
             <!-- Move -->
-            <div class="vertical-tool-button"
+            <div class="vertical-tool-button" data-rail-tool="move"
                  [class.selected]="scene3dGizmoMode === 'move' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable && activeModeChrome !== 'armature' && activeModeChrome !== 'meshEdit'"
                  (click)="scene3dSetGizmoMode('move')"
                  title="Move gizmo (G: move by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1323,9 +1325,9 @@
                 </svg>
             </div>
             <!-- Rotate -->
-            <div class="vertical-tool-button"
+            <div class="vertical-tool-button" data-rail-tool="rotate"
                  [class.selected]="scene3dGizmoMode === 'rotate' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable && activeModeChrome !== 'armature' && activeModeChrome !== 'meshEdit'"
                  (click)="scene3dSetGizmoMode('rotate')"
                  title="Rotate gizmo (R: rotate by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1334,9 +1336,9 @@
                 </svg>
             </div>
             <!-- Scale -->
-            <div class="vertical-tool-button"
+            <div class="vertical-tool-button" data-rail-tool="scale"
                  [class.selected]="scene3dGizmoMode === 'scale' && !scene3dIsArrayGroup"
-                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable"
+                 [class.tool-disabled]="scene3dInSubMode && !scene3dEditGizmoAvailable && activeModeChrome !== 'meshEdit'"
                  (click)="scene3dSetGizmoMode('scale')"
                  title="Scale gizmo (S: scale by a typed amount)">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1373,7 +1375,7 @@
             <div class="tools-3d-separator"></div>
 
             <!-- Edit Mesh -->
-            <div class="vertical-tool-button"
+            <div class="vertical-tool-button" data-rail-tool="editMesh"
                  [class.selected]="meshEdit.scene3dIsEditingMesh"
                  [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
                  (click)="meshEdit.scene3dIsEditingMesh ? meshEdit.exitMeshEditMode() : meshEdit.enterMeshEditMode()"
@@ -1389,7 +1391,7 @@
             </div>
 
             <!-- Armature -->
-            <div class="vertical-tool-button"
+            <div class="vertical-tool-button" data-rail-tool="armature"
                  [class.selected]="scene3dArmaturePanelOpen"
                  [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
                  (click)="scene3dArmaturePanelOpen ? closeArmaturePanel() : openArmaturePanel()"
@@ -1428,7 +1430,9 @@
                 </svg>
             </div>
 
-            <!-- Package Creator — always visible, creates/reuses a box -->
+            <!-- Package / Decal / Skins / City: desktop only (hidden on touch devices — phones and tablets) -->
+            <ng-container *ngIf="!touchUi.coarse">
+            <!-- Package Creator — creates/reuses a box -->
             <div class="vertical-tool-button"
                  [class.selected]="pkg.scene3dPkgCreatorOpen"
                  (click)="pkg.scene3dPkgCreatorOpen ? pkg.closePkgCreator() : pkg.openPkgCreator()"
@@ -1475,6 +1479,7 @@
                     <line x1="1" y1="21" x2="23" y2="21"/>
                 </svg>
             </div>
+            </ng-container>
         </div><!-- /.tools-3d-mesh-actions -->
 
         <!-- AI authoring button — pinned to bottom of toolbar. WIP: hidden unless showAiTool (utils/ai-tool-flag.ts) -->

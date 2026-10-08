@@ -1910,7 +1910,6 @@ svg {
   }
   &[role='button'] { cursor: pointer; text-decoration: underline; }
   &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
-  @media (pointer: coarse) { &[role='button'] { position: relative; min-height: 36px; &::after { content: ''; position: absolute; inset: -4px 0; } } }
 }
 
 /* ── Undo / Redo (top bar) ── */
@@ -1938,11 +1937,6 @@ svg {
   &:hover { background: var(--rc-surface-hi, #4a4a4a); }
   &:active { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #fff); }
   &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
-  /* Touch: 44 px wide; the 40 px top bar caps the height at 36, a hit area 4 px past each edge makes it 44. */
-  @media (pointer: coarse) {
-    position: relative; width: 44px; height: 36px;
-    &::after { content: ''; position: absolute; inset: -4px 0; }
-  }
 }
 
 /* ── Document not found (persist.documentMissing) — covers the whole editor ── */
@@ -1995,7 +1989,6 @@ svg {
   &--primary { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #c8ede3); }
   &--primary:hover { background: var(--rc-green-hi, #4f7a68); }
   &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
-  @media (pointer: coarse) { min-height: 44px; }
 }
 
 /* ── Menu bar buttons ───────────────────────────────────────── */
@@ -2785,17 +2778,25 @@ svg {
     .animation-timeline-wrapper { display: none !important; }
 }
 
-/* Mode chrome (UI review 2026-10-07 §4; components/mode-chrome/README.md): while a mode with the new chrome is active
-   (activeModeChrome) its tool strip takes the rail's slot and its props panel the right column's, so the rail, its
-   sub-panels, the right column + drawer handle and the colour picker leave (they stay mounted and come back as they
-   were). The canvas does not resize: the strip is exactly the rail's 70 px. */
+/* Mode chrome (UI review 2026-10-07 §4, round-2 feedback 2026-10-08; components/mode-chrome/README.md): while a mode
+   with the new chrome is active (activeModeChrome) the main rail, its sub-panels and the vertical "3D TOOLS" strip
+   stay; the mode's props panel takes the right column's slot (the right column + drawer handle leave) and the colour
+   picker leaves (they stay mounted and come back as they were). The green frame stays closed where the picker was:
+   the "3D TOOLS" strip runs down to the bottom edge (retro-chrome-theme.scss starts the bottom edge strip at the rail),
+   or, with the animation timeline open, the timeline moves into the picker's slot so its green top edge meets the strip. */
 .mode-chrome-active {
-    .vertical-control-panel,
-    .tool-subpanel,
-    .toolbar-mode-label,
     .right-column,
     .side-drawer-handle,
     .persistent-color-picker { display: none !important; }
+
+    .toolbar-mode-label { bottom: 0; }
+    /* The zoom box keeps beside the props panel (open: 284 + 6 = where it sits beside the right column; collapsed /
+       the portrait drawer shut: the screen edge — it sat over the op pill there) */
+    .zoom-control { right: calc(var(--fm-modeprops-w, 0px) + 6px); }
+    &:has(.animation-timeline-wrapper) {
+        .toolbar-mode-label { bottom: var(--fm-timeline-h, 204px); }
+        .animation-timeline-wrapper { left: 70px; }
+    }
 }
 /* The engine status line ("Preparing shaders…") sits above the mode op pill (bottom 16 px + its height), not on it. */
 @media (min-width: 700.02px) {
@@ -2810,8 +2811,7 @@ svg {
     color: var(--rc-text-muted, #a8a8a8);
 }
 
-/* Canvas context menu (right-click / long-press; canvas-context-menu.ts). Retro chrome: sharp corners, raised bevel,
-   44 px rows on a coarse pointer. */
+/* Canvas context menu (right-click / long-press; canvas-context-menu.ts). Retro chrome: sharp corners, raised bevel. */
 .canvas-menu {
     position: fixed;
     z-index: 1200;
@@ -2824,7 +2824,6 @@ svg {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     user-select: none;
 }
-.canvas-menu--coarse { min-width: 220px; }
 .canvas-menu-item {
     display: flex;
     width: 100%;
@@ -2845,6 +2844,5 @@ svg {
     &:hover:not(:disabled), &:focus-visible { background: var(--rc-surface-hi, #2e2e2e); outline: none; }
     &:disabled { opacity: 0.4; cursor: default; }
 }
-.canvas-menu--coarse .canvas-menu-item { min-height: 44px; font-size: 15px; }
 .canvas-menu-keys { color: var(--rc-text-muted, #8a8a8a); font-size: 11px; }
 .canvas-menu-divider { height: 1px; margin: 4px 2px; background: var(--rc-bevel-dk, #333); }

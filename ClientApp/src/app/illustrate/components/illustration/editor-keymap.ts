@@ -33,7 +33,7 @@ export type KeymapHost = Pick<IllustrationComponent,
   'scene3dDuplicateMesh' | 'decal' | 'meshEdit' | 'selectCursor' | 'setActiveTool' | 'deleteSelectionOrLayers' | 'toggleFullscreen' | 'toggleUI' | 'scene3dSetIllustrationProjection' |
   'scene3dDeleteSelected' | 'uv' |
   'animationEnabled' | 'anim' | 'scene3dArmaturePanelOpen' | 'closeArmaturePanel' |
-  'openArmaturePanel' | 'animationService'
+  'openArmaturePanel' | 'animationService' | 'armatureUndo'
 >;
 
 /** The engine's selected layer entry is the 3D scene layer (a city document selects it on load). Raster undo has no
@@ -45,16 +45,32 @@ function engineLayerIs3DScene(sm: KeymapHost['shapeManager'] | undefined): boole
   return api?.getRasterLayers?.()?.find(l => l.id === id)?.type === '3d-scene';
 }
 
+type ScopedUndoHost = Partial<Pick<KeymapHost, 'meshEdit' | 'scene3dArmaturePanelOpen' | 'armatureUndo'>>;
+type UndoHost = Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>
+  & ScopedUndoHost;
+
+/** A 3D mode owns undo / redo: Edit Mesh, the Armature (Rig and Animate). Only the steps made in it (ModeUndoScope;
+ *  round-2 feedback 2026-10-08) — never the 2D object stack. */
+function inScopedUndoMode(ed: ScopedUndoHost): boolean { return !!ed.meshEdit?.scene3dIsEditingMesh || !!ed.scene3dArmaturePanelOpen; }
+
+/** Whether the mode's undo (redo = false) / redo step may run (an Armature without its scope: unscoped, as before). */
+function takeScopedUndoStep(ed: ScopedUndoHost, redo: boolean): boolean {
+  if (ed.meshEdit?.scene3dIsEditingMesh) return ed.meshEdit.takeUndoStep(redo);
+  return ed.armatureUndo ? ed.armatureUndo.takeStep(redo) : true;
+}
+
 /** Undo / redo go to the active context; the engine's 2D object stack has already handled the key when it can. */
-function undo(ed: Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
+function undo(ed: UndoHost, redo: boolean): void {
+  if (inScopedUndoMode(ed)) { if (takeScopedUndoStep(ed, redo)) redo ? ed.scene3dRedo() : ed.scene3dUndo(); return; }
   if (ed.is3DContextActive || engineLayerIs3DScene(ed.shapeManager)) redo ? ed.scene3dRedo() : ed.scene3dUndo();
   else void (redo ? ed.rasterRedo() : ed.rasterUndo());
 }
 
 /** Undo / redo from a BUTTON (Edit menu): routed exactly like Ctrl+Z / Ctrl+Y. The 2D object stack
  *  goes first (for the keys the engine consumes it itself; a button has to call it), then the active context. */
-export function routeUndo(ed: Pick<KeymapHost, 'shapeManager' | 'is3DContextActive' | 'scene3dUndo' | 'scene3dRedo' | 'rasterUndo' | 'rasterRedo'>, redo: boolean): void {
+export function routeUndo(ed: UndoHost, redo: boolean): void {
   const sm = ed.shapeManager;
+  if (inScopedUndoMode(ed)) { undo(ed, redo); return; }   // not the 2D object stack: the mode's own steps
   if (!redo && sm.canUndo2DShapes) { sm.undo2DShapes(); return; }
   if (redo && sm.canRedo2DShapes) { sm.redo2DShapes(); return; }
   undo(ed, redo);
@@ -492,12 +508,15 @@ export const MOD_KEYMAP: KeyBinding[] = [
   // Undo / redo / zoom repeat while held (step back through history, keep zooming); everything else fires once.
   { keys: ['z', 'Z'], mod: true, repeat: true, group: 'Edit', help: 'Undo (Shift: redo)', run: (ed, e) => {
     const sm = ed.shapeManager;
-    if (!e.shiftKey && sm.canUndo2DShapes) return;   // 2D object stack (engine consumed it)
-    if (e.shiftKey && sm.canRedo2DShapes) return;
+    // (a mode owning undo — Edit Mesh, Armature — never hands the key to the 2D object stack)
+    if (!inScopedUndoMode(ed)) {
+      if (!e.shiftKey && sm.canUndo2DShapes) return;   // 2D object stack (engine consumed it)
+      if (e.shiftKey && sm.canRedo2DShapes) return;
+    }
     undo(ed, e.shiftKey);
   } },
   { keys: ['y', 'Y'], mod: true, repeat: true, group: 'Edit', help: 'Redo', run: (ed) => {
-    if (ed.shapeManager.canRedo2DShapes) return;
+    if (!inScopedUndoMode(ed) && ed.shapeManager.canRedo2DShapes) return;
     undo(ed, true);
   } },
   { keys: ['0'], mod: true, group: 'View', help: 'Fit artboard to view', run: (ed) => ed.artboard.fitArtboard() },

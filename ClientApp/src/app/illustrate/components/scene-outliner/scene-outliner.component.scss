@@ -44,20 +44,9 @@
     &.scene3d-mesh-delete-asking { opacity: 1; color: #f77; }
 }
 
-// Touch has no hover: the row actions were invisible but still tappable (a blind ✕). Always shown, finger-sized.
+// Touch has no hover: the row actions were invisible but still tappable (a blind ✕). Always shown.
 @media (hover: none), (pointer: coarse) {
-    .scene3d-mesh-list { max-height: 264px; }
-    .scene3d-mesh-item { min-height: 44px; padding: 0 0 0 8px; font-size: 12px; }
-    .scene3d-mesh-delete, .scene3d-move-btn, .scene3d-eye-btn {
-        opacity: 1;
-        min-width: 40px;
-        min-height: 44px;
-        font-size: 15px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
+    .scene3d-mesh-delete, .scene3d-move-btn, .scene3d-eye-btn { opacity: 1; }
     // The ✕ sits apart from the other actions so a tap meant for ⧉ / 🕹 doesn't delete
     .scene3d-mesh-delete { margin-left: 6px; }
 }
@@ -92,11 +81,6 @@
 }
 .scene3d-undo-btn { padding: 0 10px; background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #c8ede3); font-weight: 600; }
 .scene3d-undo-close { padding: 0 6px; }
-
-@media (pointer: coarse) {
-    .scene3d-undo-toast { font-size: 13px; }
-    .scene3d-undo-btn, .scene3d-undo-close { min-height: 44px; min-width: 44px; }
-}
 
 // Outliner enhancements
 .scene3d-node-hidden {

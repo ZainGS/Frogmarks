@@ -65,8 +65,6 @@
     color: #fff;
   }
   &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
-
-  @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 16px; }
 }
 
 // Phone: nav above the content (the 220 px nav left ~170 px for the text)

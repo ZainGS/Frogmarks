@@ -4,12 +4,11 @@ import { ArmatureModeComponent } from './armature-mode.component';
 import { ARM_WORKSPACE_KEY } from './armature-mode.logic';
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
-import { TouchUiService } from '../../services/touch-ui.service';
 import { EXP_CLASSIC_ARMATURE_KEY, ExperimentalSettingsService } from '../../services/experimental-settings.service';
 import { ARMATURE_KEYS, ArmatureKeyTarget, dispatchModeKey } from '../illustration/mode-keymap';
 
 /** A fake engine with what an Armature session calls on the OLD dist; `newApi` adds the UI review §4 calls. */
-function fakeEngine(o: { newApi?: boolean } = {}) {
+function fakeEngine(o: { newApi?: boolean; latch?: boolean } = {}) {
   const joints = [
     { index: 0, name: 'hips', parentIndex: -1, localPosition: [0, 1, 0], tailOffset: [0, 0.3, 0], isLeaf: false },
     { index: 1, name: 'spine', parentIndex: 0, localPosition: [0, 0.3, 0], tailOffset: [0, 0.3, 0], isLeaf: false },
@@ -68,16 +67,21 @@ function fakeEngine(o: { newApi?: boolean } = {}) {
     sm.setArmatureIK3D = jasmine.createSpy('setArmatureIK3D').and.returnValue('ik1');
     sm.getArmatureIK3D = () => null;
   }
+  if (o.latch) {
+    let latch = false;
+    sm.setAdditiveSelect3D = jasmine.createSpy('setAdditiveSelect3D').and.callFake((on: boolean) => { latch = on; });
+    sm.getAdditiveSelect3D = () => latch;
+  }
   const animation = { setAnimationEnabled: jasmine.createSpy('setAnimationEnabled').and.callFake((on: boolean) => { anim = on; }) };
   return { sm, animation, isAnim: () => anim };
 }
 
-describe('ArmatureModeComponent (mode chrome)', () => {
+describe('ArmatureModeComponent (round-2 layout)', () => {
   beforeEach(() => {
     try { localStorage.removeItem(ARM_WORKSPACE_KEY); } catch { /* none */ }
   });
 
-  function create(o: { newApi?: boolean } = {}) {
+  function create(o: { newApi?: boolean; latch?: boolean } = {}) {
     const f = fakeEngine(o);
     TestBed.configureTestingModule({
       declarations: [ArmatureModeComponent],
@@ -85,7 +89,6 @@ describe('ArmatureModeComponent (mode chrome)', () => {
       providers: [
         { provide: RasterAnimationService, useValue: f.animation },
         { provide: NotifyService, useValue: { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') } },
-        { provide: TouchUiService, useValue: { coarse: true } },
       ],
     });
     const fixture = TestBed.createComponent(ArmatureModeComponent);
@@ -103,8 +106,104 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     expect(sm.enterArmatureMode3D).toHaveBeenCalledWith('m1');
     expect(cmp.workspace).toBe('rig');
     expect(cmp.tool).toBe('rotate');
-    expect(cmp.subtitle).toBe('Rig · Body');
-    expect(cmp.multiLatch).toBeNull();   // the old dist has no additive latch
+    expect(cmp.baseTool).toBe('rotate');
+  });
+
+  it('no header bar / tool strip; the panel top has Rig | Animate, the switch, Deselect all and icon-only mode tools', () => {
+    const { fixture, cmp } = create();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('app-mode-header-bar')).toBeNull();
+    expect(el.querySelector('app-mode-tool-strip')).toBeNull();
+    const top = el.querySelector('.arm-top')!;
+    expect([...top.querySelectorAll('.ar-btn-pair')[0].querySelectorAll('button')].map(b => b.textContent!.trim())).toEqual(['Rig', 'Animate']);
+    expect([...top.querySelectorAll('.arm-seg-row button')].map(b => b.textContent!.trim())).toEqual(['Pose', 'Edit Bones', 'Weight', 'Deselect all']);
+    const tools = [...top.querySelectorAll('.arm-tools .vertical-tool-button')];
+    expect(tools.map(t => t.getAttribute('data-id'))).toEqual(['addbone', 'ik', 'weight']);
+    expect(tools.every(t => !t.textContent!.trim())).toBeTrue();   // icon only (tooltip = title)
+    expect(tools[0].getAttribute('title')).toContain('Add Bone');
+    cmp.setWorkspace('animate');
+    fixture.detectChanges();
+    expect([...el.querySelectorAll('.arm-tools .vertical-tool-button')].map(t => t.getAttribute('data-id'))).toEqual(['key']);
+    expect([...el.querySelectorAll('.arm-seg-row button')].map(b => b.textContent!.trim())).toEqual(['Deselect all']);
+  });
+
+  it('the pill is always there with Frame (Select: Frame only), never a Cancel', () => {
+    const { fixture, cmp, sm } = create();
+    const pill = () => fixture.debugElement.query(sel => sel.name === 'app-mode-op-pill');
+    expect(pill().properties['showFrame']).toBeTrue();
+    expect(pill().properties['showCancel']).toBeFalse();
+    cmp.setTool('select');
+    fixture.detectChanges();
+    expect(pill()).not.toBeNull();
+    expect(pill().properties['title']).toBe('');
+    expect(pill().properties['params']).toEqual([]);
+    pill().triggerEventHandler('frame', undefined);
+    expect(sm.fitArtboard).toHaveBeenCalled();
+  });
+
+  it('a mode tool button toggles: tapping the active one again goes back to the main toolbar tool', () => {
+    const { cmp } = create({ newApi: true });
+    cmp.setTool('move');
+    cmp.toggleModeTool('ik');
+    expect(cmp.tool).toBe('ik');
+    expect(cmp.segment).toBe('pose');
+    cmp.toggleModeTool('ik');
+    expect(cmp.tool).toBe('move');
+    expect(cmp.segment).toBe('edit');
+    cmp.toggleModeTool('addbone');
+    cmp.setTool('addbone');   // a key / the main toolbar picking the active tool keeps it
+    expect(cmp.tool).toBe('addbone');
+  });
+
+  it('the main toolbar tool changes are reported (toolChange)', () => {
+    const { cmp } = create({ newApi: true });
+    const seen: string[] = [];
+    cmp.toolChange.subscribe(t => seen.push(t));
+    cmp.setTool('select');
+    cmp.toggleModeTool('weight');
+    cmp.toggleModeTool('weight');
+    expect(seen).toEqual(['select', 'weight', 'select']);
+  });
+
+  it('Deselect all clears the joint selection', () => {
+    const { sm, cmp } = create({ newApi: true });
+    cmp.rig.selectJoint(2);
+    expect(cmp.hasSelection).toBeTrue();
+    cmp.deselectAll();
+    expect(sm.selectJoint3D).toHaveBeenCalledWith(null);
+    expect(cmp.rig.selectedJointIdx).toBeNull();
+    expect(cmp.hasSelection).toBeFalse();
+  });
+
+  it('multi-select by default: a touch / pen press on the canvas turns the additive latch on, a mouse press off; restored on leave', () => {
+    const { sm, fixture, cmp } = create({ newApi: true, latch: true });
+    const canvas = cmp.canvasEl!;
+    document.body.appendChild(canvas);
+    try {
+      const press = (pointerType: string, target: EventTarget = canvas) =>
+        target.dispatchEvent(new PointerEvent('pointerdown', { pointerType, bubbles: true }));
+      press('touch');
+      expect(sm.setAdditiveSelect3D).toHaveBeenCalledWith(true);
+      press('mouse');
+      expect(sm.setAdditiveSelect3D.calls.mostRecent().args).toEqual([false]);
+      press('pen');
+      expect(sm.setAdditiveSelect3D.calls.mostRecent().args).toEqual([true]);
+      sm.setAdditiveSelect3D.calls.reset();
+      press('touch', document.body);   // not the canvas: untouched
+      expect(sm.setAdditiveSelect3D).not.toHaveBeenCalled();
+      expect(cmp.additiveFor('touch')).toBeTrue();
+      cmp.binding.bindMeshId = 'm1';
+      cmp.setTool('weight');
+      expect(cmp.additiveFor('touch')).toBeFalse();   // the Weight Brush paints one joint: a tap picks it
+      sm.setAdditiveSelect3D.calls.reset();
+      fixture.destroy();
+      expect(sm.setAdditiveSelect3D).toHaveBeenCalledOnceWith(false);   // the latch as it was before Armature
+      sm.setAdditiveSelect3D.calls.reset();
+      press('touch');
+      expect(sm.setAdditiveSelect3D).not.toHaveBeenCalled();   // listener gone
+    } finally {
+      canvas.remove();
+    }
   });
 
   it('Animate shows the timeline, Rig / close put it back, and the workspace is remembered', () => {
@@ -112,8 +211,7 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     cmp.setWorkspace('animate');
     expect(animation.setAnimationEnabled).toHaveBeenCalledOnceWith(true);
     expect(localStorage.getItem(ARM_WORKSPACE_KEY)).toBe('animate');
-    expect(cmp.tools.map(t => t.id)).toContain('key');
-    expect(cmp.segments).toEqual([]);
+    expect(cmp.modeTools.map(t => t.id)).toEqual(['key']);
     cmp.setWorkspace('rig');
     expect(isAnim()).toBeFalse();
     cmp.setWorkspace('animate');
@@ -122,7 +220,7 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     expect(animation.setAnimationEnabled.calls.allArgs()).toEqual([[true], [false], [true], [false]]);
   });
 
-  it('a workspace switch drops a tool the new strip lacks (Weight → Rotate)', () => {
+  it('a workspace switch drops a mode tool the new workspace lacks (Weight → the main toolbar tool)', () => {
     const { cmp } = create({ newApi: true });
     cmp.binding.bindMeshId = 'm1';
     cmp.setTool('weight');
@@ -222,7 +320,7 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     expect(b.sm.setJointTailOffset3D).toHaveBeenCalledOnceWith('s1', 3, [0, 0.2, 0]);
   });
 
-  it('Rotate pill: Apply rotates the selected joint by the typed angle about the axis; Cancel resets', () => {
+  it('Rotate pill: Apply rotates the selected joint by the typed angle about the axis; Esc in the pill resets', () => {
     const { sm, cmp } = create();
     cmp.rig.selectJoint(1);
     cmp.onParamChange({ id: 'axis', value: 'z' });
@@ -247,7 +345,7 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     expect(sm.recordSkeletonPose3D).toHaveBeenCalledOnceWith('s1', 'c1', 12);
   });
 
-  it('the Armature keys drive the chrome (per workspace) and decline without it', () => {
+  it('the Armature keys drive the mode (per workspace) and decline without it', () => {
     const { cmp } = create();
     const key = (k: string) => new KeyboardEvent('keydown', { key: k, cancelable: true });
     const ed: any = { armatureMode: cmp, shapeManager: { canUndo2DShapes: false, canRedo2DShapes: false } };
@@ -269,6 +367,19 @@ describe('ArmatureModeComponent (mode chrome)', () => {
     expect(ARMATURE_KEYS.rotate.run({ armatureMode: target } as never)).toBeUndefined();
     expect(target.setTool).toHaveBeenCalledOnceWith('rotate');
     expect(ARMATURE_KEYS.rotate.run(classic)).toBeFalse();
+  });
+});
+
+describe('ArmatureModeComponent Esc', () => {
+  it('Esc leaves Armature; an open radial or a pending rename takes it first; the classic panel declines', () => {
+    const cmp: any = { workspace: 'rig', setTool() {}, setSegment() {}, keyPose() {}, overlay: true, cancelOverlay() { const o = this.overlay; this.overlay = false; return o; } };
+    const ed: any = { armatureMode: cmp, closeArmaturePanel: jasmine.createSpy('close'), shapeManager: { canUndo2DShapes: false } };
+    const esc = () => new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    dispatchModeKey('armature', ed, esc(), false);
+    expect(ed.closeArmaturePanel).not.toHaveBeenCalled();   // closed the radial
+    dispatchModeKey('armature', ed, esc(), false);
+    expect(ed.closeArmaturePanel).toHaveBeenCalledTimes(1);
+    expect(ARMATURE_KEYS.exit.run({ closeArmaturePanel: ed.closeArmaturePanel } as never)).toBeFalse();
   });
 });
 

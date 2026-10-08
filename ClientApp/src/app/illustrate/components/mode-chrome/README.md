@@ -15,6 +15,15 @@ the engine. All are declared and exported by `IllustrateModule`.
 
 Types: `mode-chrome.types.ts`. Icons: `mode-icons.ts`. Value logic: `op-pill-logic.ts`, `radial-layout.ts`.
 
+**Round-2 feedback (2026-10-08) supersedes parts of what follows:** no mode uses the header bar or the tool strip any
+more (their files stay). In a mode the main rail, its sub-panels and the "3D TOOLS" strip stay visible; only the colour
+picker, the right column and its drawer handle are hidden (`.mode-chrome-active` in illustration.component.scss; the
+green frame closes where the picker was). Rail tools the mode uses itself stay inside it, any other rail tool leaves the
+mode first: the per-mode allowlist `MODE_RAIL_TOOLS` in `mode-toolbar-scope.ts` (buttons are tagged
+`data-rail-tool="…"`). The op pill takes `[showCancel]="false"` and `[showFrame]="true"` (always shown, Frame only when
+no tool is active); the props panel starts below the top bar (the mode's host sets `--mpp-top`) and holds the mode's
+switches and icon-only tools. Esc leaves the mode; the top bar's Undo / Redo are the mode's.
+
 ## Switching a mode on (IllustrationComponent)
 
 - `useModeChrome: Record<'meshEdit' | 'armature', boolean>`: every switch is `false` for now, so nothing changes yet. Flip

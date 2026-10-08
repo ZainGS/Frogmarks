@@ -15,6 +15,8 @@
   container-type: inline-size;   // the compact layout follows the free width (props panel open or not), not the screen
 }
 :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
+// Touch: the zoom box is 120 px wide there (illustration.component.scss), 6 px from the props panel
+@media (pointer: coarse) { :host { right: calc(var(--fm-modeprops-w, 0px) + 132px); } }
 
 // Phone / narrow: the whole free width, above the zoom widget.
 @media (max-width: 700px) {
@@ -47,6 +49,9 @@
   padding: 0 4px 0 6px;
   max-width: 220px;
 }
+// With the Frame button: it sits beside the title, not above it
+.mop-head:has(.mop-frame) { flex-direction: row; align-items: center; gap: 8px; padding-left: 0; }
+.mop-frame { flex-shrink: 0; padding: 0 6px; }
 .mop-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -100,7 +105,6 @@
   white-space: nowrap;
   cursor: ew-resize;
   touch-action: none;   // a horizontal drag scrubs instead of scrolling
-  @media (pointer: coarse) { min-height: 44px; padding: 0 10px; }
 }
 .mop-num.scrubbing .mop-scrub { color: var(--rc-green-txt, #c8ede3); }
 .mop-value,
@@ -115,24 +119,23 @@
   font: 600 13px/1 'Courier New', monospace;
   text-align: right;
   cursor: text;
-  @media (pointer: coarse) { min-height: 44px; width: 76px; font-size: 15px; }
 }
 .mop-value:focus-visible, .mop-input:focus { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 0; }
 .mop-value:disabled { cursor: default; }
 .mop-step {
   @include mode-btn;
   display: none;           // touch only (a mouse scrubs / types / uses ↑ ↓)
-  @media (pointer: coarse) { display: inline-flex; font-size: 18px; }
+  @media (pointer: coarse) { display: inline-flex; }
 }
 
 // axis / choice chips
 .mop-chips { display: flex; align-items: center; gap: 2px; }
 .mop-label { padding: 0 6px 0 4px; color: var(--rc-text-label, #c0c0c0); font-weight: 600; white-space: nowrap; }
-.mop-chip { min-width: 32px; padding: 0 6px; @media (pointer: coarse) { min-width: 44px; } }
+.mop-chip { min-width: 32px; padding: 0 6px; }
 
 // text / select (added for the Armature pills)
 .mop-field { display: flex; align-items: center; gap: 0; &.disabled { opacity: 0.45; } }
-.mop-text { width: 120px; text-align: left; font: 500 13px/1 system-ui, sans-serif; @media (pointer: coarse) { width: 132px; } }
+.mop-text { width: 120px; text-align: left; font: 500 13px/1 system-ui, sans-serif; }
 .mop-select { width: auto; max-width: 160px; text-align: left; font: 500 13px/1 system-ui, sans-serif; cursor: pointer; }
 
 // Narrow (a phone, or a tablet in portrait with the props panel open): at most two rows — title + Apply / Cancel,

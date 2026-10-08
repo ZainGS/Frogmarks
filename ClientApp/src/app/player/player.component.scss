@@ -44,8 +44,6 @@
 
     &:hover { background: var(--rc-surface-hi, #2e2e2e); color: #fff; }
     &:focus-visible { outline: 2px solid var(--rc-green-txt, #c8ede3); outline-offset: 1px; }
-
-    @media (pointer: coarse) { min-height: 44px; min-width: 44px; padding: 8px 18px; font-size: 13px; }
 }
 
 // ── Header bar ───────────────────────────────────────────────────

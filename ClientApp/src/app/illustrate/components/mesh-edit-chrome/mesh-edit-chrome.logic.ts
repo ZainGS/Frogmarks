@@ -1,14 +1,16 @@
 /**
- * Edit Mesh on the mode chrome (UI review 2026-10-07 §4): the data the header bar, tool strip, op pill and radial
- * menu show, and how a tool maps onto the engine. Plain functions (testable without a DOM or an engine).
+ * Edit Mesh on the mode chrome (UI review 2026-10-07 §4, reworked to the round-2 tablet feedback 2026-10-08: no header
+ * bar or tool strip — the main toolbar's Select / Pan / Move / Rotate / Scale stay, the mode's own tools are icon
+ * buttons in the right panel): the data the right panel, the op pill and the radial menu show, and how a tool maps
+ * onto the engine. Plain functions (testable without a DOM or an engine).
  *
  * The engine calls of the redesign (salsa docs/reviews/section4-engine-api.md) are newer than the Salsa dist
  * Frogmarks may be building against: every one is feature-detected (MeshChromeCaps) and has a fallback or a disabled
  * control ("Needs the engine update").
  */
 import type { BevelState } from '../illustration/editor-keymap';
-import { MESH_EDIT_KEYS, meshEditKeyLabels } from '../illustration/mode-keymap';
-import type { ModeMenuItem, ModeOpParam, ModeRadialItem, ModeSegment, ModeTool } from '../mode-chrome/mode-chrome.types';
+import { meshEditKeyLabels } from '../illustration/mode-keymap';
+import type { ModeOpParam, ModeRadialItem, ModeSegment } from '../mode-chrome/mode-chrome.types';
 
 export type MeshSelectMode = 'vertex' | 'edge' | 'face';
 export type MeshToolId = 'select' | 'move' | 'rotate' | 'scale' | 'extrude' | 'inset' | 'loopcut' | 'knife' | 'bevel';
@@ -61,7 +63,7 @@ export interface MeshChromeCaps {
   multiLoopCut: boolean;
   /** insetRegion3D's depth (came with the tool strip API). */
   insetDepth: boolean;
-  /** setAdditiveSelect3D (the Multi latch). */
+  /** setAdditiveSelect3D (touch / pen: taps add to the selection). */
   additive: boolean;
 }
 
@@ -96,7 +98,7 @@ export function followClassicSetting<T extends object>(switches: T, key: keyof T
   });
 }
 
-// ── Header bar ──────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Right panel: the selection-type switch and the tools ────────────────────────────────────────────────────────
 
 const KEYS = meshEditKeyLabels();
 
@@ -111,47 +113,78 @@ export const MESH_BG_OPTIONS: ReadonlyArray<{ id: MeshBgMode; label: string }> =
   { id: 'dim', label: 'Dim' }, { id: 'solid', label: 'Solid' }, { id: 'none', label: 'None' },
 ];
 
-/** The ⋯ menu: the background (checked), Open UV editor, Drag moves selection (a newer dist), Keyboard shortcuts. */
-export function meshMenuItems(bg: MeshBgMode, dragMoves: boolean | null): ModeMenuItem[] {
-  const items: ModeMenuItem[] = MESH_BG_OPTIONS.map(o => ({ id: `bg:${o.id}`, label: `Background: ${o.label}`, checked: o.id === bg }));
-  if (dragMoves !== null) items.push({ id: 'drag-moves', label: 'Drag moves selection', checked: dragMoves, separatorBefore: true });
-  items.push({ id: 'uv', label: 'Open UV editor', separatorBefore: dragMoves === null });
-  items.push({ id: 'shortcuts', label: 'Keyboard shortcuts…' });
-  return items;
+/** The tool names (the op pill's title). Select / Move / Rotate / Scale are the main toolbar's. */
+const TOOL_LABELS: Readonly<Record<MeshToolId, string>> = {
+  select: 'Select', move: 'Move', rotate: 'Rotate', scale: 'Scale', extrude: 'Extrude', inset: 'Inset', loopcut: 'Loop Cut',
+  knife: 'Knife', bevel: 'Bevel',
+};
+
+/** One-shot ops on the selection (the panel's verb buttons; the radial menu runs some of them too). */
+export type MeshVerbId = 'delete' | 'dissolve' | 'subdivide' | 'flip' | 'separate' | 'merge' | 'bridge';
+
+/** A right-panel button: a tool (stays on; tapping it again turns it off) or a verb (runs once on the selection). */
+export interface MeshPanelTool {
+  id: MeshToolId | MeshVerbId;
+  kind: 'tool' | 'verb';
+  label: string;
+  /** The tooltip (the buttons are icon-only). */
+  title: string;
+  /** 'svg:<id>' (mode-icons.ts) or a local icon id (MESH_PANEL_ICONS). */
+  icon: string;
+  disabled: boolean;
 }
 
-// ── Tool strip ──────────────────────────────────────────────────────────────────────────────────────────────────
+/** Icons the shared set (mode-icons.ts) does not have: 24 × 24 path lists, stroked. */
+export const MESH_PANEL_ICONS: Readonly<Record<string, readonly string[]>> = {
+  dissolve: ['M4 4h16v16H4z', 'M12 4v16', 'M9 9l6 6M15 9l-6 6'],
+  subdivide: ['M4 4h16v16H4z', 'M12 4v16M4 12h16'],
+  flip: ['M4 20L12 4l8 16z', 'M12 10v5', 'M10 13l2 2 2-2'],
+  separate: ['M3 6h8v12H3z', 'M14 6h7v12h-7z', 'M12 3v18'],
+  bridge: ['M3 6h4v12H3zM17 6h4v12h-4z', 'M7 9h10M7 15h10'],
+};
 
-interface MeshToolDef { id: MeshToolId; label: string; group: string; key: string; how: string }
+const key = (k: string): string => (k ? ` (${k})` : '');
 
-/** The tools; `key` = the keymap's chip (mode-keymap.ts), `how` = how the pointer uses the tool. */
-const TOOL_DEFS: readonly MeshToolDef[] = [
-  { id: 'select', label: 'Select', group: 'xf', key: '', how: `Tap to select (Multi or Shift adds) · ${KEYS.selectAll} all · ${KEYS.deselectAll} none` },
-  { id: 'move', label: 'Move', group: 'xf', key: KEYS.move, how: MESH_EDIT_KEYS.move.help },
-  { id: 'rotate', label: 'Rotate', group: 'xf', key: KEYS.rotate, how: MESH_EDIT_KEYS.rotate.help },
-  { id: 'scale', label: 'Scale', group: 'xf', key: KEYS.scale, how: MESH_EDIT_KEYS.scale.help },
-  { id: 'extrude', label: 'Extrude', group: 'op', key: KEYS.extrude, how: `${MESH_EDIT_KEYS.extrude.help}: set the distance below, then Extrude` },
-  { id: 'inset', label: 'Inset', group: 'op', key: KEYS.inset, how: `${MESH_EDIT_KEYS.inset.help}: set the thickness below, then Inset` },
-  { id: 'loopcut', label: 'Loop Cut', group: 'op', key: KEYS.loopCut, how: MESH_EDIT_KEYS.loopCut.help },
-  { id: 'knife', label: 'Knife', group: 'op', key: KEYS.knife, how: 'Knife: cut across the faces' },
-  { id: 'bevel', label: 'Bevel', group: 'op', key: KEYS.chamfer, how: 'Bevel the selected edges / chamfer the selected corners, then drag' },
-];
-
-/** The pointer hint per tool on this dist (the Knife / Loop Cut work differently on an older one). */
-export function meshToolHint(id: MeshToolId, caps: MeshChromeCaps): string {
-  const def = TOOL_DEFS.find(d => d.id === id)!;
-  if (id === 'knife') return caps.knifePoints ? 'Tap points on the surface, then Cut (Enter)' : 'Drag a line across the mesh to cut';
-  if (id === 'loopcut') return caps.activeTool ? 'Tap an edge to cut a loop across its ring' : `${def.how} (select an edge, then Cut)`;
-  if (id === 'bevel' && !caps.bevel) return NEEDS_ENGINE_UPDATE;
-  if ((id === 'move' || id === 'rotate' || id === 'scale') && caps.dragMoves) return `Drag the selection or the gizmo · ${def.how}`;
-  return def.how;
+/** The panel tools per selection type (Select / Move / Rotate / Scale are the main toolbar's and apply everywhere). */
+const MODE_TOOLS: Readonly<Record<MeshSelectMode, readonly MeshToolId[]>> = {
+  face: ['extrude', 'inset', 'loopcut', 'knife'],
+  edge: ['loopcut', 'bevel', 'knife'],
+  vertex: ['bevel', 'knife'],
+};
+/** The tool is offered in this selection type (switching Vertex / Edge / Face drops a tool that is not). */
+export function meshToolAppliesTo(tool: MeshToolId, mode: MeshSelectMode): boolean {
+  return tool === 'select' || tool === 'move' || tool === 'rotate' || tool === 'scale' || MODE_TOOLS[mode].includes(tool);
 }
 
-export function meshTools(caps: MeshChromeCaps): ModeTool[] {
-  return TOOL_DEFS.map(d => ({
-    id: d.id, label: d.label, icon: `svg:${d.id}`, key: d.key || undefined, group: d.group, hint: meshToolHint(d.id, caps),
-    disabled: d.id === 'bevel' && !caps.bevel,
-  }));
+/**
+ * The right panel's tools for the selection type: only what applies to it. Face: Extrude, Inset, Loop Cut, Knife,
+ * then Delete, Subdivide, Flip, Separate. Edge: Loop Cut, Bevel, Knife, then Dissolve, Bridge. Vertex: Chamfer (the
+ * Bevel tool on corners), Knife, then Merge, Bridge. A verb is greyed out until the selection fits it.
+ */
+export function meshPanelTools(mode: MeshSelectMode, caps: MeshChromeCaps, sel: MeshSelCounts, canBridge: boolean): MeshPanelTool[] {
+  const tool = (id: MeshToolId, title: string, disabled = false): MeshPanelTool =>
+    ({ id, kind: 'tool', label: TOOL_LABELS[id], title, icon: `svg:${id}`, disabled });
+  const verb = (id: MeshVerbId, label: string, title: string, icon: string, disabled: boolean): MeshPanelTool =>
+    ({ id, kind: 'verb', label, title, icon, disabled });
+  const bevel = (label: string): MeshPanelTool => tool('bevel', caps.bevel ? `${label}${key(KEYS.chamfer)}` : NEEDS_ENGINE_UPDATE, !caps.bevel);
+  const loopCut = tool('loopcut', `Loop Cut${key(KEYS.loopCut)}`);
+  const knife = tool('knife', `Knife${key(KEYS.knife)}`);
+  const bridge = verb('bridge', 'Bridge Loops', 'Bridge Loops', 'bridge', !canBridge);
+  if (mode === 'face') {
+    const none = sel.faces === 0;
+    return [
+      tool('extrude', `Extrude${key(KEYS.extrude)}`), tool('inset', `Inset${key(KEYS.inset)}`), loopCut, knife,
+      verb('delete', 'Delete', `Delete${key(KEYS.delete)}`, 'svg:delete', none),
+      verb('subdivide', 'Subdivide', 'Subdivide', 'subdivide', none),
+      verb('flip', 'Flip Normals', 'Flip Normals', 'flip', none),
+      verb('separate', 'Separate', 'Separate', 'separate', none),
+    ];
+  }
+  if (mode === 'edge') {
+    return [loopCut, bevel('Bevel'), knife, verb('dissolve', 'Dissolve', `Dissolve${key(KEYS.delete)}`, 'dissolve', sel.edges === 0), bridge];
+  }
+  const chamfer = bevel('Chamfer');
+  return [{ ...chamfer, label: 'Chamfer' }, knife, verb('merge', 'Merge', 'Merge', 'svg:merge', sel.vertices < 2), bridge];
 }
 
 /** What choosing a tool does to the engine. */
@@ -220,7 +253,6 @@ export interface MeshOpView {
   kind: MeshOpKind;
   title: string;
   params: ModeOpParam[];
-  note?: string;
   showApplyCancel: boolean;
   applyLabel: string;
   cancelLabel: string;
@@ -257,41 +289,13 @@ export function lastOpParams(last: MeshLastOp): ModeOpParam[] {
   return out;
 }
 
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-
-/** "3 faces" / "1 edge" / "No vertices selected". */
-export function selectionLabel(mode: MeshSelectMode, sel: MeshSelCounts): string {
-  const n = mode === 'vertex' ? sel.vertices : mode === 'edge' ? sel.edges : sel.faces;
-  const [one, many] = mode === 'vertex' ? ['vertex', 'vertices'] : mode === 'edge' ? ['edge', 'edges'] : ['face', 'faces'];
-  return n ? `${plural(n, one, many)} selected` : `No ${many} selected`;
-}
-
 const btn = (id: string, label: string, title: string, disabled = false): ModeOpParam => ({ id, label, kind: 'button', value: null, title, disabled });
 
-/** The Select tool's actions: All / None / Invert, then what fits the selection. */
-export function selectActions(mode: MeshSelectMode, sel: MeshSelCounts, canBridge: boolean): ModeOpParam[] {
-  const p: ModeOpParam[] = [
-    btn('sel-all', 'All', `Select all (${KEYS.selectAll})`),
-    btn('sel-none', 'None', `Deselect all (${KEYS.deselectAll})`),
-    btn('sel-invert', 'Invert', 'Select what is not selected'),
-  ];
-  if (mode === 'face' && sel.faces) {
-    p.push(btn('delete', 'Delete', `Delete the selected faces (${KEYS.delete})`));
-    p.push(btn('subdivide', 'Subdivide', 'Split each selected face into quads'));
-    p.push(btn('flip', 'Flip Normals', 'Turn the selected faces inside out'));
-    p.push(btn('separate', 'Separate', 'Split the selected faces off the rest'));
-  }
-  if (mode === 'edge' && sel.edges) {
-    p.push(btn('delete', 'Dissolve', `Remove the selected edges and merge their faces (${KEYS.delete})`));
-  }
-  if (mode === 'vertex' && sel.vertices >= 2) p.push(btn('merge', 'Merge', 'Merge the selected vertices into one'));
-  if (canBridge) p.push(btn('bridge', 'Bridge Loops', 'Join two open loops with a ring of faces'));
-  return p;
-}
-
-const toolTitle = (t: MeshToolId): string => TOOL_DEFS.find(d => d.id === t)?.label ?? t;
-
-/** The op pill for the current state: a running transform / Chamfer first, then "adjust last", then the tool's own. */
+/**
+ * The op pill for the current state (round-2 feedback: no hint text; the name is enough): a running transform /
+ * Chamfer first, then "adjust last", then the active panel tool's parameters + Apply. Select / Move / Rotate / Scale
+ * (the main toolbar's tools) have no parameters: the pill then shows only its Frame button (title '').
+ */
 export function buildMeshOp(i: MeshOpInput): MeshOpView {
   const view = (kind: MeshOpKind, title: string, params: ModeOpParam[], o: Partial<MeshOpView> = {}): MeshOpView =>
     ({ kind, title, params, showApplyCancel: false, applyLabel: 'Apply', cancelLabel: 'Cancel', applyDisabled: false, ...o });
@@ -304,66 +308,50 @@ export function buildMeshOp(i: MeshOpInput): MeshOpView {
       { id: 'axis', label: 'Axis', kind: 'axis', value: t.axis, title: 'Constrain to an axis (X / Y / Z)' },
       { id: 'amount', label: 'Amount', kind: 'number', value: Number.isFinite(v) ? v : 0, step: t.mode === 'rotate' ? 1 : 0.01,
         unit: XF_UNIT[t.mode] || undefined, disabled: !t.axis, title: t.axis ? 'Type the amount' : 'Pick an axis first' },
-    ], { showApplyCancel: true, note: t.axis ? undefined : 'Move the pointer, or pick an axis and type' });
+    ], { showApplyCancel: true });
   }
 
   if (i.bevel) {
     const b = i.bevel;
     const name = b.kind === 'vertex' ? 'Chamfer' : 'Bevel';
-    if (b.phase === 'pick') return view('bevel', name, [], { note: b.hint, showApplyCancel: true, applyDisabled: true });
+    if (b.phase === 'pick') return view('bevel', name, [], { showApplyCancel: true, applyDisabled: true });
     return view('bevel', name, [
       { id: 'amount', label: 'Amount', kind: 'number', value: b.amount, min: 0, max: b.maxAmount || undefined, step: 0.01 },
       { id: 'segments', label: 'Segments', kind: 'int', value: b.segments, min: 1, max: 32 },
       { id: 'snap', label: 'Snap', kind: 'toggle', value: b.snap, title: 'Round the amount to grid steps (Ctrl while dragging)' },
-    ], { showApplyCancel: true, applyDisabled: b.amount <= 0, note: `${b.targets} ${b.kind === 'edge' ? 'edge(s)' : 'corner(s)'} · drag on the canvas` });
+    ], { showApplyCancel: true, applyDisabled: b.amount <= 0 });
   }
 
   if (i.lastOp) {
     const label = LAST_OP_LABELS[i.lastOp.op] ?? i.lastOp.op;
-    return view('adjust', `Adjust last: ${label}`, lastOpParams(i.lastOp),
-      { showApplyCancel: true, applyLabel: 'Done', cancelLabel: 'Undo' });
+    return view('adjust', `Adjust last: ${label}`, lastOpParams(i.lastOp), { showApplyCancel: true });
   }
 
   switch (i.tool) {
-    case 'select':
-      return view('select', 'Select', selectActions(i.mode, sel, i.canBridge), { note: selectionLabel(i.mode, sel) });
-    case 'move': case 'rotate': case 'scale': {
-      const any = sel.vertices + sel.edges + sel.faces > 0;
-      const k = KEYS[i.tool];
-      return view(i.tool, toolTitle(i.tool), [btn('start', `Start (${k})`, `${toolTitle(i.tool)} by a typed amount (${k})`, !any)],
-        { note: any ? (caps.dragMoves || caps.gizmo ? 'Drag the selection or the gizmo' : 'Start, then move the pointer') : 'Select something first' });
-    }
+    case 'select': case 'move': case 'rotate': case 'scale':
+      return view(i.tool, '', []);
     case 'extrude':
       return view('extrude', 'Extrude', [{ id: 'distance', label: 'Distance', kind: 'number', value: tp.extrudeDistance, step: 0.01, min: -100, max: 100 }],
-        { showApplyCancel: true, applyLabel: 'Extrude', cancelLabel: 'Close', applyDisabled: !sel.faces,
-          note: sel.faces ? plural(sel.faces, 'face', 'faces') : 'Select faces first' });
+        { showApplyCancel: true, applyLabel: 'Extrude', applyDisabled: !sel.faces });
     case 'inset':
       return view('inset', 'Inset', [
         { id: 'amount', label: 'Thickness', kind: 'number', value: tp.insetAmount, step: 0.01, min: 0, max: 100 },
         { id: 'depth', label: 'Depth', kind: 'number', value: tp.insetDepth, step: 0.01, min: -100, max: 100,
           disabled: !caps.insetDepth, title: caps.insetDepth ? 'Move the inner faces in / out' : NEEDS_ENGINE_UPDATE },
-      ], { showApplyCancel: true, applyLabel: 'Inset', cancelLabel: 'Close', applyDisabled: !sel.faces,
-        note: sel.faces ? plural(sel.faces, 'face', 'faces') : 'Select faces first' });
+      ], { showApplyCancel: true, applyLabel: 'Inset', applyDisabled: !sel.faces });
     case 'loopcut':
       return view('loopcut', 'Loop Cut', [
         { id: 'count', label: 'Cuts', kind: 'int', value: tp.loopCutCount, min: 1, max: 64,
           disabled: !caps.multiLoopCut, title: caps.multiLoopCut ? 'Parallel cuts' : NEEDS_ENGINE_UPDATE },
         { id: 'position', label: 'Position', kind: 'number', value: tp.loopCutPosition, step: 0.05, min: 0, max: 1,
           title: '0–1 along the edge (0.5 = the middle)' },
-      ], { showApplyCancel: true, applyLabel: 'Cut', cancelLabel: 'Close', applyDisabled: !sel.edges,
-        note: caps.activeTool ? (sel.edges ? 'Tap an edge, or Cut through the selected one' : 'Tap an edge to cut') : (sel.edges ? undefined : 'Select an edge first') });
+      ], { showApplyCancel: true, applyLabel: 'Cut', applyDisabled: !sel.edges });
     case 'knife':
-      if (caps.knifePoints) {
-        return view('knife', 'Knife', [], {
-          showApplyCancel: true, applyLabel: 'Cut', cancelLabel: i.knifePoints ? 'Clear' : 'Close', applyDisabled: i.knifePoints < 2,
-          note: i.knifePoints ? `${plural(i.knifePoints, 'point', 'points')} · tap to add more` : 'Tap points on the surface',
-        });
-      }
-      return view('knife', 'Knife', [], { showApplyCancel: true, applyLabel: 'Cut', cancelLabel: 'Close', applyDisabled: true,
-        note: 'Drag a line across the mesh: it cuts on release' });
+      return view('knife', 'Knife', [], {
+        showApplyCancel: true, applyLabel: 'Cut', applyDisabled: !caps.knifePoints || i.knifePoints < 2,
+      });
     case 'bevel':
-      return view('bevel', 'Bevel', caps.bevel ? [btn('start', `Start (${KEYS.chamfer})`, 'Bevel the selected edges / chamfer the selected corners, or tap one')] : [],
-        { note: caps.bevel ? 'Select edges or corners, then Start (or Start and tap one)' : NEEDS_ENGINE_UPDATE });
+      return view('bevel', 'Bevel', caps.bevel ? [btn('start', `Start (${KEYS.chamfer})`, 'Bevel the selected edges / chamfer the selected corners, or tap one')] : []);
   }
 }
 

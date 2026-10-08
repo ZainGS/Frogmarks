@@ -1,15 +1,15 @@
 import type ShapeManager from '@zaings/salsa/shape-manager';
-import type { ModeMenuItem, ModeOpParam, ModeRadialItem, ModeSegment, ModeTool } from '../mode-chrome/mode-chrome.types';
+import type { ModeOpParam, ModeRadialItem, ModeSegment } from '../mode-chrome/mode-chrome.types';
 import { armatureKeyLabels } from '../illustration/mode-keymap';
 import { armApi, NEEDS_ENGINE, type ArmEngineTool } from '../armature-panel/arm-engine';
-import { ARMATURE_BG_MODES, type ArmatureBgMode } from '../armature-panel/arm-session';
 import type { ArmRigService } from '../armature-panel/arm-rig.service';
 import type { ArmBindingService } from '../armature-panel/arm-binding.service';
 
 /**
- * The Armature mode chrome's data and decisions (UI review 2026-10-07 §4), kept out of the component so the specs can
- * drive them: the Rig / Animate workspaces and their tools, which engine calls each tool makes, the operation pill's
- * params per tool, the long-press radial, the header's ⋯ menu, the remembered workspace and the timeline restore.
+ * The Armature mode's data and decisions (UI review 2026-10-07 §4, reworked to the round-2 feedback 2026-10-08), kept
+ * out of the component so the specs can drive them: the Rig / Animate workspaces, the base tools (the MAIN toolbar's
+ * Select / Move / Rotate) and the mode tools (icon buttons in the right panel), which engine calls each tool makes, the
+ * operation pill's params per tool, the long-press radial, the remembered workspace and the timeline restore.
  */
 
 export type ArmWorkspace = 'rig' | 'animate';
@@ -23,42 +23,57 @@ export const ARM_WORKSPACES: ModeSegment[] = [
   { id: 'animate', label: 'Animate', title: 'Animate: poses, clips, NLA, libraries, retarget (shows the timeline)' },
 ];
 
-/** The header's selection-mode segments (Rig). Each picks its tool: Pose = Rotate, Edit Bones = Move, Weight = Weight
- *  Brush; the segment follows the tool you pick on the strip. */
+/** The selection-type switch at the top of the right panel (Rig). Each picks its tool: Pose = Rotate, Edit Bones =
+ *  Move, Weight = Weight Brush; the switch follows the tool picked on the main toolbar / the panel's tool buttons. */
 export const ARM_SEGMENTS: ModeSegment[] = [
   { id: 'pose', label: 'Pose', key: KEYS.pose, title: 'Pose: rotate joints (FK)' },
   { id: 'edit', label: 'Edit Bones', key: KEYS.editBones, title: 'Edit Bones: move joints, add bones' },
   { id: 'weight', label: 'Weight', key: KEYS.weightMode, title: 'Weight: paint how strongly each joint moves the mesh' },
 ];
 
-const T = (id: ArmToolId, label: string, icon: string, key: string, hint: string, group: string): ModeTool => ({ id, label, icon, key, hint, group });
+/** The tools the editor's MAIN toolbar drives while in Armature (its Select / Move / Rotate; mode-chrome/
+ *  mode-toolbar-scope.ts MODE_RAIL_TOOLS.armature keeps them, + Pan, inside the mode). */
+export type ArmBaseTool = 'select' | 'move' | 'rotate';
+export const ARM_BASE_TOOLS: readonly ArmBaseTool[] = ['select', 'move', 'rotate'];
+export function isArmBaseTool(t: string): t is ArmBaseTool { return (ARM_BASE_TOOLS as readonly string[]).includes(t); }
 
-/** The Rig workspace's tool strip (key chips generated from ARMATURE_KEYS). */
-export const RIG_TOOLS: ModeTool[] = [
-  T('select', 'Select', 'svg:select', KEYS.select, 'Tap a joint to select it · Multi (or Shift) adds more', 'pick'),
-  T('rotate', 'Rotate', 'svg:rotate', KEYS.rotate, 'Drag the ring to rotate the joint · or type an angle below', 'xf'),
-  T('move', 'Move', 'svg:move', KEYS.move, 'Drag a joint to move the bone itself · or type an amount below', 'xf'),
-  T('addbone', 'Add Bone', 'svg:addBone', KEYS.addBone, 'Tap the mesh to place the next bone · or add a child below', 'build'),
-  T('ik', 'IK', 'svg:ik', KEYS.ik, 'Tap the end joint of a limb, then set its chain below', 'build'),
-  T('weight', 'Weight Brush', 'svg:brush', KEYS.weight, 'Paint on the mesh · blue = none, red = full', 'paint'),
-];
-
-/** The Animate workspace's tool strip: posing + Key. */
-export const ANIM_TOOLS: ModeTool[] = [
-  T('select', 'Select', 'svg:select', KEYS.select, 'Tap a joint to select it', 'pick'),
-  T('rotate', 'Rotate', 'svg:rotate', KEYS.rotate, 'Drag the ring to pose the joint', 'xf'),
-  T('move', 'Move', 'svg:move', KEYS.move, 'Drag a joint to move it (moves the bone itself)', 'xf'),
-  T('key', 'Key', '◆', KEYS.key, 'Pose the joints, then Key the pose into the clip below', 'key'),
-];
-
-export function toolsFor(ws: ArmWorkspace): ModeTool[] { return ws === 'animate' ? ANIM_TOOLS : RIG_TOOLS; }
-
-/** The tool a workspace switch keeps (it must exist in the new strip; else Rotate). */
-export function toolForWorkspace(ws: ArmWorkspace, tool: ArmToolId): ArmToolId {
-  return toolsFor(ws).some(t => t.id === tool) ? tool : 'rotate';
+/** A mode tool: an icon-only button in the right panel (styled like the main toolbar's), tooltip = label + key. */
+export interface ArmModeTool {
+  id: ArmToolId;
+  label: string;
+  key: string;
+  /** SVG path `d` strings on a 24 x 24 grid (stroked like the main toolbar's icons). */
+  paths: readonly string[];
 }
 
-/** The header segment a tool shows (Select / Key keep the last one). */
+const ICON: Readonly<Record<'addbone' | 'ik' | 'weight' | 'key', readonly string[]>> = {
+  addbone: ['M5 19L15 9', 'M15 9a2.5 2.5 0 1 0 0-.01', 'M18 16v6M15 19h6'],
+  ik: ['M4 20l6-8 6 2 4-10', 'M4 20h.01M10 12h.01M16 14h.01M20 4h.01'],
+  weight: ['M14 4l6 6-8 8H6v-6z', 'M4 20c1-2 2-3 4-3'],
+  key: ['M12 3l9 9-9 9-9-9z'],
+};
+
+/** Rig's mode tools (keys from ARMATURE_KEYS). */
+export const RIG_MODE_TOOLS: ArmModeTool[] = [
+  { id: 'addbone', label: 'Add Bone', key: KEYS.addBone, paths: ICON.addbone },
+  { id: 'ik', label: 'IK', key: KEYS.ik, paths: ICON.ik },
+  { id: 'weight', label: 'Weight Brush', key: KEYS.weight, paths: ICON.weight },
+];
+
+/** Animate's mode tool: Key. */
+export const ANIM_MODE_TOOLS: ArmModeTool[] = [
+  { id: 'key', label: 'Key', key: KEYS.key, paths: ICON.key },
+];
+
+export function modeToolsFor(ws: ArmWorkspace): ArmModeTool[] { return ws === 'animate' ? ANIM_MODE_TOOLS : RIG_MODE_TOOLS; }
+
+/** The tool a workspace switch keeps: a base tool always, a mode tool only when the new workspace has it (else the
+ *  base tool). */
+export function toolForWorkspace(ws: ArmWorkspace, tool: ArmToolId, base: ArmBaseTool = 'rotate'): ArmToolId {
+  return isArmBaseTool(tool) || modeToolsFor(ws).some(t => t.id === tool) ? tool : base;
+}
+
+/** The switch segment a tool shows (Select / Key keep the last one). */
 export function segmentForTool(tool: ArmToolId, last: ArmSegmentId): ArmSegmentId {
   if (tool === 'rotate' || tool === 'ik') return 'pose';
   if (tool === 'move' || tool === 'addbone') return 'edit';
@@ -70,7 +85,7 @@ export function toolForSegment(seg: ArmSegmentId): ArmToolId {
   return seg === 'edit' ? 'move' : seg === 'weight' ? 'weight' : 'rotate';
 }
 
-/** The engine tool behind a strip tool (Key selects, like Select). */
+/** The engine tool behind a tool (Key selects, like Select). */
 export function engineTool(tool: ArmToolId): ArmEngineTool { return tool === 'key' ? 'select' : tool; }
 
 // ── Tool switch → engine ────────────────────────────────────────────────────────────────────────────────────
@@ -86,7 +101,7 @@ export const WEIGHT_NEEDS_BIND = 'Weight Brush needs a mesh bound to this skelet
 export const NEEDS_SKELETON = 'Create or pick a skeleton first';
 
 /**
- * Switch the strip's tool from `from` to `to` and make the engine calls for it. A newer Salsa takes the tool itself
+ * Switch the Armature tool from `from` to `to` and make the engine calls for it. A newer Salsa takes the tool itself
  * (setArmatureActiveTool3D: Select hides the gizmo, Add Bone keeps placing, IK taps select, Weight enters weight
  * paint). The old dist gets what it can: Rotate / Move = setArmatureToolMode3D, Add Bone = one bone placement, Weight =
  * the panel's weight paint, Select / IK / Key = the Rotate gizmo (taps still select). `ok: false` = the tool could not
@@ -164,8 +179,10 @@ export interface ArmOpPill {
   params: ModeOpParam[];
   showApplyCancel: boolean;
   applyLabel?: string;
-  note?: string;
 }
+
+/** The pill with nothing to set (the Select tool): only its Frame button shows. */
+export const ARM_EMPTY_PILL: ArmOpPill = { title: '', params: [], showApplyCancel: false };
 
 const AXES = [{ id: 'x', label: 'X' }, { id: 'y', label: 'Y' }, { id: 'z', label: 'Z' }];
 
@@ -176,12 +193,13 @@ function jointOptions(s: ArmOpState, none: string | null, exclude: number | null
 }
 
 /**
- * The pill for the active tool (null = none: the Select tool). Rotate / Move: axis chips + a typed amount, Apply /
- * Cancel. Add Bone: the new bone's name + "Add child to <joint>" + tap-to-place. IK: on / off, chain length, pole
- * joint (dropdown or a one-shot tap). Weight Brush: target joint (dropdown or tap), Add / Remove / Set, radius,
- * strength (+ the Set weight). Key: the clip, the frame and Key pose. A pending Rename takes the pill over.
+ * The pill for the active tool (always shown in Armature: it carries the Frame button). Select: nothing else
+ * (ARM_EMPTY_PILL). Rotate / Move: axis chips + a typed amount, Apply. Add Bone: the new bone's name + "Add child to
+ * <joint>" + tap-to-place. IK: on / off, chain length, pole joint (dropdown or a one-shot tap). Weight Brush: target
+ * joint (dropdown or tap), Add / Remove / Set, radius, strength (+ the Set weight). Key: the clip, the frame and Key
+ * pose. A pending Rename takes the pill over. No notes (round-2 feedback: the pill's name is enough).
  */
-export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null {
+export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill {
   const sel = s.selectedIdx !== null ? s.joints[s.selectedIdx]?.name ?? null : null;
   if (s.renameIdx !== null && s.joints[s.renameIdx]) {
     return {
@@ -196,7 +214,6 @@ export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null
       const rot = tool === 'rotate';
       return {
         title: rot ? 'Rotate' : 'Move', showApplyCancel: true,
-        note: many ? `${many} · local axes` : 'Select a joint first',
         params: [
           { id: 'axis', label: 'Axis', kind: 'axis', value: s.axis, options: AXES, disabled: !many },
           rot
@@ -208,7 +225,6 @@ export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null
     case 'addbone':
       return {
         title: 'Add Bone', showApplyCancel: false,
-        note: !s.hasSkeleton ? NEEDS_SKELETON : s.placing ? 'Tap the mesh to place the bone' : undefined,
         params: [
           { id: 'newBoneName', label: 'Name', kind: 'text', value: s.newBoneName, disabled: !s.hasSkeleton, title: 'The new bone\'s name (empty: joint_N)' },
           { id: 'addChild', label: sel ? `Add child to ${sel}` : 'Add root bone', kind: 'button', value: null, disabled: !s.hasSkeleton },
@@ -220,7 +236,6 @@ export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null
       const poleTitle = !s.hasPoleApi ? NEEDS_ENGINE : 'The joint the bend points at';
       return {
         title: 'IK', showApplyCancel: false,
-        note: !sel ? 'Tap the end joint of a limb' : s.ik.intermediate ? `${sel} is inside a chain: pick its end joint` : `${sel} · not an undo step`,
         params: [
           { id: 'ikEnabled', label: 'IK on', kind: 'toggle', value: s.ik.exists && s.ik.enabled, disabled: !can },
           { id: 'ikChainLength', label: 'Chain', kind: 'int', value: s.ik.chainLength, min: 2, max: 64, step: 1, unit: ' bones', disabled: !can },
@@ -243,17 +258,12 @@ export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null
         { id: 'wpStrength', label: 'Strength', kind: 'number', value: w.strength, min: 0, max: 1, step: 0.01 },
       ];
       if (w.mode === 'set') params.push({ id: 'wpWeight', label: 'Weight', kind: 'number', value: w.weight, min: 0, max: 1, step: 0.01 });
-      return {
-        title: 'Weight Brush', showApplyCancel: false,
-        note: w.active ? 'Paint on the mesh' : WEIGHT_NEEDS_BIND,
-        params,
-      };
+      return { title: 'Weight Brush', showApplyCancel: false, params };
     }
     case 'key': {
       const clip = s.clipIdx !== null ? s.clips[s.clipIdx] ?? null : null;
       return {
         title: 'Key', showApplyCancel: false,
-        note: !s.clips.length ? 'Create a clip first (Clips, below)' : 'Keys the whole pose at the frame',
         params: [
           { id: 'keyClip', label: 'Clip', kind: 'select', value: clip ? String(s.clipIdx) : '',
             options: [...(clip ? [] : [{ id: '', label: 'Pick a clip…' }]), ...s.clips.map((c, i) => ({ id: String(i), label: c.name }))],
@@ -264,7 +274,7 @@ export function buildArmOpPill(tool: ArmToolId, s: ArmOpState): ArmOpPill | null
       };
     }
     default:
-      return null;
+      return ARM_EMPTY_PILL;
   }
 }
 
@@ -288,16 +298,6 @@ export function armRadialItems(s: ArmRadialState): ModeRadialItem[] {
     { id: 'frame', label: 'Frame', icon: '⌖' },
     { id: 'delete', label: 'Delete', icon: 'svg:delete', danger: true },
   ];
-}
-
-// ── Header ⋯ menu ──────────────────────────────────────────────────────────────────────────────────────────
-
-export function armMenuItems(s: { bgMode: ArmatureBgMode; devTools: boolean }): ModeMenuItem[] {
-  const items: ModeMenuItem[] = ARMATURE_BG_MODES.map(b => ({ id: 'bg:' + b.id, label: 'Background: ' + b.label, checked: s.bgMode === b.id }));
-  items.push({ id: 'refresh', label: 'Refresh the lists', separatorBefore: true });
-  items.push({ id: 'shortcuts', label: 'Keyboard shortcuts…' });
-  if (s.devTools) items.push({ id: 'copyForClaude', label: 'Copy pose + body for Claude', separatorBefore: true });
-  return items;
 }
 
 // ── Classic fallback ────────────────────────────────────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ function safeLocalStorage(): Storage | null {
 // ── Timeline while in Animate ───────────────────────────────────────────────────────────────────────────────
 
 /**
- * Animate shows the editor's animation timeline (animationEnabled); leaving Animate (Rig, Done, any close) puts it
+ * Animate shows the editor's animation timeline (animationEnabled); leaving Animate (Rig, leaving Armature) puts it
  * back the way the user had it. enter() remembers the state once (re-entering keeps the first remembered value).
  */
 export class ArmTimelineGuard {

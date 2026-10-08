@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PlayTouchControlsComponent } from './play-touch-controls.component';
 
 /** Play on touch (UI review 2026-10-07 §3 #21): Stop is a ≥ 44 px button on its own, away from Sneak / Run; Sneak /
- *  Run are ≥ 44 px; the hint fades (CSS animation). */
+ *  Run keep their 54 × 40 size; the hint fades (CSS animation). */
 describe('PlayTouchControlsComponent layout', () => {
   function create() {
     const sm = {
@@ -32,11 +32,11 @@ describe('PlayTouchControlsComponent layout', () => {
     fixture.destroy();
   });
 
-  it('Sneak / Run are at least 44 px tall; the hint fades out', () => {
+  it('Sneak / Run are 40 px tall; the hint fades out', () => {
     const { el, fixture } = create();
     const small = Array.from(el.querySelectorAll<HTMLElement>('.ptc-btn-sm'));
     expect(small.map(b => b.textContent?.trim())).toEqual(['Sneak', 'Run']);
-    for (const b of small) expect(b.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    for (const b of small) expect(b.getBoundingClientRect().height).toBeGreaterThanOrEqual(40);
     const hint = el.querySelector<HTMLElement>('.ptc-hint')!;
     expect(getComputedStyle(hint).animationName).toContain('ptc-hint-fade');
     fixture.destroy();

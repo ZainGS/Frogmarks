@@ -43,8 +43,3 @@
     border-color: var(--rc-danger-hi, #c0392b);
     color: #ffdada;
 }
-
-@media (pointer: coarse) {
-    .fm-confirm { font-size: 13px; }
-    .fm-confirm-btn { min-height: 44px; }
-}

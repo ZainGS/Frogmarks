@@ -50,7 +50,3 @@
 
     &:hover, &.scene3d-slot-remove-asking { color: #f77; border-color: #844; }
 }
-
-@media (pointer: coarse) {
-    .scene3d-slot-remove { min-width: 44px; min-height: 44px; font-size: 15px; }
-}

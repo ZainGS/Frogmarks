@@ -380,7 +380,7 @@
                   (click)="toggleModifier(mod)" [title]="mod.enabled ? 'Disable' : 'Enable'">
             {{ mod.enabled ? '●' : '○' }}
           </button>
-          <button class="me-mod-apply" (click)="applyModifier(mod)" title="Bake into geometry (destructive)">Apply</button>
+          <button class="me-mod-apply" (click)="applyModifier(mod)" title="Bake into geometry (destructive)">Bake</button>
           <button class="me-mod-remove" (click)="removeModifier(mod)" title="Remove">✕</button>
         </div>
         <div *ngIf="modifiers.length === 0" class="me-hint">No modifiers</div>

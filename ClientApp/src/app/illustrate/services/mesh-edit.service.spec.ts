@@ -241,4 +241,75 @@ describe('MeshEditService tools (mode chrome)', () => {
     svc.invertSelection();
     expect([...sel.faces].sort()).toEqual([0, 1, 2]);
   });
+
+  // ── Round-2 feedback (2026-10-08) ──
+
+  it('the main toolbar shows the tool: Move / Rotate / Scale light their rail button, the panel tools none', () => {
+    const { svc, host } = setup({ newer: true });
+    host.scene3dGizmoMode = 'move';
+    svc.setTool('rotate');
+    expect(host.scene3dGizmoMode).toBe('rotate');
+    svc.setTool('extrude');
+    expect(host.scene3dGizmoMode).toBeNull();
+    svc.setTool('select');
+    expect(host.scene3dGizmoMode).toBeNull();
+  });
+
+  it('a selection-type switch drops a panel tool the new type does not offer', () => {
+    const { svc, sm } = setup({ newer: true });
+    sm.setMeshEditSelectionMode = () => undefined;
+    svc.setTool('extrude');
+    svc.setSelectionMode('edge');
+    expect(svc.tool).toBe('select');
+    svc.setTool('loopcut');
+    svc.setSelectionMode('face');
+    expect(svc.tool).toBe('loopcut');
+  });
+
+  it('the panel verbs run on the selection; nothing fitting: false', () => {
+    const { svc, sm, sel } = setup();
+    sm.subdivideFace3D = jasmine.createSpy('subdivideFace3D');
+    expect(svc.runVerb('subdivide')).toBeTrue();
+    expect(sm.subdivideFace3D).toHaveBeenCalled();
+    sel.faces.clear();
+    expect(svc.runVerb('flip')).toBeFalse();
+    expect(svc.runVerb('merge')).toBeFalse();
+  });
+
+  it('undo in Edit Mesh stops at the step it was entered on; redo only re-does what was undone in it', () => {
+    const { svc, sm } = setup();
+    const before = { description: 'Add mesh' }, op = { description: 'Extrude' };
+    const stack: object[] = [before];
+    let undone: object[] = [];
+    sm.scene3d = { peekUndoCommand3D: () => stack[stack.length - 1] ?? null };
+    Object.defineProperty(sm, 'canUndo3D', { get: () => stack.length > 0 });
+    Object.defineProperty(sm, 'canRedo3D', { get: () => undone.length > 0 });
+    sm.enterMeshEditMode3D = () => undefined;
+    sm.setMeshEditSelectionMode = () => undefined;
+    sm.attachMeshEditPointerHandlers = () => undefined;
+    svc.editMesh('m1');
+    // nothing done in Edit Mesh yet: the step below (the cube's Add) is not undone; a redo from before is not re-done
+    expect(svc.takeUndoStep(false)).toBeFalse();
+    undone = [{ description: 'older' }];
+    expect(svc.takeUndoStep(true)).toBeFalse();
+    undone = [];
+    stack.push(op);
+    expect(svc.takeUndoStep(false)).toBeTrue();   // the Extrude
+    stack.pop(); undone.push(op);
+    expect(svc.takeUndoStep(false)).toBeFalse();  // back at the floor
+    expect(svc.takeUndoStep(true)).toBeTrue();    // the Extrude again
+    stack.push(undone.pop()!);
+    expect(svc.takeUndoStep(true)).toBeFalse();
+  });
+
+  it('leave(): the focus background goes and Edit Mesh exits', () => {
+    const { svc, sm } = setup();
+    sm.setMeshEditBgMode3D = jasmine.createSpy('setMeshEditBgMode3D');
+    sm.detachMeshEditPointerHandlers = jasmine.createSpy('detach');
+    sm.exitMeshEditMode3D = jasmine.createSpy('exitMeshEditMode3D');
+    svc.leave();
+    expect(sm.setMeshEditBgMode3D).toHaveBeenCalledOnceWith({ mode: 'none' });
+    expect(sm.exitMeshEditMode3D).toHaveBeenCalledTimes(1);
+    expect(svc.scene3dIsEditingMesh).toBeFalse();
+  });
 });

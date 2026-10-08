@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { MeshEditChromeComponent } from './mesh-edit-chrome.component';
 
-/** The Edit Mesh chrome's handlers (UI review 2026-10-07 §4): the long-press radial, the pill's actions, adjust last. */
+/** The Edit Mesh chrome's handlers (UI review 2026-10-07 §4, round-2 feedback): the long-press radial, the pill, adjust last,
+ *  the touch multi-select latch. */
 describe('MeshEditChromeComponent', () => {
-  function setup(o: { pick?: { kind: 'vertex' | 'edge' | 'face'; index: number; selected: boolean } | null; lastOp?: boolean } = {}) {
+  function setup(o: { pick?: { kind: 'vertex' | 'edge' | 'face'; index: number; selected: boolean } | null; lastOp?: boolean; coarse?: boolean } = {}) {
     const sel = { vertices: [] as number[], edges: [] as number[], faces: [] as number[] };
     const sm: any = {
       isShortcutActive3D: false,
@@ -15,6 +16,7 @@ describe('MeshEditChromeComponent', () => {
       setMeshEditBgMode3D: jasmine.createSpy('setMeshEditBgMode3D'),
       subdivideFace3D: jasmine.createSpy('subdivideFace3D'),
       clearEditSelection3D: jasmine.createSpy('clearEditSelection3D'),
+      setMeshEditSelectionMode: () => undefined,
     };
     if (o.pick !== undefined) sm.pickMeshEditElementAt3D = jasmine.createSpy('pick').and.returnValue(o.pick);
     let last: { op: string; params: Record<string, number> } | null = o.lastOp ? { op: 'extrudeRegion', params: { distance: 0.3 } } : null;
@@ -31,6 +33,7 @@ describe('MeshEditChromeComponent', () => {
       runExtrude: jasmine.createSpy('runExtrude').and.returnValue(true),
       runInset: jasmine.createSpy('runInset').and.returnValue(true),
       deleteSelectedElements: jasmine.createSpy('deleteSelectedElements'),
+      runVerb: jasmine.createSpy('runVerb').and.returnValue(true),
       loopCutSelectedEdge: jasmine.createSpy('loopCutSelectedEdge').and.returnValue(true),
       deselectAll: jasmine.createSpy('deselectAll'),
       toggleSelectAll: jasmine.createSpy('toggleSelectAll'),
@@ -40,8 +43,7 @@ describe('MeshEditChromeComponent', () => {
     };
     const ed: any = {
       shapeManager: sm, meshEdit, editorState: { scene3dSelectedMeshId: 'm1', scene3dSelectedMeshName: 'Box' },
-      touchUi: { coarse: true }, uv: { openUVEditor: jasmine.createSpy('openUVEditor') }, showShortcutCheatsheet: false,
-      editUndo: jasmine.createSpy('editUndo'), editRedo: jasmine.createSpy('editRedo'),
+      touchUi: { coarse: o.coarse ?? true }, uv: { openUVEditor: jasmine.createSpy('openUVEditor') },
       scene3dUndo: jasmine.createSpy('scene3dUndo'), scene3dMarkDirty: () => undefined, _updateGizmoPosition: () => undefined,
       canvasRef: null,
     };
@@ -87,17 +89,9 @@ describe('MeshEditChromeComponent', () => {
     expect(meshEdit.setTool).toHaveBeenCalledWith('extrude');
     expect(meshEdit.runExtrude).toHaveBeenCalledTimes(1);
     c.runRadial('delete');
-    expect(meshEdit.deleteSelectedElements).toHaveBeenCalledTimes(1);
+    expect(meshEdit.runVerb).toHaveBeenCalledOnceWith('delete');
     c.runRadial('loopcut');
     expect(meshEdit.loopCutSelectedEdge).toHaveBeenCalledTimes(1);
-  });
-
-  it('the Select pill: All = everything (even when some is selected), None, Invert', () => {
-    const { c, meshEdit } = setup();
-    c.opAction('sel-all');
-    expect(meshEdit.deselectAll).toHaveBeenCalledBefore(meshEdit.toggleSelectAll);
-    c.opAction('sel-invert');
-    expect(meshEdit.invertSelection).toHaveBeenCalledTimes(1);
   });
 
   it('Extrude tool: the distance edits the next run; Apply runs it', () => {
@@ -114,7 +108,7 @@ describe('MeshEditChromeComponent', () => {
     expect(meshEdit.setTool).toHaveBeenCalledWith('select');
   });
 
-  it('adjust last: a scrub re-runs the op once per frame (and sets the tool amount); Done hides it; Undo reverts', async () => {
+  it('adjust last: a scrub re-runs the op once per frame (and sets the tool amount); Apply hides it; Esc (cancel) reverts', async () => {
     const { c, sm, meshEdit, ed } = setup({ lastOp: true });
     expect(c.op!.kind).toBe('adjust');
     c.setOpParam({ id: 'distance', value: 0.5 });
@@ -123,8 +117,9 @@ describe('MeshEditChromeComponent', () => {
     await new Promise(r => requestAnimationFrame(() => r(null)));
     expect(sm.redoMeshEditLastOp3D).toHaveBeenCalledOnceWith({ distance: 0.6 });
     expect(c.op!.params[0].value).toBe(0.6);
-    c.applyOp();   // Done
+    c.applyOp();   // Apply
     expect(c.op!.kind).toBe('select');
+    expect(c.op!.title).toBe('');   // just Frame
     const u = setup({ lastOp: true });
     expect(u.c.op!.kind).toBe('adjust');
     u.c.cancelOp();
@@ -132,22 +127,34 @@ describe('MeshEditChromeComponent', () => {
     expect(ed.scene3dUndo).not.toHaveBeenCalled();
   });
 
-  it('header: Frame frames the mesh with nothing selected; Done clears the background and leaves', () => {
-    const { c, sm, meshEdit } = setup();
-    c.frame();
-    expect(sm.frameMesh3D).toHaveBeenCalledOnceWith('m1', 1.4);
-    c.done();
-    expect(sm.setMeshEditBgMode3D).toHaveBeenCalledOnceWith({ mode: 'none' });
-    expect(meshEdit.exitMeshEditMode).toHaveBeenCalledTimes(1);
+  it('another tool (the panel, the rail, a key) hides adjust last: the new tool\'s own pill', () => {
+    const { c, meshEdit } = setup({ lastOp: true });
+    expect(c.op!.kind).toBe('adjust');
+    meshEdit.tool = 'inset';
+    expect(c.op!.kind).toBe('inset');
   });
 
-  it('⋯ menu: background, UV editor, shortcuts', () => {
-    const { c, meshEdit, ed } = setup();
-    c.runMenu('bg:wavy');
-    expect(meshEdit.setBgMode).toHaveBeenCalledOnceWith('wavy');
-    c.runMenu('uv');
-    expect(ed.uv.openUVEditor).toHaveBeenCalledTimes(1);
-    c.runMenu('shortcuts');
-    expect(ed.showShortcutCheatsheet).toBeTrue();
+  it('the pill always shows (Frame): frames the mesh with nothing selected', () => {
+    const { c, sm } = setup();
+    expect(c.op).not.toBeNull();
+    c.frame();
+    expect(sm.frameMesh3D).toHaveBeenCalledOnceWith('m1', 1.4);
   });
+
+  it('touch / pen: taps add to the selection while mounted (the latch), restored on destroy; desktop: untouched', () => {
+    const t = setup();
+    let latch = false;
+    t.sm.setAdditiveSelect3D = jasmine.createSpy('setAdditiveSelect3D').and.callFake((on: boolean) => { latch = on; });
+    t.sm.getAdditiveSelect3D = () => latch;
+    t.c.ngOnInit();
+    expect(latch).toBeTrue();
+    t.c.ngOnDestroy();
+    expect(latch).toBeFalse();
+    const d = setup({ coarse: false });
+    d.sm.setAdditiveSelect3D = jasmine.createSpy('setAdditiveSelect3D');
+    d.c.ngOnInit();
+    d.c.ngOnDestroy();
+    expect(d.sm.setAdditiveSelect3D).not.toHaveBeenCalled();
+  });
+
 });

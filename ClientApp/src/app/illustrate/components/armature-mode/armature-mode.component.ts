@@ -9,32 +9,32 @@ import { ArmAnimService } from '../armature-panel/arm-anim.service';
 import { ArmLibraryService } from '../armature-panel/arm-library.service';
 import { ArmSpringService } from '../armature-panel/arm-spring.service';
 import { ArmPickService } from '../armature-panel/arm-pick.service';
-import { ArmatureHost, ArmatureSession } from '../armature-panel/arm-session';
+import { ARMATURE_BG_MODES, ArmatureBgMode, ArmatureHost, ArmatureSession } from '../armature-panel/arm-session';
 import { ARMATURE_HOST_PROVIDERS } from '../armature-panel/armature-panel.component';
 import { armApi, pickArmatureJoint, selectArmatureJoint } from '../armature-panel/arm-engine';
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
-import { TouchUiService } from '../../services/touch-ui.service';
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { LongPressDetector, type LongPressPointer } from '../mode-chrome/long-press';
-import type { ModeMenuItem, ModeOpParamChange, ModeRadialItem, ModeSegment, ModeTool } from '../mode-chrome/mode-chrome.types';
+import type { ModeOpParamChange, ModeRadialItem } from '../mode-chrome/mode-chrome.types';
 import type { ArmatureKeyTarget } from '../illustration/mode-keymap';
 import {
-  ARM_SEGMENTS, ARM_WORKSPACES, ArmOpPill, ArmOpState, ArmSegmentId, ArmTimelineGuard, ArmToolId, ArmWorkspace,
-  armMenuItems, armRadialItems, buildArmOpPill, loadArmWorkspace, saveArmWorkspace, segmentForTool, switchArmTool,
-  toolForSegment, toolForWorkspace, toolsFor,
+  ARM_SEGMENTS, ARM_WORKSPACES, ArmBaseTool, ArmModeTool, ArmOpPill, ArmOpState, ArmSegmentId, ArmTimelineGuard,
+  ArmToolId, ArmWorkspace, armRadialItems, buildArmOpPill, isArmBaseTool, loadArmWorkspace, modeToolsFor,
+  saveArmWorkspace, segmentForTool, switchArmTool, toolForSegment, toolForWorkspace,
 } from './armature-mode.logic';
 
-const NO_SEGMENTS: ModeSegment[] = [];
-
 /**
- * Armature on the shared mode chrome (UI review 2026-10-07 §4; components/mode-chrome/README.md): the header bar (Pose /
- * Edit Bones / Weight, Rig | Animate, Multi, Undo / Redo, Frame, ⋯, Done), the left tool strip, the operation pill for
- * the active tool, the long-press radial on a joint and the right properties panel — Rig: skeletons, joints, joint
- * properties, constraints, bind, weight paint, spring bones; Animate: preset poses, pose library, clips, NLA, the
- * libraries, retarget, with the editor's timeline shown. The sections and services are the classic panel's
- * (armature-panel/sections, arm-*.service), so both stay in step. Every newer Salsa call is typeof-guarded
- * (arm-engine.ts); the old dist keeps everything it could do before.
+ * Armature (UI review 2026-10-07 §4, reworked to the round-2 feedback 2026-10-08: docs/reviews/round2-feedback-2026-10-08.md
+ * in salsa). No header bar and no tool strip: the editor's MAIN toolbar stays, and its Select / Move / Rotate drive the
+ * joint tools (setTool). The right panel holds, at the top, Rig | Animate, Pose / Edit Bones / Weight (Rig) + Deselect
+ * all and the mode tools as icon-only buttons (Add Bone / IK / Weight Brush; Animate: Key; tapping the active one again
+ * turns it off), then the sections in the old green-title look: Rig — skeletons, joints, the joint, constraints, bind,
+ * weight paint, spring bones; Animate — preset poses, pose library, clips, NLA, the libraries, retarget, with the
+ * editor's timeline shown. The bottom op pill holds Frame + the active tool's parameters (Apply, no Cancel).
+ * Selection: on touch / pen a tap on a joint adds it / removes it (the engine's additive latch, set per press); a mouse
+ * click replaces, Shift+click toggles. The sections and services are the classic panel's (armature-panel/sections,
+ * arm-*.service). Every newer Salsa call is typeof-guarded (arm-engine.ts).
  */
 @Component({
   selector: 'app-armature-mode',
@@ -45,28 +45,29 @@ const NO_SEGMENTS: ModeSegment[] = [];
 export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() shapeManager: ShapeManager = null;
   @Input() initialMeshId = '';
-  /** The 3D canvas: the long-press radial and the one-shot joint picks listen on it. */
+  /** The 3D canvas: the long-press radial, the one-shot joint picks and the per-press additive latch listen on it. */
   @Input() canvasEl: HTMLElement | null = null;
   /** The chrome is shown (the editor's modeChromeVisible: false while the UI is hidden). The armature session stays. */
   @Input() chromeVisible = true;
   /** The animation timeline is open: the pill and the props panel sit above it. */
   @Input() aboveTimeline = false;
 
-  @Output() undo = new EventEmitter<void>();
-  @Output() redo = new EventEmitter<void>();
-  @Output() done = new EventEmitter<void>();
-  @Output() shortcuts = new EventEmitter<void>();
-  /** The chrome appeared / went (mount, Toggle UI, leave): the editor moves the 3D nav gizmo below the header bar. */
+  /** The chrome appeared / went (mount, Toggle UI, leave): the editor re-places the 3D nav gizmo. */
   @Output() chromeLayout = new EventEmitter<void>();
+  /** The active tool changed (any source: the main toolbar, the keys, the panel, the radial): the editor's main
+   *  toolbar shows Select / Move / Rotate pressed to match. */
+  @Output() toolChange = new EventEmitter<ArmToolId>();
 
   readonly workspaces = ARM_WORKSPACES;
+  readonly segments = ARM_SEGMENTS;
+  readonly bgModes = ARMATURE_BG_MODES;
   readonly session: ArmatureSession;
 
   workspace: ArmWorkspace = loadArmWorkspace();
   tool: ArmToolId = 'rotate';
+  /** The main toolbar's tool (Select / Move / Rotate): what turning a mode tool off goes back to. */
+  baseTool: ArmBaseTool = 'rotate';
   segment: ArmSegmentId = 'pose';
-  tools: ModeTool[] = toolsFor(this.workspace);
-  segments: ModeSegment[] = this.workspace === 'rig' ? ARM_SEGMENTS : NO_SEGMENTS;
 
   // Pill state (Rotate / Move typed amounts, Add Bone name, Key frame, Rename)
   axis: 'x' | 'y' | 'z' | null = null;
@@ -78,21 +79,20 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   renameDraft = '';
 
   private _opPill: ArmOpPill | null = null;
-  private _menuItems: ModeMenuItem[] = [];
   radial: { open: boolean; x: number; y: number; items: ModeRadialItem[]; title: string; jointIdx: number | null } =
     { open: false, x: 0, y: 0, items: [], title: '', jointIdx: null };
 
   private readonly timeline = new ArmTimelineGuard();
   private readonly longPress: LongPressDetector;
   private detachLongPress: (() => void) | null = null;
+  private detachLatch: (() => void) | null = null;
+  /** The additive latch before Armature (put back on leave); null = not touched. */
+  private latchBefore: boolean | null = null;
   private pillKey = '';
-  private menuKey = '';
-  /** The additive latch was switched on from here (switched off again on leave). */
-  private latchOn = false;
 
   constructor(public cdr: ChangeDetectorRef, public rig: ArmRigService, public binding: ArmBindingService, public anim: ArmAnimService,
               public library: ArmLibraryService, public spring: ArmSpringService, public pick: ArmPickService,
-              public exp: ExperimentalSettingsService, private touchUi: TouchUiService, private animation: RasterAnimationService,
+              public exp: ExperimentalSettingsService, private animation: RasterAnimationService,
               private notify: NotifyService, private zone: NgZone) {
     rig.bind(this); binding.bind(this); anim.bind(this); library.bind(this); spring.bind(this); pick.bind(this);
     this.session = new ArmatureSession(this, zone, () => this.cdr.markForCheck());
@@ -106,6 +106,7 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
     this.session.start('rotate');
     this.applyTool('rotate', 'rotate');
     if (this.workspace === 'animate') this.timeline.enter(() => this.timelineOn, (on) => this.setTimeline(on));
+    this.attachLatch();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -123,26 +124,23 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   }
 
   /** The pill for the active tool. Rebuilt only when what it shows changed: the chrome wants stable references. */
-  get opPill(): ArmOpPill | null {
+  get opPill(): ArmOpPill {
     const s = this.opState();
     const key = this.tool + '|' + JSON.stringify(s);
-    if (key !== this.pillKey) { this.pillKey = key; this._opPill = buildArmOpPill(this.tool, s); }
+    if (key !== this.pillKey || !this._opPill) { this.pillKey = key; this._opPill = buildArmOpPill(this.tool, s); }
     return this._opPill;
   }
 
-  /** The header's ⋯ menu (memoised like the pill). */
-  get menuItems(): ModeMenuItem[] {
-    const m = { bgMode: this.session.bgMode, devTools: this.exp.devTools };
-    const key = m.bgMode + '|' + m.devTools;
-    if (key !== this.menuKey) { this.menuKey = key; this._menuItems = armMenuItems(m); }
-    return this._menuItems;
-  }
+  /** The mode tool buttons of the current workspace (icon-only, in the right panel). */
+  get modeTools(): ArmModeTool[] { return modeToolsFor(this.workspace); }
 
   ngOnDestroy(): void {
     this.detachLongPress?.();
     this.detachLongPress = null;
+    this.detachLatch?.();
+    this.detachLatch = null;
     this.pick.cancel();
-    if (this.latchOn) armApi(this.shapeManager).setAdditiveSelect3D?.(false);
+    if (this.latchBefore !== null) armApi(this.shapeManager).setAdditiveSelect3D?.(this.latchBefore);
     // The editor restores the timeline in closeArmaturePanel (restoreTimeline) before this view goes; this covers any
     // other teardown, after the current change detection.
     if (this.timeline.active) void Promise.resolve().then(() => this.restoreTimeline());
@@ -157,39 +155,42 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
     if (el) this.detachLongPress = this.zone.runOutsideAngular(() => this.longPress.attach(el));
   }
 
+  /**
+   * Multi-select by default (round-2 feedback): every press on the 3D canvas sets the engine's additive latch BEFORE
+   * the engine sees it (window capture runs ahead of its canvas listeners) — on for touch / pen (a tap on a joint adds
+   * it, a tap on a selected one removes it), off for the mouse (a click replaces, Shift+click toggles). The Weight
+   * Brush paints one joint, so there a tap just picks it. Without the latch (old dist) a tap replaces, as before.
+   */
+  private attachLatch(): void {
+    const api = armApi(this.shapeManager);
+    if (typeof api.setAdditiveSelect3D !== 'function' || typeof window === 'undefined') return;
+    this.latchBefore = !!api.getAdditiveSelect3D?.();
+    const onDown = (e: PointerEvent): void => {
+      const el = this.canvasEl;
+      if (el && !(e.target instanceof Node && el.contains(e.target))) return;
+      armApi(this.shapeManager).setAdditiveSelect3D?.(this.additiveFor(e.pointerType));
+    };
+    this.zone.runOutsideAngular(() => window.addEventListener('pointerdown', onDown, { capture: true }));
+    this.detachLatch = () => window.removeEventListener('pointerdown', onDown, { capture: true });
+  }
+
+  /** A press of this pointer type adds to / removes from the joint selection (true) or replaces it (false). */
+  additiveFor(pointerType: string): boolean {
+    return (pointerType === 'touch' || pointerType === 'pen') && this.tool !== 'weight';
+  }
+
   refreshAll(): void { this.session.refreshAll(); }
 
-  // ── Header ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-  get subtitle(): string {
-    const parts = [this.rig.activeSkeleton?.name, this.binding.bindMeshId ? this.binding.bindMeshName : ''].filter(Boolean);
-    return parts.join(' · ');
-  }
-
-  /** Multi (taps add to the selection) on a touch screen with a Salsa that has the latch; null hides it. */
-  get multiLatch(): boolean | null {
-    const api = armApi(this.shapeManager);
-    if (!this.touchUi.coarse || typeof api.setAdditiveSelect3D !== 'function') return null;
-    return !!api.getAdditiveSelect3D?.();
-  }
-
-  setMulti(on: boolean): void {
-    const api = armApi(this.shapeManager);
-    if (typeof api.setAdditiveSelect3D !== 'function') return;
-    api.setAdditiveSelect3D(on);
-    this.latchOn = on;
-  }
+  // ── Top of the panel: Rig | Animate, Pose / Edit Bones / Weight, Deselect all ───────────────────────────────
 
   setWorkspace(id: string): void {
     const ws: ArmWorkspace = id === 'animate' ? 'animate' : 'rig';
     if (ws === this.workspace) return;
     this.workspace = ws;
     saveArmWorkspace(ws);
-    this.tools = toolsFor(ws);
-    this.segments = ws === 'rig' ? ARM_SEGMENTS : NO_SEGMENTS;
     this.radial.open = false;
     this.renameIdx = null;
-    const next = toolForWorkspace(ws, this.tool);
+    const next = toolForWorkspace(ws, this.tool, this.baseTool);
     if (next !== this.tool) this.setTool(next);
     if (ws === 'animate') this.timeline.enter(() => this.timelineOn, (on) => this.setTimeline(on));
     else this.restoreTimeline();
@@ -210,40 +211,61 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
     if (this.tool === toolForSegment(seg)) this.segment = seg;
   }
 
+  /** Deselect every joint (the small button beside the selection-type switch). */
+  deselectAll(): void {
+    this.shapeManager?.selectJoint3D(null);
+    this.rig.selectedJointIdx = null;
+    this.rig.renamingIdx = null;
+    this.session.selection = [];
+    this.renameIdx = null;
+  }
+
+  get hasSelection(): boolean { return this.session.selection.length > 0 || this.rig.selectedJointIdx !== null; }
+
+  /** The pill's Frame (the old header's Frame). */
   frame(): void { this.binding.focusMesh(); }
 
-  runMenu(id: string): void {
-    if (id.startsWith('bg:')) { this.session.setBgMode(id.slice(3) as never); return; }
-    if (id === 'refresh') this.refreshAll();
-    else if (id === 'shortcuts') this.shortcuts.emit();
-    else if (id === 'copyForClaude' && this.exp.devTools) this.library.exportPoseForClaude();
-  }
+  get bgMode(): ArmatureBgMode { return this.session.bgMode; }
+  setBgMode(mode: string): void { this.session.setBgMode(mode as ArmatureBgMode); }
 
   // ── Tools ──────────────────────────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Pick a tool (the main toolbar's Select / Move / Rotate, the keys, the switch, the radial). A base tool becomes the
+   * one a mode tool falls back to. Picking the active tool again keeps it (the keys, the main toolbar).
+   */
   setTool(id: string): void {
     const to = id as ArmToolId;
-    if (to === this.tool || !this.tools.some(t => t.id === to)) return;
-    this.applyTool(this.tool, to);
+    if (!isArmBaseTool(to) && !this.modeTools.some(t => t.id === to)) return;
+    if (to === this.tool) { if (isArmBaseTool(to)) this.baseTool = to; return; }
+    if (this.applyTool(this.tool, to) && isArmBaseTool(to)) this.baseTool = to;
   }
 
-  private applyTool(from: ArmToolId, to: ArmToolId): void {
+  /** A mode tool button: on, or (already on) off again — back to the main toolbar's tool. */
+  toggleModeTool(id: string): void {
+    if (id === this.tool) this.applyTool(this.tool, this.baseTool);
+    else this.setTool(id);
+  }
+
+  private applyTool(from: ArmToolId, to: ArmToolId): boolean {
     const res = switchArmTool({ sm: this.shapeManager, rig: this.rig, binding: this.binding }, from, to);
     if (!res.ok) {
       if (res.reason) this.notify.error(res.reason);
-      return;
+      return false;
     }
     this.tool = to;
     this.segment = segmentForTool(to, this.segment);
     this.renameIdx = null;
     if (to === 'key' && this.anim.activeClipIdx === null && this.anim.clips.length) this.anim.selectClip(0);
     if (to === 'key') this.keyFrame = this.anim.recordFrame;
+    this.toolChange.emit(to);
+    return true;
   }
 
   /** The weight section's Enter Paint / Painting: the Weight Brush tool on / off. */
   onWeightPaint(on: boolean): void {
     if (on) this.setTool('weight');
-    else if (this.tool === 'weight') this.setTool('rotate');
+    else if (this.tool === 'weight') this.applyTool('weight', this.baseTool);
   }
 
   /** Record the current pose into the picked clip at the Key frame (the Key tool, K, the radial). */
@@ -328,6 +350,7 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
     else if (this.tool === 'move') this.rig.moveSelectedBy(this.axis, this.moveAmount, this.session.selection);
   }
 
+  /** Esc inside the pill (there is no Cancel button): drop a pending rename, else the typed amount. */
   onOpCancel(): void {
     if (this.renameIdx !== null) { this.renameIdx = null; return; }
     this.rotateDeg = 0;
@@ -378,6 +401,15 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
 
   closeRadial(): void { this.radial = { ...this.radial, open: false }; }
 
+  /** Esc (mode-keymap ARMATURE_KEYS.exit): close the radial / drop a pending rename; false = Esc leaves Armature. */
+  cancelOverlay(): boolean {
+    if (this.radial.open) { this.closeRadial(); return true; }
+    if (this.renameIdx !== null) { this.renameIdx = null; return true; }
+    return false;
+  }
+
   /** Browser seam (the specs replace it). */
   confirm(question: string): boolean { return window.confirm(question); }
+
+  trackTool(_: number, t: ArmModeTool): string { return t.id; }
 }

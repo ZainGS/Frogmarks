@@ -1,12 +1,13 @@
 import {
-  ANIM_TOOLS, ARM_SEGMENTS, ARM_WORKSPACE_KEY, ArmOpState, ArmTimelineGuard, ArmToolCtx, RIG_TOOLS, WEIGHT_NEEDS_BIND,
-  armMenuItems, armRadialItems, buildArmOpPill, followClassicArmature, loadArmWorkspace, saveArmWorkspace, segmentForTool,
-  switchArmTool, toolForSegment, toolForWorkspace,
+  ANIM_MODE_TOOLS, ARM_EMPTY_PILL, ARM_SEGMENTS, ARM_WORKSPACE_KEY, ArmOpState, ArmTimelineGuard, ArmToolCtx, RIG_MODE_TOOLS,
+  WEIGHT_NEEDS_BIND, armRadialItems, buildArmOpPill, followClassicArmature, isArmBaseTool, loadArmWorkspace, modeToolsFor,
+  saveArmWorkspace, segmentForTool, switchArmTool, toolForSegment, toolForWorkspace,
 } from './armature-mode.logic';
 import { ARMATURE_KEYS, armatureKeyLabels } from '../illustration/mode-keymap';
 import { NEEDS_ENGINE } from '../armature-panel/arm-engine';
+import { railTapExitsMode } from '../mode-chrome/mode-toolbar-scope';
 
-/** UI review 2026-10-07 §4: the Armature mode chrome's decisions (tools → engine, pills, radial, menu, workspace). */
+/** UI review 2026-10-07 §4 + round-2 feedback: the Armature mode's decisions (tools → engine, pills, radial, workspace). */
 describe('Armature mode chrome logic', () => {
   function ctx(o: { newApi?: boolean; toolOk?: boolean; skeleton?: boolean; bound?: boolean; painting?: () => boolean } = {}) {
     let painting = false;
@@ -87,7 +88,7 @@ describe('Armature mode chrome logic', () => {
   });
 
   describe('segments / workspaces', () => {
-    it('Pose / Edit Bones / Weight pick Rotate / Move / Weight Brush and follow the strip', () => {
+    it('Pose / Edit Bones / Weight pick Rotate / Move / Weight Brush and follow the tool', () => {
       expect(ARM_SEGMENTS.map(s => s.id)).toEqual(['pose', 'edit', 'weight']);
       expect(['pose', 'edit', 'weight'].map(s => toolForSegment(s as never))).toEqual(['rotate', 'move', 'weight']);
       expect(segmentForTool('ik', 'edit')).toBe('pose');
@@ -95,27 +96,33 @@ describe('Armature mode chrome logic', () => {
       expect(segmentForTool('select', 'weight')).toBe('weight');   // Select keeps the last one
     });
 
-    it('Rig has rigging tools, Animate posing + Key; a switch keeps the tool when it exists there', () => {
-      expect(RIG_TOOLS.map(t => t.id)).toEqual(['select', 'rotate', 'move', 'addbone', 'ik', 'weight']);
-      expect(ANIM_TOOLS.map(t => t.id)).toEqual(['select', 'rotate', 'move', 'key']);
+    it('Select / Move / Rotate come from the main toolbar; the panel has Add Bone / IK / Weight Brush (Rig), Key (Animate)', () => {
+      expect(['select', 'move', 'rotate'].every(isArmBaseTool)).toBeTrue();
+      expect(isArmBaseTool('addbone')).toBeFalse();
+      expect(RIG_MODE_TOOLS.map(t => t.id)).toEqual(['addbone', 'ik', 'weight']);
+      expect(ANIM_MODE_TOOLS.map(t => t.id)).toEqual(['key']);
+      expect(modeToolsFor('animate')).toBe(ANIM_MODE_TOOLS);
       expect(toolForWorkspace('animate', 'weight')).toBe('rotate');
+      expect(toolForWorkspace('animate', 'weight', 'select')).toBe('select');   // back to the main toolbar's tool
       expect(toolForWorkspace('animate', 'move')).toBe('move');
-      expect(toolForWorkspace('rig', 'key')).toBe('rotate');
+      expect(toolForWorkspace('rig', 'key', 'move')).toBe('move');
     });
 
-    it('the tool strip key chips + hints come from the Armature keymap', () => {
+    it('main toolbar: Select / Pan / Move / Rotate stay inside Armature, any other tool leaves it (the entry toggles itself)', () => {
+      for (const t of ['select', 'pan', 'move', 'rotate', 'armature']) expect(railTapExitsMode('armature', t)).withContext(t).toBeFalse();
+      for (const t of ['scale', 'editMesh', 'pen', '']) expect(railTapExitsMode('armature', t)).withContext(t).toBeTrue();
+    });
+
+    it('the mode tool tooltips + switch keys come from the Armature keymap; every mode tool has an icon', () => {
       const k = armatureKeyLabels();
-      const byId = (id: string) => RIG_TOOLS.find(t => t.id === id)!;
-      expect(byId('select').key).toBe(k.select);
-      expect(byId('rotate').key).toBe(k.rotate);
-      expect(byId('move').key).toBe(k.move);
+      const byId = (id: string) => RIG_MODE_TOOLS.find(t => t.id === id)!;
       expect(byId('addbone').key).toBe(k.addBone);
       expect(byId('ik').key).toBe(k.ik);
       expect(byId('weight').key).toBe(k.weight);
-      expect(ANIM_TOOLS.find(t => t.id === 'key')!.key).toBe(k.key);
+      expect(ANIM_MODE_TOOLS[0].key).toBe(k.key);
       expect(ARM_SEGMENTS.map(s => s.key)).toEqual([k.pose, k.editBones, k.weightMode]);
       expect(k.rotate).toBe(ARMATURE_KEYS.rotate.keys[0].toUpperCase());
-      for (const t of [...RIG_TOOLS, ...ANIM_TOOLS]) expect(t.hint.length).toBeGreaterThan(5);
+      for (const t of [...RIG_MODE_TOOLS, ...ANIM_MODE_TOOLS]) expect(t.paths.length).toBeGreaterThan(0);
     });
 
     it('remembers the workspace (and survives blocked storage)', () => {
@@ -180,21 +187,26 @@ describe('Armature mode chrome logic', () => {
     }
     const ids = (p: ReturnType<typeof buildArmOpPill>) => p!.params.map(x => x.id);
 
-    it('Select has no pill', () => {
-      expect(buildArmOpPill('select', state())).toBeNull();
+    it('Select: the empty pill (only its Frame button shows)', () => {
+      expect(buildArmOpPill('select', state())).toBe(ARM_EMPTY_PILL);
+      expect(ARM_EMPTY_PILL).toEqual({ title: '', params: [], showApplyCancel: false });
     });
 
-    it('Rotate / Move: axis chips + a typed amount (disabled until an axis is picked), Apply / Cancel', () => {
+    it('no pill carries a note / hint (round-2 feedback)', () => {
+      for (const t of ['select', 'rotate', 'move', 'addbone', 'ik', 'weight', 'key'] as const) {
+        expect('note' in buildArmOpPill(t, state())).withContext(t).toBeFalse();
+      }
+    });
+
+    it('Rotate / Move: axis chips + a typed amount (disabled until an axis is picked), Apply', () => {
       const rot = buildArmOpPill('rotate', state())!;
       expect(rot.showApplyCancel).toBeTrue();
       expect(ids(rot)).toEqual(['axis', 'rotateDeg']);
       expect(rot.params[0].kind).toBe('axis');
       expect(rot.params[1].disabled).toBeTrue();
-      expect(rot.note).toContain('hand_L');
       const move = buildArmOpPill('move', state({ axis: 'y', selectionCount: 3 }))!;
       expect(ids(move)).toEqual(['axis', 'moveAmount']);
       expect(move.params[1].disabled).toBeFalse();
-      expect(move.note).toContain('3 joints');
       expect(buildArmOpPill('rotate', state({ selectedIdx: null }))!.params.every(p => p.disabled)).toBeTrue();
     });
 
@@ -229,7 +241,6 @@ describe('Armature mode chrome logic', () => {
       expect(p.params[0].value).toBe('2');
       expect(p.params[2].options!.map(o => o.id)).toEqual(['add', 'remove', 'set']);
       expect(ids(buildArmOpPill('weight', state({ weight: { active: true, mode: 'set', radius: 0.1, strength: 1, weight: 0.4 } })))).toContain('wpWeight');
-      expect(buildArmOpPill('weight', state({ weight: { active: false, mode: 'add', radius: 0.1, strength: 1, weight: 1 } }))!.note).toBe(WEIGHT_NEEDS_BIND);
     });
 
     it('Key: the clip by name, the frame, Key pose', () => {
@@ -250,7 +261,7 @@ describe('Armature mode chrome logic', () => {
     });
   });
 
-  describe('radial + menu', () => {
+  describe('radial', () => {
     it('Rig: Add Child / IK / Rename / Frame / Delete (danger); IK off inside a chain', () => {
       const items = armRadialItems({ hasIK: false, intermediate: false, workspace: 'rig' });
       expect(items.map(i => i.id)).toEqual(['child', 'ik', 'rename', 'frame', 'delete']);
@@ -263,13 +274,6 @@ describe('Armature mode chrome logic', () => {
       expect(armRadialItems({ hasIK: false, intermediate: false, workspace: 'animate' }).map(i => i.id)).toEqual(['key', 'frame', 'rotate']);
     });
 
-    it('⋯ menu: the background (checked), refresh, shortcuts; Copy for Claude only with the developer buttons', () => {
-      const m = armMenuItems({ bgMode: 'dim', devTools: false });
-      expect(m.filter(i => i.checked).map(i => i.id)).toEqual(['bg:dim']);
-      expect(m.map(i => i.id)).toContain('shortcuts');
-      expect(m.map(i => i.id)).not.toContain('copyForClaude');
-      expect(armMenuItems({ bgMode: 'dim', devTools: true }).map(i => i.id)).toContain('copyForClaude');
-    });
   });
 
   describe('classic fallback switch', () => {
