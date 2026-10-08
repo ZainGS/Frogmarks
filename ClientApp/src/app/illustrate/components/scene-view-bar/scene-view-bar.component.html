@@ -30,12 +30,6 @@
         [class.active]="scene3dViewArtboardFrame"
         (click)="setArtboardFrame.emit(!scene3dViewArtboardFrame)"
         title="Show artboard render safe-frame outline in 3D view">⬜</button>
-<!-- Fly editor camera (free3D only) -->
-<button [disabled]="locked" class="scene-view-btn scene-view-icon-btn"
-        *ngIf="scene3dViewCameraMode === 'free3D'"
-        [class.active]="scene3dViewFly"
-        (click)="setFly.emit(!scene3dViewFly)"
-        title="WASD flythrough: W/S forward, A/D strafe, E/Q up/down, Shift boost. Aim by orbit-drag.">🛩</button>
 <!-- (The touch "Navigate" toggle was removed at the user's request, 2026-10-08: drags off the selection orbit and the
      main toolbar's Pan tool pans. scene3dToggleTouchNavigate() stays in the component, unused.) -->
 <!-- 1P/3P toggle + Play button (scene target only) -->

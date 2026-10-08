@@ -548,7 +548,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dOrbitEnabled = false;
 
   scene3d2DPanelsActive = true;
-  scene3dViewFly = false;
   scene3dViewIsPlaying = false;
   scene3dViewArtboardFrame = true;
   scene3dPlayCameraMode: 'first' | 'third' = 'first';
@@ -915,7 +914,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.editorState.scene3dViewTarget = state.target ?? 'illustration';
     this.editorState.scene3dViewCameraMode = state.cameraMode ?? 'ortho2D';
     this.scene3dViewArtboardFrame = state.showArtboardFrame ?? true;
-    this.scene3dViewFly = this.shapeManager.isFlyEnabled3D ?? false;
     // Activate full 3D context (panel + toolbar) when in Scene target or 3D Free camera
     if ((this.editorState.scene3dViewTarget === 'scene' || this.editorState.scene3dViewCameraMode === 'free3D') && this.has3DScene) {
       if (!this.editorState.scene3dPanelVisible) {
@@ -930,7 +928,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.artboard.updateOverlay();
   }
 
-  /** Edit Mesh / Armature / UV Paint own the camera: the view-bar controls (camera mode, target, fly, Play) are locked
+  /** Edit Mesh / Armature / UV Paint own the camera: the view-bar controls (camera mode, target, Play) are locked
    *  while one is on (user request 2026-10-08; the bar disables its buttons via [locked]). */
   get viewModesLocked(): boolean {
     return this.meshEdit.scene3dIsEditingMesh || this.scene3dArmaturePanelOpen || this.uv.uvEditorOpen || this.uv.uvPaintMode;
@@ -957,12 +955,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dSetArtboardFrame(on: boolean): void {
     this.scene3dViewArtboardFrame = on;
     this.shapeManager.setArtboardFrameVisible3D(on);
-  }
-
-  scene3dSetFly(on: boolean): void {
-    if (this.viewModesLocked && on) return;
-    this.scene3dViewFly = on;
-    this.shapeManager.setFlyEnabled3D(on);
   }
 
   scene3dTogglePlay(): void {
@@ -1371,6 +1363,11 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // paints the mesh (and, for a finger, lets the press through so the orbit controller can pinch). No full-scene
     // pick here: it cost a raycast of every mesh per press and selected / deselected under the brush.
     if (this.uv.uvEditorOpen || sm.isUVPaintActive3D?.()) return;
+
+    // 0d. The Armature owns the viewport (tablet feedback 2026-10-08): taps act on joints / bones / weight paint, an
+    // empty tap does nothing — never a mesh select / deselect. (A deselect here greyed out the Armature rail button,
+    // so the mode couldn't be left.) Edit Mesh is covered by step 0, UV by 0c.
+    if (this.scene3dArmaturePanelOpen) return;
 
     // 1. Try ribbon handle hit first (only when a ribbon with visible handles is selected)
     if (this.ribbon.tryBeginHandleDrag(event, canvas)) return;

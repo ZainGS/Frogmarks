@@ -6,6 +6,7 @@ import { ViewportHudService } from '../../services/viewport-hud.service';
 import { IllustrationPersistenceService } from '../../services/illustration-persistence.service';
 import { StorageSettingsService } from '../../services/storage-settings.service';
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
+import { FocusBgAnimationService } from '../../services/focus-bg-animation.service';
 import { SCREEN_CORNER_MAX_PX, ScreenCornerService } from '../../services/screen-corner.service';
 import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '../../../app-version';
 import { AppUpdateService } from '../../../shared/services/pwa/app-update.service';
@@ -36,7 +37,18 @@ export class EditorMenubarComponent implements DoCheck, OnInit, OnDestroy {
   showExperimentalMenu = false;
   constructor(public files: ProjectFileService, public hud: ViewportHudService, public persist: IllustrationPersistenceService, public storage: StorageSettingsService,
               public exp: ExperimentalSettingsService, public corners: ScreenCornerService, public updates: AppUpdateService,
-              @Optional() private overlays?: OverlayManagerService, @Optional() private hostEl?: ElementRef<HTMLElement>) {}
+              @Optional() private overlays?: OverlayManagerService, @Optional() private hostEl?: ElementRef<HTMLElement>,
+              @Optional() focusBg?: FocusBgAnimationService) {
+    this.focusBg = focusBg ?? new FocusBgAnimationService();
+  }
+
+  /** View › Toggle Animations: the wavy focus backgrounds (Edit Mesh, Armature, UV, the package stage) animate. */
+  readonly focusBg: FocusBgAnimationService;
+  /** The engine the setting was last pushed into (each new ShapeManager gets it once, from its first check). */
+  private _focusBgEngine: unknown = null;
+  /** The menu item works on this engine build (an older Salsa: greyed out). */
+  get focusBgAnimateSupported(): boolean { return this.focusBg.supported(this.engine); }
+  toggleFocusBgAnimate(): void { this.focusBg.toggle(this.engine); }
 
   /** The menus and the Experimental result dialog join the overlay manager: Esc / a tap outside closes them, and one
    *  overlay is open at a time (UI review 2026-10-07 §3 item 2). */
@@ -95,6 +107,8 @@ export class EditorMenubarComponent implements DoCheck, OnInit, OnDestroy {
   /** One menu at a time: the other menubar buttons stop their click from reaching the document, so close this one
    *  when the editor opens one of its own. */
   ngDoCheck(): void {
+    const sm = this.engine;
+    if (sm && sm !== this._focusBgEngine && this.focusBg.apply(sm)) this._focusBgEngine = sm;
     if (!this.showExperimentalMenu) return;
     const e = this.editor;
     if (e?.showFileMenu || e?.showEditMenu || e?.showAnimationMenu || e?.showViewMenu) this.showExperimentalMenu = false;

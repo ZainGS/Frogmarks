@@ -26,6 +26,7 @@ import { ArtboardService } from './artboard.service';
 import { EditorStateService } from './editor-state.service';
 import { startBlankEngineDocument } from '../utils/blank-engine-document';
 import { SaveStatus, saveStatusOf } from './save-status';
+import { takePendingProjectImport, type PendingProjectImport } from 'app/shared/services/illustrate/pending-project-import';
 import { cloudSceneGraphJSON, toVectorSceneGraphJSON } from '../utils/cloud-scene-graph';
 import { celExporter, CloudUploadVersions, contentVersionsDiffer, hasContentVersionApi, readContentVersions, type RasterContentVersions } from '../utils/cloud-pixel-versions';
 
@@ -74,6 +75,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     this._texLibDirty = false;
     this._uploadAllMeshes = false;
     this._saveQueued = false;
+    this._saveWhenLoaded = false;
     this.fx.layerDitherConfigs.clear();       // repopulated from the engine on load
     this.fx.layerFrameLinkConfigs.clear();    // read lazily from the engine
     this.noCloudEmptyState = false;
@@ -649,10 +651,15 @@ export class IllustrationPersistenceService implements OnDestroy {
     if (this.frogFileService.pendingImport && (this.syncMode === 2 || this.illustration?.id)) {
       const pending = this.frogFileService.pendingImport;
       this.frogFileService.pendingImport = null; // consume it
+      this._releaseShellForEditor();   // (the Shell's .frog import opens a document with the Shell scene still up)
       await this.host.applyFrogImport(pending);
+      this._saveWhenLoaded = true;     // the imported content is saved without waiting for an edit
       requestAnimationFrame(() => this.host.markLoaded('sceneApplied'));
       return;
     }
+    // ── A .frogmarks the Shell imported into this NEW local document (pending-project-import.ts) ──
+    const pkg = this.syncMode === 2 ? takePendingProjectImport(this.illustration?.uuid) : null;
+    if (pkg) return this._loadFromPendingPackage(pkg);
 
     // Local-only: OPFS is the only source — no SQL state, no blob downloads
     if (this.syncMode === 2) return this._loadLocalOnly(nothingSavedYet);
@@ -749,9 +756,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       // Created a moment ago: there is no OPFS document to find, so the engine stays on the blank document that
       // startBlankDocument gave it — exactly where a failed lookup ends up, minus the lookup. (Salsa's loadDocument
       // also releases the Shell scene / resumes the editor renderer before it looks; keep that part.)
-      const sm = this.shapeManager;
-      if (sm.shell?.isSceneActive) sm.shell.destroyScene();
-      else if (sm.webgpuRenderer?.isSuspended) sm.webgpuRenderer.resumeRendering();
+      this._releaseShellForEditor();
       requestAnimationFrame(() => {
         this.artboard.fitArtboard();
         this.host.markLoaded('sceneApplied');
@@ -780,19 +785,7 @@ export class IllustrationPersistenceService implements OnDestroy {
             console.warn('[V2 Load] local-only sceneGraph restore failed', e);
           }
         }
-        if (opfsMeta) {
-          await this._syncAnimationStateFromBackend(opfsMeta);
-          this.artboard.applyDocumentSize(opfsMeta.documentSize ?? null);
-          this.artboard.updateOverlay();
-          this._applyCanvasMeta(opfsMeta);
-          // Global + per-layer dither / frame link live only in our metadata (not in Salsa's document) — the
-          // local-only load used to skip them.
-          if (opfsMeta.ditherConfig) this.fx._applyDitherConfig(opfsMeta.ditherConfig);
-          this._applyLayerMeta(opfsMeta.layers);
-          // Host-owned 3D state only — the engine already restored its own settings with loadDocument
-          if (opfsMeta.scene3dGlobalSettings) this._applyHostOwned3D(opfsMeta.scene3dGlobalSettings);
-          this.host.scene3dAllGroupBuckets = opfsMeta.scene3dFrameLinkBuckets ?? {};
-        }
+        if (opfsMeta) await this._applyEditorMeta(opfsMeta);
       }
     } catch (e) {
       console.warn('[V2 Load] local-only OPFS load failed', e);
@@ -801,6 +794,101 @@ export class IllustrationPersistenceService implements OnDestroy {
       this.artboard.fitArtboard();
       this.host.markLoaded('sceneApplied');
     });
+  }
+
+  /** The editor-owned settings of a document whose engine part Salsa has just restored (a local-only load, a
+   *  .frogmarks restore): animation, document size, canvas look, dither, per-layer meta, host-owned 3D, frame-link
+   *  buckets. The engine's own 3D settings are not re-applied (it restored them). */
+  private async _applyEditorMeta(meta: Partial<IllustrationStateDto>): Promise<void> {
+    const m = meta as IllustrationStateDto;
+    await this._syncAnimationStateFromBackend(m);
+    this.artboard.applyDocumentSize(m.documentSize ?? null);
+    this.artboard.updateOverlay();
+    this._applyCanvasMeta(m);
+    // Global + per-layer dither / frame link live only in our metadata (not in Salsa's document) — the
+    // local-only load used to skip them.
+    if (m.ditherConfig) this.fx._applyDitherConfig(m.ditherConfig);
+    this._applyLayerMeta(m.layers);
+    // Host-owned 3D state only — the engine already restored its own settings
+    if (m.scene3dGlobalSettings) this._applyHostOwned3D(m.scene3dGlobalSettings);
+    this.host.scene3dAllGroupBuckets = m.scene3dFrameLinkBuckets ?? {};
+  }
+
+  /** Salsa's loadDocument releases the Shell scene (or resumes a suspended editor renderer) before it loads. Every
+   *  load that does not go through it (a document with nothing saved yet, an import) must do the same. */
+  private _releaseShellForEditor(): void {
+    const sm = this.shapeManager;
+    if (sm.shell?.isSceneActive) sm.shell.destroyScene();
+    else if (sm.webgpuRenderer?.isSuspended) sm.webgpuRenderer.resumeRendering();
+  }
+
+  /**
+   * Replace the open document's content with a .frogmarks package (ShapeManager.unpackProject — the engine's one
+   * restore path) and bring the editor in line with it: raster layers + per-layer dither, the timeline, 3D panels,
+   * PS1 / environment / player mirrors, and the editor-owned settings the file carries (`editorState`; files saved
+   * before 2026-10-08 have none). Saves keep going to THIS document. Used by File › Open .frogmarks (replace) and by
+   * the Shell's Import (a new local document). Throws when the engine restore fails (Salsa then blocks saving).
+   */
+  async restoreProjectPackage(file: Blob, editorState: Partial<IllustrationStateDto> | null): Promise<void> {
+    const sm = this.shapeManager;
+    this.animationService.beginBulkRestore();
+    const unpack = () => sm.unpackProject(file);
+    await (this.ngZone ? this.ngZone.runOutsideAngular(unpack) : unpack()).finally(() => this.animationService.endBulkRestore());
+    // The restore keeps the engine's document id; pin it to the key this document saves under (`local-<uuid>` /
+    // the server id) — the editor's restore used to set the bare uuid, which no load ever reads.
+    const key = this._docKey();
+    if (key) sm.setCurrentDocId(key, this.host.doc.illustrationTitle || this.illustration?.name || undefined);
+    this.noCloudEmptyState = false;
+    this.animationService.refreshTimeline();
+    this.host.scene3dRefreshMeshes();
+    this._afterEngineDocumentLoaded();
+    this.s3._syncScene3dPS1FromEngine();
+    this.s3._syncEnvironmentStyleFromEngine();
+    this.anim.syncPlayerFromEngine();
+    if (editorState) await this._applyEditorMeta(editorState);
+    else this.artboard.applyDocumentSize((sm.getDocumentSize() as { w: number; h: number } | null | undefined) ?? null);
+    // Everything restored must reach the cloud copy too (not just layers dirty since load)
+    if (this.syncMode === 0) this.forceFullUpload(); else this._invalidateUploadedLayers();
+    this._checkSaveBlocked();
+  }
+
+  /** The key this document's saves go to: `local-<uuid>` (local-only) or the server id ('' when none yet). */
+  private _docKey(): string {
+    if (!this.illustration) return '';
+    return this.syncMode === 2 ? 'local-' + (this.illustration.uuid ?? '') : this.illustration.id?.toString() ?? '';
+  }
+
+  /** The load of a new local document the Shell imported a .frogmarks into. */
+  private async _loadFromPendingPackage(pkg: PendingProjectImport): Promise<void> {
+    this._releaseShellForEditor();
+    try {
+      await this.restoreProjectPackage(pkg.file, pkg.editorState);
+      this._saveWhenLoaded = true;
+    } catch (e) {
+      console.error('[import] .frogmarks restore failed', e);
+      this._checkSaveBlocked();
+      this.notifyService.error('Could not import the project. The file may be damaged.');
+    }
+    requestAnimationFrame(() => {
+      this.artboard.fitArtboard();
+      this.host.markLoaded('sceneApplied');
+    });
+  }
+
+  /** Set by an import during the load: save the document once the load has finished (initWithIllustration). */
+  private _saveWhenLoaded = false;
+
+  /** After an import: write the document (Frogmarks metadata + Salsa's pixels / 3D + thumbnail) as soon as the load is
+   *  over — saves are held while loading, and nothing else would save it before the first edit. */
+  private async _saveImportedDocument(ill: Illustration): Promise<void> {
+    for (let waited = 0; this.host.isLoading && this.illustration === ill && waited < 120_000; waited += 100) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (this.illustration !== ill || this.host.isLoading || this._isSaveBlocked()) return;
+    await this.saveIllustrationV2();
+    if (this.illustration !== ill || this._isSaveBlocked()) return;
+    await this.autoSaveService.saveNow();
+    if (this.illustration === ill && !ill.isCustomThumbnail) this.saveThumbnailIfChanged();
   }
 
   /** This device's OPFS copy (Salsa's document + our metadata, or the server state when the metadata file is
@@ -1556,6 +1644,11 @@ export class IllustrationPersistenceService implements OnDestroy {
         { intervalMs: this.host.selectedAutoSaveInterval, strokeDebounceMs: 1500 }
       );
       this._autoSaveStateSub = this.autoSaveService.state$.subscribe(s => this.autoSaveState = s);
+    }
+    // An import (Shell .frogmarks / .frog) restored the content during the load: save it once the load is over
+    if (this._saveWhenLoaded) {
+      this._saveWhenLoaded = false;
+      void this._saveImportedDocument(illustration).catch(e => console.warn('[import] first save failed', e));
     }
 
     this.thumbnailSaveSubscription = this.sceneChanged$

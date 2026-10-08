@@ -428,4 +428,7 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   confirm(question: string): boolean { return window.confirm(question); }
 
   trackTool(_: number, t: ArmModeTool): string { return t.id; }
+
+  /** The thin label under a mode tool: its name (Weight Brush shortened to fit the button; the tooltip keeps it). */
+  shortToolLabel(t: ArmModeTool): string { return t.id === 'weight' ? 'Weight' : t.label; }
 }

@@ -74,6 +74,7 @@ $danger:  #c0392b;
 .me-tools {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;   // each row centred (the last, partial one too)
   gap: 8px;
   margin-bottom: 14px;
   padding-bottom: 12px;
@@ -106,6 +107,37 @@ $danger:  #c0392b;
   &:focus-visible { outline: 1px solid #4f7a68; outline-offset: 1px; }
   // Greyed out (the selection doesn't fit the op yet); the tooltip still shows, so no pointer-events: none
   &.tool-off { opacity: 0.25; cursor: default; }
+}
+
+// A button + its thin name label (the button's width: the label never widens the column)
+.me-tool {
+  display: flex;
+  flex-direction: column;
+}
+// The label: the section titles' colour as its background (plain: #999; retro: the green left border), the
+// "Rotate plane" button's text colour (plain) / the "On" button's text colour (retro)
+.tool-name {
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin-top: 2px;
+  padding: 0 1px;
+  height: 11px;
+  line-height: 11px;
+  font-size: 8px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0;
+  background: #999;
+  color: #ccc;
+  cursor: pointer;
+}
+.me-tool-off .tool-name { opacity: 0.25; cursor: default; }
+:host-context(body.theme-retro-chrome) .tool-name {
+  background: var(--rc-green);
+  color: var(--rc-green-txt);
 }
 
 // ── Sections ──────────────────────────────────────────────────────

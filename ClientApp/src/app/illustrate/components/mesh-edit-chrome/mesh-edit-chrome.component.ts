@@ -294,6 +294,7 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const sm = this.sm, meshId = this.meshId, me = this.ed.meshEdit;
     if (!sm || !meshId || !me.scene3dIsEditingMesh) return;
     if (sm.isShortcutActive3D || BEVEL_ACTIONS.active(this.ed)) return;   // a modal op owns the finger
+    me.cancelMirrorFacePick?.();   // the menu ends Mirror's "tap a face"
     // A live preview: cancelled first, so the element is picked on the mesh before it (the menu's ops act on that)
     if (me.previewKind) me.cancelPreview();
     const pick = meshChromeApi(sm).pickMeshEditElementAt3D;

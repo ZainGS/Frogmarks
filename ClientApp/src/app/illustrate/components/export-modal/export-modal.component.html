@@ -93,7 +93,9 @@
         <ng-container *ngIf="tab === 'workfile'">
           <div class="export-modal-panel-title">Export Workfile</div>
           <p class="export-modal-panel-desc">Download the full editable project file. Use this to back up your work or open it on another device.</p>
-          <button class="export-modal-action-btn" (click)="exportWorkfile()">Download .frogmarks</button>
+          <button class="export-modal-action-btn" (click)="exportWorkfile()" [disabled]="files.frogmarksSaving">
+            {{ files.frogmarksSaving ? 'Saving…' : 'Download .frogmarks' }}
+          </button>
         </ng-container>
 
       </div>

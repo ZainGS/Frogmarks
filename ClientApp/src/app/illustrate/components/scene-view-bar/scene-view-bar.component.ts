@@ -8,7 +8,7 @@ type TouchNavigateApi = { setTouchNavigate3D?: (on: boolean) => void } | null;
 type CameraMode ='ortho2D' | 'perspective2D' | 'free3D';
 
 /**
- * Top-bar 3D view controls: camera mode, Illustration / Scene target, artboard frame, fly, 1P / 3P, the
+ * Top-bar 3D view controls: camera mode, Illustration / Scene target, artboard frame, 1P / 3P, the
  * play-settings popover and Play. Extracted from illustration.component (refactor-plan 2.7d). The editor owns
  * the view state (many areas read it); this bar shows it and asks for changes.
  */
@@ -24,16 +24,14 @@ export class SceneViewBarComponent {
   @Input() scene3dViewCameraMode: CameraMode = 'ortho2D';
   @Input() scene3dViewTarget: 'illustration' | 'scene' = 'illustration';
   @Input() scene3dViewArtboardFrame = true;
-  @Input() scene3dViewFly = false;
   @Input() scene3dViewIsPlaying = false;
   @Input() scene3dPlayCameraMode: 'first' | 'third' = 'first';
   /** An edit mode is on (Edit Mesh / Armature / UV Paint): every view control is disabled — changing the camera mode,
-   *  target, fly or Play mid-mode broke the mode's camera / state (user request 2026-10-08). */
+   *  target or Play mid-mode broke the mode's camera / state (user request 2026-10-08). */
   @Input() locked = false;
   @Output() setCameraMode = new EventEmitter<CameraMode>();
   @Output() setTarget = new EventEmitter<'illustration' | 'scene'>();
   @Output() setArtboardFrame = new EventEmitter<boolean>();
-  @Output() setFly = new EventEmitter<boolean>();
   @Output() togglePlay = new EventEmitter<void>();
   @Output() playCameraModeChange = new EventEmitter<'first' | 'third'>();
   @Output() dirty = new EventEmitter<void>();

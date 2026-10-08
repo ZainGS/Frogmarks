@@ -89,6 +89,34 @@ describe('MeshEditPropsComponent', () => {
     expect(sm.applyModifier3D).toHaveBeenCalledOnceWith('m1', 0);
   });
 
+  it('Use Face with the engine pick: enabled with no face selected; tapping it arms "tap a face" (pressed)', () => {
+    const { c, meshEdit } = setup({ mirrorApi: true, faces: [] });
+    Object.assign(meshEdit, {
+      mirrorFacePicking: false, mirrorFacePickSupported: true,
+      useMirrorFace: jasmine.createSpy('useMirrorFace').and.callFake(() => {
+        meshEdit.mirrorFacePicking = !meshEdit.mirrorFacePicking;
+        return meshEdit.mirrorFacePicking ? 'armed' : 'cancelled';
+      }),
+      cancelMirrorFacePick: jasmine.createSpy('cancelMirrorFacePick').and.callFake(() => {
+        const was = meshEdit.mirrorFacePicking; meshEdit.mirrorFacePicking = false; return was;
+      }),
+    });
+    expect(c.canMirrorFace).toBeTrue();
+    expect(c.mirrorFaceTitle).toBe('Mirror the mesh across a face');
+    c.mirrorChoice = true;
+    c.addMirrorFace();
+    expect(c.mirrorFacePicking).toBeTrue();
+    expect(c.mirrorChoice).toBeTrue();                   // still open while it waits for the tap
+    c.addMirrorFace();                                   // the button again: cancelled
+    expect(c.mirrorFacePicking).toBeFalse();
+    c.addMirrorFace();
+    c.addSubdivision(1);                                 // another modifier button cancels it
+    expect(c.mirrorFacePicking).toBeFalse();
+    c.addMirrorFace();
+    c.toggleMirrorChoice();                              // closing + Mirror too
+    expect(c.mirrorFacePicking).toBeFalse();
+  });
+
   it('an old X / Y / Z mirror shows On / Bake / ✕ only (no plane controls)', () => {
     const { c, mods } = setup({ mirrorApi: true });
     mods.push({ type: 'mirror', enabled: true, axis: 'y' });

@@ -122,8 +122,11 @@ export class ExportModalComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** The full project file (File › Save .frogmarks… — the whole document: layers, vectors, 3D, Grease Pencil …). It
+   *  used to write the older 2D-only .frog file under a ".frogmarks" label. */
   async exportWorkfile(): Promise<void> {
-    await this.files.exportFrogFile();
+    if (this.files.frogmarksSaving) return;
+    await this.files.frogmarksSave();
     this.close.emit();
   }
 }

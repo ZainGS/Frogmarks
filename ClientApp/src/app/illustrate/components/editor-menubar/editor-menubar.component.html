@@ -214,6 +214,12 @@
             <span>Retro Chrome</span>
             <span class="shortcut" *ngIf="editor.retroThemeActive">✓</span>
         </div>
+        <div class="edit-menu-item" data-item="focus-bg-animate" role="menuitemcheckbox" [attr.aria-checked]="focusBg.on"
+             [class.disabled]="!focusBgAnimateSupported" [attr.title]="focusBgAnimateSupported ? null : 'Needs the engine update'"
+             (click)="focusBgAnimateSupported && toggleFocusBgAnimate(); editor.closeAllMenus()">
+            <span>Toggle Animations</span>
+            <span class="shortcut" *ngIf="focusBg.on">✓</span>
+        </div>
         <div class="edit-menu-divider"></div>
         <div class="edit-menu-item" (click)="editor.showShortcutCheatsheet = true; editor.closeAllMenus()">
             <span>Keyboard Shortcuts</span><span class="shortcut">?</span>

@@ -36,8 +36,38 @@ app-mode-props-panel.arm-props {
 .arm-tools {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;   // each row centred
   gap: 10px;
   &:empty { display: none; }
+}
+
+// A button + its thin name label (Edit Mesh's: mesh-edit-props .tool-name) — the button's width, never wider
+.arm-tool {
+  display: flex;
+  flex-direction: column;
+}
+.tool-name {
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin-top: 2px;
+  padding: 0 1px;
+  height: 11px;
+  line-height: 11px;
+  font-size: 8px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0;
+  background: #999;
+  color: #ccc;
+  cursor: pointer;
+}
+:host-context(body.theme-retro-chrome) .tool-name {
+  background: var(--rc-green);
+  color: var(--rc-green-txt);
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .vertical-tool-button {

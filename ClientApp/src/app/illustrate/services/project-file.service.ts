@@ -1,7 +1,5 @@
 import { inject, Injectable, NgZone, OnDestroy } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
-import { Scene3dSettingsService } from './scene3d-settings.service';
-import { SceneAnimationService } from './scene-animation.service';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { FrogFileService } from 'app/shared/services/illustrate/frog-file.service';
 import { IllustrationPersistenceService } from './illustration-persistence.service';
@@ -16,6 +14,10 @@ import { OnionSkinConfig, LoopMode } from 'app/shared/services/raster/raster-ani
 import { DitherConfig } from 'app/boards/models/brush-preset.model';
 
 import { ArtboardService } from './artboard.service';
+import {
+  buildFrogmarksStateFile, FROGMARKS_STATE_FILE, FROGMARKS_THUMBNAIL_FILE, FrogmarksPackageError, NOT_A_PROJECT_MESSAGE,
+  readFrogmarksPackage, type FrogmarksEditorState,
+} from 'app/shared/services/illustrate/frogmarks-package';
 /** Exactly the editor state the project-file actions read and write. Typed against the editor so a rename breaks here at compile time. */
 export type ProjectFileHost = Pick<IllustrationComponent, 'shapeManager' | 'doc' | '_disableAllViewerTools' | 'setAnimationEnabled' |
   'canvas' | 'closeContextMenu' |
@@ -30,7 +32,7 @@ export type ProjectFileHost = Pick<IllustrationComponent, 'shapeManager' | 'doc'
 @Injectable()
 export class ProjectFileService implements OnDestroy {
   private host!: ProjectFileHost;
-  constructor(private artboard: ArtboardService, private animationService: RasterAnimationService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private notifyService: NotifyService, private persist: IllustrationPersistenceService, private s3: Scene3dSettingsService, private anim: SceneAnimationService) {}
+  constructor(private artboard: ArtboardService, private animationService: RasterAnimationService, private frogFileService: FrogFileService, private fx: LayerEffectsService, private illustrationService: IllustrationService, private notifyService: NotifyService, private persist: IllustrationPersistenceService) {}
   bind(host: ProjectFileHost): void { this.host = host; }
   private get shapeManager(): ShapeManager { return this.host.shapeManager; }
   /** Zone audit item 3: unpackProject restores a whole document (a city's build, stream pump, tile workers, tickers) —
@@ -300,6 +302,8 @@ export class ProjectFileService implements OnDestroy {
 
   _pendingRestoreFileUuid: string | null = null;
 
+  _pendingRestoreEditorState: FrogmarksEditorState | null = null;
+
   async frogmarksSave(): Promise<void> {
     if (this.frogmarksSaving) return;
     this.frogmarksSaving = true;
@@ -310,23 +314,26 @@ export class ProjectFileService implements OnDestroy {
       const salsaBlob: Blob = await sm.packProject();
       const zip = await JSZip.loadAsync(salsaBlob);
 
-      zip.file('frogmarks-state.json', JSON.stringify({
-        formatVersion: 1,
-        packedAt: new Date().toISOString(),
-        name: this.persist.illustration?.name ?? 'Untitled',
+      const name = this.host.doc.illustrationTitle || this.persist.illustration?.name || 'Untitled';
+      // The editor-owned settings (canvas look, dither, animation, host-owned 3D …) go in too, so an import restores
+      // them (readFrogmarksPackage / restoreProjectPackage). Non-fatal: the package alone still restores the content.
+      const editorState = await this.persist._buildFullState().catch((e) => { console.warn('[frogmarksSave] editor state', e); return null; });
+      zip.file(FROGMARKS_STATE_FILE, JSON.stringify(buildFrogmarksStateFile({
+        name,
         uuid: this.persist.illustrationUid,
         illustrationId: this.persist.illustration?.id ?? null,
         teamId: this.persist.illustration?.teamId ?? null,
         deviceName: localStorage.getItem('frogmarks-device-name') ?? null,
-      }, null, 2));
+        editorState,
+      }), null, 2));
 
       try {
         const thumbBlob = await this.shapeManager.captureThumbnailBlob(300);
-        if (thumbBlob) zip.file('thumbnail.png', thumbBlob);
+        if (thumbBlob) zip.file(FROGMARKS_THUMBNAIL_FILE, thumbBlob);
       } catch { /* non-fatal */ }
 
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-      const safeName = (this.persist.illustration?.name ?? 'untitled').replace(/[^a-z0-9_\-]/gi, '_');
+      const safeName = name.replace(/[^a-z0-9_\-]/gi, '_');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -347,16 +354,12 @@ export class ProjectFileService implements OnDestroy {
     (event.target as HTMLInputElement).value = '';
     if (!file) return;
     try {
-      const { default: JSZip } = await import('jszip');
-      const zip = await JSZip.loadAsync(file);
-      const frogmarksRaw = await zip.file('frogmarks-state.json')?.async('string');
-      const meta = frogmarksRaw ? JSON.parse(frogmarksRaw) : null;
-
-      if (meta?.formatVersion > 1)
-        throw new Error('This .frogmarks file requires a newer version of Frogmarks.');
+      const info = await readFrogmarksPackage(file, { thumbnail: true });
+      if (info.kind !== 'frogmarks') throw new FrogmarksPackageError('not-a-project', NOT_A_PROJECT_MESSAGE);
+      const meta = info.state;
 
       const fileUuid: string | null = meta?.uuid ?? null;
-      const fileName: string = meta?.name ?? file.name;
+      const fileName: string = info.name;
 
       if (fileUuid && this.persist.illustrationUid && fileUuid !== this.persist.illustrationUid) {
         // Different illustration — simple confirm
@@ -364,11 +367,10 @@ export class ProjectFileService implements OnDestroy {
           `"${fileName}" is from a different illustration.\n\nThis will replace the current content of "${this.persist.illustration?.name ?? 'this illustration'}". Continue?`
         );
         if (!ok) return;
-        await this._doFrogmarksRestore(file, fileUuid);
+        await this._doFrogmarksRestore(file, fileUuid, meta?.editorState ?? null);
       } else {
         // Same illustration (or no UUID in file) — show thumbnail comparison modal
-        const thumbEntry = zip.file('thumbnail.png');
-        const fileThumbBlob = thumbEntry ? await thumbEntry.async('blob') : null;
+        const fileThumbBlob = info.thumbnail;
         const fileThumbnailUrl = fileThumbBlob ? URL.createObjectURL(fileThumbBlob) : '';
         const fileDate = meta?.packedAt
           ? new Date(meta.packedAt).toLocaleString()
@@ -380,19 +382,23 @@ export class ProjectFileService implements OnDestroy {
 
         this._pendingRestoreFile = file;
         this._pendingRestoreFileUuid = fileUuid;
+        this._pendingRestoreEditorState = meta?.editorState ?? null;
         this.frogmarksRestoreModal = { currentThumbnailUrl, currentDate, fileThumbnailUrl, fileDate };
       }
     } catch (e) {
       console.error('[frogmarksLoad]', e);
-      this.notifyService.error('Could not load project. The file may be corrupted or from a newer version of Frogmarks.');
+      this.notifyService.error(e instanceof FrogmarksPackageError
+        ? e.message
+        : 'Could not load project. The file may be corrupted or from a newer version of Frogmarks.');
     }
   }
 
   async confirmFrogmarksRestore(): Promise<void> {
     const file = this._pendingRestoreFile;
     const uuid = this._pendingRestoreFileUuid;
+    const editorState = this._pendingRestoreEditorState;
     this._closeFrogmarksRestoreModal();
-    if (file) await this._doFrogmarksRestore(file, uuid);
+    if (file) await this._doFrogmarksRestore(file, uuid, editorState);
   }
 
   cancelFrogmarksRestore(): void {
@@ -407,30 +413,16 @@ export class ProjectFileService implements OnDestroy {
     this.frogmarksRestoreModal = null;
     this._pendingRestoreFile = null;
     this._pendingRestoreFileUuid = null;
+    this._pendingRestoreEditorState = null;
   }
 
-  async _doFrogmarksRestore(file: File, fileUuid: string | null): Promise<void> {
+  async _doFrogmarksRestore(file: File, _fileUuid: string | null, editorState: FrogmarksEditorState | null = null): Promise<void> {
     try {
-      const sm = this.shapeManager;
-      this.animationService.beginBulkRestore();
-      await this.ngZone.runOutsideAngular(() => sm.unpackProject(file)).finally(() => this.animationService.endBulkRestore());
-      if (fileUuid && this.persist.illustrationUid && fileUuid !== this.persist.illustrationUid) {
-        sm.setCurrentDocId(this.persist.illustrationUid, this.persist.illustration?.name);
-        // (saveNow was a phantom — saveDocument is the real flush)
-        await sm.persist?.saveDocument();
-      }
-      this.persist.noCloudEmptyState = false;
-      this.animationService.refreshTimeline();
-      this.host.scene3dRefreshMeshes();
-      // Bring the editor in line with what was unpacked (raster layers, per-layer dither and the 3D panel mirrors
-      // used to keep showing the previous content)
-      this.host.refreshRasterLayers();
-      this.fx._syncLayerDitherConfigsFromEngine();
-      this.s3._syncScene3dPS1FromEngine();
-      this.s3._syncEnvironmentStyleFromEngine();
-      this.anim.syncPlayerFromEngine();
-      // Everything restored must reach the cloud copy too (not just layers dirty since load), then save
-      if (this.persist.syncMode === 0) this.persist.forceFullUpload(); else this.persist._invalidateUploadedLayers();
+      // The one restore (shared with the Shell's Import): unpack, keep saving to THIS document, bring the editor in
+      // line (raster layers, dither, timeline, 3D panels and mirrors) and apply the file's editor settings.
+      await this.persist.restoreProjectPackage(file, editorState);
+      // Write it now (saveNow was a phantom — saveDocument is the real flush), then the metadata save
+      if (!this.persist._isSaveBlocked()) await this.shapeManager.persist?.saveDocument();
       this.persist.sceneChanged$.next('__restore_' + Date.now());
       this.persist._checkSaveBlocked();
       if (!this.persist.saveBlockedReason) this.notifyService.success('Project loaded successfully.');

@@ -9,6 +9,9 @@ import {
   type MeshBgMode, type MeshChromeCaps, type MeshPanelTool, type MeshSelectMode, type MeshToolId, type MeshVerbId,
 } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 
+/** Tool names too long for the label under a button (the tooltip keeps the full name). */
+const SHORT_TOOL_LABELS: Readonly<Record<string, string>> = { 'Flip Normals': 'Flip', 'Bridge Loops': 'Bridge' };
+
 /** The editor members the properties use. */
 export type MeshEditPropsHost = Pick<IllustrationComponent, 'shapeManager' | 'editorState' | 'meshEdit' | 'scene3dUndo' | 'scene3dMarkDirty'>;
 
@@ -102,12 +105,12 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   get hasSelection(): boolean { const s = this.sel; return s.vertices.length + s.edges.length + s.faces.length > 0; }
 
   setMode(id: string): void { this.ed.meshEdit.setSelectionMode(id as MeshSelectMode); }
-  deselectAll(): void { this.ed.meshEdit.deselectAll(); }
+  deselectAll(): void { this.pickSvc.cancelMirrorFacePick?.(); this.ed.meshEdit.deselectAll(); }
 
   /** Drag Lock: dragging the selection doesn't move it (MeshEditService.setDragLock). */
   private get _lockSvc(): { dragLock?: boolean; setDragLock?(on: boolean): void } { return this.ed.meshEdit as unknown as { dragLock?: boolean; setDragLock?(on: boolean): void }; }
   get dragLock(): boolean { return !!this._lockSvc.dragLock; }
-  toggleDragLock(): void { this._lockSvc.setDragLock?.(!this.dragLock); }
+  toggleDragLock(): void { this.pickSvc.cancelMirrorFacePick?.(); this._lockSvc.setDragLock?.(!this.dragLock); }
 
   private _toolsSig = '';
   private _tools: MeshPanelTool[] = [];
@@ -136,14 +139,20 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   }
 
   /** Any modifier / cleanup action first cancels a live preview (next Edit Mesh batch §4): the preview's revert would
-   *  otherwise undo the wrong step, and the action works on the mesh before the preview. */
+   *  otherwise undo the wrong step, and the action works on the mesh before the preview. It also ends Mirror's armed
+   *  "tap a face" (any other action cancels it). */
   private endPreview(): void {
-    (this.ed.meshEdit as unknown as { cancelPreview?(): boolean }).cancelPreview?.();
+    const me = this.ed.meshEdit as unknown as { cancelPreview?(): boolean; cancelMirrorFacePick?(): boolean };
+    me.cancelMirrorFacePick?.();
+    me.cancelPreview?.();
   }
 
   iconPaths(icon: string): readonly string[] { return modeIconPaths(icon) ?? MESH_PANEL_ICONS[icon] ?? []; }
 
   trackTool(_: number, t: MeshPanelTool): string { return t.id; }
+
+  /** The thin label under a tool button: its name, the long ones shortened to fit the button's width. */
+  shortLabel(t: MeshPanelTool): string { return SHORT_TOOL_LABELS[t.label] ?? t.label; }
 
   // ── Modifiers ──
 
@@ -158,23 +167,47 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
 
   get hasMirrorFace(): boolean { return typeof ops.mirrorPlaneApi(this.sm).addMirrorFromFace3D === 'function'; }
   get hasMirrorBisect(): boolean { return typeof ops.mirrorPlaneApi(this.sm).addMirrorBisect3D === 'function'; }
-  /** Use Face needs exactly one selected face. */
-  get canMirrorFace(): boolean { return this.hasMirrorFace && this.sel.faces.length === 1; }
+  /** MeshEditService's Mirror "tap a face" (absent on an older service double: today's one-selected-face rule). */
+  private get pickSvc(): {
+    mirrorFacePicking?: boolean; mirrorFacePickSupported?: boolean; cancelMirrorFacePick?(): boolean;
+    useMirrorFace?(onDone?: () => void): 'mirrored' | 'armed' | 'cancelled' | null;
+  } { return this.ed.meshEdit as unknown as MeshEditPropsComponent['pickSvc']; }
+  /** Use Face's "tap a face" is armed: the button shows pressed. */
+  get mirrorFacePicking(): boolean { return !!this.pickSvc.mirrorFacePicking; }
+  /** Use Face: one selected face mirrors at once; otherwise (a newer Salsa) it arms "tap a face". */
+  get canMirrorFace(): boolean {
+    return this.hasMirrorFace && (this.sel.faces.length === 1 || !!this.pickSvc.mirrorFacePickSupported || this.mirrorFacePicking);
+  }
   get mirrorFaceTitle(): string {
     if (!this.hasMirrorFace) return NEEDS_ENGINE_UPDATE;
-    return this.sel.faces.length === 1 ? 'Mirror the mesh across the selected face' : 'Select exactly one face first';
+    if (this.sel.faces.length === 1 || this.pickSvc.mirrorFacePickSupported) return 'Mirror the mesh across a face';
+    return 'Select exactly one face first';
   }
   get mirrorBisectTitle(): string {
     return this.hasMirrorBisect ? 'Mirror the mesh across a plane through its middle (Rotate plane turns it)' : NEEDS_ENGINE_UPDATE;
   }
 
+  /** Use Face: exactly one face selected → the mirror across it at once; otherwise the button arms a one-shot "tap a
+   *  face" (pressed until the tap, or any other action cancels it — again on the button too). */
   addMirrorFace(): void {
+    const svc = this.pickSvc;
+    if (typeof svc.useMirrorFace === 'function') {
+      const r = svc.useMirrorFace(() => { this.mirrorChoice = false; this.ngDoCheck(); });
+      if (r === 'mirrored') { this.mirrorChoice = false; this.ngDoCheck(); }
+      return;
+    }
     this.endPreview();
     const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).addMirrorFromFace3D;
     if (!id || typeof f !== 'function' || this.sel.faces.length !== 1) return;
     f.call(this.sm, id, this.sel.faces[0]);
     this.mirrorChoice = false;
     this.ngDoCheck();
+  }
+
+  /** + Mirror: open / close the Use Face / Bisect Mesh choice (closing it ends an armed "tap a face"). */
+  toggleMirrorChoice(): void {
+    this.pickSvc.cancelMirrorFacePick?.();
+    this.mirrorChoice = !this.mirrorChoice;
   }
 
   addMirrorBisect(): void {

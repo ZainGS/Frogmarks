@@ -522,14 +522,12 @@
                         [scene3dViewCameraMode]="editorState.scene3dViewCameraMode"
                         [scene3dViewTarget]="editorState.scene3dViewTarget"
                         [scene3dViewArtboardFrame]="scene3dViewArtboardFrame"
-                        [scene3dViewFly]="scene3dViewFly"
                         [scene3dViewIsPlaying]="scene3dViewIsPlaying"
                         [scene3dPlayCameraMode]="scene3dPlayCameraMode"
                         [locked]="viewModesLocked"
                         (setCameraMode)="scene3dSetViewCameraMode($event)"
                         (setTarget)="scene3dSetViewTarget($event)"
                         (setArtboardFrame)="scene3dSetArtboardFrame($event)"
-                        (setFly)="scene3dSetFly($event)"
                         (togglePlay)="scene3dTogglePlay()"
                         (playCameraModeChange)="scene3dPlayCameraMode = $event"
                         (dirty)="scene3dMarkDirty()">
@@ -1380,7 +1378,7 @@
             <!-- Edit Mesh -->
             <div class="vertical-tool-button" data-rail-tool="editMesh"
                  [class.selected]="meshEdit.scene3dIsEditingMesh"
-                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
+                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId && !meshEdit.scene3dIsEditingMesh"
                  (click)="meshEdit.scene3dIsEditingMesh ? meshEdit.exitMeshEditMode() : meshEdit.enterMeshEditMode()"
                  title="Edit Mesh (Tab)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1396,7 +1394,7 @@
             <!-- Armature -->
             <div class="vertical-tool-button" data-rail-tool="armature"
                  [class.selected]="scene3dArmaturePanelOpen"
-                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
+                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId && !scene3dArmaturePanelOpen"
                  (click)="scene3dArmaturePanelOpen ? closeArmaturePanel() : openArmaturePanel()"
                  title="Armature (⇧Tab)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1411,7 +1409,7 @@
             <!-- UV Editor -->
             <div class="vertical-tool-button"
                  [class.selected]="uv.uvEditorOpen"
-                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
+                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId && !uv.uvEditorOpen"
                  (click)="uv.uvEditorOpen ? uv.closeUVEditor() : uv.openUVEditor()"
                  title="UV Editor">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2">

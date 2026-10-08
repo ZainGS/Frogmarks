@@ -23,13 +23,16 @@
                   (click)="deselectAll()">Deselect all</button>
         </div>
         <div class="arm-tools" role="toolbar" aria-label="Armature tools">
-          <div *ngFor="let t of modeTools; trackBy: trackTool" class="vertical-tool-button" role="button" tabindex="0"
-               [class.selected]="tool === t.id" [attr.aria-pressed]="tool === t.id" [attr.aria-label]="t.label"
-               [attr.data-id]="t.id" [title]="t.label + (t.key ? ' (' + t.key + ')' : '')"
-               (click)="toggleModeTool(t.id)" (keydown.enter)="toggleModeTool(t.id)" (keydown.space)="$event.preventDefault(); toggleModeTool(t.id)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path *ngFor="let d of t.paths" [attr.d]="d"/>
-            </svg>
+          <div *ngFor="let t of modeTools; trackBy: trackTool" class="arm-tool">
+            <div class="vertical-tool-button" role="button" tabindex="0"
+                 [class.selected]="tool === t.id" [attr.aria-pressed]="tool === t.id" [attr.aria-label]="t.label"
+                 [attr.data-id]="t.id" [title]="t.label + (t.key ? ' (' + t.key + ')' : '')"
+                 (click)="toggleModeTool(t.id)" (keydown.enter)="toggleModeTool(t.id)" (keydown.space)="$event.preventDefault(); toggleModeTool(t.id)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path *ngFor="let d of t.paths" [attr.d]="d"/>
+              </svg>
+            </div>
+            <span class="tool-name" aria-hidden="true" [title]="t.label" (click)="toggleModeTool(t.id)">{{ shortToolLabel(t) }}</span>
           </div>
         </div>
       </div>

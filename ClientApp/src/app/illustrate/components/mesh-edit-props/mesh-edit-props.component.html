@@ -10,16 +10,20 @@
                 title="Deselect all (Alt+A)">Deselect all</button>
     </div>
 
-    <!-- The tools for this selection type: icon-only, the main toolbar's buttons (tap the active tool again: off) -->
+    <!-- The tools for this selection type: the main toolbar's buttons with a thin name label below (tap the active
+         tool again: off). Each row is centred. -->
     <div class="me-tools" role="toolbar" aria-label="Edit Mesh tools">
-        <div *ngFor="let t of tools; trackBy: trackTool" class="vertical-tool-button" role="button"
-             [attr.tabindex]="t.disabled ? -1 : 0" [class.selected]="(t.kind === 'tool' && tool === t.id) || previewing === t.id"
-             [class.tool-off]="t.disabled" [attr.aria-disabled]="t.disabled"
-             [attr.aria-pressed]="t.kind === 'tool' ? tool === t.id : null" [attr.aria-label]="t.label"
-             [attr.data-id]="t.id" [title]="t.title"
-             (click)="tapTool(t)" (keydown.enter)="tapTool(t)" (keydown.space)="$event.preventDefault(); tapTool(t)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"
-                 stroke-linejoin="round" aria-hidden="true"><path *ngFor="let d of iconPaths(t.icon)" [attr.d]="d"/></svg>
+        <div *ngFor="let t of tools; trackBy: trackTool" class="me-tool" [class.me-tool-off]="t.disabled">
+            <div class="vertical-tool-button" role="button"
+                 [attr.tabindex]="t.disabled ? -1 : 0" [class.selected]="(t.kind === 'tool' && tool === t.id) || previewing === t.id"
+                 [class.tool-off]="t.disabled" [attr.aria-disabled]="t.disabled"
+                 [attr.aria-pressed]="t.kind === 'tool' ? tool === t.id : null" [attr.aria-label]="t.label"
+                 [attr.data-id]="t.id" [title]="t.title"
+                 (click)="tapTool(t)" (keydown.enter)="tapTool(t)" (keydown.space)="$event.preventDefault(); tapTool(t)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true"><path *ngFor="let d of iconPaths(t.icon)" [attr.d]="d"/></svg>
+            </div>
+            <span class="tool-name" aria-hidden="true" [title]="t.title" (click)="tapTool(t)">{{ shortLabel(t) }}</span>
         </div>
     </div>
 
@@ -50,10 +54,11 @@
              small ×2 (two levels) at the row's end -->
         <div class="me-mod-add-row">
             <button type="button" class="me-chip me-chip-grow" [class.me-chip-on]="mirrorChoice" [attr.aria-expanded]="mirrorChoice"
-                    (click)="mirrorChoice = !mirrorChoice" title="Mirror the mesh">+ Mirror</button>
+                    (click)="toggleMirrorChoice()" title="Mirror the mesh">+ Mirror</button>
         </div>
         <div *ngIf="mirrorChoice" class="me-op-pair me-mirror-choice" data-section="mirror-choice">
-            <button type="button" class="me-op-btn" [disabled]="!canMirrorFace" [title]="mirrorFaceTitle" (click)="addMirrorFace()">Use Face</button>
+            <button type="button" class="me-op-btn" [class.active]="mirrorFacePicking" [attr.aria-pressed]="mirrorFacePicking"
+                    [disabled]="!canMirrorFace" [title]="mirrorFaceTitle" (click)="addMirrorFace()">Use Face</button>
             <button type="button" class="me-op-btn" [disabled]="!hasMirrorBisect" [title]="mirrorBisectTitle" (click)="addMirrorBisect()">Bisect Mesh</button>
         </div>
         <div class="me-mod-add-row">

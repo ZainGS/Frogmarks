@@ -137,6 +137,7 @@ export class MeshEditService {
   setTool(tool: MeshToolId): void {
     const sm = this.shapeManager;
     if (!sm) return;
+    this.cancelMirrorFacePick();   // picking a tool ends Mirror's "tap a face"
     const caps = this._caps;
     // Another tool (or the active one re-tapped: Select) while a live preview shows: the preview is cancelled
     const showing = this.previewKind;
@@ -293,8 +294,9 @@ export class MeshEditService {
     return false;
   }
 
-  /** Esc: cancel the preview showing / the Chamfer (chrome). False = neither. */
+  /** Esc: cancel Mirror's "tap a face", the preview showing / the Chamfer (chrome). False = none of them. */
   cancelPreviewKey(): boolean {
+    if (this.cancelMirrorFacePick()) return true;
     if (this.shapeManager?.isShortcutActive3D) return false;
     return this.cancelPreview();
   }
@@ -333,6 +335,7 @@ export class MeshEditService {
   runVerb(id: MeshVerbId | 'fill'): boolean {
     const sm = this.shapeManager, id3 = this._editId;
     if (!sm || !id3) return false;
+    this.cancelMirrorFacePick();
     // Subdivide is a live preview on a newer Salsa (tapping it again while it shows = Cancel); any other verb first
     // cancels a preview showing (its revert must not undo the verb's step)
     if (id === 'subdivide' && this.previewSupported) {
@@ -412,6 +415,71 @@ export class MeshEditService {
     return true;
   }
 
+  // ── Mirror "Use Face": tap the button, then tap a face (notes 2026-10-08 #2) ──
+
+  /** The one-shot face pick is armed: the Use Face button shows pressed; the next face tap is the mirror plane. */
+  mirrorFacePicking = false;
+  /** Runs after the picked face's mirror was added (the panel closes its + Mirror choice). */
+  private _mirrorPickDone: (() => void) | null = null;
+
+  /** The engine takes the "tap a face" pick (a newer Salsa: armMeshEditFacePick3D). */
+  get mirrorFacePickSupported(): boolean {
+    const api = ops.mirrorPlaneApi(this.host?.shapeManager);
+    return typeof api.armMeshEditFacePick3D === 'function' && typeof api.addMirrorFromFace3D === 'function';
+  }
+
+  /**
+   * Use Face. Exactly one face selected: the mirror across it at once. Otherwise (a newer Salsa) arm a one-shot pick:
+   * the tool goes back to Select (a running preview is cancelled), Face mode is forced, and the next face TAP becomes
+   * the plane — it doesn't change the selection; drags still orbit, two fingers pan / zoom. Tapped again while armed:
+   * cancelled. 'mirrored' | 'armed' | 'cancelled' | null (nothing done).
+   */
+  useMirrorFace(onDone?: () => void): 'mirrored' | 'armed' | 'cancelled' | null {
+    if (this.cancelMirrorFacePick()) return 'cancelled';
+    const sm = this.shapeManager, id = this._editId;
+    const api = ops.mirrorPlaneApi(sm);
+    if (!sm || !id || typeof api.addMirrorFromFace3D !== 'function') return null;
+    const faces = this.selection.faces;
+    if (faces.length === 1) {
+      this.cancelPreview();
+      api.addMirrorFromFace3D.call(sm, id, faces[0]);
+      sm.requestRender3D?.();
+      return 'mirrored';
+    }
+    if (!this.mirrorFacePickSupported) return null;
+    this.setTool('select');                                         // (cancels a running preview / Chamfer / knife)
+    if (this.selectionMode !== 'face') this.setSelectionMode('face');
+    const ok = api.armMeshEditFacePick3D!.call(sm, (face: number | null) => this.ngZone.run(() => this._mirrorFacePicked(id, face)));
+    this.mirrorFacePicking = !!ok;
+    this._mirrorPickDone = ok ? onDone ?? null : null;
+    return ok ? 'armed' : null;
+  }
+
+  /** Cancel the armed "tap a face" (Esc, the button again, another tool / mode / modifier button, leaving). False = it
+   *  wasn't armed. */
+  cancelMirrorFacePick(): boolean {
+    if (!this.mirrorFacePicking) return false;
+    this.mirrorFacePicking = false;
+    this._mirrorPickDone = null;
+    const sm = this.host?.shapeManager;
+    ops.mirrorPlaneApi(sm).cancelMeshEditFacePick3D?.call(sm);
+    return true;
+  }
+
+  /** The engine's pick: a face → the mirror across it (one undo step); null → cancelled engine-side. */
+  private _mirrorFacePicked(meshId: string, face: number | null): void {
+    if (!this.mirrorFacePicking) return;
+    this.mirrorFacePicking = false;
+    const done = this._mirrorPickDone;
+    this._mirrorPickDone = null;
+    const sm = this.host?.shapeManager;
+    const add = ops.mirrorPlaneApi(sm).addMirrorFromFace3D;
+    if (face === null || !sm || this._editId !== meshId || typeof add !== 'function') return;
+    add.call(sm, meshId, face);
+    sm.requestRender3D?.();
+    done?.();
+  }
+
   /** Leave Edit Mesh from the mode itself (Esc, the main toolbar's other tools): the focus background goes too. */
   leave(): void {
     if (!this.scene3dIsEditingMesh) return;
@@ -421,6 +489,7 @@ export class MeshEditService {
 
   exitMeshEditMode(): void {
     const sm = this.shapeManager;
+    this.cancelMirrorFacePick();
     // Leaving with a live preview: it is cancelled (nothing is applied without Apply). Then no tool stays selected — the
     // engine's tool back to Select too — so the next entry starts clean (user request 2026-10-08).
     this._revertPreview();
@@ -560,6 +629,7 @@ export class MeshEditService {
 
   /** Vertex / Edge / Face (the panel's tabs, 1 / 2 / 3): the engine's picker switches and the selection is cleared. */
   setSelectionMode(mode: MeshEditSelectMode): void {
+    this.cancelMirrorFacePick();   // Vertex / Edge / Face ends Mirror's "tap a face"
     if (mode !== this.selectionMode && this.previewKind) this.cancelPreview();   // (the face ops' preview)
     this.selectionMode = mode;
     // The chrome: a panel tool the new selection type doesn't offer goes off (Select)

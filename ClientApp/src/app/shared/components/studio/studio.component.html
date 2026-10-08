@@ -75,6 +75,12 @@
       <p *ngIf="storageInfo.persisted === false" class="fm-pwa-note">{{ storageInfo.noticeText }}</p>
       <button *ngIf="storageInfo.supported && storageInfo.persisted === false" class="fm-pwa-btn"
               [disabled]="storageInfo.requesting" (click)="requestPersistentStorage()">Ask the browser to keep it</button>
+      <!-- Import a .frogmarks (or older .frog) as a NEW local illustration, opened in the editor -->
+      <div class="shell-import-row">
+        <input #projectFileInput type="file" hidden accept=".frogmarks,.frog,application/zip,application/octet-stream"
+               (change)="onProjectFilePicked($event)" />
+        <button class="fm-pwa-btn" [disabled]="importBusy" (click)="projectFileInput.click()">{{ importBusy ? 'Importing…' : 'Import .frogmarks…' }}</button>
+      </div>
     </section>
 
     <!-- Install app: the browser's prompt (beforeinstallprompt) where there is one, else the steps -->

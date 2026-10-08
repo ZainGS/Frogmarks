@@ -233,6 +233,10 @@ export interface MirrorPlaneApi {
   flipMirrorSide3D?(meshId: string, modIndex: number): boolean;
   /** Show the plane + its rotation handle on the canvas (null hides it). */
   setMirrorPlaneHandle3D?(meshId: string, modIndex: number | null): void;
+  /** One-shot face pick: the next face TAP is consumed (the selection doesn't change) and `onPick(face)` runs; drags
+   *  still navigate. Cancelled by the engine (another tool, Vertex / Edge, detach) with `onPick(null)`. */
+  armMeshEditFacePick3D?(onPick: (faceIndex: number | null) => void): boolean;
+  cancelMeshEditFacePick3D?(): boolean;
 }
 export const mirrorPlaneApi = (sm: unknown): MirrorPlaneApi => (sm ?? {}) as MirrorPlaneApi;
 

@@ -21,12 +21,21 @@ import {
   saveLocalModelUrl, type ShellThemeId,
 } from './shell-settings';
 import { shellKeyItems, shellKeySignature, type ShellKeyItem } from './shell-keys';
+import { prepareShellProjectImport } from './shell-project-import';
+import { planShellImport, shellImportProblem } from './shell-import-router';
+import { FrogFileService } from '../../services/illustrate/frog-file.service';
+import { FrogmarksPackageError } from '../../services/illustrate/frogmarks-package';
+import { NotifyService } from '../../services/notify/notify.service';
 
 /** A FrogCart tile was opened: what its dialog shows. */
 interface CartDialog { id: string; name: string; description: string; removable: boolean; confirmRemove: boolean; removing: boolean }
 
 /** The Salsa Shell APIs added after the dist Frogmarks may still be built against (typeof-guarded at each use). */
-type ShellNewer = { importCart?: () => void };
+type ShellNewer = {
+  importCart?: () => void;
+  /** The Import tile's picked files → the ones to install as carts (the host opens the rest itself). */
+  setImportHandler?: (handler: ((files: File[]) => Promise<File[]>) | null) => void;
+};
 
 /** What the New Illustration dialog closes with (null / undefined = cancelled). */
 interface NewIllustrationResult { name?: string; docW?: number | null; docH?: number | null; bounded?: boolean }
@@ -96,6 +105,8 @@ export class StudioComponent implements OnInit, OnDestroy {
     readonly updates: AppUpdateService,
     readonly storageInfo: StoragePersistenceService,
     readonly install: AppInstallService,
+    private frogFileService: FrogFileService,
+    private notify: NotifyService,
   ) {}
 
   // ── PWA: update popup + storage notice (salsa/docs/ui/pwa.md) ────────────
@@ -160,6 +171,69 @@ export class StudioComponent implements OnInit, OnDestroy {
   // ── Settings › Install app ──
 
   installApp(): void { void this.install.install(); }
+
+  // ── Settings › Storage › Import .frogmarks… ──
+
+  /** Validating / creating the imported document (the button shows "Importing…"; the editor's loader covers the
+   *  unpack itself). */
+  importBusy = false;
+
+  /** A .frogmarks (or older .frog) was picked: validate it, create a NEW local illustration for it (unique name) and
+   *  open it in the editor, which restores the file into it and saves (shell-project-import.ts). A bad / too-new file
+   *  is an error toast and creates nothing. */
+  async onProjectFilePicked(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = '';   // the same file can be picked again
+    if (file) await this._importProjectFile(file);
+  }
+
+  /** The Shell's Import tile picked files (Salsa setImportHandler; outside the Angular zone): each is told apart by
+   *  its content (shell-import-router.ts). A project opens as a new illustration; the carts go back to the Shell,
+   *  which installs them as new cart tiles; anything else is an error toast. */
+  private async _routeShellImport(files: File[]): Promise<File[]> {
+    const plan = await planShellImport(files);
+    this.ngZone.run(() => {
+      const problem = shellImportProblem(plan, files.length);
+      if (problem) this.notify.error(problem);
+      if (plan.project && !this._destroyed) void this._importProjectFile(plan.project);
+    });
+    return plan.carts;
+  }
+
+  /** Validate a .frogmarks / .frog, create the NEW local illustration for it and open it (see onProjectFilePicked). */
+  private async _importProjectFile(file: File): Promise<void> {
+    if (this.importBusy) return;
+    this.importBusy = true;
+    try {
+      const item = await prepareShellProjectImport(file, {
+        listNames: async () => (await this.localIllustrationService.getAll(true)).map(i => i.name),
+        create: (name, aspect) => this.localIllustrationService.create(name, aspect),
+        parseFrog: (f) => this.frogFileService.parseFrogFile(f),
+        setFrogPending: (r) => { this.frogFileService.pendingImport = r; },
+      });
+      if (this._destroyed) return;
+      // Nothing is saved under it yet: the editor takes the record as it is (fresh-local-document.ts)
+      markFreshLocalDocument(item);
+      this.closeSettingsOverlay();
+      perfMark('nav-start');
+      void this.router.navigate(['/illustration/local', item.uuid]);
+    } catch (e) {
+      console.warn('[Studio] import failed:', e);
+      this.notify.error(e instanceof FrogmarksPackageError ? e.message : "Couldn't import that file.");
+    } finally {
+      this.importBusy = false;
+    }
+  }
+
+  /** Route the Import tile through _routeShellImport (newer Salsa builds; an older one keeps its .frogcart-only
+   *  picker). Off when the Shell is left: the handler belongs to this component. */
+  private _setShellImportHandler(on: boolean): void {
+    const shell = this.sm?.shell as unknown as ShellNewer | undefined;
+    if (shell && typeof shell.setImportHandler === 'function') {
+      shell.setImportHandler(on ? (files) => this._routeShellImport(files) : null);
+    }
+  }
 
   private _storage(): Storage | null {
     try { return window.localStorage; } catch { return null; }
@@ -226,6 +300,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     });
 
     this._applySavedTheme();
+    this._setShellImportHandler(true);
     await this.sm.shell?.load();
     this.sm.setShellLogo('assets/images/logo.png');
 
@@ -276,6 +351,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
     this._deleteSub?.unsubscribe();
+    this._setShellImportHandler(false);
     clearTimeout(this._idlePreloadTimer);
     clearTimeout(this._gridPreloadTimer);
     clearTimeout(this._keysTimer);
@@ -419,7 +495,8 @@ export class StudioComponent implements OnInit, OnDestroy {
     if (this.cartDialog === d) this.closeCartDialog();
   }
 
-  /** Open the .frogcart picker (the Import tile's action; newer Salsa builds only — it is in a click handler). */
+  /** Open the Import picker (the Import tile's action; newer Salsa builds only — it is in a click handler). With the
+   *  import handler on it takes projects and carts alike (_routeShellImport). */
   importCart(): void {
     const shell = this.sm?.shell as unknown as ShellNewer | undefined;
     if (shell && typeof shell.importCart === 'function') shell.importCart();
