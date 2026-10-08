@@ -1,14 +1,15 @@
 import {
-  DEFAULT_MESH_TOOL_PARAMS, MESH_TOOL_IDS, NEEDS_ENGINE_UPDATE, buildMeshOp, followClassicSetting, lastOpParams, meshChromeCaps,
+  DEFAULT_EDIT_BG_MODE, DEFAULT_MESH_TOOL_PARAMS, MESH_BG_OPTIONS, MESH_TOOL_IDS, NEEDS_ENGINE_UPDATE, editBgOptions, buildMeshOp,
+  followClassicSetting, lastOpParams, meshChromeCaps,
   meshPanelTools, meshRadialItems, meshToolAppliesTo, planMeshTool, type MeshChromeCaps, type MeshOpInput,
 } from './mesh-edit-chrome.logic';
 
 const OLD: MeshChromeCaps = {
-  activeTool: false, gizmo: false, bevel: false, knifePoints: false, pick: false, lastOp: false, dragMoves: false,
+  activeTool: false, gizmo: false, bevel: false, knifePoints: false, pick: false, lastOp: false, preview: false, dragMoves: false,
   multiLoopCut: false, insetDepth: false, additive: false,
 };
 const NEW: MeshChromeCaps = {
-  activeTool: true, gizmo: true, bevel: true, knifePoints: true, pick: true, lastOp: true, dragMoves: true,
+  activeTool: true, gizmo: true, bevel: true, knifePoints: true, pick: true, lastOp: true, preview: true, dragMoves: true,
   multiLoopCut: true, insetDepth: true, additive: true,
 };
 
@@ -27,7 +28,7 @@ describe('Edit Mesh chrome logic', () => {
       const fn = () => true;
       const sm = {
         setMeshEditActiveTool3D: fn, setMeshEditGizmoMode3D: fn, beginBevel3D: fn, applyMeshEditKnife3D: fn, pickMeshEditElementAt3D: fn,
-        getMeshEditLastOp3D: fn, redoMeshEditLastOp3D: fn, setMeshEditDragMovesSelection3D: fn, getMeshEditDragMovesSelection3D: fn,
+        getMeshEditLastOp3D: fn, redoMeshEditLastOp3D: fn, cancelMeshEditLastOp3D: fn, setMeshEditDragMovesSelection3D: fn, getMeshEditDragMovesSelection3D: fn,
         loopCuts3D: fn, extrudeRegion3D: fn, setAdditiveSelect3D: fn,
       };
       expect(meshChromeCaps(sm)).toEqual(NEW);
@@ -187,6 +188,23 @@ describe('Edit Mesh chrome logic', () => {
       expect(buildMeshOp(input({ lastOp: { op: 'bevel', params: {} }, transform: { mode: 'grab', axis: 'x', display: '1' } })).kind).toBe('transform');
     });
 
+    it('a live preview (next Edit Mesh batch §4): its own params + Apply AND Cancel, over "adjust last"; the Chamfer has Cancel too', () => {
+      const lastOp = { op: 'extrudeRegion', params: { distance: 0.3 } };
+      const ex = buildMeshOp(input({ tool: 'extrude', preview: 'extrude', lastOp, params: { ...DEFAULT_MESH_TOOL_PARAMS, extrudeDistance: 0.4 } }));
+      expect(ex.kind).toBe('preview');
+      expect(ex.title).toBe('Extrude');
+      expect(ex.params.map(p => [p.id, p.value])).toEqual([['distance', 0.4]]);
+      expect([ex.showApplyCancel, ex.showCancel, ex.applyLabel, ex.applyDisabled]).toEqual([true, true, 'Apply', false]);
+      expect(buildMeshOp(input({ tool: 'inset', preview: 'inset' })).params.map(p => p.id)).toEqual(['amount', 'depth']);
+      const sub = buildMeshOp(input({ preview: 'subdivide', params: { ...DEFAULT_MESH_TOOL_PARAMS, subdivideLevels: 2 } }));
+      expect([sub.title, sub.params.map(p => [p.id, p.kind, p.value])]).toEqual(['Subdivide', [['levels', 'int', 2]]]);
+      // a transform still comes first; with no preview the idle tool pill has no Cancel (as before)
+      expect(buildMeshOp(input({ preview: 'extrude', transform: { mode: 'grab', axis: 'x', display: '1' } })).kind).toBe('transform');
+      expect(buildMeshOp(input({ tool: 'extrude' })).showCancel).toBeFalse();
+      const bevel = buildMeshOp(input({ tool: 'bevel', bevel: { phase: 'adjust', kind: 'edge', amount: 0.1, maxAmount: 1, segments: 1, snap: false } as never }));
+      expect([bevel.kind, bevel.showCancel]).toEqual(['bevel', true]);
+    });
+
     it('last-op params: ints for counts / segments / levels, numbers otherwise, strings skipped', () => {
       const p = lastOpParams({ op: 'x', params: { count: 2, position: 0.5, segments: 3, levels: 1, distance: 0.3, mode: 'a', flag: true } });
       expect(p.map(q => [q.id, q.kind])).toEqual([['count', 'int'], ['position', 'number'], ['segments', 'int'], ['levels', 'int'],
@@ -225,6 +243,16 @@ describe('Edit Mesh chrome logic', () => {
       expect(exp.classicMeshEdit).toBeFalse();
       expect(switches.armature).toBeFalse();     // the other mode's switch is untouched
       expect(Object.keys(switches)).toEqual(['meshEdit', 'armature']);
+    });
+  });
+
+  describe('focus background', () => {
+    it('Wavy Sage (right after Wavy) is the default: wavy + the engine preset colours; plain Wavy stays the blue fallback', () => {
+      expect(DEFAULT_EDIT_BG_MODE).toBe('wavy-sage');
+      expect(MESH_BG_OPTIONS.map(o => o.id)).toEqual(['gradient', 'wavy', 'wavy-sage', 'checkers', 'dim', 'solid', 'none']);
+      expect(editBgOptions('wavy-sage')).toEqual({ mode: 'wavy', color1: [0.73, 0.80, 0.71, 1.0], color2: [0.93, 0.91, 0.84, 1.0] });
+      expect(editBgOptions('wavy')).toEqual({ mode: 'wavy' });
+      expect(editBgOptions('gradient')).toEqual({ mode: 'gradient' });
     });
   });
 });

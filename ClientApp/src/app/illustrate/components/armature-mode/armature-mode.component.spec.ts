@@ -398,3 +398,67 @@ describe('Experimental › Classic Armature panel', () => {
     expect(localStorage.getItem(EXP_CLASSIC_ARMATURE_KEY)).toBeNull();
   });
 });
+
+describe('Armature leave (direct mode switches)', () => {
+  function mount(f: ReturnType<typeof fakeEngine>) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      declarations: [ArmatureModeComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+      providers: [
+        { provide: RasterAnimationService, useValue: f.animation },
+        { provide: NotifyService, useValue: { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') } },
+      ],
+    });
+    const fixture = TestBed.createComponent(ArmatureModeComponent);
+    const canvas = document.createElement('div');
+    fixture.componentRef.setInput('shapeManager', f.sm);
+    fixture.componentRef.setInput('initialMeshId', 'm1');
+    fixture.componentRef.setInput('canvasEl', canvas);
+    fixture.detectChanges();
+    return { fixture, cmp: fixture.componentInstance };
+  }
+
+  it('leave() takes the engine armature down AT ONCE (before the next mode enters); the later ngOnDestroy adds nothing', () => {
+    const f = fakeEngine({ newApi: true, latch: true });
+    const { fixture, cmp } = mount(f);
+    f.sm.setAdditiveSelect3D(true);                          // a pen press set the latch
+    f.sm.showBoneOverlay3D.calls.reset();
+    f.sm.setAdditiveSelect3D.calls.reset();
+    cmp.leave();
+    expect(f.sm.showBoneOverlay3D).toHaveBeenCalledOnceWith(null);
+    expect(f.sm.setAdditiveSelect3D).toHaveBeenCalledOnceWith(false);   // the latch from before the Armature
+    // the next mode enters here (e.g. Edit Mesh: enterMeshEditMode3D) — then change detection destroys the view
+    fixture.destroy();
+    expect(f.sm.showBoneOverlay3D).toHaveBeenCalledTimes(1);
+    expect(f.sm.exitBonePlacementMode3D).toHaveBeenCalledTimes(1);
+    expect(f.sm.setAdditiveSelect3D).toHaveBeenCalledTimes(1);
+  });
+
+  it('enter / leave 20×: window listeners, scene-graph and joint-selection subscriptions all released', () => {
+    const f = fakeEngine({ newApi: true, latch: true });
+    let subs = 0, selSubs = 0;
+    f.sm.interactionService.onSceneGraphChanged = { subscribe: () => { subs++; return { unsubscribe: () => { subs--; } }; } };
+    f.sm.onArmatureJointSelectionChanged = () => { selSubs++; return () => { selSubs--; }; };
+    const added = new Map<unknown, number>();
+    const add = window.addEventListener.bind(window), rem = window.removeEventListener.bind(window);
+    const addSpy = spyOn(window, 'addEventListener').and.callFake(((t: string, h: EventListenerOrEventListenerObject, o?: boolean | AddEventListenerOptions) => {
+      added.set(h, (added.get(h) ?? 0) + 1); add(t, h, o);
+    }) as typeof window.addEventListener);
+    const remSpy = spyOn(window, 'removeEventListener').and.callFake(((t: string, h: EventListenerOrEventListenerObject, o?: boolean | EventListenerOptions) => {
+      if (added.has(h)) added.set(h, added.get(h)! - 1); rem(t, h, o);
+    }) as typeof window.removeEventListener);
+    for (let i = 0; i < 20; i++) {
+      const { fixture, cmp } = mount(f);
+      expect(subs).toBe(1);
+      expect(selSubs).toBe(1);
+      if (i % 2) cmp.leave();                                // the editor's closeArmaturePanel path
+      fixture.destroy();                                     // (or ngOnDestroy alone)
+      expect(subs).toBe(0);
+      expect(selSubs).toBe(0);
+    }
+    expect([...added.values()].filter(n => n !== 0)).toEqual([]);
+    expect(f.sm.getAdditiveSelect3D()).toBeFalse();
+    addSpy.and.callThrough(); remSpy.and.callThrough();
+  });
+});

@@ -2,6 +2,7 @@ import { Component, Input, NgZone, OnDestroy, OnInit, inject } from '@angular/co
 import type { IllustrationComponent } from '../illustration/illustration.component';
 import { BEVEL_ACTIONS, TOOL3D_ACTIONS } from '../illustration/editor-keymap';
 import { LongPressDetector, type LongPressPointer } from '../mode-chrome/long-press';
+import { acquireAdditiveLatch, releaseAdditiveLatch } from '../mode-chrome/additive-latch-scope';
 import type { ModeOpParamChange, ModeRadialItem } from '../mode-chrome/mode-chrome.types';
 import * as ops from '../../services/mesh-edit-ops';
 import { NotifyService } from '../../../shared/services/notify/notify.service';
@@ -56,8 +57,9 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
   private dismissedLastOp: string | null = null;
   /** The tool the pill last saw: a tool change (the panel, the rail, a key) dismisses "adjust last". */
   private seenTool: MeshToolId | null = null;
-  /** The additive latch before this turned it on (touch / pen: taps add / remove), restored on destroy. */
-  private latchBefore: boolean | null = null;
+  /** The engine whose additive latch this turned on (touch / pen: taps add / remove); the latch scope puts it back
+   *  when the last mode using it leaves (additive-latch-scope.ts). */
+  private latchSm: object | null = null;
   /** Pill scrubs of "adjust last" waiting for the next animation frame (one re-run per frame). */
   private pendingRedo: Record<string, number | boolean | string> | null = null;
   private redoRaf = 0;
@@ -70,8 +72,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     if (canvas) this.detachLongPress = this.ngZone.runOutsideAngular(() => this.longPress.attach(canvas));
     // Multi-select by default on touch / pen (round-2 feedback): every tap adds; a desktop click replaces, Shift adds
     const api = meshChromeApi(sm);
-    if (this.ed.touchUi.coarse && typeof api.setAdditiveSelect3D === 'function') {
-      this.latchBefore = TOOL3D_ACTIONS.additiveOn(this.ed);
+    if (this.ed.touchUi.coarse && typeof api.setAdditiveSelect3D === 'function' && acquireAdditiveLatch(sm, this)) {
+      this.latchSm = sm;
       api.setAdditiveSelect3D.call(sm, true);
     }
     this.ed._updateGizmoPosition();
@@ -80,9 +82,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.detachLongPress?.();
     this.detachLongPress = null;
-    const api = meshChromeApi(this.sm);
-    if (this.latchBefore !== null && typeof api.setAdditiveSelect3D === 'function') api.setAdditiveSelect3D.call(this.sm, this.latchBefore);
-    this.latchBefore = null;
+    releaseAdditiveLatch(this.latchSm, this);
+    this.latchSm = null;
     if (this.redoRaf) cancelAnimationFrame(this.redoRaf);
     this.ed?._updateGizmoPosition();
   }
@@ -103,14 +104,21 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     return this._caps;
   }
 
-  /** The pill's Frame: frame the selection; nothing selected: the whole mesh. */
+  /** The pill's Frame: frame the selection — faces facing one way (one face, a flat panel): the camera turns to look
+   *  straight at them (a newer Salsa's frameEditSelection3D, animated), else centre + zoom (frameSelected3D); nothing
+   *  selected: the whole mesh with the Edit Mesh entry framing (frameEditView3D — the same 60 % fit as on entering; an
+   *  older dist: frameMesh3D). */
   frame(): void {
     const id = this.meshId, sm = this.sm;
     if (!id || !sm) return;
     const s = this.counts;
-    const f = meshChromeApi(sm).frameSelected3D;
-    if (s.vertices + s.edges + s.faces > 0 && typeof f === 'function') f.call(sm);
-    else sm.frameMesh3D(id, 1.4);
+    const api = meshChromeApi(sm);
+    if (s.vertices + s.edges + s.faces > 0 && typeof api.frameEditSelection3D === 'function') { api.frameEditSelection3D.call(sm); return; }
+    const f = api.frameSelected3D;
+    if (s.vertices + s.edges + s.faces > 0 && typeof f === 'function') { f.call(sm); return; }
+    const fv = (sm as unknown as { frameEditView3D?: () => boolean }).frameEditView3D;
+    if (typeof fv === 'function' && fv.call(sm)) return;
+    sm.frameMesh3D(id, 1.4);
   }
 
   /** A tool change (the radial's Extrude / Inset). */
@@ -132,7 +140,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const op = typeof f === 'function' && this.caps.lastOp ? f.call(this.sm) : null;
     if (!op) return null;
     const sig = JSON.stringify(op);
-    return sig === this.dismissedLastOp ? null : { op, sig };
+    // (a live preview's Apply kept it: no "adjust last" for it — the preview was the adjusting)
+    return sig === this.dismissedLastOp || sig === this.ed.meshEdit.appliedOpSig ? null : { op, sig };
   }
   private dismissLastOp(): void {
     const f = meshChromeApi(this.sm).getMeshEditLastOp3D;
@@ -140,7 +149,7 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     this.dismissedLastOp = op ? JSON.stringify(op) : null;
   }
   /** The chrome ran an op: its "adjust last" shows even when it repeats the previous one exactly. */
-  private opRan(): void { this.dismissedLastOp = null; }
+  private opRan(): void { this.dismissedLastOp = null; this.ed.meshEdit.appliedOpSig = null; }
 
   private _opSig = '';
   private _op: MeshOpView | null = null;
@@ -161,7 +170,7 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const sel = me.selection;
     const input = {
       tool: me.tool, caps: this.caps, mode: me.selectionMode, sel: counts, params: { ...me.params }, transform, bevel,
-      knifePoints: me.knifePointCount, lastOp: last?.op ?? null, canBridge: ops.canBridge(sm, sel),
+      knifePoints: me.knifePointCount, lastOp: last?.op ?? null, canBridge: ops.canBridge(sm, sel), preview: me.previewKind,
     };
     const sig = JSON.stringify(input);
     if (sig !== this._opSig) { this._opSig = sig; this._op = buildMeshOp(input); }
@@ -185,6 +194,7 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
         return;
       }
       case 'adjust': this.queueRedo(e.id, e.value); return;
+      case 'preview': me.setPreviewParam(e.id, e.value); return;
       case 'extrude': if (e.id === 'distance') me.params.extrudeDistance = Number(e.value); return;
       case 'inset':
         if (e.id === 'amount') me.params.insetAmount = Number(e.value);
@@ -224,7 +234,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const me = this.ed.meshEdit;
     switch (op.kind) {
       case 'transform': TOOL3D_ACTIONS.commit(this.ed); return;
-      case 'bevel': BEVEL_ACTIONS.commit(this.ed); this.opRan(); return;
+      case 'bevel': me.applyBevel(); return;
+      case 'preview': me.applyPreview(); return;
       case 'adjust': this.dismissLastOp(); return;
       case 'extrude': if (me.runExtrude()) this.opRan(); return;
       case 'inset': if (me.runInset()) this.opRan(); return;
@@ -239,7 +250,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const me = this.ed.meshEdit;
     switch (op.kind) {
       case 'transform': TOOL3D_ACTIONS.cancel(this.ed); return;
-      case 'bevel': BEVEL_ACTIONS.cancel(this.ed); return;
+      case 'bevel': if (me.tool === 'bevel') me.cancelBevelTool(); else BEVEL_ACTIONS.cancel(this.ed); return;
+      case 'preview': me.cancelPreview(); return;
       case 'adjust': this.dismissLastOp(); this.ed.scene3dUndo(); this.ed.scene3dMarkDirty(); return;
       case 'knife': if (!me.cancelKnifePoints()) this.setTool('select'); return;
       default: this.setTool('select');
@@ -249,13 +261,16 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
   /** The pill's button: Bevel's Start (after an Esc dropped the running Chamfer). */
   opAction(id: string): void {
     if (!this.sm || !this.meshId) return;
-    if (id === 'start' && this.ed.meshEdit.tool === 'bevel' && !BEVEL_ACTIONS.active(this.ed)) BEVEL_ACTIONS.begin(this.ed);
+    if (id === 'start' && this.ed.meshEdit.tool === 'bevel' && !BEVEL_ACTIONS.active(this.ed)) this.ed.meshEdit.beginBevelPreview();
   }
 
   /** A radial menu pick: an op on the selection. */
   private runElementOp(id: MeshRadialId): void {
     const me = this.ed.meshEdit, sm = this.sm, meshId = this.meshId;
     if (!sm || !meshId) return;
+    // Extrude / Inset / Subdivide: their live preview (a newer Salsa); any other op cancels a preview showing first
+    if ((id === 'extrude' || id === 'inset') && me.previewSupported) { this.dismissLastOp(); me.toolKey(id); return; }
+    if (id !== 'subdivide') me.cancelPreview();
     switch (id) {
       case 'extrude': this.setTool('extrude'); if (me.runExtrude()) this.opRan(); return;
       case 'inset': this.setTool('inset'); if (me.runInset()) this.opRan(); return;
@@ -279,6 +294,8 @@ export class MeshEditChromeComponent implements OnInit, OnDestroy {
     const sm = this.sm, meshId = this.meshId, me = this.ed.meshEdit;
     if (!sm || !meshId || !me.scene3dIsEditingMesh) return;
     if (sm.isShortcutActive3D || BEVEL_ACTIONS.active(this.ed)) return;   // a modal op owns the finger
+    // A live preview: cancelled first, so the element is picked on the mesh before it (the menu's ops act on that)
+    if (me.previewKind) me.cancelPreview();
     const pick = meshChromeApi(sm).pickMeshEditElementAt3D;
     const hit = typeof pick === 'function' ? pick.call(sm, p.clientX, p.clientY, true) : null;
     let kind: MeshSelectMode = me.selectionMode;

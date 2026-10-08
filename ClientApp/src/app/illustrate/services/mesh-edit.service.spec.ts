@@ -313,3 +313,31 @@ describe('MeshEditService tools (mode chrome)', () => {
     expect(svc.scene3dIsEditingMesh).toBeFalse();
   });
 });
+
+describe('MeshEditService Drag Lock', () => {
+  afterEach(() => { try { localStorage.removeItem('fm-mesh-drag-lock'); } catch { /* */ } });
+  function make(withApi = true) {
+    const sm: any = withApi ? { setMeshEditDragMovesSelection3D: jasmine.createSpy('dragMoves') } : {};
+    const svc = new MeshEditService({ scene3dSelectedMeshId: 'm1' } as any, { run: (f: () => void) => f() } as any);
+    svc.bind({ shapeManager: sm } as any);
+    return { svc, sm };
+  }
+
+  it('off by default; on = the engine stops drag-to-move, off = back on; remembered on this device', () => {
+    try { localStorage.removeItem('fm-mesh-drag-lock'); } catch { /* */ }
+    const { svc, sm } = make();
+    expect(svc.dragLock).toBeFalse();
+    svc.setDragLock(true);
+    expect(sm.setMeshEditDragMovesSelection3D).toHaveBeenCalledWith(false);
+    expect(make().svc.dragLock).toBeTrue();        // a new editor session reads it back
+    svc.setDragLock(false);
+    expect(sm.setMeshEditDragMovesSelection3D).toHaveBeenCalledWith(true);
+    expect(make().svc.dragLock).toBeFalse();
+  });
+
+  it('an older engine without the switch: no throw', () => {
+    const { svc } = make(false);
+    expect(() => svc.setDragLock(true)).not.toThrow();
+    expect(svc.dragLock).toBeTrue();
+  });
+});

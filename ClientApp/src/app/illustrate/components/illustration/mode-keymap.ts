@@ -61,6 +61,12 @@ export const MESH_EDIT_KEYS = {
     run: (ed) => { if (meshEditBusy(ed)) return false; ed.meshEdit.toolKey('inset'); } },
   knife: { keys: ['k', 'K'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife tool on / off',
     run: (ed) => { ed.meshEdit.toggleKnifeTool(); } },   // (as the global K: it ends a running Chamfer / transform)
+  // A live preview (Extrude / Inset / Subdivide, the Bevel tool's Chamfer): Enter applies, Esc cancels it (the tool goes
+  // off). A held Loop Cut press: Esc drops it. Declined otherwise.
+  previewApply: { keys: ['Enter'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Apply the preview',
+    run: (ed) => ed.meshEdit.applyPreviewKey() },
+  previewCancel: { keys: ['Escape'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Cancel the preview',
+    run: (ed) => ed.meshEdit.cancelPreviewKey() || ed.meshEdit.cancelLoopCutPress() },
   // The Knife's tapped points (a newer Salsa): Enter cuts, Esc drops them. Declined otherwise (the global Enter / Esc).
   knifeApply: { keys: ['Enter'], mod: false, shift: false, alt: false, group: 'Edit Mesh', help: 'Knife: cut along the tapped points',
     run: (ed) => ed.meshEdit.applyKnifePoints() },

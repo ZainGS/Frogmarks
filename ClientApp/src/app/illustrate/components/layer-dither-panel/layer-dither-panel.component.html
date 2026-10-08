@@ -10,7 +10,7 @@
     <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
         <label style="width: 50px; color:#aaa; font-size: 10px;">Algorithm</label>
         <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
-                [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm"
+                [ngModel]="fx.ditherMenuValue(fx.getLayerDitherConfig(selectedRasterLayerId).algorithm)"
                 (ngModelChange)="fx.onLayerDitherAlgorithmChange(selectedRasterLayerId, $event)">
             <option *ngFor="let opt of fx.ditherAlgorithmOptions" [ngValue]="opt.value">{{ opt.label }}</option>
         </select>
@@ -145,7 +145,9 @@
             <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
                     [ngModel]="fx.getLayerDitherConfig(selectedRasterLayerId).algorithm"
                     (ngModelChange)="fx.onLayerDitherHalftoneShapeChange(selectedRasterLayerId, $event)">
-                <option *ngFor="let opt of halftoneShapeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+                <optgroup *ngFor="let g of fx.halftoneShapeGroups(fx.getLayerDitherConfig(selectedRasterLayerId).algorithm)" [label]="g.label">
+                    <option *ngFor="let opt of g.options" [ngValue]="opt.value">{{ opt.label }}</option>
+                </optgroup>
             </select>
         </div>
         <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
@@ -179,17 +181,17 @@
         </div>
         <!-- Edge sub-controls (only when width > 0) -->
         <ng-container *ngIf="(fx.getLayerDitherConfig(selectedRasterLayerId).edgeWidth ?? 0) > 0">
-            <!-- Mode segmented control -->
-            <div style="display: flex; gap: 2px; margin-bottom: 5px;">
-                <button class="scene3d-btn scene3d-btn-sm"
+            <!-- Mode segmented control: the three fill the row, a little more gap -->
+            <div style="display: flex; gap: 6px; margin-bottom: 5px;">
+                <button class="scene3d-btn scene3d-btn-sm" style="flex: 1; text-align: center;"
                         [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'content'"
                         (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'content')"
                         title="Ramp toward stroke/content boundary">Stroke</button>
-                <button class="scene3d-btn scene3d-btn-sm"
+                <button class="scene3d-btn scene3d-btn-sm" style="flex: 1; text-align: center;"
                         [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'canvas'"
                         (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'canvas')"
                         title="Ramp toward document border (vignette)">Canvas</button>
-                <button class="scene3d-btn scene3d-btn-sm"
+                <button class="scene3d-btn scene3d-btn-sm" style="flex: 1; text-align: center;"
                         [class.scene3d-btn-active]="($any(fx.getLayerDitherConfig(selectedRasterLayerId)).edgeMode ?? 'content') === 'both'"
                         (click)="fx.onLayerDitherEdgeModeChange(selectedRasterLayerId, 'both')"
                         title="Whichever boundary is nearer">Both</button>

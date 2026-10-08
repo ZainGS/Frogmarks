@@ -987,6 +987,12 @@ body.theme-retro-chrome .me-op-btn {
     color: var(--rc-green-txt) !important;
   }
 }
+/* Edit Mesh "Drag Lock" while on: the same green as a picked Vertex / Edge / Face button */
+body.theme-retro-chrome .me-lock-btn.active {
+  background: var(--rc-green) !important;
+  border-color: var(--rc-green) !important;
+  color: var(--rc-green-txt) !important;
+}
 
 body.theme-retro-chrome .me-num,
 body.theme-retro-chrome .me-select {

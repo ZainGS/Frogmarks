@@ -16,8 +16,10 @@ $danger:  #c0392b;
 
 // ── Selection type + Deselect all ─────────────────────────────────
 
+// Vertex / Edge / Face on the first line, Deselect all on its own full-width line below (the wrap)
 .me-mode-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-bottom: 10px;
@@ -45,7 +47,7 @@ $danger:  #c0392b;
 }
 
 .me-clear-btn {
-  flex: 0 0 auto;
+  flex: 1 0 100%;
   background: none;
   border: 1px solid #555;
   color: $muted;
@@ -57,6 +59,13 @@ $danger:  #c0392b;
 
   &:hover:not(:disabled) { color: #fff; border-color: #888; }
   &:disabled { opacity: 0.35; cursor: default; }
+}
+// Drag Lock (its own full-width row above Deselect all): on = the same active look as the Vertex / Edge / Face buttons
+.me-lock-btn.active {
+  background: rgba($accent, 0.25);
+  border-color: $accent;
+  color: lighten($accent, 30%);
+  font-weight: 600;
 }
 
 // ── Tools: the main toolbar's .vertical-tool-button (illustration.component.scss; the retro-chrome theme restyles the
@@ -236,14 +245,19 @@ $danger:  #c0392b;
   flex: 1 0 100%;
   display: flex;
   gap: 5px;
+  .me-op-btn { flex: 1; text-align: center; }   // Rotate plane / Flip side share the whole row
 }
 
+// One add button per row (+ Mirror; + Subdivision with its small ×2 at the end)
 .me-mod-add-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 4px;
+  margin-top: 6px;
 }
+.me-chip-grow { flex: 1; text-align: center; }
+.me-chip-x2 { flex: none; }
+.me-mirror-choice { margin-top: 4px; }
 
 .me-chip {
   background: #2a2a2a;

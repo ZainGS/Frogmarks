@@ -3,7 +3,6 @@ import type { IllustrationComponent } from '../illustration/illustration.compone
 import * as ops from '../../services/mesh-edit-ops';
 import type { MeshModifier, ProportionalFalloff } from '../../services/mesh-edit-ops';
 import { ExperimentalSettingsService } from '../../services/experimental-settings.service';
-import { NotifyService } from '../../../shared/services/notify/notify.service';
 import { modeIconPaths } from '../mode-chrome/mode-icons';
 import {
   MESH_BG_OPTIONS, MESH_PANEL_ICONS, MESH_SELECT_SEGMENTS, NEEDS_ENGINE_UPDATE, meshChromeCaps, meshPanelTools,
@@ -30,7 +29,6 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   @Input() ed!: MeshEditPropsHost;
 
   readonly exp = inject(ExperimentalSettingsService);
-  private readonly notify = inject(NotifyService, { optional: true });
   readonly segments = MESH_SELECT_SEGMENTS;
   readonly bgOptions = MESH_BG_OPTIONS;
 
@@ -106,6 +104,11 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   setMode(id: string): void { this.ed.meshEdit.setSelectionMode(id as MeshSelectMode); }
   deselectAll(): void { this.ed.meshEdit.deselectAll(); }
 
+  /** Drag Lock: dragging the selection doesn't move it (MeshEditService.setDragLock). */
+  private get _lockSvc(): { dragLock?: boolean; setDragLock?(on: boolean): void } { return this.ed.meshEdit as unknown as { dragLock?: boolean; setDragLock?(on: boolean): void }; }
+  get dragLock(): boolean { return !!this._lockSvc.dragLock; }
+  toggleDragLock(): void { this._lockSvc.setDragLock?.(!this.dragLock); }
+
   private _toolsSig = '';
   private _tools: MeshPanelTool[] = [];
   /** The tools for the selection type (a stable array while nothing they show changed). */
@@ -125,6 +128,17 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
     const me = this.ed.meshEdit;
     if (t.kind === 'tool') me.setTool(me.tool === t.id ? 'select' : t.id as MeshToolId);
     else me.runVerb(t.id as MeshVerbId);
+  }
+
+  /** The live preview showing (Subdivide's button shows pressed while its preview does: tapping it again cancels). */
+  get previewing(): string | null {
+    return (this.ed.meshEdit as unknown as { previewKind?: string | null }).previewKind ?? null;
+  }
+
+  /** Any modifier / cleanup action first cancels a live preview (next Edit Mesh batch §4): the preview's revert would
+   *  otherwise undo the wrong step, and the action works on the mesh before the preview. */
+  private endPreview(): void {
+    (this.ed.meshEdit as unknown as { cancelPreview?(): boolean }).cancelPreview?.();
   }
 
   iconPaths(icon: string): readonly string[] { return modeIconPaths(icon) ?? MESH_PANEL_ICONS[icon] ?? []; }
@@ -155,6 +169,7 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   }
 
   addMirrorFace(): void {
+    this.endPreview();
     const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).addMirrorFromFace3D;
     if (!id || typeof f !== 'function' || this.sel.faces.length !== 1) return;
     f.call(this.sm, id, this.sel.faces[0]);
@@ -163,6 +178,7 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   }
 
   addMirrorBisect(): void {
+    this.endPreview();
     const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).addMirrorBisect3D;
     if (!id || typeof f !== 'function') return;
     f.call(this.sm, id);
@@ -172,9 +188,16 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
 
   /** Rotate plane: the plane + its rotation handle on the canvas (again: hidden). One mirror's handle at a time. */
   toggleRotatePlane(m: MeshModifier): void {
+    this.endPreview();
     const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).setMirrorPlaneHandle3D;
     if (!id || typeof f !== 'function') return;
     const next = this.rotatingMirror === m.index ? null : m.index;
+    // The plane handle and a tool both want the canvas drags (the handle also replaces the tool's gizmo): turning the
+    // handle on puts the tool back to Select (a running tool preview is cancelled with it).
+    if (next !== null) {
+      (this.ed.meshEdit as unknown as { setTool?(t: string): void }).setTool?.('select');
+      this.toolSeen = this.ed?.meshEdit?.tool;   // this tool change is ours: ngDoCheck must not hide the handle for it
+    }
     f.call(this.sm, id, next);
     this.rotatingMirror = next;
   }
@@ -188,6 +211,7 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
 
   /** Flip side: the other side becomes the real half. */
   flipSide(m: MeshModifier): void {
+    this.endPreview();
     const id = this.meshId, f = ops.mirrorPlaneApi(this.sm).flipMirrorSide3D;
     if (id && typeof f === 'function') f.call(this.sm, id, m.index);
   }
@@ -196,43 +220,48 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   get canFlipSide(): boolean { return typeof ops.mirrorPlaneApi(this.sm).flipMirrorSide3D === 'function'; }
 
   addSubdivision(iterations: 1 | 2): void {
+    this.endPreview();
     const id = this.meshId;
     if (id) this.sm?.addSubdivisionModifier3D(id, iterations);
     this.ngDoCheck();
   }
 
   toggleModifier(m: MeshModifier): void {
+    this.endPreview();
     const id = this.meshId;
     if (id) this.sm?.setModifierEnabled3D(id, m.index, !m.enabled);
     this.ngDoCheck();
   }
 
-  /** Bake: the modifier into the mesh (undoable). */
+  /** Bake: the modifier into the mesh (undoable). The plane handle hides on any bake (the indices after it shift). */
   bakeModifier(m: MeshModifier): void {
+    this.endPreview();
     const id = this.meshId;
-    if (this.rotatingMirror === m.index) this.hidePlaneHandle();
+    this.hidePlaneHandle();
     if (id) this.sm?.applyModifier3D(id, m.index);
     this.ngDoCheck();
   }
 
-  /** Remove at once (one 3D undo step), with an Undo toast — the editor's remove convention (vector layer ✕). */
+  /** Remove at once (one 3D undo step — the top bar's Undo brings it back; no toast, user request 2026-10-08). The plane
+   *  handle is hidden on any removal: the modifier indices after it shift, so it could end up on another mirror. */
   removeModifier(m: MeshModifier): void {
+    this.endPreview();
     const id = this.meshId;
     if (!id || !this.sm) return;
-    if (this.rotatingMirror === m.index) this.hidePlaneHandle();
+    this.hidePlaneHandle();
     this.sm.removeModifier3D(id, m.index);
     this.ngDoCheck();
-    const ref = this.notify?.success(`Removed ${this.label(m)}`, 'Undo');
-    ref?.onAction().subscribe(() => { this.ed.scene3dUndo(); this.ed.scene3dMarkDirty(); });
   }
 
   // ── Cleanup ──
 
   mergeByDistance(): void {
+    this.endPreview();
     const id = this.meshId;
     if (id && this.sm) this.mergeRemovedCount = ops.mergeByDistance(this.sm, id, this.mergeThreshold);
   }
   fillHoles(): void {
+    this.endPreview();
     const id = this.meshId;
     if (id && this.sm) ops.fillHoles(this.sm, id);
   }

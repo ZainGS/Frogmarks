@@ -485,12 +485,13 @@ describe('editor keymap', () => {
       };
     }
     const btn = (ed: any, id: string) => pillButtons(activeContextPill(ed)!, ed).find(b => b.id === id)!;
+    // The object pill isn't shown any more (removed 2026-10-08); its buttons are still tested directly.
+    const objBtn = (ed: any, id: string) => pillButtons(CONTEXT_PILLS.object3d, ed).find(b => b.id === id)!;
 
-    it('object mode: Multi / Snap / Frame on a selected mesh; nothing without the 3D view, a selection, or in a sub-mode', () => {
+    it('object mode: no pill on a selected mesh (removed by the user), nor without the 3D view / a selection / in a sub-mode', () => {
       const ed = host();
-      const pill = activeContextPill(ed as any)!;
-      expect(pill).toBe(CONTEXT_PILLS.object3d);
-      expect(pillButtons(pill, ed as any).map(b => b.id)).toEqual(['multi', 'snap', 'frame']);
+      expect(activeContextPill(ed as any)).toBeNull();
+      expect(pillButtons(CONTEXT_PILLS.object3d, ed as any).map(b => b.id)).toEqual(['multi', 'snap', 'frame']);
       expect(activeContextPill(host({ selected: null }) as any)).toBeNull();
       expect(activeContextPill(host({ panel: false }) as any)).toBeNull();
       expect(activeContextPill(host({ subMode: true }) as any)).toBeNull();   // armature / UV editor / world panel
@@ -498,7 +499,7 @@ describe('editor keymap', () => {
 
     it('Multi and Snap are latches on the engine (aria-pressed from the engine); hidden on an old Salsa dist', () => {
       const ed = host();
-      const multi = btn(ed, 'multi'), snap = btn(ed, 'snap');
+      const multi = objBtn(ed, 'multi'), snap = objBtn(ed, 'snap');
       expect(multi.pressed!(ed as any)).toBeFalse();
       multi.run(ed as any);
       expect(ed.shapeManager.setAdditiveSelect3D).toHaveBeenCalledOnceWith(true);
@@ -509,15 +510,15 @@ describe('editor keymap', () => {
       expect(ed.shapeManager.setSnapToggle3D).toHaveBeenCalledOnceWith(true);
       expect(snap.pressed!(ed as any)).toBeTrue();
       const old = host({ engine: false });
-      expect(pillButtons(activeContextPill(old as any)!, old as any).map(b => b.id)).toEqual(['frame']);
+      expect(pillButtons(CONTEXT_PILLS.object3d, old as any).map(b => b.id)).toEqual(['frame']);
     });
 
     it('Frame: the engine frame-selected when present, else the selected mesh', () => {
       const ed = host();
-      btn(ed, 'frame').run(ed as any);
+      objBtn(ed, 'frame').run(ed as any);
       expect(ed.shapeManager.frameSelected3D).toHaveBeenCalledTimes(1);
       const old = host({ engine: false });
-      btn(old, 'frame').run(old as any);
+      objBtn(old, 'frame').run(old as any);
       expect(old.shapeManager.frameMesh3D).toHaveBeenCalledOnceWith('m1', 1.4);
     });
 

@@ -56,6 +56,11 @@ export class ArmaturePanelComponent implements ArmatureHost, OnInit, OnChanges, 
 
   /** Every close path (the panel's ✕, the toolbar, Shift+Tab, another 3D mode taking over) removes this panel. */
   ngOnDestroy(): void {
+    this.leave();
+  }
+
+  /** The engine teardown NOW (the editor's closeArmaturePanel, before a mode switch enters the next mode); once. */
+  leave(): void {
     this.pick.cancel();
     this.session.stop();
   }

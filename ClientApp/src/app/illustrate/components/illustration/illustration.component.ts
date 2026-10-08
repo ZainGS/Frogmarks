@@ -100,6 +100,7 @@ import { installEditorChrome } from './editor-chrome';
 import type { ModeChromeId } from '../mode-chrome/mode-chrome.types';
 import { installModeRailExit } from '../mode-chrome/mode-toolbar-scope';
 import { ArmatureModeComponent } from '../armature-mode/armature-mode.component';
+import { ArmaturePanelComponent } from '../armature-panel/armature-panel.component';
 import { followClassicArmature } from '../armature-mode/armature-mode.logic';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
@@ -624,6 +625,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
    *  next change detection, so the timeline's *ngIf and the chrome's teardown agree). */
   closeArmaturePanel(): void {
     this.armatureMode?.restoreTimeline();
+    // The engine teardown NOW, not in ngOnDestroy after the next change detection: a direct switch (the rail's Edit
+    // Mesh / UV Editor) enters the next mode right after this, and the late teardown tore that mode's camera down.
+    this.armatureMode?.leave();
+    this.armaturePanel?.leave();
     this.scene3dArmaturePanelOpen = false;
     this.armatureUndo.leave();
     if (this.useModeChrome.armature) this.scene3dGizmoMode = null;   // it mirrored the joint tool (onArmatureToolChange)
@@ -631,6 +636,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   /** The mode chrome's Armature (Rig | Animate), while mounted: the Armature keys drive it (mode-keymap ArmatureKeyTarget). */
   @ViewChild(ArmatureModeComponent) armatureMode?: ArmatureModeComponent;
+  /** The classic Armature panel, while mounted (closeArmaturePanel tears it down at once too). */
+  @ViewChild(ArmaturePanelComponent) armaturePanel?: ArmaturePanelComponent;
 
   /** <app-armature-mode> (toolChange): the main toolbar's Move / Rotate show the joint tool pressed (scene3dGizmoMode
    *  mirrors it; the engine's object gizmo stays off — scene3dSetGizmoMode routes to the joint tools in Armature). */
@@ -923,7 +930,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.artboard.updateOverlay();
   }
 
+  /** Edit Mesh / Armature / UV Paint own the camera: the view-bar controls (camera mode, target, fly, Play) are locked
+   *  while one is on (user request 2026-10-08; the bar disables its buttons via [locked]). */
+  get viewModesLocked(): boolean {
+    return this.meshEdit.scene3dIsEditingMesh || this.scene3dArmaturePanelOpen || this.uv.uvEditorOpen || this.uv.uvPaintMode;
+  }
+
   scene3dSetViewTarget(t: 'illustration' | 'scene'): void {
+    if (this.viewModesLocked) return;
     this.shapeManager.setTarget3D(t);
     this.editorState.scene3dViewTarget = t;
     if (t === 'scene' && this.has3DScene && !this.editorState.scene3dPanelVisible) {
@@ -932,6 +946,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dSetViewCameraMode(m: 'ortho2D' | 'perspective2D' | 'free3D'): void {
+    if (this.viewModesLocked) return;
     this.shapeManager.setCameraMode3D(m);
     this.editorState.scene3dViewCameraMode = m;
     if (m === 'free3D' && this.has3DScene && !this.editorState.scene3dPanelVisible) {
@@ -945,12 +960,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dSetFly(on: boolean): void {
+    if (this.viewModesLocked && on) return;
     this.scene3dViewFly = on;
     this.shapeManager.setFlyEnabled3D(on);
   }
 
   scene3dTogglePlay(): void {
     const sm = this.shapeManager;
+    if (this.viewModesLocked && !sm.isPlaying3D) return;   // can't START Play from an edit mode (stopping always works)
     // H1: enter / exit OUTSIDE the zone — the game loop and the mouse-look / keyboard listeners Play installs must not
     // run app change detection per frame / per key. The UI follows through onPlayStateChanged3D (enters the zone).
     if (sm.isPlaying3D) {

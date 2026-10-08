@@ -572,3 +572,49 @@ app-arm-sections { display: block; }
   .ar-lib-preview img { border-radius: 0 !important; }
 
 }
+
+// ── Retro-chrome theme (body.theme-retro-chrome): Edit Mesh's right-panel look (retro-chrome-theme.scss § 6 .me-*:
+// green section titles with the left bar, bevel buttons, green active state, Courier) instead of the teal accent. The
+// default theme keeps the look above; the .arm-chrome skin brings its own. ─────────────────────────────────────────────
+
+body.theme-retro-chrome .arm-sections:not(.arm-chrome) {
+  &, * { font-family: 'Courier New', Courier, monospace; }
+
+  .ar-section-title {
+    color: var(--rc-green-hi, #4f7a68);
+    border-left: 3px solid var(--rc-green, #3b6151);
+    background: #1c1c1c;
+    padding: 2px 6px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    &.ar-section-title-toggle:hover { color: var(--rc-green-txt, #c8ede3); }
+  }
+  .ar-section-sub, .ar-axis, .ar-vis-spring { color: var(--rc-green-hi, #4f7a68); }
+  .ar-hint-active {
+    color: var(--rc-green-txt, #c8ede3);
+    background: var(--rc-green, #3b6151);
+    border: 1px solid var(--rc-green-hi, #4f7a68);
+  }
+  .ar-leaf-tag { color: var(--rc-green-hi, #4f7a68); border-color: var(--rc-green, #3b6151); }
+
+  .ar-op-btn {
+    @include mode-raised;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text-muted, #a8a8a8);
+    &:hover:not(:disabled) { background: var(--rc-surface-hi, #2e2e2e); color: var(--rc-text, #c8c8c8); }
+    &.ar-active {
+      @include mode-sunken;
+      background: var(--rc-green, #3b6151);
+      color: var(--rc-green-txt, #c8ede3);
+    }
+  }
+  .ar-op-xs { padding: 2px 4px; }   // the bevel's 2 px border: rows of small buttons keep their width
+  .ar-op-danger { color: #ffb3a8; }
+  .ar-op-danger:hover:not(:disabled) { background: var(--rc-danger, #8b1a1a); color: #fff; }
+
+  .ar-list-row.active {
+    background: var(--rc-green, #3b6151);
+    border-color: var(--rc-green-hi, #4f7a68);
+    color: var(--rc-green-txt, #c8ede3);
+  }
+}

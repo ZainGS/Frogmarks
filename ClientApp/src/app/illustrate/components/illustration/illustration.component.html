@@ -352,8 +352,9 @@
             {{ cityBuildReason === 'load' ? 'Building city…' : 'Updating city…' }}
         </div>
 
-        <!-- Export reminder banner (no-cloud / local-only) -->
-        <div *ngIf="doc.showExportReminder" class="export-reminder">
+        <!-- Export reminder banner (no-cloud / local-only). Not shown in the edit modes (Edit Mesh / Armature / UV Paint —
+             it covered their canvas; user 2026-10-08): it appears again once the mode is left. -->
+        <div *ngIf="doc.showExportReminder && !viewModesLocked" class="export-reminder">
           <span class="export-reminder-text">
             Back up your work<ng-container *ngIf="storage.opfsSizeLabel"> — scene is <strong>{{ storage.opfsSizeLabel }}</strong> in browser storage</ng-container> — export a <strong>.frogmarks</strong> file to keep a portable copy.
           </span>
@@ -498,11 +499,11 @@
                     <div class="top-toolbar-history" role="group" aria-label="History">
                         <button type="button" class="top-history-btn" (click)="editUndo(); $event.stopPropagation()"
                                 [title]="touchUi.coarse ? 'Undo (two-finger tap)' : 'Undo (Ctrl+Z)'" aria-label="Undo">
-                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 7H4V2M4.5 7.5A8.5 8.5 0 1 1 3.6 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7H4V2M4.5 7.5A8.5 8.5 0 1 1 3.6 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg>
                         </button>
                         <button type="button" class="top-history-btn" (click)="editRedo(); $event.stopPropagation()"
                                 [title]="touchUi.coarse ? 'Redo (three-finger tap)' : 'Redo (Ctrl+Y)'" aria-label="Redo">
-                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 7h5V2M19.5 7.5A8.5 8.5 0 1 0 20.4 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7h5V2M19.5 7.5A8.5 8.5 0 1 0 20.4 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg>
                         </button>
                     </div>
                 </div>
@@ -523,6 +524,7 @@
                         [scene3dViewFly]="scene3dViewFly"
                         [scene3dViewIsPlaying]="scene3dViewIsPlaying"
                         [scene3dPlayCameraMode]="scene3dPlayCameraMode"
+                        [locked]="viewModesLocked"
                         (setCameraMode)="scene3dSetViewCameraMode($event)"
                         (setTarget)="scene3dSetViewTarget($event)"
                         (setArtboardFrame)="scene3dSetArtboardFrame($event)"
@@ -936,17 +938,17 @@
              [class.no-side-panel]="!sidePanel.visible && !modePanelOpen">
             <div class="zoom-percent-display" (click)="artboard.zoomFitClick()" [title]="editorState.scene3dViewCameraMode === 'free3D' ? 'Click to return to the scene view' : 'Current zoom — click to fit artboard'">{{ artboard.currentZoomPercent }}</div>
             <div class="row zoom-control-row">
-                <div class="col-6 zoom-button-left" (click)="artboard.zoomOut()">
+                <div class="col-6 zoom-button-left" (fmHoldRepeat)="artboard.zoomOut()">
                     <span class="zoom-symbol" style="filter: brightness(10);">➖</span>
                 </div>
-                <div class="col-6 zoom-button-right" (click)="artboard.zoomIn()">
+                <div class="col-6 zoom-button-right" (fmHoldRepeat)="artboard.zoomIn()">
                     <span class="zoom-symbol" style="filter: brightness(10);">➕</span>
                 </div>
             </div>
             <div *ngIf="editorState.scene3dViewCameraMode === 'free3D'" class="fit-artboard-btn" (click)="scene3dFrameScene()" title="Return to the scene view (frames everything visible)">
                 Scene
             </div>
-            <div *ngIf="artboard.artboardLabelText" class="fit-artboard-btn" (click)="artboard.fitArtboard()" title="Fit artboard to view">
+            <div *ngIf="artboard.artboardLabelText" class="fit-artboard-btn" (click)="artboard.fitView()" title="Fit to view">
                 Fit
             </div>
         </div>
@@ -1405,17 +1407,6 @@
                 </svg>
             </div>
 
-            <!-- Grease Pencil -->
-            <div class="vertical-tool-button"
-                 [class.selected]="gpPanelVisible"
-                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
-                 (click)="gpPanelVisible ? closeGpPanel() : openGpPanel()"
-                 title="Grease Pencil">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                </svg>
-            </div>
-
             <!-- UV Editor -->
             <div class="vertical-tool-button"
                  [class.selected]="uv.uvEditorOpen"
@@ -1427,6 +1418,17 @@
                     <rect x="8" y="2" width="8" height="6"/>
                     <rect x="8" y="16" width="8" height="6"/>
                     <rect x="2" y="8" width="6" height="8"/>
+                </svg>
+            </div>
+
+            <!-- Grease Pencil (after the UV Editor — user, 2026-10-08) -->
+            <div class="vertical-tool-button"
+                 [class.selected]="gpPanelVisible"
+                 [class.tool-disabled]="!editorState.scene3dSelectedMeshId"
+                 (click)="gpPanelVisible ? closeGpPanel() : openGpPanel()"
+                 title="Grease Pencil">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
             </div>
 

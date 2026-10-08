@@ -7,6 +7,7 @@ import type { ArmAnimService } from './arm-anim.service';
 import type { ArmLibraryService } from './arm-library.service';
 import type { ArmSpringService } from './arm-spring.service';
 import { armApi, type ArmJointRef } from './arm-engine';
+import { DEFAULT_EDIT_BG_MODE, editBgOptions } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 
 export interface ArmatureSkeleton {
   id: string;
@@ -47,12 +48,13 @@ export interface NLATrackDisplay {
   segments: NLASegmentDisplay[];
 }
 
-export type ArmatureBgMode = 'wavy' | 'checkers' | 'gradient' | 'dim' | 'solid' | 'none';
+export type ArmatureBgMode = 'wavy' | 'wavy-sage' | 'checkers' | 'gradient' | 'dim' | 'solid' | 'none';
 
 /** The armature background styles (the classic panel's dropdown, the mode header's ⋯ menu). */
 export const ARMATURE_BG_MODES: ReadonlyArray<{ id: ArmatureBgMode; label: string }> = [
   { id: 'gradient', label: 'Gradient' },
   { id: 'wavy', label: 'Wavy' },
+  { id: 'wavy-sage', label: 'Wavy Sage' },
   { id: 'checkers', label: 'Clover Picnic' },
   { id: 'dim', label: 'Dim' },
   { id: 'solid', label: 'Solid' },
@@ -81,8 +83,8 @@ export interface ArmatureHost {
  * cleans up on stop. Shared by the classic panel and the mode chrome (moved verbatim from armature-panel.component).
  */
 export class ArmatureSession {
-  /** The calm gradient by default (UI review 2026-10-07 §3 #18); Wavy stays in the list. */
-  bgMode: ArmatureBgMode = 'gradient';
+  /** Wavy Sage by default (DEFAULT_EDIT_BG_MODE, shared with Edit Mesh). */
+  bgMode: ArmatureBgMode = DEFAULT_EDIT_BG_MODE;
   /** Every selected joint (primary first) on a Salsa dist with multi-select (onArmatureJointSelectionChanged); else
    *  the primary alone. */
   selection: ArmJointRef[] = [];
@@ -100,15 +102,21 @@ export class ArmatureSession {
 
   private get sm(): ShapeManager { return this.host.shapeManager; }
 
+  /** Between start() and stop(): stop() runs its engine teardown once (the editor runs it synchronously when it closes
+   *  the mode — a mode switch then enters the next mode with nothing of the Armature left — and ngOnDestroy again). */
+  private _running = false;
+  get running(): boolean { return this._running; }
+
   /** ngOnInit: enter the engine's armature mode on the initial mesh. */
   start(initialTool: 'move' | 'rotate' = 'rotate'): void {
     if (!this.sm) return;
+    this._running = true;
     const { rig, binding } = this.host;
     if (this.host.initialMeshId) binding.bindMeshId = this.host.initialMeshId;
     this._subscribe();
     binding.refreshMeshes();
     this.sm.enterArmatureMode3D(binding.bindMeshId || undefined);
-    this.sm.setArmatureBgMode3D({ mode: this.bgMode });
+    this.sm.setArmatureBgMode3D(editBgOptions(this.bgMode));
     this.sm.setArmatureToolMode3D(initialTool);
     rig.armatureToolMode = initialTool;
     rig.refreshSkeletons();
@@ -120,15 +128,18 @@ export class ArmatureSession {
     if (!this.sm) return;
     this._unsubscribe();
     this._subscribe();
-    this.sm.setArmatureBgMode3D({ mode: this.bgMode });
+    this.sm.setArmatureBgMode3D(editBgOptions(this.bgMode));
     this.host.refreshAll();
   }
 
   /** ngOnDestroy: every close path (✕ / Done, the toolbar, Shift+Tab, another 3D mode taking over). Each service stops
    *  its own work (clip / NLA players / polls, library previews) in its ngOnDestroy. */
   stop(): void {
+    if (!this._running) { this._unsubscribe(); return; }
+    this._running = false;
     this._unsubscribe();
-    if (this.host.binding.wpActive) this.sm?.exitWeightPaintMode3D();
+    // (the engine's own state too: the Weight Brush tool can paint without the panel's flag having caught up yet)
+    if (this.host.binding.wpActive || this.sm?.isWeightPainting3D?.()) this.sm?.exitWeightPaintMode3D();
     this.sm?.exitBonePlacementMode3D();
     this.sm?.showBoneOverlay3D(null);
     this.sm?.selectJoint3D(null);
@@ -137,7 +148,7 @@ export class ArmatureSession {
 
   setBgMode(mode: ArmatureBgMode): void {
     this.bgMode = mode;
-    this.sm?.setArmatureBgMode3D({ mode });
+    this.sm?.setArmatureBgMode3D(editBgOptions(mode));
   }
 
   refreshAll(): void {

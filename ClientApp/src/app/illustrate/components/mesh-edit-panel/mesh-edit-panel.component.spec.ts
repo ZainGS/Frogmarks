@@ -33,8 +33,12 @@ describe('MeshEditPanelComponent operations', () => {
     return { panel, sm, sel };
   }
 
-  it('defaults to the calm Gradient background', () => {
-    expect(setup(true).panel.bgMode).toBe('gradient');
+  it('defaults to the Wavy Sage background (wavy + the sage colours on the engine)', () => {
+    const { panel, sm } = setup(true);
+    expect(panel.bgMode).toBe('wavy-sage');
+    panel.updateBgMode();
+    expect(sm['setMeshEditBgMode3D']).toHaveBeenCalledOnceWith(
+      { mode: 'wavy', color1: [0.73, 0.80, 0.71, 1.0], color2: [0.93, 0.91, 0.84, 1.0] });
   });
 
   it('Extrude / Inset: ONE region op on the whole face selection, which stays selected', () => {

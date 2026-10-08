@@ -1,12 +1,16 @@
 @import '../../../styles/mode-chrome-mixins';
 
-// Bottom centre of the free viewport: from the rail's edge (70 px; the colour picker is hidden while a mode with the
-// chrome is active) to the props panel (--fm-modeprops-w) + the zoom widget (~116 px). With the animation timeline
-// open (class="above-timeline") it sits above it. Only the pill itself takes pointer events.
+// Bottom centre of the free viewport — the same centre as the artboard: from the rail's edge (70 px; the colour picker
+// is hidden while a mode with the chrome is active) to the props panel (--fm-modeprops-w). Equal side padding (the
+// zoom widget's width + its gap, ~120 px) keeps a wide pill clear of the zoom box while staying centred (it used to
+// be centred between the rail and the zoom box, i.e. ~58 px left of centre — user, 2026-10-08). With the animation
+// timeline open (class="above-timeline") it sits above it. Only the pill itself takes pointer events.
 :host {
   position: fixed;
   left: 70px;
-  right: calc(var(--fm-modeprops-w, 0px) + 116px);
+  right: var(--fm-modeprops-w, 0px);
+  padding: 0 120px;
+  box-sizing: border-box;
   bottom: 16px;
   z-index: 950;
   display: flex;
@@ -15,12 +19,9 @@
   container-type: inline-size;   // the compact layout follows the free width (props panel open or not), not the screen
 }
 :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
-// Touch: the zoom box is 120 px wide there (illustration.component.scss), 6 px from the props panel
-@media (pointer: coarse) { :host { right: calc(var(--fm-modeprops-w, 0px) + 132px); } }
-
 // Phone / narrow: the whole free width, above the zoom widget.
 @media (max-width: 700px) {
-  :host { right: var(--fm-modeprops-w, 0px); bottom: 112px; left: 74px; }
+  :host { right: var(--fm-modeprops-w, 0px); bottom: 112px; left: 74px; padding: 0; }
   :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
 }
 

@@ -16,6 +16,7 @@ import { ExperimentalSettingsService } from '../../services/experimental-setting
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
 import { LongPressDetector, type LongPressPointer } from '../mode-chrome/long-press';
+import { acquireAdditiveLatch, releaseAdditiveLatch } from '../mode-chrome/additive-latch-scope';
 import type { ModeOpParamChange, ModeRadialItem } from '../mode-chrome/mode-chrome.types';
 import type { ArmatureKeyTarget } from '../illustration/mode-keymap';
 import {
@@ -86,8 +87,10 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   private readonly longPress: LongPressDetector;
   private detachLongPress: (() => void) | null = null;
   private detachLatch: (() => void) | null = null;
-  /** The additive latch before Armature (put back on leave); null = not touched. */
-  private latchBefore: boolean | null = null;
+  /** The engine the additive latch scope was joined on (additive-latch-scope.ts: put back by the last mode to leave). */
+  private latchSm: ShapeManager | null = null;
+  /** leave() ran (the engine teardown is done; ngOnDestroy only finishes the view). */
+  private left = false;
   private pillKey = '';
 
   constructor(public cdr: ChangeDetectorRef, public rig: ArmRigService, public binding: ArmBindingService, public anim: ArmAnimService,
@@ -135,17 +138,30 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   get modeTools(): ArmModeTool[] { return modeToolsFor(this.workspace); }
 
   ngOnDestroy(): void {
+    this.leave();
+    this.chromeLayout.emit();
+  }
+
+  /**
+   * Leave the Armature NOW: listeners off, the latch scope left, the engine's armature mode down (session.stop). The
+   * editor calls it from closeArmaturePanel, before a mode switch enters the next mode in the same tick (the teardown
+   * used to run in ngOnDestroy, after the next mode had entered, and tore that mode's camera down). Runs once;
+   * ngOnDestroy calls it too.
+   */
+  leave(): void {
+    if (this.left) return;
+    this.left = true;
     this.detachLongPress?.();
     this.detachLongPress = null;
     this.detachLatch?.();
     this.detachLatch = null;
     this.pick.cancel();
-    if (this.latchBefore !== null) armApi(this.shapeManager).setAdditiveSelect3D?.(this.latchBefore);
+    releaseAdditiveLatch(this.latchSm, this);
+    this.latchSm = null;
     // The editor restores the timeline in closeArmaturePanel (restoreTimeline) before this view goes; this covers any
     // other teardown, after the current change detection.
     if (this.timeline.active) void Promise.resolve().then(() => this.restoreTimeline());
     this.session.stop();
-    this.chromeLayout.emit();
   }
 
   private attachLongPress(): void {
@@ -164,7 +180,7 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
   private attachLatch(): void {
     const api = armApi(this.shapeManager);
     if (typeof api.setAdditiveSelect3D !== 'function' || typeof window === 'undefined') return;
-    this.latchBefore = !!api.getAdditiveSelect3D?.();
+    if (acquireAdditiveLatch(this.shapeManager, this)) this.latchSm = this.shapeManager;
     const onDown = (e: PointerEvent): void => {
       const el = this.canvasEl;
       if (el && !(e.target instanceof Node && el.contains(e.target))) return;
@@ -222,7 +238,7 @@ export class ArmatureModeComponent implements ArmatureHost, ArmatureKeyTarget, O
 
   get hasSelection(): boolean { return this.session.selection.length > 0 || this.rig.selectedJointIdx !== null; }
 
-  /** The pill's Frame (the old header's Frame). */
+  /** The pill's Frame (the old header's Frame): the Armature's edit camera framing (arm-binding focusMesh). */
   frame(): void { this.binding.focusMesh(); }
 
   get bgMode(): ArmatureBgMode { return this.session.bgMode; }

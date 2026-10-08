@@ -1,58 +1,54 @@
 <!-- Camera mode: 3-way segmented -->
 <div class="scene-view-seg">
-    <button class="scene-view-btn"
+    <button [disabled]="locked" class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'ortho2D'"
             (click)="setCameraMode.emit('ortho2D')"
             title="2D Ortho — locked illustration camera, orthographic"><span class="svb-long">2D </span>Ortho</button>
-    <button class="scene-view-btn"
+    <button [disabled]="locked" class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'perspective2D'"
             (click)="setCameraMode.emit('perspective2D')"
             title="2D Persp — locked illustration camera, perspective"><span class="svb-long">2D </span>Persp</button>
-    <button class="scene-view-btn"
+    <button [disabled]="locked" class="scene-view-btn"
             [class.active]="scene3dViewCameraMode === 'free3D'"
             (click)="setCameraMode.emit('free3D')"
             title="3D Free — orbit (Alt+drag), pan (Shift+drag), dolly (scroll)">3D<span class="svb-long"> Free</span></button>
 </div>
 <!-- Target: Illustration ↔ Scene -->
 <div class="scene-view-seg">
-    <button class="scene-view-btn"
+    <button [disabled]="locked" class="scene-view-btn"
             [class.active]="scene3dViewTarget === 'illustration'"
             (click)="setTarget.emit('illustration')"
             title="Illustration: produces a fixed X×Y image. Raster/vector layers preserved.">Illus</button>
-    <button class="scene-view-btn"
+    <button [disabled]="locked" class="scene-view-btn"
             [class.active]="scene3dViewTarget === 'scene'"
             (click)="setTarget.emit('scene')"
             title="Scene: interactive 3D world. Layers preserved.">Scene</button>
 </div>
 <!-- Artboard frame (illustration × free3D) -->
-<button class="scene-view-btn scene-view-icon-btn"
+<button [disabled]="locked" class="scene-view-btn scene-view-icon-btn"
         *ngIf="scene3dViewTarget === 'illustration' && scene3dViewCameraMode === 'free3D'"
         [class.active]="scene3dViewArtboardFrame"
         (click)="setArtboardFrame.emit(!scene3dViewArtboardFrame)"
         title="Show artboard render safe-frame outline in 3D view">⬜</button>
 <!-- Fly editor camera (free3D only) -->
-<button class="scene-view-btn scene-view-icon-btn"
+<button [disabled]="locked" class="scene-view-btn scene-view-icon-btn"
         *ngIf="scene3dViewCameraMode === 'free3D'"
         [class.active]="scene3dViewFly"
         (click)="setFly.emit(!scene3dViewFly)"
         title="WASD flythrough: W/S forward, A/D strafe, E/Q up/down, Shift boost. Aim by orbit-drag.">🛩</button>
-<!-- Touch only (mobile-parity): one finger moves the camera instead of the active tool -->
-<button class="scene-view-btn"
-        *ngIf="touchUi.coarse && touchNavAvailable && !scene3dViewIsPlaying"
-        [class.active]="scene3dTouchNavigate"
-        (click)="scene3dToggleTouchNavigate()"
-        title="Navigate: one finger orbits / pans the camera (instead of using the tool). Two fingers always navigate.">Navigate</button>
+<!-- (The touch "Navigate" toggle was removed at the user's request, 2026-10-08: drags off the selection orbit and the
+     main toolbar's Pan tool pans. scene3dToggleTouchNavigate() stays in the component, unused.) -->
 <!-- 1P/3P toggle + Play button (scene target only) -->
 <ng-container *ngIf="scene3dViewTarget === 'scene'">
     <div class="scene-view-seg" title="Camera perspective when playing">
-        <button class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'first'"
+        <button [disabled]="locked" class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'first'"
                 (click)="playCameraModeChange.emit('first')" title="First-person — camera sits at the character's eyes">1P</button>
-        <button class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'third'"
+        <button [disabled]="locked" class="scene-view-btn" [class.active]="scene3dPlayCameraMode === 'third'"
                 (click)="playCameraModeChange.emit('third')" title="Third-person — camera pulls back and follows the character">3P</button>
     </div>
     <!-- Play settings (Salsa polish round 3 T5): first-person eye height + auto default character -->
     <div style="position:relative;display:inline-flex">
-        <button class="scene-view-btn scene-view-icon-btn" [class.active]="scene3dPlaySettingsOpen"
+        <button [disabled]="locked" class="scene-view-btn scene-view-icon-btn" [class.active]="scene3dPlaySettingsOpen"
                 (click)="scene3dTogglePlaySettings()" title="Play settings">&#9881;</button>
         <div *ngIf="scene3dPlaySettingsOpen"
              style="position:absolute;top:100%;right:0;margin-top:4px;z-index:60;width:230px;background:#1e1e1e;border:1px solid #444;border-radius:4px;padding:8px;box-shadow:0 4px 14px rgba(0,0,0,0.5)">
@@ -130,7 +126,7 @@
             </div>
         </div>
     </div>
-    <button class="scene-view-btn scene-view-play-btn"
+    <button [disabled]="locked" class="scene-view-btn scene-view-play-btn"
             [class.playing]="scene3dViewIsPlaying"
             (click)="togglePlay.emit()"
             [title]="scene3dViewIsPlaying ? 'Stop — restores editor view' : 'Play scene — walk (WASD + Space, click canvas for mouse-look)'">{{ scene3dViewIsPlaying ? '⏹' : '▶' }}</button>

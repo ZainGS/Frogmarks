@@ -16,7 +16,7 @@
                 <span class="mop-scrub" [title]="p.title || ('Drag sideways to change ' + p.label + ' (Shift: fine); tap to type')"
                       (pointerdown)="scrubDown($event, p)" (pointermove)="scrubMove($event, p)"
                       (pointerup)="scrubUp($event, p)" (pointercancel)="scrubCancel()">{{ p.label }}</span>
-                <button type="button" class="mop-step" [disabled]="p.disabled" (click)="step(p, -1)"
+                <button type="button" class="mop-step" [disabled]="p.disabled" (fmHoldRepeat)="step(p, -1)"
                         [attr.aria-label]="'Less ' + p.label">−</button>
                 <input *ngIf="editingId === p.id; else valueBtn" #edit class="mop-input" type="text" inputmode="decimal"
                        autocomplete="off" spellcheck="false" [value]="editText" [attr.aria-label]="p.label"
@@ -25,7 +25,7 @@
                     <button type="button" class="mop-value" [disabled]="p.disabled" [attr.aria-label]="p.label + ': ' + format(p) + ', tap to type'"
                             (click)="startEdit(p)" (keydown)="onValueKey($event, p)">{{ format(p) }}</button>
                 </ng-template>
-                <button type="button" class="mop-step" [disabled]="p.disabled" (click)="step(p, 1)"
+                <button type="button" class="mop-step" [disabled]="p.disabled" (fmHoldRepeat)="step(p, 1)"
                         [attr.aria-label]="'More ' + p.label">+</button>
             </div>
 

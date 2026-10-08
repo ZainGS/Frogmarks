@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { LayerEffectsService } from '../../services/layer-effects.service';
-import { BAYER_LEVEL_OPTIONS, COLOR_LEVEL_OPTIONS, COLOR_MODE_OPTIONS, HALFTONE_SHAPE_OPTIONS } from 'app/boards/models/brush-preset.model';
+import { BAYER_LEVEL_OPTIONS, COLOR_LEVEL_OPTIONS, COLOR_MODE_OPTIONS } from 'app/boards/models/brush-preset.model';
 
 /** The whole-canvas (global) dither, shown in the right panel's Global tab ("Global Dither" section).
  *  A view over LayerEffectsService (refactor-plan 2.10a). */
@@ -12,7 +12,6 @@ import { BAYER_LEVEL_OPTIONS, COLOR_LEVEL_OPTIONS, COLOR_MODE_OPTIONS, HALFTONE_
 export class DitherOptionsComponent {
   readonly bayerLevelOptions = BAYER_LEVEL_OPTIONS;
   readonly colorLevelOptions = COLOR_LEVEL_OPTIONS;
-  readonly halftoneShapeOptions = HALFTONE_SHAPE_OPTIONS;
   readonly colorModeOptions = COLOR_MODE_OPTIONS;
   mathRound(v: number): number { return Math.round(v); }
   constructor(public fx: LayerEffectsService) {}

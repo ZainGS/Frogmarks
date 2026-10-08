@@ -1,8 +1,9 @@
 <!-- Round-2 feedback (2026-10-08): no header bar or tool strip — the main toolbar's Select / Pan / Move / Rotate / Scale
      stay, the mode's tools are in the right panel. The pill is always up: Frame, then the active tool's name +
-     parameters + Apply (no Cancel: tapping the tool again turns it off; Esc still cancels). -->
+     parameters + Apply. Cancel only for the live previews (Extrude / Inset / Subdivide / Bevel); otherwise tapping the
+     tool again turns it off (Esc still cancels). -->
 <app-mode-op-pill *ngIf="op as o" [class.above-timeline]="ed.animationEnabled"
-    [title]="o.title" [params]="o.params" [showApplyCancel]="o.showApplyCancel" [showCancel]="false"
+    [title]="o.title" [params]="o.params" [showApplyCancel]="o.showApplyCancel" [showCancel]="o.showCancel"
     [showFrame]="true" (frame)="frame()"
     [applyLabel]="o.applyLabel" [applyDisabled]="o.applyDisabled"
     (paramChange)="setOpParam($event)" (apply)="applyOp()" (cancel)="cancelOp()" (action)="opAction($event)"></app-mode-op-pill>

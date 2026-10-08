@@ -51,7 +51,11 @@ export class ArmBindingService {
 
   wpActive = false;
 
+  /** Frame: the Armature's edit camera frames its mesh (a newer Salsa: the armature has its own camera, decoupled from
+   *  the 2D view); an older dist's armature camera follows the 2D zoom, so it fits the artboard as before. */
   focusMesh(): void {
+    const sm = this.sm as (ShapeManager & { frameEditView3D?: () => boolean }) | null | undefined;
+    if (typeof sm?.frameEditView3D === 'function' && sm.frameEditView3D()) return;
     this.sm?.fitArtboard();
   }
 

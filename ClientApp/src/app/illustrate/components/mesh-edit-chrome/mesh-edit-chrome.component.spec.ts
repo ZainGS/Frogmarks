@@ -40,6 +40,12 @@ describe('MeshEditChromeComponent', () => {
       invertSelection: jasmine.createSpy('invertSelection'),
       exitMeshEditMode: jasmine.createSpy('exitMeshEditMode'),
       setBgMode: jasmine.createSpy('setBgMode'),
+      // the live preview (next Edit Mesh batch §4)
+      previewKind: null, previewSupported: false, appliedOpSig: null,
+      cancelPreview: jasmine.createSpy('cancelPreview').and.returnValue(false),
+      setPreviewParam: jasmine.createSpy('setPreviewParam'),
+      applyPreview: jasmine.createSpy('applyPreview').and.returnValue(true),
+      toolKey: jasmine.createSpy('toolKey'),
     };
     const ed: any = {
       shapeManager: sm, meshEdit, editorState: { scene3dSelectedMeshId: 'm1', scene3dSelectedMeshName: 'Box' },
@@ -139,6 +145,48 @@ describe('MeshEditChromeComponent', () => {
     expect(c.op).not.toBeNull();
     c.frame();
     expect(sm.frameMesh3D).toHaveBeenCalledOnceWith('m1', 1.4);
+  });
+
+  it('a live preview: its pill (Apply + Cancel) wins over adjust last; params / Apply / Cancel go to the service', () => {
+    const { c, meshEdit } = setup({ lastOp: true });
+    meshEdit.tool = 'extrude';
+    meshEdit.previewKind = 'extrude';
+    const op = c.op!;
+    expect([op.kind, op.title, op.showApplyCancel, op.showCancel]).toEqual(['preview', 'Extrude', true, true]);
+    c.setOpParam({ id: 'distance', value: 0.6 });
+    expect(meshEdit.setPreviewParam).toHaveBeenCalledOnceWith('distance', 0.6);
+    c.applyOp();
+    expect(meshEdit.applyPreview).toHaveBeenCalledTimes(1);
+    c.cancelOp();
+    expect(meshEdit.cancelPreview).toHaveBeenCalledTimes(1);
+    // after an Apply the kept op gets no "adjust last" pill
+    meshEdit.previewKind = null;
+    meshEdit.appliedOpSig = JSON.stringify({ op: 'extrudeRegion', params: { distance: 0.3 } });
+    expect(c.op!.kind).toBe('extrude');
+  });
+
+  it('the radial Extrude / Inset start the preview on a newer Salsa; another radial op cancels a preview first', () => {
+    const { c, meshEdit } = setup({ pick: { kind: 'face', index: 1, selected: true } });
+    meshEdit.previewSupported = true;
+    c.openRadialAt(press);
+    c.runRadial('inset');
+    expect(meshEdit.toolKey).toHaveBeenCalledOnceWith('inset');
+    expect(meshEdit.runInset).not.toHaveBeenCalled();
+    c.runRadial('delete');
+    expect(meshEdit.cancelPreview).toHaveBeenCalled();
+    expect(meshEdit.runVerb).toHaveBeenCalledOnceWith('delete');
+  });
+
+  it('Frame with a selection: the face-on frame (frameEditSelection3D) when the engine has it, else frameSelected3D', () => {
+    const t = setup();
+    t.sel.faces.push(2);
+    t.sm.frameSelected3D = jasmine.createSpy('frameSelected3D').and.returnValue(true);
+    t.c.frame();
+    expect(t.sm.frameSelected3D).toHaveBeenCalledTimes(1);
+    t.sm.frameEditSelection3D = jasmine.createSpy('frameEditSelection3D').and.returnValue(true);
+    t.c.frame();
+    expect(t.sm.frameEditSelection3D).toHaveBeenCalledTimes(1);
+    expect(t.sm.frameSelected3D).toHaveBeenCalledTimes(1);
   });
 
   it('touch / pen: taps add to the selection while mounted (the latch), restored on destroy; desktop: untouched', () => {

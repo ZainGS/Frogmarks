@@ -8,11 +8,12 @@ import { ModeRadialMenuComponent } from './mode-radial-menu/mode-radial-menu.com
 import { ModeToolStripComponent, modeToolRows } from './mode-tool-strip/mode-tool-strip.component';
 import { MODE_CHROME_VARS, ModeOpParam, ModeTool } from './mode-chrome.types';
 import { releaseRootVar, rootVarValue, setRootVar } from './root-css-vars';
+import { HoldRepeatDirective } from '../../../shared/directives/hold-repeat.directive';
 
 const ALL = [ModeHeaderBarComponent, ModeToolStripComponent, ModeOpPillComponent, ModeRadialMenuComponent, ModePropsPanelComponent];
 
 describe('mode chrome', () => {
-  beforeEach(() => TestBed.configureTestingModule({ declarations: ALL }));
+  beforeEach(() => TestBed.configureTestingModule({ declarations: ALL, imports: [HoldRepeatDirective] }));
 
   describe('root CSS vars', () => {
     it('the newest owner wins; releasing restores the previous value, then removes it', () => {
@@ -179,6 +180,27 @@ describe('mode chrome', () => {
       fixture.detectChanges();
       expect(el.querySelector('.mop-input')).toBeTruthy();
       fixture.destroy();
+    });
+
+    it('− / + step once per tap and auto-repeat while held (no extra step from the click)', () => {
+      jasmine.clock().install();
+      try {
+        const { fixture, el, changes } = create();
+        const [less, more] = Array.from(el.querySelectorAll<HTMLButtonElement>('[data-id="segments"] .mop-step'));
+        more.dispatchEvent(pe('pointerdown', 0, { pointerType: 'touch' }));
+        more.dispatchEvent(pe('pointerup', 0, { pointerType: 'touch' }));
+        more.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }));
+        expect(changes).toEqual([{ id: 'segments', value: 3 }]);
+        changes.length = 0;
+        less.dispatchEvent(pe('pointerdown', 0, { pointerType: 'pen' }));
+        jasmine.clock().tick(400 + 80);
+        less.dispatchEvent(pe('pointerup', 0, { pointerType: 'pen' }));
+        less.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }));
+        expect(changes.length).toBe(3);   // press + 2 repeats (the parent applies the value, so each step is from 2)
+        fixture.destroy();
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
 
     it('typing: Enter commits (clamped), Esc keeps the old value, bad text is ignored — none reach the editor', () => {

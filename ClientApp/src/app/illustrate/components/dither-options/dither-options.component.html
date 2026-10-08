@@ -13,7 +13,7 @@
     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
         <label style="width: 60px; color:#aaa; font-size: 10px;">Algorithm</label>
         <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
-                [ngModel]="fx.ditherConfig.algorithm"
+                [ngModel]="fx.ditherMenuValue(fx.ditherConfig.algorithm)"
                 (ngModelChange)="fx.onDitherAlgorithmChange($event)">
             <option *ngFor="let opt of fx.ditherAlgorithmOptions" [ngValue]="opt.value">{{ opt.label }}</option>
         </select>
@@ -153,7 +153,9 @@
                 <select class="form-select form-select-sm" style="flex: 1; font-size: 11px;"
                         [ngModel]="fx.ditherConfig.algorithm"
                         (ngModelChange)="fx.onDitherHalftoneShapeChange($event)">
-                    <option *ngFor="let opt of halftoneShapeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+                    <optgroup *ngFor="let g of fx.halftoneShapeGroups(fx.ditherConfig.algorithm)" [label]="g.label">
+                        <option *ngFor="let opt of g.options" [ngValue]="opt.value">{{ opt.label }}</option>
+                    </optgroup>
                 </select>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">

@@ -23,11 +23,12 @@ app-mode-props-panel.arm-props {
   gap: 6px;
 }
 
-// Pose / Edit Bones / Weight + Deselect all on one line in the 280 px panel.
+// Pose / Edit Bones / Weight on one line, Deselect all on its own full-width line below (the wrap).
 .arm-seg-row {
   align-items: center;
+  flex-wrap: wrap;
   .ar-op-btn { min-width: 0; padding-left: 6px; padding-right: 6px; }
-  .arm-deselect { flex: 0 0 auto; margin-left: auto; }
+  .arm-deselect { flex: 1 0 100%; }
 }
 
 // The mode tools: icon-only buttons, the main toolbar's .vertical-tool-button look (illustration.component.scss; the

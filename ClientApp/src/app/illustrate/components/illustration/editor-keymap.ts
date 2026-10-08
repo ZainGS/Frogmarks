@@ -500,7 +500,8 @@ export function activeContextPill(ed: Pick<ModeHost, 'shapeManager' | 'decal' | 
   if (!es?.scene3dPanelVisible) return null;
   if (ed.shapeManager?.isShortcutActive3D) return CONTEXT_PILLS.transform3d;
   if (ed.meshEdit.scene3dIsEditingMesh) return CONTEXT_PILLS.meshEdit;
-  if (es.scene3dSelectedMeshId && !ed.scene3dInSubMode) return CONTEXT_PILLS.object3d;
+  // (No pill for a plain selected 3D object any more — the user removed the Multi / Snap / Frame pill, 2026-10-08.
+  //  CONTEXT_PILLS.object3d is kept for reference.)
   return null;
 }
 

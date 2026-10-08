@@ -15,7 +15,20 @@ import type { ModeOpParam, ModeRadialItem, ModeSegment } from '../mode-chrome/mo
 export type MeshSelectMode = 'vertex' | 'edge' | 'face';
 export type MeshToolId = 'select' | 'move' | 'rotate' | 'scale' | 'extrude' | 'inset' | 'loopcut' | 'knife' | 'bevel';
 export const MESH_TOOL_IDS: readonly MeshToolId[] = ['select', 'move', 'rotate', 'scale', 'extrude', 'inset', 'loopcut', 'knife', 'bevel'];
-export type MeshBgMode = 'gradient' | 'wavy' | 'checkers' | 'dim' | 'solid' | 'none';
+export type MeshBgMode = 'gradient' | 'wavy' | 'wavy-sage' | 'checkers' | 'dim' | 'solid' | 'none';
+
+/** The Edit Mesh / Armature focus background until the user picks another (the chrome and the classic panels). */
+export const DEFAULT_EDIT_BG_MODE: MeshBgMode = 'wavy-sage';
+
+type Rgba = [number, number, number, number];
+/** "Wavy Sage" = the engine's ARMATURE_BG_WAVY_SAGE (salsa src/renderer/3d/armature-bg-pass.ts; not in the Salsa dist's
+ *  entry points, so its colours are copied here: keep them in step). Plain "Wavy" = the engine's fallback colours (blue). */
+const WAVY_SAGE_COLORS: { color1: Rgba; color2: Rgba } = { color1: [0.73, 0.80, 0.71, 1.0], color2: [0.93, 0.91, 0.84, 1.0] };
+
+/** The engine options (setMeshEditBgMode3D / setArmatureBgMode3D) for a background id: Wavy Sage = wavy + its colours. */
+export function editBgOptions(mode: MeshBgMode): { mode: Exclude<MeshBgMode, 'wavy-sage'>; color1?: Rgba; color2?: Rgba } {
+  return mode === 'wavy-sage' ? { mode: 'wavy', ...WAVY_SAGE_COLORS } : { mode };
+}
 
 export const NEEDS_ENGINE_UPDATE = 'Needs the engine update';
 
@@ -31,6 +44,15 @@ export interface MeshChromeEngineApi {
   getMeshEditKnifePointCount3D?(): number;
   getMeshEditLastOp3D?(): MeshLastOp | null;
   redoMeshEditLastOp3D?(params: Record<string, number | boolean | string>): boolean;
+  /** The live preview's Cancel: the last op reverted with no undo step (next Edit Mesh batch §4). */
+  cancelMeshEditLastOp3D?(): boolean;
+  /** Live preview on: face taps re-target the op (resolved against the mesh before it), selection drags orbit. */
+  setMeshEditOpPreview3D?(on: boolean): void;
+  /** Esc while a Loop Cut press is held: nothing is cut. */
+  cancelMeshEditLoopCut3D?(): boolean;
+  /** The pill's Frame with a selection: faces facing one way → an animated face-on frame; else frameSelected3D. */
+  frameEditSelection3D?(padding?: number): boolean;
+  subdivideFaces3D?(meshId: string, faces: Iterable<number> | null, levels?: number): boolean;
   setMeshEditLoopCutOptions3D?(opts: { count?: number; position?: number }): void;
   getMeshEditLoopCutOptions3D?(): { count: number; position: number };
   setMeshEditGizmoMode3D?(mode: 'move' | 'rotate' | 'scale' | null): void;
@@ -57,6 +79,8 @@ export interface MeshChromeCaps {
   pick: boolean;
   /** getMeshEditLastOp3D / redoMeshEditLastOp3D: "adjust last operation". */
   lastOp: boolean;
+  /** "Adjust last" + cancelMeshEditLastOp3D: Extrude / Inset / Subdivide run as a live preview (Apply / Cancel). */
+  preview: boolean;
   /** set / getMeshEditDragMovesSelection3D. */
   dragMoves: boolean;
   /** loopCuts3D / Loop Cut options: several cuts at a position. */
@@ -77,6 +101,7 @@ export function meshChromeCaps(sm: unknown): MeshChromeCaps {
     knifePoints: fn(a.setMeshEditActiveTool3D) && fn(a.applyMeshEditKnife3D),
     pick: fn(a.pickMeshEditElementAt3D),
     lastOp: fn(a.getMeshEditLastOp3D) && fn(a.redoMeshEditLastOp3D),
+    preview: fn(a.getMeshEditLastOp3D) && fn(a.redoMeshEditLastOp3D) && fn(a.cancelMeshEditLastOp3D),
     dragMoves: fn(a.setMeshEditDragMovesSelection3D) && fn(a.getMeshEditDragMovesSelection3D),
     multiLoopCut: fn(a.loopCuts3D),
     insetDepth: fn(a.setMeshEditActiveTool3D) && fn(a.extrudeRegion3D),
@@ -109,7 +134,8 @@ export const MESH_SELECT_SEGMENTS: ModeSegment[] = [
 ];
 
 export const MESH_BG_OPTIONS: ReadonlyArray<{ id: MeshBgMode; label: string }> = [
-  { id: 'gradient', label: 'Gradient' }, { id: 'wavy', label: 'Wavy' }, { id: 'checkers', label: 'Clover Picnic' },
+  { id: 'gradient', label: 'Gradient' }, { id: 'wavy', label: 'Wavy' }, { id: 'wavy-sage', label: 'Wavy Sage' },
+  { id: 'checkers', label: 'Clover Picnic' },
   { id: 'dim', label: 'Dim' }, { id: 'solid', label: 'Solid' }, { id: 'none', label: 'None' },
 ];
 
@@ -222,9 +248,25 @@ export interface MeshToolParams {
   insetDepth: number;
   loopCutCount: number;
   loopCutPosition: number;
+  /** Subdivide's levels (its live preview). */
+  subdivideLevels: number;
+  /** The Chamfer / Bevel amount its preview starts with (the last applied one). */
+  bevelAmount: number;
 }
 export const DEFAULT_MESH_TOOL_PARAMS: Readonly<MeshToolParams> = {
-  extrudeDistance: 0.3, insetAmount: 0.1, insetDepth: 0, loopCutCount: 1, loopCutPosition: 0.5,
+  extrudeDistance: 0.3, insetAmount: 0.1, insetDepth: 0, loopCutCount: 1, loopCutPosition: 0.5, subdivideLevels: 1, bevelAmount: 0.1,
+};
+
+/** The ops that run as a LIVE PREVIEW (next Edit Mesh batch §4): on picking them with faces selected, until Apply /
+ *  Cancel. (The Chamfer / Bevel is its own preview: the engine's interactive tool.) */
+export type MeshPreviewKind = 'extrude' | 'inset' | 'subdivide';
+/** The engine's last-op name of each preview. */
+export const PREVIEW_OPS: Readonly<Record<MeshPreviewKind, string>> = { extrude: 'extrudeRegion', inset: 'insetRegion', subdivide: 'subdivide' };
+/** Per preview: pill param id (= the engine's last-op param) → the tool param it keeps. */
+export const PREVIEW_PARAMS: Readonly<Record<MeshPreviewKind, Readonly<Record<string, keyof MeshToolParams>>>> = {
+  extrude: { distance: 'extrudeDistance' },
+  inset: { amount: 'insetAmount', depth: 'insetDepth' },
+  subdivide: { levels: 'subdivideLevels' },
 };
 
 export interface MeshLastOp { op: string; params: Record<string, number | boolean | string> }
@@ -245,15 +287,19 @@ export interface MeshOpInput {
   /** "Adjust last operation" to show (null = none / dismissed / an older dist). */
   lastOp: MeshLastOp | null;
   canBridge: boolean;
+  /** The live preview showing (MeshEditService.previewKind), else null / absent. */
+  preview?: MeshPreviewKind | null;
 }
 
-export type MeshOpKind = 'transform' | 'bevel' | 'adjust' | MeshToolId;
+export type MeshOpKind = 'transform' | 'bevel' | 'adjust' | 'preview' | MeshToolId;
 
 export interface MeshOpView {
   kind: MeshOpKind;
   title: string;
   params: ModeOpParam[];
   showApplyCancel: boolean;
+  /** Cancel next to Apply (the live previews and the Chamfer); otherwise turning the tool off is the cancel. */
+  showCancel: boolean;
   applyLabel: string;
   cancelLabel: string;
   applyDisabled: boolean;
@@ -298,8 +344,14 @@ const btn = (id: string, label: string, title: string, disabled = false): ModeOp
  */
 export function buildMeshOp(i: MeshOpInput): MeshOpView {
   const view = (kind: MeshOpKind, title: string, params: ModeOpParam[], o: Partial<MeshOpView> = {}): MeshOpView =>
-    ({ kind, title, params, showApplyCancel: false, applyLabel: 'Apply', cancelLabel: 'Cancel', applyDisabled: false, ...o });
+    ({ kind, title, params, showApplyCancel: false, showCancel: false, applyLabel: 'Apply', cancelLabel: 'Cancel', applyDisabled: false, ...o });
   const { sel, params: tp, caps } = i;
+  const insetParams = (): ModeOpParam[] => [
+    { id: 'amount', label: 'Thickness', kind: 'number', value: tp.insetAmount, step: 0.01, min: 0, max: 100 },
+    { id: 'depth', label: 'Depth', kind: 'number', value: tp.insetDepth, step: 0.01, min: -100, max: 100,
+      disabled: !caps.insetDepth, title: caps.insetDepth ? 'Move the inner faces in / out' : NEEDS_ENGINE_UPDATE },
+  ];
+  const extrudeParams = (): ModeOpParam[] => [{ id: 'distance', label: 'Distance', kind: 'number', value: tp.extrudeDistance, step: 0.01, min: -100, max: 100 }];
 
   if (i.transform) {
     const t = i.transform;
@@ -314,12 +366,20 @@ export function buildMeshOp(i: MeshOpInput): MeshOpView {
   if (i.bevel) {
     const b = i.bevel;
     const name = b.kind === 'vertex' ? 'Chamfer' : 'Bevel';
-    if (b.phase === 'pick') return view('bevel', name, [], { showApplyCancel: true, applyDisabled: true });
+    if (b.phase === 'pick') return view('bevel', name, [], { showApplyCancel: true, showCancel: true, applyDisabled: true });
     return view('bevel', name, [
       { id: 'amount', label: 'Amount', kind: 'number', value: b.amount, min: 0, max: b.maxAmount || undefined, step: 0.01 },
       { id: 'segments', label: 'Segments', kind: 'int', value: b.segments, min: 1, max: 32 },
       { id: 'snap', label: 'Snap', kind: 'toggle', value: b.snap, title: 'Round the amount to grid steps (Ctrl while dragging)' },
-    ], { showApplyCancel: true, applyDisabled: b.amount <= 0 });
+    ], { showApplyCancel: true, showCancel: true, applyDisabled: b.amount <= 0 });
+  }
+
+  // A live preview (Extrude / Inset / Subdivide): its params re-run it, Apply keeps it, Cancel reverts it
+  if (i.preview) {
+    const o = { showApplyCancel: true, showCancel: true };
+    if (i.preview === 'extrude') return view('preview', 'Extrude', extrudeParams(), o);
+    if (i.preview === 'inset') return view('preview', 'Inset', insetParams(), o);
+    return view('preview', 'Subdivide', [{ id: 'levels', label: 'Levels', kind: 'int', value: tp.subdivideLevels, min: 1, max: 4 }], o);
   }
 
   if (i.lastOp) {
@@ -331,14 +391,9 @@ export function buildMeshOp(i: MeshOpInput): MeshOpView {
     case 'select': case 'move': case 'rotate': case 'scale':
       return view(i.tool, '', []);
     case 'extrude':
-      return view('extrude', 'Extrude', [{ id: 'distance', label: 'Distance', kind: 'number', value: tp.extrudeDistance, step: 0.01, min: -100, max: 100 }],
-        { showApplyCancel: true, applyLabel: 'Extrude', applyDisabled: !sel.faces });
+      return view('extrude', 'Extrude', extrudeParams(), { showApplyCancel: true, applyLabel: 'Extrude', applyDisabled: !sel.faces });
     case 'inset':
-      return view('inset', 'Inset', [
-        { id: 'amount', label: 'Thickness', kind: 'number', value: tp.insetAmount, step: 0.01, min: 0, max: 100 },
-        { id: 'depth', label: 'Depth', kind: 'number', value: tp.insetDepth, step: 0.01, min: -100, max: 100,
-          disabled: !caps.insetDepth, title: caps.insetDepth ? 'Move the inner faces in / out' : NEEDS_ENGINE_UPDATE },
-      ], { showApplyCancel: true, applyLabel: 'Inset', applyDisabled: !sel.faces });
+      return view('inset', 'Inset', insetParams(), { showApplyCancel: true, applyLabel: 'Inset', applyDisabled: !sel.faces });
     case 'loopcut':
       return view('loopcut', 'Loop Cut', [
         { id: 'count', label: 'Cuts', kind: 'int', value: tp.loopCutCount, min: 1, max: 64,

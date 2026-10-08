@@ -5,7 +5,9 @@ import { meshEditKeyLabels } from '../illustration/mode-keymap';
 import { MeshEditService, type MeshEditSelectMode } from '../../services/mesh-edit.service';
 import * as ops from '../../services/mesh-edit-ops';
 import type { MeshModifier } from '../../services/mesh-edit-ops';
-import { DEFAULT_MESH_TOOL_PARAMS, type MeshBgMode, type MeshToolParams } from '../mesh-edit-chrome/mesh-edit-chrome.logic';
+import {
+  DEFAULT_EDIT_BG_MODE, DEFAULT_MESH_TOOL_PARAMS, editBgOptions, type MeshBgMode, type MeshToolParams,
+} from '../mesh-edit-chrome/mesh-edit-chrome.logic';
 
 export type { MeshModifier, RegionOpsApi } from '../../services/mesh-edit-ops';
 
@@ -28,9 +30,9 @@ export class MeshEditPanelComponent implements OnChanges {
   get selectionMode(): MeshEditSelectMode { return this.meshEditState?.selectionMode ?? this._localMode; }
   /** The key chips, generated from the Edit Mesh keymap (mode-keymap.ts). */
   readonly keys = meshEditKeyLabels();
-  /** The calm gradient by default (UI review 2026-10-07 §3 #18); Wavy stays in the list. Shared with the mode chrome
-   *  through the editor's MeshEditService (the panel alone keeps its own). */
-  private _bgMode: MeshBgMode = 'gradient';
+  /** Wavy Sage by default (DEFAULT_EDIT_BG_MODE). Shared with the mode chrome through the editor's MeshEditService (the
+   *  panel alone keeps its own). */
+  private _bgMode: MeshBgMode = DEFAULT_EDIT_BG_MODE;
   get bgMode(): MeshBgMode { return this.meshEditState?.bgMode ?? this._bgMode; }
   set bgMode(v: MeshBgMode) { if (this.meshEditState) this.meshEditState.bgMode = v; else this._bgMode = v; }
 
@@ -87,16 +89,16 @@ export class MeshEditPanelComponent implements OnChanges {
     if (changes['meshId'] && this.meshId) {
       this.refreshModifiers();
       if (!this.meshEditState) this._localMode = 'face';   // the service resets it on every entry
-      this.sm?.setMeshEditBgMode3D({ mode: this.bgMode });
+      this.sm?.setMeshEditBgMode3D(editBgOptions(this.bgMode));
     }
     if (changes['shapeManager'] && this.shapeManager && this.meshId) {
-      this.sm?.setMeshEditBgMode3D({ mode: this.bgMode });
+      this.sm?.setMeshEditBgMode3D(editBgOptions(this.bgMode));
     }
   }
 
   updateBgMode(): void {
     if (this.meshEditState) this.meshEditState.setBgMode(this.bgMode);
-    else this.sm?.setMeshEditBgMode3D({ mode: this.bgMode });
+    else this.sm?.setMeshEditBgMode3D(editBgOptions(this.bgMode));
   }
 
   // ── Selection state ─────────────────────────────────────────────

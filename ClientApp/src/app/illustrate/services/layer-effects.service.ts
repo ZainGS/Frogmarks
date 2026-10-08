@@ -1,7 +1,12 @@
 import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { hexToRgba01, rgba01ToHex } from '../utils/color-utils';
-import { DEFAULT_DITHER_CONFIG, DEFAULT_FRAME_LINK_ANIMATION, DitherAlgorithm, DitherColorMode, DitherConfig, DITHER_ALGORITHM_OPTIONS, FrameLinkAnimation, FrameLinkAnimationType, FrameLinkLoopMode, FRAME_LINK_TYPE_OPTIONS, FRAME_LINK_LOOP_MODE_OPTIONS } from 'app/boards/models/brush-preset.model';
+import { DEFAULT_DITHER_CONFIG, DEFAULT_FRAME_LINK_ANIMATION, DitherAlgorithm, DitherAlgorithmMenuValue, DitherColorMode, DitherConfig, DITHER_ALGORITHM_OPTIONS, FrameLinkAnimation, FrameLinkAnimationType, FrameLinkLoopMode, FRAME_LINK_TYPE_OPTIONS, FRAME_LINK_LOOP_MODE_OPTIONS, HalftoneShapeGroup, ditherAlgorithmMenuValue, halftoneShapeGroupsFor, isHalftoneAlgorithm, resolveDitherAlgorithmMenuChoice } from 'app/boards/models/brush-preset.model';
+
+/** The engine's own dither types. Frogmarks' DitherAlgorithm can list halftone shapes a published Salsa build predates
+ *  (that engine skips an unknown shape; the Shape dropdown hides them, see halftoneShapeGroups). */
+type EngineDitherAlgorithm = Parameters<ShapeManager['setDitherAlgorithm']>[0];
+type EngineDitherConfig = NonNullable<Parameters<ShapeManager['setLayerDitherConfig']>[1]>;
 
 /** A default dither config with its own colour arrays — the alpha handlers write foregroundColor[3] /
  *  backgroundColor[3] in place, which on a shallow copy changed DEFAULT_DITHER_CONFIG itself (every later layer
@@ -40,6 +45,31 @@ export class LayerEffectsService {
 
   ditherAlgorithmOptions = DITHER_ALGORITHM_OPTIONS;
 
+  /** The halftone shape "Halftone" resumes when picked in the Algorithm dropdown (global dither / per layer). */
+  lastHalftoneAlgorithm: DitherAlgorithm = DEFAULT_DITHER_CONFIG.algorithm;
+  private lastLayerHalftone = new Map<string, DitherAlgorithm>();
+
+  /** The Algorithm dropdown's value for a stored algorithm (every halftone shape is the one "Halftone" entry). */
+  ditherMenuValue(algorithm: DitherAlgorithm): DitherAlgorithmMenuValue { return ditherAlgorithmMenuValue(algorithm); }
+
+  private _engineDitherAlgorithms: readonly string[] | null | undefined;
+  private _shapeGroups = new Map<string, HalftoneShapeGroup[]>();
+  /** The Shape dropdown's groups: only shapes the linked Salsa build lists in ShapeManager.DitherAlgorithms (an older
+   *  build lacks the 2026-10-08 shapes), plus the current one. Cached: the template calls this every check. */
+  halftoneShapeGroups(current: DitherAlgorithm): HalftoneShapeGroup[] {
+    if (this._engineDitherAlgorithms === undefined) {
+      try {
+        const list = (ShapeManager as unknown as { DitherAlgorithms?: readonly string[] }).DitherAlgorithms;
+        this._engineDitherAlgorithms = Array.isArray(list) ? list : null;
+      } catch { this._engineDitherAlgorithms = null; }
+    }
+    const supported = this._engineDitherAlgorithms;
+    const key = supported && !supported.includes(current) ? current : '';
+    let groups = this._shapeGroups.get(key);
+    if (!groups) { groups = halftoneShapeGroupsFor(supported, current); this._shapeGroups.set(key, groups); }
+    return groups;
+  }
+
   onDitherEnabledChange(enabled: boolean): void {
     this.ditherConfig.enabled = enabled;
     // Seed FG from the current pen color when enabling
@@ -53,9 +83,12 @@ export class LayerEffectsService {
     this.host.markStateDirty();
   }
 
-  onDitherAlgorithmChange(algorithm: DitherAlgorithm): void {
+  /** Algorithm dropdown: "Halftone" resumes the last halftone shape. */
+  onDitherAlgorithmChange(choice: DitherAlgorithmMenuValue): void {
+    if (isHalftoneAlgorithm(this.ditherConfig.algorithm)) this.lastHalftoneAlgorithm = this.ditherConfig.algorithm;
+    const algorithm = resolveDitherAlgorithmMenuChoice(choice, this.lastHalftoneAlgorithm);
     this.ditherConfig.algorithm = algorithm;
-    this.shapeManager.setDitherAlgorithm(algorithm);
+    this.shapeManager.setDitherAlgorithm(algorithm as EngineDitherAlgorithm);
     this.host.markStateDirty();
   }
 
@@ -103,7 +136,8 @@ export class LayerEffectsService {
 
   onDitherHalftoneShapeChange(algorithm: DitherAlgorithm): void {
     this.ditherConfig.algorithm = algorithm;
-    this.shapeManager.setDitherAlgorithm(algorithm);
+    this.lastHalftoneAlgorithm = algorithm;
+    this.shapeManager.setDitherAlgorithm(algorithm as EngineDitherAlgorithm);
     this.host.markStateDirty();
   }
 
@@ -227,7 +261,7 @@ export class LayerEffectsService {
         cfg.enabled = true;
         this.layerDitherConfigs.set(layerId, cfg);
       }
-      this.shapeManager.setLayerDitherConfig(layerId, this.layerDitherConfigs.get(layerId)!);
+      this.shapeManager.setLayerDitherConfig(layerId, this.layerDitherConfigs.get(layerId)! as EngineDitherConfig);
     } else {
       if (this.layerDitherConfigs.has(layerId)) {
         const cfg = this.layerDitherConfigs.get(layerId)!;
@@ -248,13 +282,16 @@ export class LayerEffectsService {
     (cfg as any)[field] = value;
     this.layerDitherConfigs.set(layerId, cfg);
     if (cfg.enabled) {
-      this.shapeManager.setLayerDitherConfig(layerId, cfg);
+      this.shapeManager.setLayerDitherConfig(layerId, cfg as EngineDitherConfig);
     }
     this.host.markStateDirty();
   }
 
-  onLayerDitherAlgorithmChange(layerId: string, algorithm: DitherAlgorithm): void {
-    this.updateLayerDitherField(layerId, 'algorithm', algorithm);
+  /** Algorithm dropdown: "Halftone" resumes this layer's last halftone shape. */
+  onLayerDitherAlgorithmChange(layerId: string, choice: DitherAlgorithmMenuValue): void {
+    const cur = this.getLayerDitherConfig(layerId).algorithm;
+    if (isHalftoneAlgorithm(cur)) this.lastLayerHalftone.set(layerId, cur);
+    this.updateLayerDitherField(layerId, 'algorithm', resolveDitherAlgorithmMenuChoice(choice, this.lastLayerHalftone.get(layerId)));
   }
 
   onLayerDitherStrengthChange(layerId: string, strength: number): void {
@@ -302,7 +339,7 @@ export class LayerEffectsService {
     cfg.foregroundColor = [...cfg.backgroundColor] as [number, number, number, number];
     cfg.backgroundColor = tmp;
     this.layerDitherConfigs.set(layerId, cfg);
-    if (cfg.enabled) this.shapeManager.setLayerDitherConfig(layerId, cfg);
+    if (cfg.enabled) this.shapeManager.setLayerDitherConfig(layerId, cfg as EngineDitherConfig);
     this.host.markStateDirty();
   }
 
@@ -346,6 +383,7 @@ export class LayerEffectsService {
   }
 
   onLayerDitherHalftoneShapeChange(layerId: string, algorithm: DitherAlgorithm): void {
+    this.lastLayerHalftone.set(layerId, algorithm);
     this.updateLayerDitherField(layerId, 'algorithm', algorithm);
   }
 
@@ -383,7 +421,7 @@ export class LayerEffectsService {
   }
 
   isGpuDitherAlgorithm(algorithm: DitherAlgorithm): boolean {
-    return ['bayer', 'halftone_dot', 'halftone_line', 'halftone_diamond', 'blue_noise', 'noise'].includes(algorithm as string);
+    return isHalftoneAlgorithm(algorithm) || ['bayer', 'blue_noise', 'noise'].includes(algorithm as string);
   }
 
   frameLinkTypeOptions = FRAME_LINK_TYPE_OPTIONS;
@@ -517,7 +555,7 @@ export class LayerEffectsService {
 
     const sm = this.shapeManager;
     sm.setDitherEnabled(this.ditherConfig.enabled);
-    sm.setDitherAlgorithm(this.ditherConfig.algorithm);
+    sm.setDitherAlgorithm(this.ditherConfig.algorithm as EngineDitherAlgorithm);
     sm.setDitherColorLevels(this.ditherConfig.colorLevels);
     sm.setDitherBayerLevel(this.ditherConfig.bayerLevel);
     sm.setDitherHalftoneAngle(this.ditherConfig.halftoneAngle);

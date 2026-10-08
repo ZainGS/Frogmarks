@@ -1,6 +1,8 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
+import { NotifyService } from '../../../shared/services/notify/notify.service';
 import { hexToHSL, hslToHex, lightnessToSbY, sbYToLightness } from '../../utils/color-utils';
+import { PaletteBook, PalettesService, SquareGesture } from './palette-book';
 
 /** Always-visible colour picker: hue ring + saturation / brightness square, hex + opacity inputs, recent colours,
  *  swap and reset. The editor owns the pen colours; this picks them. Extracted from illustration.component
@@ -30,6 +32,98 @@ export class PersistentColorPickerComponent implements OnChanges, AfterViewInit,
   @ViewChild('sbIndicator') sbIndicatorRef?: ElementRef<HTMLElement>;
 
   constructor(private ngZone: NgZone) {}
+
+  // ── Palettes popup (the Palettes button): rows of 8 squares, global for the user (palette-book.ts) ──
+
+  private readonly hostRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly notify = inject(NotifyService, { optional: true });
+  readonly palettes: PaletteBook = inject(PalettesService);
+  palettesOpen = false;
+  private readonly _gesture = new SquareGesture({
+    tap: (row, col) => {
+      const c = this.palettes.tap(row, col, this.color);
+      if (c) this.pickRecent.emit(c);   // a filled square: the picker takes its colour (not linked)
+    },
+    link: (row, col) => {
+      const c = this.palettes.link(row, col);
+      if (c && c !== this.color) this.pickRecent.emit(c);   // edit on from the square's own colour
+    },
+  });
+  private _popupEl: HTMLElement | null = null;
+  private readonly _placePopup = (): void => { if (this._popupEl) this._placePalettesPopup(this._popupEl); };
+  private readonly _onPopupMoveOutsideZone = (e: PointerEvent): void => this._gesture.move(e.clientX, e.clientY);
+
+  /** The popup element while it is open: placed by the picker, re-placed on resize / when the picker slides. */
+  @ViewChild('palettesPopup') set palettesPopupRef(ref: ElementRef<HTMLElement> | undefined) {
+    const el = ref?.nativeElement ?? null;
+    if (el === this._popupEl) return;
+    this._detachPopup();
+    this._popupEl = el;
+    if (!el) return;
+    this._placePalettesPopup(el);
+    this.ngZone.runOutsideAngular(() => {
+      el.addEventListener('pointermove', this._onPopupMoveOutsideZone);
+      window.addEventListener('resize', this._placePopup);
+      this.hostRef.nativeElement.addEventListener('transitionend', this._placePopup);
+      requestAnimationFrame(this._placePopup);
+    });
+  }
+
+  togglePalettes(): void {
+    if (this.palettesOpen) this.closePalettes();
+    else this.palettesOpen = true;
+  }
+
+  closePalettes(): void {
+    this.palettesOpen = false;
+    this._gesture.cancel();
+    this.palettes.deselect();
+  }
+
+  @HostListener('document:keydown.escape') onEscape(): void {
+    if (this.palettesOpen) this.closePalettes();
+  }
+
+  onSquarePointerDown(e: PointerEvent, row: number, col: number): void {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    this._capture(e);
+    this._gesture.down(row, col, e.clientX, e.clientY);
+  }
+
+  onSquarePointerUp(): void { this._gesture.up(); }
+
+  onSquarePointerCancel(): void { this._gesture.cancel(); }
+
+  addPaletteRow(row: number): void { this.palettes.addRowBelow(row); }
+
+  /** "✕": the row goes, with an Undo toast that puts it back at the same place. */
+  deletePaletteRow(row: number): void {
+    const deleted = this.palettes.deleteRow(row);
+    if (!deleted) return;
+    const ref = this.notify?.success('Palette row deleted', 'Undo');
+    ref?.onAction().subscribe(() => this.palettes.restoreRow(deleted));
+  }
+
+  readonly trackByIndex = (i: number): number => i;
+
+  /** Above the picker, left edges together, clamped inside the viewport (many rows scroll inside the popup). */
+  private _placePalettesPopup(el: HTMLElement): void {
+    const m = 8;
+    const host = this.hostRef.nativeElement.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    const vh = window.innerHeight;
+    el.style.maxWidth = Math.max(0, vw - 2 * m) + 'px';
+    el.style.bottom = Math.max(0, vh - host.top) + 'px';
+    el.style.maxHeight = Math.max(60, host.top - m) + 'px';
+    const w = el.offsetWidth;
+    el.style.left = Math.max(m, Math.min(host.left, vw - w - m)) + 'px';
+  }
+
+  private _detachPopup(): void {
+    this._popupEl?.removeEventListener('pointermove', this._onPopupMoveOutsideZone);
+    window.removeEventListener('resize', this._placePopup);
+    this.hostRef.nativeElement.removeEventListener('transitionend', this._placePopup);
+  }
 
   /** M3 (zone audit): the ring / square pointermove is listened OUTSIDE the zone — as template bindings every hover
    *  move ran an app change detection. While dragging, the thumb / indicator / square hue move by direct style writes
@@ -67,12 +161,17 @@ export class PersistentColorPickerComponent implements OnChanges, AfterViewInit,
     this.hueRingRef?.nativeElement.removeEventListener('pointermove', this._onRingMoveOutsideZone);
     this.sbSquareRef?.nativeElement.removeEventListener('pointermove', this._onSquareMoveOutsideZone);
     this._dragFrame.cancel();
+    this._detachPopup();
+    this._gesture.cancel();
+    this.palettes.deselect();
   }
   /** The last colour this picker emitted — re-deriving hue from it would snap greys to hue 0 mid-drag. */
   private _lastEmitted: string | null = null;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['color'] && this.color && this.color !== this._lastEmitted) this._syncPersistentPickerFromHex(this.color);
+    // A selected (live-linked) palette square follows every picker change.
+    if (changes['color'] && this.color) this.palettes.pickerChanged(this.color);
   }
 
   persistentHue = 0;

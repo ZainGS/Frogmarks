@@ -3,8 +3,9 @@ import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { BEVEL_ACTIONS, type BevelState } from '../components/illustration/editor-keymap';
 import {
-  DEFAULT_MESH_TOOL_PARAMS, meshChromeApi, meshChromeCaps, meshToolAppliesTo, planMeshTool, type MeshBgMode, type MeshToolId,
-  type MeshToolParams, type MeshVerbId,
+  DEFAULT_EDIT_BG_MODE, DEFAULT_MESH_TOOL_PARAMS, PREVIEW_OPS, PREVIEW_PARAMS, editBgOptions, meshChromeApi, meshChromeCaps,
+  meshToolAppliesTo, planMeshTool,
+  type MeshBgMode, type MeshPreviewKind, type MeshToolId, type MeshToolParams, type MeshVerbId,
 } from '../components/mesh-edit-chrome/mesh-edit-chrome.logic';
 import * as ops from './mesh-edit-ops';
 import { NotifyService } from '../../shared/services/notify/notify.service';
@@ -18,6 +19,12 @@ export type MeshEditSelectMode = 'vertex' | 'edge' | 'face';
 export type MeshEditHost = Pick<IllustrationComponent, 'shapeManager' |
   '_exitAllScene3dModes' | 'canvasRef' | 'handleCanvasRef'
 > & Partial<Pick<IllustrationComponent, 'scene3dGizmoMode' | 'activeModeChrome' | 'hud'>>;
+
+/** Edit Mesh Drag Lock, remembered on this device (MeshEditService.dragLock). */
+const DRAG_LOCK_KEY = 'fm-mesh-drag-lock';
+function readDragLock(): boolean {
+  try { return localStorage.getItem(DRAG_LOCK_KEY) === '1'; } catch { return false; }
+}
 
 /**
  * 3D mesh edit mode: enter / exit (engine edit mode + its pointer controller on the canvas), the edit tool, and the
@@ -37,8 +44,8 @@ export class MeshEditService {
   scene3dEditTool: 'select' | 'knife' = 'select';
 
   // ── Mode chrome state (UI review 2026-10-07 §4; components/mesh-edit-chrome) ──
-  /** The focus background (both layouts: the classic panel's dropdown, the chrome's ⋯ menu). Calm Gradient by default. */
-  bgMode: MeshBgMode = 'gradient';
+  /** The focus background (both layouts: the classic panel's dropdown, the chrome's ⋯ menu). Wavy Sage by default. */
+  bgMode: MeshBgMode = DEFAULT_EDIT_BG_MODE;
   /** The tool strip's tool (the chrome only; the classic panel has Select / Knife through scene3dEditTool). */
   tool: MeshToolId = 'select';
   /** The tools' amounts for their next run (the op pill edits them; the classic panel's fields read them too). */
@@ -80,22 +87,38 @@ export class MeshEditService {
         () => this.ngZone.run(() => { /* trigger change detection so panel re-reads selection */ }),
       );
     }
+    // Every entry starts with no tool (user request 2026-10-08): Select — the engine's tool too (its default was 'move',
+    // the selection gizmo), so the rail shows no Move / Rotate / Scale until one is picked
+    const setTool = meshChromeApi(sm).setMeshEditActiveTool3D;
+    if (typeof setTool === 'function') setTool.call(sm, 'select');
+    this.tool = 'select';
     // The selection gizmo (a newer Salsa dist): the rail's Move / Rotate / Scale show (and pick) its mode
     const gizmo = sm as unknown as { getMeshEditGizmoMode3D?(): 'move' | 'rotate' | 'scale' | null };
     if (typeof gizmo.getMeshEditGizmoMode3D === 'function' && 'scene3dGizmoMode' in this.host) {
       this.host.scene3dGizmoMode = gizmo.getMeshEditGizmoMode3D();
     }
-    sm.setMeshEditBgMode3D?.({ mode: this.bgMode });
-    // The chrome's tool strip shows the engine's tool (default 'move' = the selection gizmo); an older dist has no
-    // tool state: Select.
-    const getTool = meshChromeApi(sm).getMeshEditActiveTool3D;
-    this.tool = typeof getTool === 'function' ? (getTool.call(sm) ?? 'select') : 'select';
+    sm.setMeshEditBgMode3D?.(editBgOptions(this.bgMode));
+    this._applyDragLock();
+  }
+
+  /** Drag Lock (user request 2026-10-08): dragging the selection never moves it (a drag orbits instead), so a wobbly
+   *  pen tap can't nudge geometry. Remembered on this device; applied on every Edit Mesh entry. Engine:
+   *  setMeshEditDragMovesSelection3D (guarded — an older dist has no drag-to-move to lock). */
+  dragLock = readDragLock();
+  setDragLock(on: boolean): void {
+    this.dragLock = on;
+    try { localStorage.setItem(DRAG_LOCK_KEY, on ? '1' : '0'); } catch { /* storage unavailable: session only */ }
+    this._applyDragLock();
+  }
+  private _applyDragLock(): void {
+    const sm = this.shapeManager as unknown as { setMeshEditDragMovesSelection3D?(on: boolean): void } | null;
+    if (typeof sm?.setMeshEditDragMovesSelection3D === 'function') sm.setMeshEditDragMovesSelection3D(!this.dragLock);
   }
 
   /** Change the focus background (the classic panel's dropdown / the chrome's ⋯ menu). */
   setBgMode(mode: MeshBgMode): void {
     this.bgMode = mode;
-    this.shapeManager?.setMeshEditBgMode3D?.({ mode });
+    this.shapeManager?.setMeshEditBgMode3D?.(editBgOptions(mode));
   }
 
   // ── The tool strip (the chrome; salsa docs/reviews/section4-engine-api.md §D) ──
@@ -115,6 +138,9 @@ export class MeshEditService {
     const sm = this.shapeManager;
     if (!sm) return;
     const caps = this._caps;
+    // Another tool (or the active one re-tapped: Select) while a live preview shows: the preview is cancelled
+    const showing = this.previewKind;
+    if (showing && showing !== tool) this._revertPreview();
     if (tool !== 'bevel' && BEVEL_ACTIONS.active(this.host)) BEVEL_ACTIONS.cancel(this.host);
     if (tool !== 'knife' && this.scene3dEditTool === 'knife') this.cancelKnifeCut();
     if (sm.isShortcutActive3D) { sm.cancelTransform3D(); this.host.hud?.syncShortcutHud(); }
@@ -126,18 +152,194 @@ export class MeshEditService {
     if (plan.gizmo !== undefined) api.setMeshEditGizmoMode3D?.call(sm, plan.gizmo);
     if (plan.beginTransform) { sm.beginTransform3D(plan.beginTransform); this.host.hud?.syncShortcutHud(); }
     this.scene3dEditTool = plan.legacyKnife ? 'knife' : 'select';
-    if (plan.beginBevel && !BEVEL_ACTIONS.active(this.host)) BEVEL_ACTIONS.begin(this.host);
+    if (plan.beginBevel && !BEVEL_ACTIONS.active(this.host)) this.beginBevelPreview();
     // The main toolbar's Move / Rotate / Scale show the Edit Mesh tool (Select and the panel tools: none of them)
     if (this.chromeOn && 'scene3dGizmoMode' in this.host) {
       this.host.scene3dGizmoMode = tool === 'move' || tool === 'rotate' || tool === 'scale' ? tool : null;
     }
+    // Extrude / Inset picked with faces selected: they run at once as a live preview (next Edit Mesh batch §4)
+    if ((tool === 'extrude' || tool === 'inset') && !this.previewKind) this.startPreview(tool);
     sm.requestRender3D?.();
+  }
+
+  // ── Live preview: Extrude / Inset / Subdivide (+ the Chamfer's start amount) — next Edit Mesh batch §4 ──
+
+  /** The preview showing: the op it ran on which mesh. Only while the engine's last op is still it (an undo / another
+   *  edit ends it — the op then stays, as any other step). */
+  private _preview: { kind: MeshPreviewKind; meshId: string } | null = null;
+  /** Pill changes waiting for the next frame (one re-run per frame: each compiles the mesh). */
+  private _previewPending: Record<string, number> | null = null;
+  private _previewRaf = 0;
+  /** The last op an Apply kept: the chrome doesn't offer "adjust last" for it (the preview was the adjusting). */
+  appliedOpSig: string | null = null;
+
+  /** The engine runs the previews (getMeshEditLastOp3D + redo + cancelMeshEditLastOp3D) and the chrome is the layout. */
+  get previewSupported(): boolean { return this.chromeOn && this._caps.preview; }
+
+  private _lastOpOf(sm: ShapeManager | null | undefined): { op: string; params: Record<string, unknown> } | null {
+    const f = meshChromeApi(sm).getMeshEditLastOp3D;
+    return sm && typeof f === 'function' ? (f.call(sm) ?? null) : null;
+  }
+
+  /** Which live preview shows (null = none). */
+  get previewKind(): MeshPreviewKind | null {
+    const p = this._preview;
+    if (!p) return null;
+    const sm = this.host?.shapeManager;
+    if (!this.scene3dIsEditingMesh || this._editId !== p.meshId || this._lastOpOf(sm)?.op !== PREVIEW_OPS[p.kind]) {
+      this._dropPreview();   // undone / edited since / Edit Mesh left: no preview any more (the op stays as a step)
+      return null;
+    }
+    return p.kind;
+  }
+
+  /**
+   * Run `kind` on the selected faces as a LIVE PREVIEW with the last-used params (one undo step that the params re-run
+   * in place). The engine then re-targets it on face taps (resolved against the mesh before it). False (nothing run) on
+   * an older Salsa, outside the chrome, or with no face selected.
+   */
+  startPreview(kind: MeshPreviewKind): boolean {
+    const sm = this.shapeManager, id = this._editId;
+    if (!sm || !id || !this.previewSupported) return false;
+    this._revertPreview();
+    const faces = this.selection.faces;
+    if (!faces.length) return false;
+    const api = meshChromeApi(sm);
+    let ok: boolean;
+    if (kind === 'extrude') ok = ops.extrudeFaces(sm, id, faces, this.params.extrudeDistance);
+    else if (kind === 'inset') ok = ops.insetFaces(sm, id, faces, this.params.insetAmount, this._caps.insetDepth ? this.params.insetDepth : 0);
+    else ok = typeof api.subdivideFaces3D === 'function' && !!api.subdivideFaces3D.call(sm, id, new Set(faces), this.params.subdivideLevels);
+    if (!ok || this._lastOpOf(sm)?.op !== PREVIEW_OPS[kind]) return false;   // (not recorded: it stays a plain step)
+    this._preview = { kind, meshId: id };
+    this.appliedOpSig = null;
+    api.setMeshEditOpPreview3D?.call(sm, true);
+    sm.requestRender3D?.();
+    return true;
+  }
+
+  /** A pill param of the preview changed: kept for the next run, the preview re-runs with it (once per frame). */
+  setPreviewParam(id: string, value: unknown): void {
+    const kind = this.previewKind;
+    const key = kind ? PREVIEW_PARAMS[kind][id] : undefined;
+    const v = Number(value);
+    if (!kind || !key || !Number.isFinite(v)) return;
+    this.params[key] = v;
+    this._previewPending = { ...(this._previewPending ?? {}), [id]: v };
+    if (this._previewRaf) return;
+    this._previewRaf = requestAnimationFrame(() => this.ngZone.run(() => { this._previewRaf = 0; this._flushPreview(); }));
+  }
+
+  private _flushPreview(): void {
+    if (this._previewRaf) { cancelAnimationFrame(this._previewRaf); this._previewRaf = 0; }
+    const p = this._previewPending, sm = this.shapeManager;
+    this._previewPending = null;
+    const f = meshChromeApi(sm).redoMeshEditLastOp3D;
+    if (p && this.previewKind && typeof f === 'function') f.call(sm, p);
+  }
+
+  /** Apply: the preview stays as its one undo step; the tool stays on. False = no preview showing. */
+  applyPreview(): boolean {
+    if (!this.previewKind) return false;
+    this._flushPreview();
+    const last = this._lastOpOf(this.shapeManager);
+    this.appliedOpSig = last ? JSON.stringify(last) : null;
+    this._dropPreview();
+    return true;
+  }
+
+  /**
+   * Cancel (the pill, Esc, the Subdivide button again, any other edit in the panel): the preview is reverted — no undo
+   * step, no redo entry — and Extrude / Inset go off (Select). A running Chamfer / Bevel is the Bevel tool's preview:
+   * it is cancelled and the tool goes off too. False = nothing to cancel.
+   */
+  cancelPreview(): boolean {
+    const kind = this._revertPreview();
+    if (kind) {
+      if (kind !== 'subdivide' && this.tool === kind) this.setTool('select');
+      return true;
+    }
+    if (this.chromeOn && this.tool === 'bevel' && BEVEL_ACTIONS.active(this.host)) { this.cancelBevelTool(); return true; }
+    return false;
+  }
+
+  /** Revert the preview showing (no step left), the tool unchanged. The kind it was, or null. */
+  private _revertPreview(): MeshPreviewKind | null {
+    const kind = this.previewKind;
+    if (!kind) return null;
+    if (this._previewRaf) { cancelAnimationFrame(this._previewRaf); this._previewRaf = 0; }
+    this._previewPending = null;
+    const sm = this.shapeManager;
+    meshChromeApi(sm).cancelMeshEditLastOp3D?.call(sm);
+    this._dropPreview();
+    sm?.requestRender3D?.();
+    return kind;
+  }
+
+  /** Forget the preview (the engine's re-targeting off) without touching the mesh. */
+  private _dropPreview(): void {
+    if (!this._preview) return;
+    this._preview = null;
+    this._previewPending = null;
+    if (this._previewRaf) { cancelAnimationFrame(this._previewRaf); this._previewRaf = 0; }
+    const sm = this.host?.shapeManager;
+    meshChromeApi(sm).setMeshEditOpPreview3D?.call(sm, false);
+  }
+
+  /** Enter: apply the preview showing, or the Chamfer (chrome). False = neither (Enter goes on to the other keys). */
+  applyPreviewKey(): boolean {
+    if (this.shapeManager?.isShortcutActive3D) return false;
+    if (this.applyPreview()) return true;
+    if (this.chromeOn && this.tool === 'bevel' && BEVEL_ACTIONS.state(this.host)?.phase === 'adjust') { this.applyBevel(); return true; }
+    return false;
+  }
+
+  /** Esc: cancel the preview showing / the Chamfer (chrome). False = neither. */
+  cancelPreviewKey(): boolean {
+    if (this.shapeManager?.isShortcutActive3D) return false;
+    return this.cancelPreview();
+  }
+
+  /** The Bevel tool's start: the Chamfer on the selection, previewed at once with the last applied amount (it waits
+   *  for a tap on a corner / edge when nothing fits). */
+  beginBevelPreview(): void {
+    if (!BEVEL_ACTIONS.begin(this.host)) return;
+    if (this.chromeOn && BEVEL_ACTIONS.state(this.host)?.phase === 'adjust' && this.params.bevelAmount > 0) {
+      BEVEL_ACTIONS.setAmount(this.host, String(this.params.bevelAmount));
+    }
+  }
+
+  /** The Chamfer's Apply (pill / Enter): one undo step; its amount is the next start amount. */
+  applyBevel(): void {
+    const s = BEVEL_ACTIONS.state(this.host);
+    if (s && s.phase === 'adjust' && s.amount > 0) this.params.bevelAmount = s.amount;
+    BEVEL_ACTIONS.commit(this.host);
+    const last = this._lastOpOf(this.shapeManager);
+    this.appliedOpSig = last ? JSON.stringify(last) : null;
+  }
+
+  /** The Chamfer's Cancel: the mesh back exactly, and the Bevel tool goes off. */
+  cancelBevelTool(): void {
+    BEVEL_ACTIONS.cancel(this.host);
+    if (this.chromeOn && this.tool === 'bevel') this.setTool('select');
+  }
+
+  /** Esc while a Loop Cut press is held: nothing is cut (a newer Salsa). False = no press. */
+  cancelLoopCutPress(): boolean {
+    const f = meshChromeApi(this.shapeManager).cancelMeshEditLoopCut3D;
+    return typeof f === 'function' && !!f.call(this.shapeManager);
   }
 
   /** A one-shot op on the selection (the right panel's verb buttons, the radial menu). False = nothing to act on. */
   runVerb(id: MeshVerbId | 'fill'): boolean {
     const sm = this.shapeManager, id3 = this._editId;
     if (!sm || !id3) return false;
+    // Subdivide is a live preview on a newer Salsa (tapping it again while it shows = Cancel); any other verb first
+    // cancels a preview showing (its revert must not undo the verb's step)
+    if (id === 'subdivide' && this.previewSupported) {
+      if (this.previewKind === 'subdivide') return this.cancelPreview();
+      return this.startPreview('subdivide');
+    }
+    this.cancelPreview();
     const sel = this.selection;
     switch (id) {
       case 'delete': case 'dissolve': return this.deleteSelectedElements();
@@ -159,8 +361,14 @@ export class MeshEditService {
    */
   takeUndoStep(redo: boolean): boolean { return this._undoScope.takeStep(redo); }
 
-  /** E / I: the Extrude / Inset tool (chrome), run at once on the selected faces with the tool's amount. */
+  /** E / I: the Extrude / Inset tool (chrome), run at once on the selected faces with the tool's amount — as the live
+   *  preview on a newer Salsa (picking the tool starts it; again with the tool on: a new preview if none shows). */
   toolKey(tool: 'extrude' | 'inset'): void {
+    if (this.previewSupported) {
+      if (this.tool !== tool) this.setTool(tool);
+      else if (!this.previewKind) this.startPreview(tool);
+      return;
+    }
     if (this.chromeOn && this.tool !== tool) this.setTool(tool);
     if (tool === 'extrude') this.runExtrude(); else this.runInset();
   }
@@ -213,6 +421,12 @@ export class MeshEditService {
 
   exitMeshEditMode(): void {
     const sm = this.shapeManager;
+    // Leaving with a live preview: it is cancelled (nothing is applied without Apply). Then no tool stays selected — the
+    // engine's tool back to Select too — so the next entry starts clean (user request 2026-10-08).
+    this._revertPreview();
+    const setTool = meshChromeApi(sm).setMeshEditActiveTool3D;
+    if (typeof setTool === 'function') setTool.call(sm, 'select');
+    this.tool = 'select';
     sm.detachMeshEditPointerHandlers();
     sm.exitMeshEditMode3D();
     // (a newer dist: the rail showed the selection gizmo's mode — the object gizmo takes it over, so the rail stays true)
@@ -346,6 +560,7 @@ export class MeshEditService {
 
   /** Vertex / Edge / Face (the panel's tabs, 1 / 2 / 3): the engine's picker switches and the selection is cleared. */
   setSelectionMode(mode: MeshEditSelectMode): void {
+    if (mode !== this.selectionMode && this.previewKind) this.cancelPreview();   // (the face ops' preview)
     this.selectionMode = mode;
     // The chrome: a panel tool the new selection type doesn't offer goes off (Select)
     if (this.chromeOn && !meshToolAppliesTo(this.tool, mode)) this.setTool('select');
@@ -420,6 +635,7 @@ export class MeshEditService {
   /** X / Delete: the selected faces are deleted; else the selected edges dissolved (each merges its two faces). The
    *  engine has no vertex delete yet: a vertex selection does nothing. False = nothing to act on. */
   deleteSelectedElements(): boolean {
+    if (this.previewKind) this.cancelPreview();   // (X while a preview shows: on the mesh before it)
     const id = this._editId;
     const sel = id ? this.shapeManager.getEditSelection3D(id) : null;
     if (!sel) return false;
@@ -452,6 +668,7 @@ export class MeshEditService {
   /** Ctrl+R: a loop cut through the (first) selected edge at `t` along it (0.5 = the middle); the selection is cleared
    *  (the cut rebuilds the topology). False = no edge selected. */
   loopCutSelectedEdge(t?: number, count?: number): boolean {
+    if (this.previewKind) this.cancelPreview();
     const sm = this.shapeManager, id = this._editId;
     const sel = id ? sm.getEditSelection3D(id) : null;
     const edge = sel ? [...sel.edges][0] : undefined;

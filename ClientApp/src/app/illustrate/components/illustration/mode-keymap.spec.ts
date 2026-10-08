@@ -38,6 +38,9 @@ describe('mode keymap', () => {
         toolKey: jasmine.createSpy('toolKey'),
         applyKnifePoints: jasmine.createSpy('applyKnifePoints').and.returnValue(false),
         cancelKnifePoints: jasmine.createSpy('cancelKnifePoints').and.returnValue(false),
+        applyPreviewKey: jasmine.createSpy('applyPreviewKey').and.returnValue(false),
+        cancelPreviewKey: jasmine.createSpy('cancelPreviewKey').and.returnValue(false),
+        cancelLoopCutPress: jasmine.createSpy('cancelLoopCutPress').and.returnValue(false),
         takeUndoStep: jasmine.createSpy('takeUndoStep').and.returnValue(true),
         leave: jasmine.createSpy('leave'),
       },
@@ -230,6 +233,26 @@ describe('mode keymap', () => {
       expect(ed.meshEdit.applyKnifePoints).toHaveBeenCalledTimes(1);
     });
 
+    it('a live preview takes Enter (Apply) / Esc (Cancel) first; Esc drops a held Loop Cut press; declined: as before', () => {
+      const ed = editor();
+      ed.meshEdit.applyPreviewKey.and.returnValue(true);
+      expect(run(ed, key('Enter'))).toBeTrue();
+      expect(ed.meshEdit.applyPreviewKey).toHaveBeenCalledTimes(1);
+      expect(ed.meshEdit.applyKnifePoints).not.toHaveBeenCalled();
+      ed.meshEdit.cancelPreviewKey.and.returnValue(true);
+      run(ed, key('Escape'));
+      expect(ed.meshEdit.cancelPreviewKey).toHaveBeenCalledTimes(1);
+      expect(ed.meshEdit.leave).not.toHaveBeenCalled();                 // the preview took the Esc, not the mode
+      ed.meshEdit.cancelPreviewKey.and.returnValue(false);
+      ed.meshEdit.cancelLoopCutPress.and.returnValue(true);
+      run(ed, key('Escape'));
+      expect(ed.meshEdit.cancelLoopCutPress).toHaveBeenCalledTimes(1);
+      expect(ed.meshEdit.leave).not.toHaveBeenCalled();
+      ed.meshEdit.cancelLoopCutPress.and.returnValue(false);
+      run(ed, key('Escape'));
+      expect(ed.meshEdit.leave).toHaveBeenCalledTimes(1);               // nothing to cancel: Esc leaves Edit Mesh
+    });
+
     it('G / R / S stay the HUD transform: listed, but never claimed here', () => {
       const ed = editor();
       expect(run(ed, key('r'))).toBeFalse();
@@ -284,7 +307,8 @@ describe('mode keymap', () => {
     it('the panel chips come from the bindings', () => {
       expect(meshEditKeyLabels()).toEqual({
         vertexMode: '1', edgeMode: '2', faceMode: '3', selectAll: 'A', deselectAll: 'Alt+A', delete: 'X', loopCut: 'Ctrl+R',
-        extrude: 'E', inset: 'I', knife: 'K', knifeApply: 'Enter', knifeCancel: 'Esc', exit: 'Esc', move: 'G', rotate: 'R', scale: 'S',
+        extrude: 'E', inset: 'I', knife: 'K', previewApply: 'Enter', previewCancel: 'Esc', knifeApply: 'Enter', knifeCancel: 'Esc', exit: 'Esc',
+        move: 'G', rotate: 'R', scale: 'S',
         chamfer: 'Ctrl+B',
       });
     });

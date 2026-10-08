@@ -65,6 +65,16 @@
             <span class="reset-black"></span>
         </span>
     </button>
+    <!-- Palettes: opens / closes the palettes popup (stays open while painting; Esc closes it) -->
+    <button type="button" class="picker-action-btn picker-palettes" [class.on]="palettesOpen"
+            [attr.aria-expanded]="palettesOpen"
+            (click)="togglePalettes()"
+            title="Palettes" aria-label="Palettes">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="square" aria-hidden="true">
+            <path d="M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z"/>
+        </svg>
+    </button>
     <!-- Eyedropper: arms a one-shot sample — the next tap / click on the canvas picks its colour (Alt+click also
          samples on desktop). Tap again to disarm. -->
     <button type="button" class="picker-action-btn picker-eyedropper" [class.on]="eyedropperArmed"
@@ -77,4 +87,26 @@
             <path d="M14.5 4.5l5 5M17 2l5 5-3 3-5-5zM13 8l-9 9v3h3l9-9"/>
         </svg>
     </button>
+</div>
+<!-- Palettes popup (position: fixed, placed above the picker by _placePalettesPopup). Tap an empty square: it takes the
+     picker colour and stays linked (the selected square follows the picker); tap a filled one: the picker takes its
+     colour; long-press / double-tap a filled one: linked again. + adds a row below, ✕ deletes the row (Undo toast). -->
+<div *ngIf="palettesOpen" #palettesPopup class="palettes-popup" role="dialog" aria-label="Palettes"
+     (pointerdown)="$event.stopPropagation()"
+     (contextmenu)="$event.preventDefault()">
+    <div class="palette-row" *ngFor="let row of palettes.rows; let r = index">
+        <div *ngFor="let c of row; let col = index; trackBy: trackByIndex"
+             class="palette-square"
+             [class.palette-square--empty]="!c"
+             [class.palette-square--selected]="palettes.isSelected(r, col)"
+             [style.background-color]="c"
+             [attr.title]="c"
+             (pointerdown)="onSquarePointerDown($event, r, col)"
+             (pointerup)="onSquarePointerUp()"
+             (pointercancel)="onSquarePointerCancel()"></div>
+        <button type="button" class="palette-row-btn" (click)="addPaletteRow(r)"
+                title="Add a row below" aria-label="Add a row below">+</button>
+        <button type="button" class="palette-row-btn" (click)="deletePaletteRow(r)"
+                title="Delete this row" aria-label="Delete this row">✕</button>
+    </div>
 </div>

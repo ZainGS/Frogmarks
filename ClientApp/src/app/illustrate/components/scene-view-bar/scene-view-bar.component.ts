@@ -27,6 +27,9 @@ export class SceneViewBarComponent {
   @Input() scene3dViewFly = false;
   @Input() scene3dViewIsPlaying = false;
   @Input() scene3dPlayCameraMode: 'first' | 'third' = 'first';
+  /** An edit mode is on (Edit Mesh / Armature / UV Paint): every view control is disabled — changing the camera mode,
+   *  target, fly or Play mid-mode broke the mode's camera / state (user request 2026-10-08). */
+  @Input() locked = false;
   @Output() setCameraMode = new EventEmitter<CameraMode>();
   @Output() setTarget = new EventEmitter<'illustration' | 'scene'>();
   @Output() setArtboardFrame = new EventEmitter<boolean>();

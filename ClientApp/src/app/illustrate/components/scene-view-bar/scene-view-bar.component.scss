@@ -38,6 +38,9 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     }
 
     & + & { border-left: 1px solid rgba(255, 255, 255, 0.1); }
+
+    // Locked while an edit mode is on (Edit Mesh / Armature / UV Paint): greyed, not clickable.
+    &:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 }
 
 .scene-view-icon-btn {

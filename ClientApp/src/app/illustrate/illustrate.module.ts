@@ -77,6 +77,7 @@ import { GreasePencilPanelComponent } from './components/grease-pencil-panel/gre
 import { UvEditorPanelComponent } from './components/uv-editor-panel/uv-editor-panel.component';
 import { AuthoringPanelComponent } from './components/authoring-panel/authoring-panel.component';
 import { DetachWhenHiddenDirective } from '../shared/directives/detach-when-hidden.directive';
+import { HoldRepeatDirective } from '../shared/directives/hold-repeat.directive';
 import { ConfirmStripComponent } from './components/confirm-strip/confirm-strip.component';
 import { ModeHeaderBarComponent } from './components/mode-chrome/mode-header-bar/mode-header-bar.component';
 import { ModeToolStripComponent } from './components/mode-chrome/mode-tool-strip/mode-tool-strip.component';
@@ -178,6 +179,6 @@ const routes: Routes = [
     ModePropsPanelComponent,
   ],
   exports: [ModeHeaderBarComponent, ModeToolStripComponent, ModeOpPillComponent, ModeRadialMenuComponent, ModePropsPanelComponent],
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, SharedUiModule, DetachWhenHiddenDirective, ConfirmStripComponent, RouterModule.forChild(routes)],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, SharedUiModule, DetachWhenHiddenDirective, HoldRepeatDirective, ConfirmStripComponent, RouterModule.forChild(routes)],
 })
 export class IllustrateModule { }

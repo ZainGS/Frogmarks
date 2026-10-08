@@ -285,11 +285,17 @@ export interface RasterTextState {
 //  DITHER EFFECT
 // ═══════════════════════════════════════════════════════════════
 
+/** Halftone screen shapes (Salsa's HALFTONE_SHAPES). Stored as the algorithm 'halftone_<shape>'; dot / line /
+ *  diamond are the original three (old documents), the rest need a Salsa build from 2026-10-08 on. */
+export type HalftoneShapeId =
+  | 'dot' | 'line' | 'diamond' | 'square' | 'cross' | 'ellipse' | 'wavy' | 'crosshatch'
+  | 'rings' | 'spiral' | 'hexagon' | 'star' | 'heart' | 'triangle';
+
+export type HalftoneAlgorithm = `halftone_${HalftoneShapeId}`;
+
 export type DitherAlgorithm =
   | 'bayer'
-  | 'halftone_dot'
-  | 'halftone_line'
-  | 'halftone_diamond'
+  | HalftoneAlgorithm
   | 'blue_noise'
   | 'noise'
   | 'floyd_steinberg'
@@ -351,16 +357,18 @@ export const DEFAULT_DITHER_CONFIG: DitherConfig = {
   edgeMode: 'content',
 };
 
+/** The Algorithm dropdown's value: every halftone shape is the one 'halftone' entry (the shape is picked in the
+ *  Halftone section). */
+export type DitherAlgorithmMenuValue = Exclude<DitherAlgorithm, HalftoneAlgorithm> | 'halftone';
+
 export interface DitherAlgorithmOption {
-  value: DitherAlgorithm;
+  value: DitherAlgorithmMenuValue;
   label: string;
 }
 
 export const DITHER_ALGORITHM_OPTIONS: DitherAlgorithmOption[] = [
   { value: 'bayer',               label: 'Bayer (Crosshatch)' },
-  { value: 'halftone_dot',        label: 'Halftone — Dot' },
-  { value: 'halftone_line',       label: 'Halftone — Line' },
-  { value: 'halftone_diamond',    label: 'Halftone — Diamond' },
+  { value: 'halftone',            label: 'Halftone' },
   { value: 'blue_noise',          label: 'Blue Noise (Organic)' },
   { value: 'noise',               label: 'Random Noise' },
   { value: 'floyd_steinberg',     label: 'Floyd-Steinberg (WASM)' },
@@ -398,11 +406,61 @@ export const COLOR_LEVEL_OPTIONS: ColorLevelOption[] = [
   { value: 256, label: 'Off (no quantization)' },
 ];
 
-export const HALFTONE_SHAPE_OPTIONS: { value: DitherAlgorithm; label: string }[] = [
-  { value: 'halftone_dot',     label: 'Dot' },
-  { value: 'halftone_line',    label: 'Line' },
-  { value: 'halftone_diamond', label: 'Diamond' },
+export interface HalftoneShapeOption { value: HalftoneAlgorithm; label: string; }
+export interface HalftoneShapeGroup { label: string; options: HalftoneShapeOption[]; }
+
+/** The Halftone section's Shape dropdown (one <optgroup> per group). */
+export const HALFTONE_SHAPE_GROUPS: HalftoneShapeGroup[] = [
+  { label: 'Classic', options: [
+    { value: 'halftone_dot',        label: 'Dot' },
+    { value: 'halftone_line',       label: 'Line' },
+    { value: 'halftone_diamond',    label: 'Diamond' },
+    { value: 'halftone_ellipse',    label: 'Ellipse' },
+    { value: 'halftone_square',     label: 'Square' },
+  ] },
+  { label: 'Sketch', options: [
+    { value: 'halftone_crosshatch', label: 'Crosshatch' },
+    { value: 'halftone_wavy',       label: 'Wavy lines' },
+  ] },
+  { label: 'Graphic', options: [
+    { value: 'halftone_rings',      label: 'Rings' },
+    { value: 'halftone_spiral',     label: 'Spiral' },
+    { value: 'halftone_hexagon',    label: 'Hexagon' },
+    { value: 'halftone_star',       label: 'Star' },
+    { value: 'halftone_heart',      label: 'Heart' },
+    { value: 'halftone_triangle',   label: 'Triangle' },
+    { value: 'halftone_cross',      label: 'Cross' },
+  ] },
 ];
+
+export const HALFTONE_SHAPE_OPTIONS: HalftoneShapeOption[] = HALFTONE_SHAPE_GROUPS.flatMap(g => g.options);
+
+/** The shape "Halftone" starts on before one was picked. */
+export const DEFAULT_HALFTONE_ALGORITHM: HalftoneAlgorithm = 'halftone_dot';
+
+export function isHalftoneAlgorithm(algorithm: string | null | undefined): algorithm is HalftoneAlgorithm {
+  return typeof algorithm === 'string' && algorithm.startsWith('halftone_');
+}
+
+/** Stored algorithm -> the Algorithm dropdown entry (any halftone shape shows as "Halftone"). */
+export function ditherAlgorithmMenuValue(algorithm: DitherAlgorithm): DitherAlgorithmMenuValue {
+  return isHalftoneAlgorithm(algorithm) ? 'halftone' : algorithm;
+}
+
+/** Algorithm dropdown pick -> the algorithm to store: "Halftone" resumes the last halftone shape (default Dot). */
+export function resolveDitherAlgorithmMenuChoice(choice: DitherAlgorithmMenuValue, lastHalftone?: DitherAlgorithm | null): DitherAlgorithm {
+  if (choice !== 'halftone') return choice;
+  return isHalftoneAlgorithm(lastHalftone) ? lastHalftone : DEFAULT_HALFTONE_ALGORITHM;
+}
+
+/** The Shape groups limited to what the engine supports (supported = Salsa's ShapeManager.DitherAlgorithms; null =
+ *  unknown, show everything). The current shape always stays listed so a document's value never shows blank. */
+export function halftoneShapeGroupsFor(supported: readonly string[] | null, current?: DitherAlgorithm | null): HalftoneShapeGroup[] {
+  if (!supported) return HALFTONE_SHAPE_GROUPS;
+  return HALFTONE_SHAPE_GROUPS
+    .map(g => ({ label: g.label, options: g.options.filter(o => supported.includes(o.value) || o.value === current) }))
+    .filter(g => g.options.length > 0);
+}
 
 export const COLOR_MODE_OPTIONS: { value: DitherColorMode; label: string }[] = [
   { value: 'quantize', label: 'Quantize' },

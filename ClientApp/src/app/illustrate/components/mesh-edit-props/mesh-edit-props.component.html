@@ -4,6 +4,8 @@
     <div class="me-mode-row" role="group" aria-label="Select">
         <button *ngFor="let s of segments" type="button" class="me-mode-btn" [class.active]="mode === s.id"
                 [attr.aria-pressed]="mode === s.id" [title]="s.title" (click)="setMode(s.id)">{{ s.label }}</button>
+        <button type="button" class="me-clear-btn me-lock-btn" [class.active]="dragLock" [attr.aria-pressed]="dragLock"
+                (click)="toggleDragLock()" title="Drag Lock: dragging the selection doesn't move it">Drag Lock</button>
         <button type="button" class="me-clear-btn" [disabled]="!hasSelection" (click)="deselectAll()"
                 title="Deselect all (Alt+A)">Deselect all</button>
     </div>
@@ -11,7 +13,7 @@
     <!-- The tools for this selection type: icon-only, the main toolbar's buttons (tap the active tool again: off) -->
     <div class="me-tools" role="toolbar" aria-label="Edit Mesh tools">
         <div *ngFor="let t of tools; trackBy: trackTool" class="vertical-tool-button" role="button"
-             [attr.tabindex]="t.disabled ? -1 : 0" [class.selected]="t.kind === 'tool' && tool === t.id"
+             [attr.tabindex]="t.disabled ? -1 : 0" [class.selected]="(t.kind === 'tool' && tool === t.id) || previewing === t.id"
              [class.tool-off]="t.disabled" [attr.aria-disabled]="t.disabled"
              [attr.aria-pressed]="t.kind === 'tool' ? tool === t.id : null" [attr.aria-label]="t.label"
              [attr.data-id]="t.id" [title]="t.title"
@@ -44,15 +46,19 @@
             </div>
         </div>
 
+        <!-- Add: + Mirror on its own row (its Use Face / Bisect Mesh choice right under it), then + Subdivision with a
+             small ×2 (two levels) at the row's end -->
         <div class="me-mod-add-row">
-            <button type="button" class="me-chip" [class.me-chip-on]="mirrorChoice" [attr.aria-expanded]="mirrorChoice"
+            <button type="button" class="me-chip me-chip-grow" [class.me-chip-on]="mirrorChoice" [attr.aria-expanded]="mirrorChoice"
                     (click)="mirrorChoice = !mirrorChoice" title="Mirror the mesh">+ Mirror</button>
-            <button type="button" class="me-chip" (click)="addSubdivision(1)" title="Smooth the mesh (one level)">+ Subdivision</button>
-            <button type="button" class="me-chip" (click)="addSubdivision(2)" title="Smooth the mesh (two levels)">+ Subdivision ×2</button>
         </div>
-        <div *ngIf="mirrorChoice" class="me-op-pair" data-section="mirror-choice">
+        <div *ngIf="mirrorChoice" class="me-op-pair me-mirror-choice" data-section="mirror-choice">
             <button type="button" class="me-op-btn" [disabled]="!canMirrorFace" [title]="mirrorFaceTitle" (click)="addMirrorFace()">Use Face</button>
             <button type="button" class="me-op-btn" [disabled]="!hasMirrorBisect" [title]="mirrorBisectTitle" (click)="addMirrorBisect()">Bisect Mesh</button>
+        </div>
+        <div class="me-mod-add-row">
+            <button type="button" class="me-chip me-chip-grow" (click)="addSubdivision(1)" title="Smooth the mesh (one level)">+ Subdivision</button>
+            <button type="button" class="me-chip me-chip-x2" (click)="addSubdivision(2)" title="Smooth the mesh (two levels)">×2</button>
         </div>
     </div>
 

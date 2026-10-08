@@ -5,6 +5,13 @@ import type { IllustrationComponent } from '../components/illustration/illustrat
 import { EditorStateService } from './editor-state.service';
 import { FrameCoalescer } from '../../shared/utilities/frame-coalescer';
 import { CanvasInsets, RectLike, computeArtboardFitFallback, fitInsetsWithFloating } from '../utils/artboard-fit-insets';
+/** The edit camera of Edit Mesh / UV / Armature (Salsa newer than the dist Frogmarks type-checks against). */
+type EditViewApi = {
+  isEditViewActive3D?(): boolean;
+  frameEditView3D?(): boolean;
+  zoomEditView3D?(factor: number): boolean;
+  getEditViewZoom3D?(): number | null;
+};
 /** Exactly the editor state the artboard / zoom controls use. */
 export type ArtboardHost = Pick<IllustrationComponent, 'shapeManager' |
   'canvas' | 'scene3dFrameScene' | 'worldManager'
@@ -39,16 +46,49 @@ export class ArtboardService implements OnDestroy {
   artboardLabelText = '';
   private _artboardViewportSub: any = null;
 
-  /** The zoom % readout: in 3D free mode it returns to the scene view, otherwise it fits the artboard. */
-  zoomFitClick(): void { if (this.editorState.scene3dViewCameraMode === 'free3D') this.host.scene3dFrameScene(); else this.fitArtboard(); }
+  /** The zoom % readout: in Edit Mesh / UV / Armature it frames the mode's mesh; in 3D free mode it returns to the scene
+   *  view; otherwise it fits the artboard. */
+  zoomFitClick(): void {
+    if (this._editView()) { this.fitView(); return; }
+    if (this.editorState.scene3dViewCameraMode === 'free3D') this.host.scene3dFrameScene(); else this.fitArtboard();
+  }
 
-  zoomIn() { this.host.worldManager.zoomIn(); }
+  /** The zoom box's Fit (and Ctrl+0): in an edit mode, frame its mesh with the mode's entry framing; else fit the artboard. */
+  fitView(): void {
+    const ev = this._editView();
+    if (ev?.frameEditView3D?.()) return;
+    this.fitArtboard();
+  }
 
-  zoomOut() { this.host.worldManager.zoomOut(); }
+  /** One zoom-box step in an edit mode (the 3D edit camera's own zoom; ×1.25 like a 2D step). */
+  static readonly EDIT_ZOOM_STEP = 1.25;
 
+  zoomIn() {
+    if (this._editView()?.zoomEditView3D?.(ArtboardService.EDIT_ZOOM_STEP)) return;
+    this.host.worldManager.zoomIn();
+  }
+
+  zoomOut() {
+    if (this._editView()?.zoomEditView3D?.(1 / ArtboardService.EDIT_ZOOM_STEP)) return;
+    this.host.worldManager.zoomOut();
+  }
+
+  /** In an edit mode: the 3D edit camera's zoom relative to its framing (100 % = as framed on entry / by Fit). */
   get currentZoomPercent(): string {
-    try { return Math.round((this.host.worldManager?.getZoomFactor?.() ?? 1) * 100) + '%'; }
+    try {
+      const z = this._editView()?.getEditViewZoom3D?.();
+      if (typeof z === 'number' && Number.isFinite(z)) return Math.round(z * 100) + '%';
+      return Math.round((this.host.worldManager?.getZoomFactor?.() ?? 1) * 100) + '%';
+    }
     catch { return '100%'; }
+  }
+
+  /** The engine's edit-camera API while Edit Mesh / the UV editor / the Armature owns the 3D camera (a newer Salsa;
+   *  an older dist has none — the zoom box stays the 2D canvas zoom), else null. */
+  private _editView(): EditViewApi | null {
+    const sm = this.shapeManager as unknown as EditViewApi | null | undefined;
+    try { return sm && typeof sm.isEditViewActive3D === 'function' && sm.isEditViewActive3D() ? sm : null; }
+    catch { return null; }
   }
 
   showResizeDialog = false;

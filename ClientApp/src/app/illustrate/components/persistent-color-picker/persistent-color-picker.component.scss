@@ -83,8 +83,9 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
     &:disabled { opacity: 0.35; cursor: default; }
 }
 
-// Eyedropper armed (the next canvas tap samples): sunken + green, like the other "on" toggles.
-.picker-eyedropper.on {
+// Eyedropper armed (the next canvas tap samples) / Palettes open: sunken + green, like the other "on" toggles.
+.picker-eyedropper.on,
+.picker-palettes.on {
     background: var(--rc-green, #3b6151);
     color: var(--rc-green-txt, #c8ede3);
     border-color: var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111);
@@ -278,4 +279,80 @@ div { cursor: url("../../../../assets/cursors/arrowhead-rounded-outline.svg"), a
         cursor: default;
         pointer-events: none;
     }
+}
+
+// ── Palettes popup ── fixed above the picker (left / bottom / max sizes set by _placePalettesPopup); retro-chrome
+// bevel, square corners; the squares look like the recent-colour squares (empty = dashed outline).
+.palettes-popup {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    box-sizing: border-box;
+    background: var(--rc-panel-bg, #1a1a1a);
+    border: 2px solid;
+    border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+    border-radius: 0;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;   // many rows scroll inside; no double-tap zoom on the squares
+}
+
+.palette-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.palette-square {
+    width: 23px;
+    height: 23px;
+    box-sizing: border-box;
+    border: 2px solid transparent;
+    border-radius: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    transition: transform 0.1s, border-color 0.1s;
+    @media (hover: hover) {
+        &:hover { transform: scale(1.25); border-color: rgba(255, 255, 255, 0.5); }
+    }
+    &.palette-square--empty {
+        border: 1.5px dashed #555;
+        background: transparent;
+    }
+    // The selected (live-linked) square: white edge + a green ring outside it.
+    &.palette-square--selected,
+    &.palette-square--selected:hover {
+        border: 2px solid #fff;
+        outline: 2px solid var(--rc-green-hi, #4f7a68);
+        outline-offset: 1px;
+        transform: none;
+    }
+}
+
+.palette-row-btn {
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text-muted, #a8a8a8);
+    border: 1px solid var(--rc-bevel-mid, #3a3a3a);
+    border-radius: 0;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover { background: var(--rc-surface-hi, #2e2e2e); color: var(--rc-text, #c8c8c8); }
 }

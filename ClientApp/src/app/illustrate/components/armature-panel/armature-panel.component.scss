@@ -1,3 +1,5 @@
+@import '../../styles/mode-chrome-mixins';
+
 $accent:  #4caf96;
 $bg:      #1a1a1a;
 $border:  rgba(255, 255, 255, 0.1);
@@ -128,4 +130,35 @@ $muted:   rgba(255, 255, 255, 0.45);
   font-size: 11px;
   color: lighten($accent, 18%);
   flex-shrink: 0;
+}
+
+// ── Retro-chrome theme: the classic Edit Mesh panel's shell (retro-chrome-theme.scss § 6 .me-panel / .me-header /
+// .me-exit-btn) instead of the teal accent; the default theme keeps the look above. ─────────────────────────────────
+
+:host-context(body.theme-retro-chrome) {
+  .ar-panel {
+    background: var(--rc-panel-bg, #1a1a1a);
+    @include mode-raised;
+  }
+  .ar-header {
+    background: var(--rc-green, #3b6151);
+    border-bottom: 2px solid var(--rc-bevel-lt, #6a6a6a);
+  }
+  .ar-title {
+    color: var(--rc-green-txt, #c8ede3);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .ar-exit-btn, .ar-refresh-btn {
+    @include mode-raised;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
+    &:hover { background: var(--rc-surface-hi, #2e2e2e); color: var(--rc-text, #c8c8c8); }
+  }
+  .ar-placement-banner {
+    background: var(--rc-green, #3b6151);
+    border-bottom: 1px solid var(--rc-green-hi, #4f7a68);
+    color: var(--rc-green-txt, #c8ede3);
+  }
+  .ar-panel, .ar-panel * { font-family: 'Courier New', Courier, monospace; }
 }

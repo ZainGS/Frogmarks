@@ -1,3 +1,5 @@
+@import '../../styles/mode-chrome-mixins';
+
 $accent: #3dbfa8;
 $bg:     #1a1a1a;
 $border: rgba(255, 255, 255, 0.1);
@@ -172,4 +174,54 @@ $muted:  rgba(255, 255, 255, 0.45);
   &:last-child { margin-bottom: 0; }
 
   input[type='checkbox'] { flex-shrink: 0; accent-color: $accent; cursor: pointer; }
+}
+
+// ── Retro-chrome theme: Edit Mesh's look (retro-chrome-theme.scss § 6 .me-panel / .me-header / .me-section-title /
+// .me-op-btn: green header and section titles, bevel buttons, green active state, Courier) instead of the teal accent;
+// the default theme keeps the look above. ──────────────────────────────────────────────────────────────────────────
+
+:host-context(body.theme-retro-chrome) {
+  .uv-panel {
+    background: var(--rc-panel-bg, #1a1a1a);
+    @include mode-raised;
+  }
+  .uv-panel, .uv-panel * { font-family: 'Courier New', Courier, monospace; }
+  .uv-header {
+    background: var(--rc-green, #3b6151);
+    border-bottom: 2px solid var(--rc-bevel-lt, #6a6a6a);
+  }
+  .uv-title {
+    color: var(--rc-green-txt, #c8ede3);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .uv-exit-btn {
+    @include mode-raised;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text, #c8c8c8);
+    &:hover { background: var(--rc-surface-hi, #2e2e2e); color: var(--rc-text, #c8c8c8); }
+  }
+  .uv-section-title {
+    color: var(--rc-green-hi, #4f7a68);
+    border-left: 3px solid var(--rc-green, #3b6151);
+    background: #1c1c1c;
+    padding: 2px 6px;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .uv-section-toggle:hover { color: var(--rc-green-txt, #c8ede3); }
+  .uv-btn {
+    @include mode-raised;
+    background: var(--rc-surface, #242424);
+    color: var(--rc-text-muted, #a8a8a8);
+    &:hover:not(:disabled) { background: var(--rc-surface-hi, #2e2e2e); color: var(--rc-text, #c8c8c8); }
+    &:active:not(:disabled) { background: var(--rc-surface-hi, #2e2e2e); }
+    &:disabled { opacity: 0.35; cursor: default; }
+  }
+  .uv-btn-active, .uv-btn-active:hover:not(:disabled) {
+    @include mode-sunken;
+    background: var(--rc-green, #3b6151);
+    color: var(--rc-green-txt, #c8ede3);
+  }
+  .uv-check-row { color: var(--rc-text, #c8c8c8); }
 }
