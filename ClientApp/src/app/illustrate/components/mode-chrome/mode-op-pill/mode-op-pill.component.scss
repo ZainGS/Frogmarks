@@ -19,9 +19,9 @@
   container-type: inline-size;   // the compact layout follows the free width (props panel open or not), not the screen
 }
 :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
-// Phone / narrow: the whole free width, above the zoom widget.
+// Phone / narrow: the whole free width, above the zoom widget and the Undo / Redo box on top of it.
 @media (max-width: 700px) {
-  :host { right: var(--fm-modeprops-w, 0px); bottom: 112px; left: 74px; padding: 0; }
+  :host { right: var(--fm-modeprops-w, 0px); bottom: 146px; left: 74px; padding: 0; }
   :host(.above-timeline) { bottom: calc(var(--fm-timeline-h, 204px) + 10px); }
 }
 

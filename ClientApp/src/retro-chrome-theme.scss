@@ -1527,6 +1527,21 @@ body.theme-retro-chrome .fit-artboard-btn {
   font-size: 10px !important;
   border-top: 1px solid var(--rc-bevel-mid) !important;
 }
+// Undo / Redo box above the zoom box: the same panel + text buttons. left / right -1 px: over the zoom box's border.
+body.theme-retro-chrome .zoom-history {
+  left: -1px;
+  right: -1px;
+  background: var(--rc-panel-bg) !important;
+  border: 1px solid var(--rc-green) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body.theme-retro-chrome .zoom-history-btn {
+  color: var(--rc-green-hi) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 10px !important;
+  & + .zoom-history-btn { border-left: 1px solid var(--rc-bevel-mid) !important; }
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════════

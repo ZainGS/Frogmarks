@@ -355,23 +355,29 @@
 <details class="scene3d-details">
     <summary>Post-Processing</summary>
 
+    <!-- Bloom: ONE control — Whole scene (post-process bloom) or Particles only (the particle glow pass), never both -->
     <div class="scene3d-pp-group">
-        <div class="scene3d-pp-group-header">
-            <label class="scene3d-checkbox-row">
-                <input type="checkbox" [(ngModel)]="s3.scene3dBloomEnabled" (ngModelChange)="s3.scene3dApplyPostProcessing()">
-                Bloom
-            </label>
+        <div class="scene3d-material-row">
+            <label>Bloom</label>
+            <div class="scene3d-seg-btn-group">
+                <button type="button" class="scene3d-seg-btn" [class.active]="s3.scene3dBloomMode === 'off'"
+                        (click)="s3.scene3dSetBloomMode('off')">Off</button>
+                <button type="button" class="scene3d-seg-btn" [class.active]="s3.scene3dBloomMode === 'scene'"
+                        (click)="s3.scene3dSetBloomMode('scene')">Whole scene</button>
+                <button type="button" class="scene3d-seg-btn" [class.active]="s3.scene3dBloomMode === 'particles'"
+                        (click)="s3.scene3dSetBloomMode('particles')">Particles only</button>
+            </div>
         </div>
-        <ng-container *ngIf="s3.scene3dBloomEnabled">
+        <ng-container *ngIf="s3.scene3dBloomMode !== 'off'">
             <div class="scene3d-material-row">
                 <label>Threshold</label>
-                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dBloomThreshold" (input)="s3.scene3dApplyPostProcessing()">
-                <span class="scene3d-val">{{ s3.scene3dBloomThreshold | number:'1.2-2' }}</span>
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="s3.scene3dBloomModeThreshold" (input)="s3.scene3dApplyBloomLevels()">
+                <span class="scene3d-val">{{ s3.scene3dBloomModeThreshold | number:'1.2-2' }}</span>
             </div>
             <div class="scene3d-material-row">
                 <label>Intensity</label>
-                <input type="range" min="0" max="4" step="0.05" [(ngModel)]="s3.scene3dBloomIntensity" (input)="s3.scene3dApplyPostProcessing()">
-                <span class="scene3d-val">{{ s3.scene3dBloomIntensity | number:'1.2-2' }}</span>
+                <input type="range" min="0" max="4" step="0.05" [(ngModel)]="s3.scene3dBloomModeIntensity" (input)="s3.scene3dApplyBloomLevels()">
+                <span class="scene3d-val">{{ s3.scene3dBloomModeIntensity | number:'1.2-2' }}</span>
             </div>
         </ng-container>
     </div>
@@ -466,7 +472,7 @@
                 <input type="range" min="0" max="1" step="0.05" [(ngModel)]="s3.scene3dFilmHalation" (input)="s3.scene3dApplyPostProcessing()">
                 <input type="color" [(ngModel)]="s3.scene3dFilmHalationTint" (input)="s3.scene3dApplyPostProcessing()" title="Halation tint">
             </div>
-            <div *ngIf="!s3.scene3dBloomEnabled && s3.scene3dFilmHalation > 0" class="scene3d-hint">Halation only shows with Bloom on.</div>
+            <div *ngIf="!s3.scene3dBloomEnabled && s3.scene3dFilmHalation > 0" class="scene3d-hint">Halation only shows with Whole scene Bloom.</div>
         </ng-container>
     </div>
 

@@ -1,0 +1,11 @@
+<svg #svg class="pd-svg">
+    <polyline #line class="pd-line"></polyline>
+    <polyline #rubber class="pd-rubber"></polyline>
+    <g #dots></g>
+</svg>
+<div class="pd-bar" role="toolbar" aria-label="Polygon outline">
+    <span class="pd-title">Polygon</span>
+    <button type="button" class="scene3d-btn pd-btn" [disabled]="count === 0" (click)="undo()" title="Remove the last point (Backspace)">Undo</button>
+    <button type="button" class="scene3d-btn pd-btn" [disabled]="count < 3" (click)="done()" title="Make the shape (Enter)">Done</button>
+    <button type="button" class="scene3d-btn pd-btn" (click)="cancel()" title="Cancel (Esc)">Cancel</button>
+</div>

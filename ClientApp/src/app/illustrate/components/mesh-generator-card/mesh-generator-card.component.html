@@ -1,0 +1,169 @@
+<div *ngIf="gen as g" class="me-mod-row mg-card" data-card="generator" [attr.data-type]="g.type">
+    <span class="me-mod-label">{{ TITLES[g.type] }}</span>
+    <button type="button" class="me-op-btn me-op-sm" (click)="bake()" title="Keep the shape, drop the settings (can be undone)">Bake</button>
+
+    <div class="mg-params">
+        <!-- Cylinder / cone / frustum -->
+        <ng-container *ngIf="g.type === 'cylinder'">
+            <div class="mg-row"><span class="me-label">Radius</span>
+                <input type="range" min="0.01" max="3" step="0.01" [ngModel]="p['radius']" (ngModelChange)="num('radius', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['radius'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Top radius</span>
+                <input type="range" min="0" max="3" step="0.01" [ngModel]="p['radiusTop']" (ngModelChange)="num('radiusTop', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['radiusTop'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Height</span>
+                <input type="range" min="0.01" max="5" step="0.01" [ngModel]="p['height']" (ngModelChange)="num('height', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['height'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Segments</span>
+                <input type="range" min="3" max="64" step="1" [ngModel]="p['segments']" (ngModelChange)="num('segments', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['segments'] }}</span></div>
+            <div class="me-op-pair">
+                <button type="button" class="me-op-btn me-op-sm" [class.active]="p['radiusTop'] === 0" (click)="cone()">Cone</button>
+                <button type="button" class="me-op-btn me-op-sm" [class.active]="p['radiusTop'] === p['radius']" (click)="straight()">Cylinder</button>
+            </div>
+        </ng-container>
+
+        <!-- Circle / n-gon -->
+        <ng-container *ngIf="g.type === 'circle'">
+            <div class="mg-row"><span class="me-label">Radius</span>
+                <input type="range" min="0.01" max="3" step="0.01" [ngModel]="p['radius']" (ngModelChange)="num('radius', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['radius'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Segments</span>
+                <input type="range" min="3" max="64" step="1" [ngModel]="p['segments']" (ngModelChange)="num('segments', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['segments'] }}</span></div>
+            <div class="mg-row"><span class="me-label">Height</span>
+                <input type="range" min="0" max="3" step="0.01" [ngModel]="p['height']" (ngModelChange)="num('height', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['height'] | number:'1.2-2' }}</span></div>
+        </ng-container>
+
+        <!-- Polygon (the drawn outline; its points stay) -->
+        <ng-container *ngIf="g.type === 'polygon'">
+            <div class="mg-row"><span class="me-label">Height</span>
+                <input type="range" min="0" max="3" step="0.01" [ngModel]="p['height']" (ngModelChange)="num('height', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['height'] | number:'1.2-2' }}</span></div>
+        </ng-container>
+
+        <!-- Revolve (lathe): profile [radius, y] -->
+        <ng-container *ngIf="g.type === 'revolve'">
+            <div class="mg-row" *ngFor="let pt of p['profile']; let i = index; trackBy: trackIndex">
+                <span class="me-label mg-pt">P{{ i + 1 }}</span>
+                <input type="number" class="me-num mg-num" step="0.05" min="0" title="Radius" [ngModel]="pt[0]" (ngModelChange)="setPoint(p['profile'], i, 0, $event)" (change)="commit()">
+                <input type="number" class="me-num mg-num" step="0.05" title="Y" [ngModel]="pt[1]" (ngModelChange)="setPoint(p['profile'], i, 1, $event)" (change)="commit()">
+                <button type="button" class="me-op-btn me-op-sm me-mod-remove" (click)="removeProfilePoint(i)" [disabled]="p['profile'].length <= 2" title="Remove point">✕</button>
+            </div>
+            <button type="button" class="me-op-btn me-op-sm me-op-full" (click)="addProfilePoint()">+ Point</button>
+            <div class="mg-row"><span class="me-label">Segments</span>
+                <input type="range" min="4" max="64" step="4" [ngModel]="p['segments']" (ngModelChange)="num('segments', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['segments'] }}</span></div>
+        </ng-container>
+
+        <!-- Tube / loft: path [x, y, z] + radius per point -->
+        <ng-container *ngIf="g.type === 'tube'">
+            <div class="mg-row" *ngFor="let pt of p['path']; let i = index; trackBy: trackIndex">
+                <span class="me-label mg-pt">P{{ i + 1 }}</span>
+                <input type="number" class="me-num mg-num" step="0.1" title="X" [ngModel]="pt[0]" (ngModelChange)="setPoint(p['path'], i, 0, $event)" (change)="commit()">
+                <input type="number" class="me-num mg-num" step="0.1" title="Y" [ngModel]="pt[1]" (ngModelChange)="setPoint(p['path'], i, 1, $event)" (change)="commit()">
+                <input type="number" class="me-num mg-num" step="0.1" title="Z" [ngModel]="pt[2]" (ngModelChange)="setPoint(p['path'], i, 2, $event)" (change)="commit()">
+                <input type="number" class="me-num mg-num" step="0.05" min="0.01" title="Radius" [ngModel]="radiusAt(i)" (ngModelChange)="setRadius(i, $event)" (change)="commit()">
+                <button type="button" class="me-op-btn me-op-sm me-mod-remove" (click)="removePathPoint(i)" [disabled]="p['path'].length <= 2" title="Remove point">✕</button>
+            </div>
+            <button type="button" class="me-op-btn me-op-sm me-op-full" (click)="addPathPoint()">+ Point</button>
+            <div class="mg-row"><span class="me-label">Segments</span>
+                <input type="range" min="4" max="32" step="4" [ngModel]="p['segments']" (ngModelChange)="num('segments', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['segments'] }}</span></div>
+        </ng-container>
+
+        <!-- Metaballs -->
+        <ng-container *ngIf="g.type === 'metaball'">
+            <div class="mg-blob" *ngFor="let b of blobs; let i = index; trackBy: trackIndex">
+                <div class="mg-row">
+                    <span class="me-label mg-pt">B{{ i + 1 }}</span>
+                    <select class="me-select" [ngModel]="b.shape" (ngModelChange)="setBlobShape(b, $event)" title="Shape">
+                        <option *ngFor="let s of BLOB_SHAPES" [value]="s">{{ s | titlecase }}</option>
+                    </select>
+                    <button type="button" class="me-op-btn me-op-sm me-mod-remove" (click)="removeBlob(i)" [disabled]="blobs.length <= 1" title="Remove blob">✕</button>
+                </div>
+                <div class="mg-row">
+                    <span class="me-label mg-pt">{{ b.shape === 'capsule' ? 'A' : 'Pos' }}</span>
+                    <input type="number" class="me-num mg-num" step="0.1" title="X" [ngModel]="b.a[0]" (ngModelChange)="setBlobVec(b, 'a', 0, $event)" (change)="commit()">
+                    <input type="number" class="me-num mg-num" step="0.1" title="Y" [ngModel]="b.a[1]" (ngModelChange)="setBlobVec(b, 'a', 1, $event)" (change)="commit()">
+                    <input type="number" class="me-num mg-num" step="0.1" title="Z" [ngModel]="b.a[2]" (ngModelChange)="setBlobVec(b, 'a', 2, $event)" (change)="commit()">
+                </div>
+                <div class="mg-row" *ngIf="b.shape === 'capsule' && b.b">
+                    <span class="me-label mg-pt">B</span>
+                    <input type="number" class="me-num mg-num" step="0.1" title="X" [ngModel]="b.b[0]" (ngModelChange)="setBlobVec(b, 'b', 0, $event)" (change)="commit()">
+                    <input type="number" class="me-num mg-num" step="0.1" title="Y" [ngModel]="b.b[1]" (ngModelChange)="setBlobVec(b, 'b', 1, $event)" (change)="commit()">
+                    <input type="number" class="me-num mg-num" step="0.1" title="Z" [ngModel]="b.b[2]" (ngModelChange)="setBlobVec(b, 'b', 2, $event)" (change)="commit()">
+                </div>
+                <div class="mg-row"><span class="me-label">Radius</span>
+                    <input type="range" min="0.01" max="2" step="0.01" [ngModel]="b.radius" (ngModelChange)="setBlobNum(b, 'radius', $event)" (change)="commit()">
+                    <span class="mg-val">{{ b.radius | number:'1.2-2' }}</span></div>
+                <div class="mg-row"><span class="me-label">Blend</span>
+                    <input type="range" min="0" max="1" step="0.05" [ngModel]="b.blend" (ngModelChange)="setBlobNum(b, 'blend', $event)" (change)="commit()">
+                    <span class="mg-val">{{ b.blend | number:'1.2-2' }}</span></div>
+                <label class="mg-row mg-check"><span class="me-label">Cut</span>
+                    <input type="checkbox" [ngModel]="!!b.subtract" (ngModelChange)="setFlag($any(b), 'subtract', $event)"></label>
+            </div>
+            <button type="button" class="me-op-btn me-op-sm me-op-full" (click)="addBlob()">+ Blob</button>
+            <div class="mg-row"><span class="me-label">Resolution</span>
+                <input type="range" min="8" max="64" step="8" [ngModel]="p['resolution']" (ngModelChange)="num('resolution', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['resolution'] }}</span></div>
+            <div class="mg-row"><span class="me-label">Decimate</span>
+                <input type="range" min="0.15" max="1" step="0.05" [ngModel]="p['decimate']" (ngModelChange)="num('decimate', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['decimate'] >= 1 ? 'Off' : ((p['decimate'] * 100 | number:'1.0-0') + '%') }}</span></div>
+        </ng-container>
+
+        <!-- Creature -->
+        <ng-container *ngIf="g.type === 'creature'">
+            <div class="mg-row"><span class="me-label">Species</span>
+                <select class="me-select" [ngModel]="p['species']" (ngModelChange)="setSpecies($event)">
+                    <option *ngFor="let s of SPECIES" [value]="s">{{ s | titlecase }}</option>
+                </select></div>
+            <div class="mg-row"><span class="me-label">Body length</span>
+                <input type="range" min="0.3" max="2.5" step="0.1" [ngModel]="p['bodyLength']" (ngModelChange)="num('bodyLength', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['bodyLength'] | number:'1.1-1' }}</span></div>
+            <div class="mg-row"><span class="me-label">Body radius</span>
+                <input type="range" min="0.1" max="0.8" step="0.05" [ngModel]="p['bodyRadius']" (ngModelChange)="num('bodyRadius', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['bodyRadius'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Legs</span>
+                <div class="me-op-pair mg-pair">
+                    <button type="button" class="me-op-btn me-op-sm" [class.active]="p['legCount'] === 2" (click)="num('legCount', 2, true)">2</button>
+                    <button type="button" class="me-op-btn me-op-sm" [class.active]="p['legCount'] === 4" (click)="num('legCount', 4, true)">4</button>
+                </div></div>
+            <div class="mg-row"><span class="me-label">Leg length</span>
+                <input type="range" min="0.1" max="1.2" step="0.05" [ngModel]="p['legLength']" (ngModelChange)="num('legLength', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['legLength'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Neck</span>
+                <input type="range" min="0" max="0.8" step="0.05" [ngModel]="p['neckLength']" (ngModelChange)="num('neckLength', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['neckLength'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Head</span>
+                <input type="range" min="0.1" max="0.8" step="0.05" [ngModel]="p['headSize']" (ngModelChange)="num('headSize', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['headSize'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Tail length</span>
+                <input type="range" min="0" max="1" step="0.05" [ngModel]="p['tailLength']" (ngModelChange)="num('tailLength', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['tailLength'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Tail curl</span>
+                <input type="range" min="0" max="1" step="0.05" [ngModel]="p['tailCurl']" (ngModelChange)="num('tailCurl', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['tailCurl'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Ear size</span>
+                <input type="range" min="0" max="0.6" step="0.05" [ngModel]="p['earSize']" (ngModelChange)="num('earSize', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['earSize'] | number:'1.2-2' }}</span></div>
+            <div class="mg-row"><span class="me-label">Blend</span>
+                <input type="range" min="0.05" max="0.8" step="0.05" [ngModel]="p['blend']" (ngModelChange)="num('blend', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['blend'] | number:'1.2-2' }}</span></div>
+            <label class="mg-row mg-check"><span class="me-label">Eyes</span>
+                <input type="checkbox" [ngModel]="p['eyes'] !== false" (ngModelChange)="setFlag(p, 'eyes', $event)"></label>
+            <div class="mg-row"><span class="me-label">Seed</span>
+                <input type="number" class="me-num mg-num" step="1" [ngModel]="p['seed']" (ngModelChange)="num('seed', $event)" (change)="commit()">
+                <button type="button" class="me-op-btn me-op-sm" (click)="randomSeed()">Random</button></div>
+            <div class="mg-row"><span class="me-label">Resolution</span>
+                <input type="range" min="8" max="64" step="8" [ngModel]="p['resolution']" (ngModelChange)="num('resolution', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['resolution'] }}</span></div>
+            <div class="mg-row"><span class="me-label">Decimate</span>
+                <input type="range" min="0.15" max="1" step="0.05" [ngModel]="p['decimate']" (ngModelChange)="num('decimate', $event)" (change)="commit()">
+                <span class="mg-val">{{ p['decimate'] * 100 | number:'1.0-0' }}%</span></div>
+        </ng-container>
+    </div>
+
+    <div class="me-hint mg-note">Editing the mesh by hand bakes these settings automatically.</div>
+</div>

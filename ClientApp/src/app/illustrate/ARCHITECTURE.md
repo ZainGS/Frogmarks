@@ -44,7 +44,7 @@ The editor template reaches them as `<var>.member`.
 | `imports` | MediaImportService | image import (picker, paste, drag-drop) and 3D model import (.glb / .gltf / .obj) |
 | `s3` | Scene3dSettingsService | scene-wide 3D render / environment settings (lighting, sky, fog, SSAO, grid, snap, …) |
 | `anim` | SceneAnimationService | 3D animation player, keyframes + tracks, cinematic cameras, Play-mode player object |
-| `add` | SceneAddService | Add-Mesh menu actions and quick-forms, procedural character |
+| `add` | SceneAddService | Add-Mesh menu actions (instant adds with defaults), the Polygon outline drawing, procedural character |
 | `procedural` | ProceduralPanelsService | building / foliage / block: add, selection flags, which editor panel is open, delete |
 | `character` | CharacterEditService | Edit Character panel (which body), generated params, eye drawing, procedural idle |
 | `stats` | SceneStatsService | 3D stats overlay + budget warning |

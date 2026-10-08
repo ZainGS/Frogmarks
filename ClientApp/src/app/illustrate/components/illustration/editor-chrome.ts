@@ -15,7 +15,7 @@ export type EditorChromeHost = Pick<IllustrationComponent, 'scene3dShowAddMeshMe
  *    Shortcuts and Script API Reference dialogs (modals: Esc closes them, their backdrops handle taps). The menubar,
  *    the Layers panel and the Export dialog register themselves.
  *  - Two-finger tap = Undo, three-finger tap = Redo on the canvas (multi-finger-tap.ts), routed exactly like the
- *    top bar's buttons and Ctrl+Z / Ctrl+Y (editUndo / editRedo → editor-keymap routeUndo). Not in Play, in the
+ *    Undo / Redo box's buttons and Ctrl+Z / Ctrl+Y (editUndo / editRedo → editor-keymap routeUndo). Not in Play, in the
  *    read-only viewer, while loading, over a missing document, during a raster stroke or while an overlay is open.
  */
 export function installEditorChrome(ed: EditorChromeHost, overlays: OverlayManagerService, ngZone: NgZone,

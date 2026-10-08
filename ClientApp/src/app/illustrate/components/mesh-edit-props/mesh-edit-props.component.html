@@ -31,6 +31,9 @@
     <div class="me-section">
         <div class="me-section-title">Modifiers</div>
 
+        <!-- First card: the Add Mesh generator settings (Cylinder / Circle / … — gone once the mesh is edited by hand) -->
+        <app-mesh-generator-card [ed]="ed"></app-mesh-generator-card>
+
         <div class="me-mod-list">
             <div *ngFor="let m of modifiers; trackBy: trackIndex" class="me-mod-row" [class.me-mod-off]="!m.enabled" [attr.data-card]="m.type">
                 <span class="me-mod-label">{{ label(m) }}</span>

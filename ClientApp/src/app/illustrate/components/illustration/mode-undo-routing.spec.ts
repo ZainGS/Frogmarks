@@ -71,7 +71,7 @@ function expectScoped(undo: (ed: any) => void, redo: (ed: any) => void, workspac
 const key = (k: string, shift = false) => new KeyboardEvent('keydown', { key: k, ctrlKey: true, shiftKey: shift, cancelable: true });
 
 describe('undo / redo scoped to the Armature (every entry path)', () => {
-  it('the top bar\'s Undo / Redo (editUndo / editRedo)', () => {
+  it('the Undo / Redo box above the zoom box (editUndo / editRedo)', () => {
     expectScoped(ed => ed.editUndo(), ed => ed.editRedo());
   });
 

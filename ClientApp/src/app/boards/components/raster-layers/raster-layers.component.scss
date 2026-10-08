@@ -429,6 +429,9 @@ $vector-accent: #3dbfa8;
 
 /* ── Row 2: blend dropdown + opacity ─────────────────────── */
 
+/* The blend trigger and the opacity slider / % button share one slim height (fine and coarse pointers alike). */
+$rl-control-h: 18px;
+
 .rl-row-bottom {
   display: flex;
   align-items: center;
@@ -448,8 +451,11 @@ $vector-accent: #3dbfa8;
   color: $text;
   border: 1px solid $border;
   border-radius: 3px;
-  padding: 1px 6px;
+  box-sizing: border-box;
+  height: $rl-control-h;
+  padding: 0 6px;
   font-size: 10px;
+  line-height: 1;
   cursor: pointer;
   white-space: nowrap;
   min-width: 80px;
@@ -512,9 +518,16 @@ $vector-accent: #3dbfa8;
   input[type='range'] {
     flex: 1;
     accent-color: $accent;
-    height: 4px;
+    height: $rl-control-h !important;  /* beats the retro theme's 14 px (30 px on touch) row */
+    min-height: 0 !important;
     min-width: 40px;
+    margin: 0;
   }
+  /* Retro chrome: a thinner track and a shorter thumb than the theme's 6 px / 16 px (22×28 on touch). */
+  input[type='range']::-webkit-slider-runnable-track { height: 4px !important; }
+  input[type='range']::-webkit-slider-thumb { width: 10px !important; height: 12px !important; margin-top: -4px !important; }
+  input[type='range']::-moz-range-track { height: 4px !important; }
+  input[type='range']::-moz-range-thumb { width: 10px !important; height: 12px !important; }
 }
 
 .opacity-label {
@@ -531,21 +544,22 @@ $vector-accent: #3dbfa8;
    body.theme-retro-chrome; the fallbacks are this panel's default-theme colours. */
 
 .rl-opacity-touch {
-  min-height: 44px;   /* the empty slot is row area: a tap there selects the layer */
+  min-height: $rl-control-h;   /* the empty slot is row area: a tap there selects the layer */
 }
 
 .rl-opacity-btn {
   flex-shrink: 0;
-  min-width: 56px;
-  min-height: 44px;
-  padding: 0 8px;
+  min-width: 40px;
+  box-sizing: border-box;
+  height: $rl-control-h;
+  padding: 0 6px;
   border-radius: 0;
   border: 2px solid;
   border-color: var(--rc-bevel-lt, #{$border}) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #{$border});
   background: var(--rc-surface, #{$surface});
   color: var(--rc-text, #{$text});
   font-family: monospace;
-  font-size: 12px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-align: center;
@@ -561,7 +575,7 @@ $vector-accent: #3dbfa8;
     background: var(--rc-green, #{$accent});
     color: var(--rc-green-txt, #fff);
     outline: 1px solid var(--rc-green-txt, #{$accent-light});
-    outline-offset: -5px;
+    outline-offset: -3px;
   }
 
   &:focus-visible {
@@ -641,7 +655,6 @@ $vector-accent: #3dbfa8;
 
 /* ── Touch (mobile-parity UI-3): finger-sized blend trigger + options ── */
 @media (pointer: coarse) {
-  .blend-trigger { min-height: 32px; padding: 4px 8px; font-size: 12px; }
   .blend-option { padding: 10px 14px; font-size: 13px; }
   .blend-cat-label { font-size: 10px; padding: 8px 10px 3px; }
 }

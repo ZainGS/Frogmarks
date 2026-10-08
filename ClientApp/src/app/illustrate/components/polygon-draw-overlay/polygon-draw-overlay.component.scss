@@ -1,0 +1,57 @@
+// Shared editor controls — same rules the editor uses (.scene3d-btn; retro-chrome-theme.scss restyles it globally).
+@import '../../styles/panel-controls';
+
+// Placed over the 3D canvas each frame (left / top / width / height follow its box). Only the bar takes input: taps
+// on the canvas go through to it (they add the points).
+:host {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.pd-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.pd-line, .pd-rubber {
+  fill: none;
+  stroke: var(--rc-green-txt, #c8ede3);
+  stroke-width: 1.5;
+  stroke-linejoin: miter;
+}
+.pd-rubber { stroke-dasharray: 4 3; opacity: 0.8; }
+
+// Below the editor's top toolbar (the 3D canvas runs under it)
+.pd-bar {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  background: var(--rc-panel-bg, #1a1a1a);
+  border: 2px solid;
+  border-color: var(--rc-bevel-lt, #6a6a6a) var(--rc-bevel-dk, #111) var(--rc-bevel-dk, #111) var(--rc-bevel-lt, #6a6a6a);
+  border-radius: 0;
+  pointer-events: auto;
+}
+
+.pd-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--rc-green-hi, #4f7a68);
+  padding: 0 4px;
+  letter-spacing: 0.5px;
+}
+
+.pd-btn { border-radius: 0; }

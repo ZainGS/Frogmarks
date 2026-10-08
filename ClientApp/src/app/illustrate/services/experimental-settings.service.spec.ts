@@ -1,5 +1,5 @@
 import {
-  applyStoredExperiments, EXP_CLASSIC_MESH_EDIT_KEY, EXP_DEV_TOOLS_KEY, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
+  applyStoredExperiments, EXP_CITY_MESHES_KEY, EXP_CLASSIC_MESH_EDIT_KEY, EXP_DEV_TOOLS_KEY, EXP_DIRTY_COMPOSITING_KEY, ExperimentalEngineApi, ExperimentalSettingsService,
   SALSA_LOSS_TIMES_KEY, SALSA_SAFE_MODE_KEY,
 } from './experimental-settings.service';
 
@@ -402,5 +402,18 @@ describe('ExperimentalSettingsService (editor › Experimental menu)', () => {
     svc.toggleClassicMeshEdit();
     expect(svc.classicMeshEdit).toBeFalse();
     expect(localStorage.getItem(EXP_CLASSIC_MESH_EDIT_KEY)).toBeNull();
+  });
+
+  it('Show city meshes: off by default (hidden from + Add Mesh), toggled and remembered per machine', () => {
+    localStorage.removeItem(EXP_CITY_MESHES_KEY);
+    const svc = new ExperimentalSettingsService();
+    expect(svc.cityMeshes).toBeFalse();
+    svc.toggleCityMeshes();
+    expect(svc.cityMeshes).toBeTrue();
+    expect(localStorage.getItem(EXP_CITY_MESHES_KEY)).toBe('1');
+    expect(new ExperimentalSettingsService().cityMeshes).toBeTrue();
+    svc.toggleCityMeshes();
+    expect(svc.cityMeshes).toBeFalse();
+    expect(localStorage.getItem(EXP_CITY_MESHES_KEY)).toBeNull();
   });
 });

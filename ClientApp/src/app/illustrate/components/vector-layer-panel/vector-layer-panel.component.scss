@@ -136,6 +136,16 @@
     &:focus-visible { outline: 1px solid var(--rc-green-txt, #9fe0b8); outline-offset: 1px; }
 }
 
+/* A text action (Edit): the type label's type (9 px, 0.04em, label colour) on the row-action button. */
+.vector-row-action-text {
+    width: auto;
+    padding: 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;   // "EDIT", like the row's type label (user, 2026-10-09)
+    color: var(--rc-text-label, #777);
+}
+
 @media (pointer: coarse) {
     .vector-tool-btn { width: 36px; height: 36px; svg { width: 18px; height: 18px; } }
     .vector-align-row { gap: 4px; flex-wrap: wrap; }

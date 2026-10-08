@@ -9,19 +9,17 @@
   <div class="uv-body">
 
     <!-- ── Display ─────────────────────────────────────────────── -->
+    <!-- 2026-10-08: the only section left (the brush moved to the left tool sub-panel, Stamp decal + Export are
+         hidden), so no collapsible title: the panel is just these three toggles and sizes to them. -->
     <div class="uv-section">
-      <div class="uv-section-title uv-section-toggle" (click)="displayCollapsed = !displayCollapsed">
-        <span class="uv-chevron">{{ displayCollapsed ? '▸' : '▾' }}</span>Display
-      </div>
-      <ng-container *ngIf="!displayCollapsed">
-        <label class="uv-check-row"><input type="checkbox" [checked]="showWireframe" (change)="toggleWireframe()"> Wireframe</label>
-        <label class="uv-check-row"><input type="checkbox" [checked]="showIslands"   (change)="toggleIslands()">   Islands</label>
-        <label class="uv-check-row"><input type="checkbox" [checked]="showUVPane"    (change)="toggleUVPane()">    Show UV Pane</label>
-      </ng-container>
+      <label class="uv-check-row"><input type="checkbox" [checked]="showWireframe" (change)="toggleWireframe()"> Wireframe</label>
+      <label class="uv-check-row"><input type="checkbox" [checked]="showIslands"   (change)="toggleIslands()">   Islands</label>
+      <label class="uv-check-row"><input type="checkbox" [checked]="showUVPane"    (change)="toggleUVPane()">    Show UV Pane</label>
     </div>
 
 <!-- ── Tools ───────────────────────────────────────────────────── -->
-    <div class="uv-section">
+    <!-- Hidden 2026-10-08 (showStampDecal): Brush is always the mode; the stamp code stays for when it comes back. -->
+    <div class="uv-section" *ngIf="showStampDecal">
       <div style="display:flex;gap:4px;padding-bottom:6px;">
         <button class="uv-btn" style="flex:1"
                 [class.uv-btn-active]="activeTool==='brush'"
@@ -50,9 +48,8 @@
     </div>
 
 <!-- ── Brush ───────────────────────────────────────────────────── -->
-    <div class="uv-section" *ngIf="activeTool==='brush'">
-      <app-brush-options></app-brush-options>
-    </div>
+    <!-- 2026-10-08: the brush panel is no longer here — the editor shows <app-brush-options> in the left tool sub-panel
+         (where 2D raster painting shows it) while UV Paint is open; the same RasterBrushService drives both. -->
 
     <!-- ── Save as GARP skin variant (Bridge 2: UV Paint → Skins) ─ -->
     <div class="uv-section" *ngIf="garpTarget">
@@ -72,7 +69,8 @@
     </div>
 
     <!-- ── Export ────────────────────────────────────────────────── -->
-    <div class="uv-section">
+    <!-- Hidden 2026-10-08 (showExportSection): the panel is the three Display toggles only. -->
+    <div class="uv-section" *ngIf="showExportSection">
       <div class="uv-section-title uv-section-toggle" (click)="exportCollapsed = !exportCollapsed">
         <span class="uv-chevron">{{ exportCollapsed ? '▸' : '▾' }}</span>Export
       </div>

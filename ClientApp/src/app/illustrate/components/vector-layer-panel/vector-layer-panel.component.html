@@ -28,9 +28,8 @@
     <span class="vector-shape-name">{{ shape.name || shape.type }}</span>
     <span class="vector-shape-type" *ngIf="shape.name">{{ shape.type }}</span>
     <button *ngIf="isPath(shape.type)"
-            class="vector-row-action"
-            (click)="enterPathEdit(shape.id); $event.stopPropagation()"
-            title="Edit path anchors" aria-label="Edit path anchors">✏</button>
+            type="button" class="vector-row-action vector-row-action-text"
+            (click)="enterPathEdit(shape.id); $event.stopPropagation()">Edit</button>
     <button *ngIf="isPolygon(shape.type)"
             class="vector-row-action"
             (click)="convertPolygonToPath(shape.id); $event.stopPropagation()"

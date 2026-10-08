@@ -3,6 +3,7 @@ import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 
 import { EditorStateService } from './editor-state.service';
+import { PARTICLE_EMITTER_NODE_TYPE } from '../utils/particle-config';
 /** Exactly the editor state the outliner reads / writes. */
 export type SceneOutlinerHost = Pick<IllustrationComponent, 'shapeManager' |
   'cdKitRootId' | 'scene3dCityContainerId' | 'scene3dMarkDirty' 
@@ -111,6 +112,11 @@ export class SceneOutlinerService {
         children: [],
       }));
     }
+    // Particle emitters aren't in the engine's mesh hierarchy: list them as their own rows (select, hide, rename, delete).
+    const listed = new Set(this.scene3dHierarchy.map((n: any) => n.id));
+    for (const e of sm.getParticleEmitters3D?.() ?? []) {
+      if (!listed.has(e.id)) this.scene3dHierarchy.push({ id: e.id, name: e.name, type: PARTICLE_EMITTER_NODE_TYPE, visible: e.visible !== false, children: [] });
+    }
     this.host.scene3dCityContainerId = sm.world?.getCityContainerId() ?? null;
   }
 
@@ -167,6 +173,9 @@ export class SceneOutlinerService {
     } else if (node.type === '3DMeshGroup') {
       sm.setGroupVisible3D(node.id, nowVisible);
       this._scene3dSetChildrenVisible(node.children ?? [], nowVisible, sm);
+    } else if (node.type === PARTICLE_EMITTER_NODE_TYPE) {
+      const e = sm.getParticleEmitter3D(node.id);
+      if (e) { e.visible = nowVisible; sm.scheduleRender(); }
     } else {
       sm.setMeshVisible3D(node.id, nowVisible);
     }
@@ -198,6 +207,9 @@ export class SceneOutlinerService {
       const sm = this.shapeManager;
       if (node.type === '3DMeshGroup') {
         sm.setGroupName3D(node.id, name);
+      } else if (node.type === PARTICLE_EMITTER_NODE_TYPE) {
+        const e = sm.getParticleEmitter3D(node.id);
+        if (e) e.name = name;
       } else {
         sm.setMeshName3D(node.id, name);
       }

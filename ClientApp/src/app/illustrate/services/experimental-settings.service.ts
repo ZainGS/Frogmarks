@@ -14,6 +14,9 @@ export const EXP_CLASSIC_MESH_EDIT_KEY = 'fm-exp-classic-mesh-edit';
 /** localStorage key: '1' = Armature uses the classic overlay panel instead of the mode chrome (Rig / Animate, tool
  *  strip, op pill, properties panel — UI review 2026-10-07 §4). Off by default: a fallback if the new layout breaks. */
 export const EXP_CLASSIC_ARMATURE_KEY = 'fm-exp-classic-armature';
+/** localStorage key: '1' = the Outliner's "+ Add Mesh" menu lists the city meshes (Foliage, Block, Package and the
+ *  street-prop creators: Vending Machine, Bike Rack, Bollard, …). Off by default: they are hidden from the menu. */
+export const EXP_CITY_MESHES_KEY = 'fm-exp-city-meshes';
 /** Salsa's own keys (salsa/docs/ui/gpu-diagnostics.md): the stored safe mode, and the loss history that
  *  `?salsaSafe=0` clears with it. */
 export const SALSA_SAFE_MODE_KEY = 'salsa.gpu.safeMode';
@@ -381,6 +384,20 @@ export class ExperimentalSettingsService {
     try {
       if (this._classicArmature) localStorage.setItem(EXP_CLASSIC_ARMATURE_KEY, '1');
       else localStorage.removeItem(EXP_CLASSIC_ARMATURE_KEY);
+    } catch { /* storage blocked (private mode): this session only */ }
+  }
+
+  // ── Show city meshes in + Add Mesh (per machine) ──
+
+  private _cityMeshes = readStored(EXP_CITY_MESHES_KEY) === '1';
+  /** The Add Mesh menu lists the city meshes (AddMeshMenuComponent reads it). Read once per app start, then kept here. */
+  get cityMeshes(): boolean { return this._cityMeshes; }
+
+  toggleCityMeshes(): void {
+    this._cityMeshes = !this._cityMeshes;
+    try {
+      if (this._cityMeshes) localStorage.setItem(EXP_CITY_MESHES_KEY, '1');
+      else localStorage.removeItem(EXP_CITY_MESHES_KEY);
     } catch { /* storage blocked (private mode): this session only */ }
   }
 

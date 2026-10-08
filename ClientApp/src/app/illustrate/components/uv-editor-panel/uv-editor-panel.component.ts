@@ -31,6 +31,13 @@ export class UvEditorPanelComponent implements OnChanges, OnDestroy {
   displayCollapsed = false;
   exportCollapsed  = true;
 
+  // ── Panel sections hidden 2026-10-08 (user: the right panel is the three Display toggles only) ──
+  /** Stamp decal hidden for now: the Brush / Stamp decal buttons are gone and Brush is always the mode. Flip back to
+   *  true to restore them (the stamp code below is untouched). */
+  readonly showStampDecal = false;
+  /** Export UV Layout hidden with it (exportLayout() stays). */
+  readonly showExportSection = false;
+
   // ── Tool mode: brush vs. stamp (Mode B decals) ─────────────────
   activeTool: 'brush' | 'stamp' = 'brush';
   stampSize        = 0.25;

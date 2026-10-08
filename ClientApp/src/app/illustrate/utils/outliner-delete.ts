@@ -3,7 +3,7 @@
  * an Undo toast) and which can't be undone (so the row asks first).
  *
  * Undoable (Salsa scene3d-manager / scene3d-grouping push these descriptions): a plain mesh ('Delete mesh'), a mesh
- * group ('Delete group'), an array group ('Delete array'). Not undoable: a procedural character (body + parts +
+ * group ('Delete group'), an array group ('Delete array'), a particle emitter ('Delete particle emitter'). Not undoable: a procedural character (body + parts +
  * skeleton), a package, a CD kit, a procedural creator object, a decal.
  */
 
@@ -33,6 +33,7 @@ export function outlinerDeletePlan(node: { id: string; type?: string }, kinds: O
   if (kinds.decalIds.has(id)) return ask('Delete this decal? This can\'t be undone.');
   if (node.type === '3DArrayGroup') return { undoStep: 'Delete array', confirmText: null };
   if (node.type === '3DMeshGroup') return { undoStep: 'Delete group', confirmText: null };
+  if (node.type === 'ParticleEmitter3D') return { undoStep: 'Delete particle emitter', confirmText: null };
   return { undoStep: 'Delete mesh', confirmText: null };
 }
 

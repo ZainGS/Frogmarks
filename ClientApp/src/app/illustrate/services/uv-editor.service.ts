@@ -7,7 +7,7 @@ import { EditorStateService } from './editor-state.service';
 type UvCloseAllApi = { closeAllUVEditors3D?: () => void };
 /** Exactly the editor state the UV editor session uses. */
 export type UvEditorHost = Pick<IllustrationComponent, 'shapeManager' | 'character' |
-  '_exitAllScene3dModes' | 'skinsPanel' | 'uvCanvasRef'
+  '_exitAllScene3dModes' | 'skinsPanel' | 'uvCanvasRef' | '_updateGizmoPosition'
 >;
 
 /**
@@ -54,6 +54,7 @@ export class UvEditorService {
     if (!this._uvSession) return;
     this._uvOpenedMeshId = this.editorState.scene3dSelectedMeshId;
     this.uvEditorOpen = true;
+    this._syncGizmo();
     setTimeout(() => {
       // The pane canvas is *ngIf'd on uvEditorOpen. With event coalescing (main.ts) the click's change detection waits for
       // the next frame, so this timeout can run first: render now when the canvas isn't there yet.
@@ -101,7 +102,12 @@ export class UvEditorService {
     this.uvPaintMode  = false;
     this.showUVPane   = false;
     this.uvStampActive = false;
+    this._syncGizmo();
   }
+
+  /** The brush panel takes the left tool sub-panel slot while the editor is open (2026-10-08): the 3D nav gizmo moves
+   *  beside it, as it does for the other left panels (illustration _updateGizmoPosition reads uvEditorOpen). */
+  private _syncGizmo(): void { this.host?._updateGizmoPosition?.(); }
 
   uvDraw(): void { this._uvDraw(); }
 
@@ -208,7 +214,7 @@ export class UvEditorService {
       this.uvPaintTargetId = meshId;   // the panel targets the garment, not the selected body
       this.uvPaintMode = true;
       // Show the UV paint panel on the right for brush controls
-      if (!this.uvEditorOpen) this.uvEditorOpen = true;
+      if (!this.uvEditorOpen) { this.uvEditorOpen = true; this._syncGizmo(); }
     }
   }
 }

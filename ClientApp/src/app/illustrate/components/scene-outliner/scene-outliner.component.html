@@ -38,7 +38,7 @@
             </span>
             <span *ngIf="node.character" class="scene3d-node-icon">👤</span>
             <span *ngIf="outliner.scene3dScriptIds.has(node.id)" class="scene3d-node-icon" title="Has a script behavior">📜</span>
-            <span *ngIf="!node.thinWrapper && node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-node-icon">{{ outliner.scene3dCharacterBodyIds.has(node.id) ? '👤' : '⬡' }}</span>
+            <span *ngIf="!node.thinWrapper && node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup'" class="scene3d-node-icon">{{ outliner.scene3dCharacterBodyIds.has(node.id) ? '👤' : node.type === 'ParticleEmitter3D' ? '✦' : '⬡' }}</span>
             <span *ngIf="!node.thinWrapper && outliner.scene3dRenamingId !== node.id" class="scene3d-mesh-name"
                   (dblclick)="outliner.scene3dStartRename(node, $event)">{{ outliner.scene3dCharacterBodyIds.has(node.id) ? 'Character' : node.name }}<span *ngIf="node.type === '3DArrayGroup' && node.instanceCount != null" class="scene3d-array-badge"> ×{{ node.instanceCount }}</span></span>
             <span *ngIf="node.thinWrapper" class="scene3d-mesh-name">{{ node.name }}</span>
@@ -61,7 +61,7 @@
                     (click)="act({ kind: 'duplicate', id: node.id }); $event.stopPropagation()"
                     title="Duplicate mesh (Ctrl+D)">⧉</button>
             <!-- Player: plain meshes + the Character row (its id IS the body mesh); not a character's parts (face / hair / garments) -->
-            <button *ngIf="!node.thinWrapper && !inChar && (node.character || (node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup')) && viewTarget === 'scene'"
+            <button *ngIf="!node.thinWrapper && !inChar && (node.character || (node.type !== '3DMeshGroup' && node.type !== '3DArrayGroup' && node.type !== 'ParticleEmitter3D')) && viewTarget === 'scene'"
                     class="scene3d-move-btn scene3d-player-btn"
                     [class.active]="anim.scene3dPlayerObjectId === node.id"
                     (click)="anim.scene3dSetPlayerObject(node.id); $event.stopPropagation()"

@@ -1,14 +1,18 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Scene3dSettingsService } from '../../services/scene3d-settings.service';
 
 /** Global tab: PS1 retro, environment style, lighting, background, fog, rendering, IBL, texture sampling,
- *  post-processing. A view over Scene3dSettingsService (refactor-plan 2.9B). */
+ *  post-processing (incl. the one Bloom control). A view over Scene3dSettingsService (refactor-plan 2.9B). */
 @Component({
   selector: 'app-scene-render-settings',
   templateUrl: './scene-render-settings.component.html',
   styleUrls: ['./scene-render-settings.component.scss'],
 })
-export class SceneRenderSettingsComponent {
+export class SceneRenderSettingsComponent implements OnInit {
   constructor(public s3: Scene3dSettingsService) {}
   mathRound(v: number): number { return Math.round(v); }
+
+  ngOnInit(): void {
+    try { this.s3.scene3dSyncBloomGlow(); } catch { /* no 3D renderer yet — the defaults stand */ }
+  }
 }

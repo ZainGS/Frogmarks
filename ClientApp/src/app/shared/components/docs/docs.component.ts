@@ -224,7 +224,7 @@ export class DocsComponent {
           'The T/R/S gizmo and mesh click-to-select are suppressed automatically while the overlay is active — closing the panel restores normal interaction and the camera view',
           'Select a different skeleton in the list to switch the active overlay',
           'Use the <strong>background dropdown</strong> in the panel header to change the focus-mode background: <em>Wavy</em> (animated), <em>Gradient</em>, <em>Dim</em> (overlay over scene), <em>Solid</em>, or <em>None</em>',
-          'Click <strong>Focus</strong> in the Bind Mesh section to center the camera on the bound mesh at any time (<code>sm.centerCameraOnMesh3D(meshId)</code>)',
+          'Click <strong>Fit</strong> in the zoom box to frame the mesh at any time',
         ]},
         { id: 'arm-bones', label: 'Add & Edit Bones', items: [
           '<strong>+ Add Bone</strong> — enters click-to-place mode; the click defines the bone\'s tail, the head auto-snaps to the selected joint\'s tail (or origin for a root)',

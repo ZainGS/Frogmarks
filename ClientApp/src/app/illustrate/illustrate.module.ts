@@ -13,6 +13,8 @@ import { ParticleEmittersComponent } from './components/particle-emitters/partic
 import { MeshEditPanelComponent } from './components/mesh-edit-panel/mesh-edit-panel.component';
 import { MeshEditChromeComponent } from './components/mesh-edit-chrome/mesh-edit-chrome.component';
 import { MeshEditPropsComponent } from './components/mesh-edit-props/mesh-edit-props.component';
+import { MeshGeneratorCardComponent } from './components/mesh-generator-card/mesh-generator-card.component';
+import { PolygonDrawOverlayComponent } from './components/polygon-draw-overlay/polygon-draw-overlay.component';
 import { ArmaturePanelComponent } from './components/armature-panel/armature-panel.component';
 import { ARMATURE_SECTION_COMPONENTS } from './components/armature-panel/sections/arm-sections.index';
 import { ArmSectionsComponent } from './components/armature-panel/arm-sections.component';
@@ -107,6 +109,8 @@ const routes: Routes = [
     MeshEditPanelComponent,
     MeshEditChromeComponent,
     MeshEditPropsComponent,
+    MeshGeneratorCardComponent,
+    PolygonDrawOverlayComponent,
     ArmaturePanelComponent,
     // Armature: the shared sections (classic panel + mode chrome) and the mode chrome itself (UI review §4)
     ArmSectionsComponent,

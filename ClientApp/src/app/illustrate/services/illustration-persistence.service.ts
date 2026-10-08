@@ -1211,6 +1211,9 @@ export class IllustrationPersistenceService implements OnDestroy {
     else this.shapeManager.restoreProceduralFromSave3D();
     this.s3._scene3dLoadSnapSettings();
     this.s3._loadScene3dGrid();
+    // Post-Processing › Bloom derives its mode from both passes: re-read the engine's particle bloom (particleBloom)
+    // for this document (Whole scene came back through scene3dBloomEnabled above).
+    try { this.s3.scene3dSyncBloomGlow(); } catch { /* no 3D renderer */ }
     console.timeEnd('[V2 Load] total');
     requestAnimationFrame(() => {
       if (fitArtboard) this.artboard.fitArtboard();

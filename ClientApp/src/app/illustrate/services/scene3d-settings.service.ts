@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { hexToRgba01, hexToRgba01Obj } from '../utils/color-utils';
 
+/** Post-Processing › Bloom: Off / Whole scene (post-process bloom) / Particles only (the particle glow pass). */
+export type Scene3dBloomMode = 'off' | 'scene' | 'particles';
+
 /** What the scene settings need from the editor that hosts them. */
 export interface Scene3dSettingsHost {
   shapeManager(): ShapeManager;
@@ -189,12 +192,22 @@ export class Scene3dSettingsService {
   // GLB export
   scene3dExportStats: string | null = null;
 
-  // Post-processing (global scene)
+  // Post-processing (global scene). Bloom is ONE control (Post-Processing › Bloom, scene3dBloomMode): Whole scene =
+  // the post-process bloom (these three, saved by Frogmarks + the engine's postProcess.bloom); Particles only = the
+  // particle glow pass (scene3dBloomGlow*, below). Each mode keeps its own threshold / intensity.
   scene3dBloomEnabled = false;
 
   scene3dBloomThreshold = 0.8;
 
   scene3dBloomIntensity = 1.0;
+
+  // Particles-only bloom — the particle glow pass (sm.enableBloom3D). The engine owns and saves it (particleBloom in its
+  // global scene settings); these mirror it (scene3dSyncBloomGlow re-reads it, also after every document load).
+  scene3dBloomGlowEnabled = false;
+
+  scene3dBloomGlowThreshold = 0.5;
+
+  scene3dBloomGlowIntensity = 1.2;
 
   scene3dColorGradeEnabled = false;
 
@@ -393,6 +406,59 @@ export class Scene3dSettingsService {
     this.scene3dExportStats =
       `${result.meshCount ?? 0} mesh, ${result.skeletonCount ?? 0} skel, ` +
       `${result.animationCount ?? 0} anim, ${result.vertexCount ?? 0} verts`;
+  }
+
+  /** The particle bloom mirror follows the engine (a loaded document's particleBloom, or off). */
+  scene3dSyncBloomGlow(): void {
+    const cfg = this.shapeManager?.renderer3D?.bloomConfig;
+    this.scene3dBloomGlowEnabled = !!cfg;
+    if (cfg) {
+      this.scene3dBloomGlowThreshold = cfg.threshold;
+      this.scene3dBloomGlowIntensity = cfg.intensity;
+    }
+  }
+
+  /** Post-Processing › Bloom mode, derived from the two passes: Whole scene when the post-process bloom is on (an older
+   *  document with BOTH on reads as Whole scene and keeps both running until the next mode pick), else Particles only
+   *  when the particle glow is on, else Off. */
+  get scene3dBloomMode(): Scene3dBloomMode {
+    return this.scene3dBloomEnabled ? 'scene' : this.scene3dBloomGlowEnabled ? 'particles' : 'off';
+  }
+
+  /** Pick the Bloom mode: turns that pass on with its own remembered values and the OTHER pass off (never both). */
+  scene3dSetBloomMode(mode: Scene3dBloomMode): void {
+    const sm = this.shapeManager;
+    const glow = mode === 'particles';
+    this.scene3dBloomGlowEnabled = glow;
+    if (glow) sm?.enableBloom3D(this.scene3dBloomGlowThreshold, this.scene3dBloomGlowIntensity);
+    else sm?.disableBloom3D();
+    this.scene3dBloomEnabled = mode === 'scene';
+    this.scene3dApplyPostProcessing();   // (marks dirty)
+  }
+
+  /** The Bloom Threshold / Intensity sliders show and edit the ACTIVE mode's values. */
+  get scene3dBloomModeThreshold(): number {
+    return this.scene3dBloomMode === 'particles' ? this.scene3dBloomGlowThreshold : this.scene3dBloomThreshold;
+  }
+  set scene3dBloomModeThreshold(v: number) {
+    if (this.scene3dBloomMode === 'particles') this.scene3dBloomGlowThreshold = v; else this.scene3dBloomThreshold = v;
+  }
+  get scene3dBloomModeIntensity(): number {
+    return this.scene3dBloomMode === 'particles' ? this.scene3dBloomGlowIntensity : this.scene3dBloomIntensity;
+  }
+  set scene3dBloomModeIntensity(v: number) {
+    if (this.scene3dBloomMode === 'particles') this.scene3dBloomGlowIntensity = v; else this.scene3dBloomIntensity = v;
+  }
+
+  /** Push the active Bloom mode's threshold / intensity to its pass. */
+  scene3dApplyBloomLevels(): void {
+    if (this.scene3dBloomMode === 'particles') {
+      this.shapeManager?.setBloomThreshold3D(this.scene3dBloomGlowThreshold);
+      this.shapeManager?.setBloomIntensity3D(this.scene3dBloomGlowIntensity);
+      this.host.markDirty();
+    } else {
+      this.scene3dApplyPostProcessing();
+    }
   }
 
   scene3dApplyPostProcessing(): void {

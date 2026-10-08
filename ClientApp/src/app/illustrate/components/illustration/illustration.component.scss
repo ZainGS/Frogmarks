@@ -1913,31 +1913,39 @@ svg {
   &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
 }
 
-/* ── Undo / Redo (top bar) ── */
+/* ── Undo / Redo: a box just above the zoom box (a child of .zoom-control, so it moves with it) ── */
 
-.top-toolbar-history {
+.zoom-history {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
   display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
+  background: rgba(64, 64, 64, 0.85);
+  border-radius: 4px;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.top-history-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;     // smaller than the first 32 × 28 (it stood out in the top bar, 2026-10-08)
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--rc-bevel-mid, #555);
-  border-radius: 0;
-  background: var(--rc-surface, #3a3a3a);
-  color: var(--rc-text, #e0e0e0);
+.zoom-history-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 3px 0;
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: normal;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
   cursor: pointer;
-  svg { transform: none; }
-  &:hover { background: var(--rc-surface-hi, #4a4a4a); }
-  &:active { background: var(--rc-green, #3b6151); color: var(--rc-green-txt, #fff); }
-  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: 1px; }
+  & + & { border-left: 1px solid rgb(105, 105, 105); }
+  &:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+  &:focus-visible { outline: 1px solid var(--rc-green-hi, #4f7a68); outline-offset: -1px; }
+}
+
+@media (pointer: coarse) {
+  .zoom-history-btn { font-size: 12px; padding: 7px 0; }   // like the zoom box's Fit on touch
 }
 
 /* ── Document not found (persist.documentMissing) — covers the whole editor ── */
@@ -2798,6 +2806,14 @@ svg {
         .toolbar-mode-label { bottom: var(--fm-timeline-h, 204px); }
         .animation-timeline-wrapper { left: 70px; }
     }
+}
+/* UV Editor (2026-10-08): its right panel is a short box (the three Display toggles) instead of a full-height column
+   over the right column, so the right column + drawer handle leave while it is open (it used to be covered whole) and
+   the 3D view / UV pane run to the screen edge under the box. The zoom box moves to that edge too. */
+.uv-editor-active {
+    .right-column,
+    .side-drawer-handle { display: none !important; }
+    .zoom-control { right: 10px; }
 }
 /* The engine status line ("Preparing shaders…") sits above the mode op pill (bottom 16 px + its height), not on it. */
 @media (min-width: 700.02px) {

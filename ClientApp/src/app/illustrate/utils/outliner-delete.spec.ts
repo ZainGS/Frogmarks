@@ -10,6 +10,7 @@ describe('outlinerDeletePlan (the outliner row ✕)', () => {
     expect(outlinerDeletePlan({ id: 'm', type: '3DMesh' }, kinds())).toEqual({ undoStep: 'Delete mesh', confirmText: null });
     expect(outlinerDeletePlan({ id: 'g', type: '3DMeshGroup' }, kinds())).toEqual({ undoStep: 'Delete group', confirmText: null });
     expect(outlinerDeletePlan({ id: 'a', type: '3DArrayGroup' }, kinds())).toEqual({ undoStep: 'Delete array', confirmText: null });
+    expect(outlinerDeletePlan({ id: 'p', type: 'ParticleEmitter3D' }, kinds())).toEqual({ undoStep: 'Delete particle emitter', confirmText: null });
   });
 
   it('what the engine cannot undo asks first', () => {

@@ -10,12 +10,10 @@
       Skeleton: <strong>{{ rig.activeSkeleton?.name ?? '—' }}</strong>
     </div>
     <div class="ar-btn-pair">
-      <button class="ar-op-btn" style="flex:2"
+      <button class="ar-op-btn"
               [disabled]="!binding.canBind"
               [title]="rig.joints.length === 0 ? 'Add at least one joint first' : 'Auto-weight vertices to nearest joints'"
               (click)="binding.bindMesh()">Bind Mesh</button>
-      <button class="ar-op-btn ar-op-secondary" [disabled]="!binding.bindMeshId"
-              (click)="binding.focusMesh()" title="Center camera on mesh">Focus</button>
     </div>
     <div *ngIf="rig.joints.length === 0" class="ar-hint" style="margin-top:4px">
       Add joints to the skeleton before binding.

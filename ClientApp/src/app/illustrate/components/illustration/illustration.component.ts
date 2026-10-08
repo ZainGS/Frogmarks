@@ -84,6 +84,7 @@ import { MeshFrameLinkSectionComponent } from '../mesh-frame-link-section/mesh-f
 import { MeshHtmlTextureSectionComponent } from '../mesh-html-texture-section/mesh-html-texture-section.component';
 import { MeshTextureSectionComponent } from '../mesh-texture-section/mesh-texture-section.component';
 import { MeshTransformSectionComponent } from '../mesh-transform-section/mesh-transform-section.component';
+import { ParticleEmittersComponent } from '../particle-emitters/particle-emitters.component';
 import { MeshBehaviorSectionComponent } from '../mesh-behavior-section/mesh-behavior-section.component';
 import { MeshOutlineSectionComponent } from '../mesh-outline-section/mesh-outline-section.component';
 import { BalloonOptionsComponent } from '../balloon-options/balloon-options.component';
@@ -181,6 +182,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   @ViewChild('htmlTextureSection') htmlTextureSection?: MeshHtmlTextureSectionComponent;
   @ViewChild('textureSection') textureSection?: MeshTextureSectionComponent;
   @ViewChild('transformSection') transformSection?: MeshTransformSectionComponent;
+  @ViewChild('particleConfig') particleConfig?: ParticleEmittersComponent;
   @ViewChild('behaviorSection') behaviorSection?: MeshBehaviorSectionComponent;
   @ViewChild('outlineSection') outlineSection?: MeshOutlineSectionComponent;
   @ViewChild('balloonOptions') balloonOptions?: BalloonOptionsComponent;
@@ -662,6 +664,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   _exitAllScene3dModes(): void {
+    this.add.scene3dCancelPolygonDraw();
     if (this.meshEdit.scene3dIsEditingMesh) this.meshEdit.exitMeshEditMode();
     if (this.scene3dArmaturePanelOpen) this.closeArmaturePanel();
     if (this.gpPanelVisible) this.closeGpPanel();
@@ -687,7 +690,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   // Selection-driven package mode
   scene3dSelectedIsPackage = false;
   pkgSelectedId: string | null = null;
-  // Selection-driven particle emitter panel
+  // The selected particle emitter (its Particle Config section shows instead of the mesh sections)
   selectedParticleEmitterId: string | null = null;
 
   // ── World / City Tool ──────────────────────────────────────────────────────
@@ -877,6 +880,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   /** Leaving 3D: detach pointer handling, exit sub-modes, drop the camera-sync listeners, stop the gizmo readout. */
   private _leave3dContext(): void {
     const sm = this.shapeManager;
+    this.add.scene3dCancelPolygonDraw();
     // Detach 3D pointer handling so meshes are no longer hoverable/selectable
     // while a raster/vector layer is active (the engine never detaches on its own).
     sm.disableTransformControls3D();
@@ -1090,8 +1094,10 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const s3d = this.shapeManager.scene3d;
     if (!s3d) return;
     this.editorState.scene3dMeshes = s3d.getAllMeshes() ?? [];
-    // If selected mesh was removed, clear selection
-    if (this.editorState.scene3dSelectedMeshId && !this.editorState.scene3dMeshes.some((m: any) => (m.id ?? m.nodeId) === this.editorState.scene3dSelectedMeshId)) {
+    // If selected mesh was removed, clear selection (a selected particle emitter is not a mesh — it stays while it exists)
+    const selId = this.editorState.scene3dSelectedMeshId;
+    if (selId && !(selId === this.selectedParticleEmitterId && this.shapeManager.getParticleEmitter3D(selId))
+        && !this.editorState.scene3dMeshes.some((m: any) => (m.id ?? m.nodeId) === selId)) {
       this.clearMeshSelection();
     }
     this.outliner._reindexNodeKinds();
@@ -1176,7 +1182,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     switch (a) {
       case 'group': this.scene3dAddGroup(); break;
       case 'ribbon': this.ribbon.scene3dAddRibbon(); break;
-      case 'cloth': this.scene3dOpenClothBuilder(); break;
       case 'building': void this.procedural.scene3dAddBuilding(); break;
       case 'foliage': void this.procedural.scene3dAddFoliage(); break;
       case 'block': void this.procedural.scene3dCreateBlock(); break;
@@ -1196,6 +1201,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dSelectMesh(id: string): void {
+    this.add.scene3dCancelPolygonDraw();   // picking another object ends a Polygon outline
     this.outliner.scene3dRenamingId = null;
     this.ribbon.hideHandles();
     if (this.meshEdit.scene3dIsEditingMesh && id !== this.editorState.scene3dSelectedMeshId) {
@@ -1217,6 +1223,12 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       return;
     }
     this.shapeManager.setSelectedNode(id);
+    // A particle emitter shows its Particle Config section instead of the mesh sections
+    if (this.shapeManager.getParticleEmitter3D(id)) {
+      this.selectedParticleEmitterId = id;
+      this.scene3dRefreshKeyframeTracks();
+      return;
+    }
     // Detect array group before normal mesh loading — array groups use a separate panel
     if (this.shapeManager.isArrayGroup3D(id)) {
       this.scene3dIsArrayGroup = true;
@@ -1262,6 +1274,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.scene3dIsArrayGroup = false;
     this.scene3dLinkedArrayCount = 0;
     this.scene3dIsCloth = false;
+    this.selectedParticleEmitterId = null;
     this.ribbon.resetForSelection();
   }
 
@@ -1333,6 +1346,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (event.pointerType === 'touch' && event.isPrimary === false) {
       this._touchTap = null;
       this.meshEdit.knifeAbortForGesture();
+      this.add.polygonPointerAbort();
       return;
     }
     // Plain LEFT click only (2026-09-29). Middle = pan, right = look / pan, Alt+left = orbit — none of them may pick,
@@ -1342,6 +1356,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const canvas = this.canvasRef?.nativeElement;
     if (!canvas) return;
     const sm = this.shapeManager;
+
+    // Add Mesh › Polygon…: drawing its outline owns plain presses (a tap adds a point on release; a drag still orbits)
+    if (this.add.polygonPointerDown(event)) return;
 
     // 0. Mesh edit mode — Salsa's MeshEditPointerController owns face/vertex/edge picking (knife start captured here)
     if (this.meshEdit.knifePointerDown(event, canvas)) return;
@@ -1391,6 +1408,14 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   /** Viewport pick at a client point: select the mesh there, or clear the selection (and the character panel). */
   private _scene3dPickAt(clientX: number, clientY: number, canvas: HTMLCanvasElement): void {
     const sm = this.shapeManager;
+    // A particle emitter ICON the engine's own click just picked (its capture handler runs first) wins over the mesh
+    // behind it and over "empty space" (the icon is no mesh). It only shows in the 3D renderer's selection.
+    const r3dSel = sm.renderer3D?.getSelectedMeshIds?.();
+    const iconId = r3dSel?.size === 1 ? r3dSel.values().next().value as string : null;
+    if (iconId && sm.getParticleEmitter3D(iconId)) {
+      if (iconId !== this.editorState.scene3dSelectedMeshId) this.scene3dSelectMesh(iconId);
+      return;
+    }
     const picked = sm.pickFromClient3D(clientX, clientY, canvas.getBoundingClientRect());
     const pickedId = picked?.meshId ?? null;
     if (pickedId) {
@@ -1464,6 +1489,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dCanvasPointerMove(event: PointerEvent): void {
+    if (this.add.polyDraw) { const c = this.canvasRef?.nativeElement; if (c) this.add.polygonPointerMove(event, c); }
     if (this.scene3dViewIsPlaying) return;   // Play: no editor hover picking (landmark cards, ribbon handles) — saves a raycast per mouse move
     if (this.scene3dWorldPanelOpen) {
       const canvas = this.canvasRef?.nativeElement;
@@ -1484,6 +1510,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   scene3dCanvasPointerUp(event: PointerEvent): void {
+    const pc = this.canvasRef?.nativeElement;
+    if (pc && this.add.polygonPointerUp(event, pc)) return;
     if (this.meshEdit.knifePointerUp(event)) return;
     this.ribbon.endHandleDrag();
     const tap = this._touchTap;
@@ -1501,6 +1529,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   scene3dCanvasPointerCancel(event: PointerEvent): void {
     if (this._touchTap?.id === event.pointerId) this._touchTap = null;
     this.meshEdit.knifePointerCancel(event);
+    this.add.polygonPointerAbort();
     this.ribbon.endHandleDrag();
   }
 
@@ -1522,6 +1551,13 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dDeleteMesh(id: string): void {
     const sm = this.shapeManager;
+    // A particle emitter (outliner ✕ / Delete key): the engine records it as one 3D undo step
+    if (sm.getParticleEmitter3D(id)) {
+      sm.removeParticleEmitter3D(id);
+      this.scene3dRefreshMeshes();   // drops the selection when it was this emitter
+      this.scene3dMarkDirty();
+      return;
+    }
     // Deleting the mesh the UV editor / UV paint is on: leave it first (its engine session would otherwise outlive the
     // mesh and keep the orbit + focus background up).
     if ((this.uv.uvEditorOpen || this.uv.scene3dClothingPaintActive)
@@ -1549,6 +1585,19 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
   scene3dDuplicateMesh(id: string): void {
     const sm = this.shapeManager;
+    const emitter = sm.getParticleEmitter3D(id);
+    if (emitter) {
+      // A particle emitter: a copy with the same settings, beside it
+      const copyId = sm.addParticleEmitter3D(emitter.x + 0.5, emitter.y, emitter.z, structuredClone(emitter.config));
+      const copyNode = copyId ? sm.getParticleEmitter3D(copyId) : null;
+      if (!copyNode) return;
+      copyNode.name = `${emitter.name} Copy`;
+      copyNode.visible = emitter.visible;
+      this.scene3dRefreshMeshes();
+      this.scene3dSelectMesh(copyId);
+      this.scene3dMarkDirty();
+      return;
+    }
     const copy = sm.duplicateMesh3D(id);
     if (copy) {
       const copyId = copy.id;
@@ -1593,6 +1642,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 // ── Canvas Grid ────────────────────────────────────────────
 
   scene3dSetGizmoMode(mode: 'move' | 'rotate' | 'scale'): void {
+    this.add.scene3dCancelPolygonDraw();
     // Edit Mesh (the chrome): the rail's Move / Rotate / Scale are its element tools (again: back to Select)
     if (this.activeModeChrome === 'meshEdit') { this.meshEdit.setTool(this.meshEdit.tool === mode ? 'select' : mode); return; }
     // Armature (mode chrome): the main toolbar's Move / Rotate are the joint tools; tapping the pressed one again goes
@@ -1676,6 +1726,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (st?.id) {
       this.scene3dRefreshMeshes();
       this.scene3dSelectMesh(st.id);
+      this.scene3dMarkDirty();
     }
   }
 
@@ -2139,7 +2190,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   _updateGizmoPosition(delayMs = 320): void {
     clearTimeout(this._gizmoPosTimer);
     this._gizmoPosTimer = setTimeout(() => {
-      const panelOpen = this.scene3dWorldPanelOpen || this.arrayTool.scene3dArrayToolActive || this.character.scene3dEditCharPanelOpen || this.procedural.scene3dEditBuildingPanelOpen || this.procedural.scene3dEditFoliagePanelOpen || this.procedural.scene3dEditBlockPanelOpen || this.pkg.scene3dPkgCreatorOpen || this.creator.scene3dCreatorPanelOpen;
+      const panelOpen = this.scene3dWorldPanelOpen || this.arrayTool.scene3dArrayToolActive || this.character.scene3dEditCharPanelOpen || this.procedural.scene3dEditBuildingPanelOpen || this.procedural.scene3dEditFoliagePanelOpen || this.procedural.scene3dEditBlockPanelOpen || this.pkg.scene3dPkgCreatorOpen || this.creator.scene3dCreatorPanelOpen
+        || this.uv.uvEditorOpen;   // UV Paint: the brush panel is in the left sub-panel slot (2026-10-08)
       // Mode chrome: below its header bar and the tool hint line (the chrome calls this when it mounts / unmounts)
       let chromeY = 0;
       if (this.activeModeChrome) {
@@ -2422,11 +2474,16 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     const s3dSel = sm3d.scene3d;
     if (s3dSel) this.editorState.scene3dSelectedMeshIds = new Set(selectedIds.filter(id => !!s3dSel.getMesh(id)));
 
-    // Particle emitter selection
-    const firstId = selectedIds[0] ?? null;
+    // Particle emitter selection: an emitter icon picked in the viewport (the engine's own pick) becomes the editor's
+    // selection too (Particle Config, Delete key); the engine moving to something else drops it. An icon pick only
+    // lands in the 3D renderer's selection (the engine's node selection reports none), so an empty report reads that.
+    const r3dSel = selectedIds.length === 0 ? sm3d.renderer3D?.getSelectedMeshIds?.() : null;
+    const firstId = selectedIds[0] ?? (r3dSel?.size === 1 ? r3dSel.values().next().value as string : null);
     if (firstId && sm3d.getParticleEmitter3D(firstId)) {
-      this.selectedParticleEmitterId = firstId;
-    } else {
+      // (the id check alone: scene3dSelectMesh sets it BEFORE its setSelectedNode, whose synchronous report lands here)
+      if (this.editorState.scene3dSelectedMeshId !== firstId) this.scene3dSelectMesh(firstId);
+    } else if (this.selectedParticleEmitterId && selectedIds.length > 0) {
+      if (this.editorState.scene3dSelectedMeshId === this.selectedParticleEmitterId) this.editorState.scene3dSelectedMeshId = null;
       this.selectedParticleEmitterId = null;
     }
   }
@@ -2500,6 +2557,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Transform inspector: re-read after gizmo drags / undo (it used to show the select-time values, so editing one
     // axis sent stale values for the others and the mesh snapped back)
     this.transformSection?.load();
+    this.particleConfig?.syncPosition();   // the selected emitter's Pos after a gizmo drag / undo
 
     // Sync camera node list whenever the scene graph changes
     this.anim.scene3dRefreshCameraNodes();
@@ -2731,6 +2789,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   selectCursor(cursor: string) {
     switch (cursor) {
       case 'cursor':
+        this.add.scene3dCancelPolygonDraw();
         this.cursorSelected = true; this.panHandSelected = false; this.shapeManager.disablePanningTool(); this.setActiveTool('');
         if (this.activeModeChrome === 'armature') this.armatureMode?.setTool('select');   // Armature: the joint Select tool
         if (this.activeModeChrome === 'meshEdit' && this.meshEdit.tool !== 'select') this.meshEdit.setTool('select');   // Edit Mesh: taps select, no gizmo
@@ -2796,6 +2855,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   }
 
   setActiveTool(activeTool: string, event?: MouseEvent) {
+    if (activeTool) this.add.scene3dCancelPolygonDraw();   // another tool ends a Polygon outline
     // Touch: the tool's options panel folded away after a brush pick; tapping the tool again reopens it (not off)
     if (this.toolSubpanel.onToolTap(activeTool, this.controlPanelActiveTool)) { this.ditherRevealSubpanel(); return; }
     if (activeTool && activeTool === this.controlPanelActiveTool) activeTool = '';
@@ -3211,7 +3271,6 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     if (this.character.scene3dIdleEnabled && this.character.scene3dEditCharBodyId) {
       this.shapeManager.setIdleAnimation3D(this.character.scene3dEditCharBodyId, false);
     }
-    clearTimeout(this.add._charPreviewTimer);
     clearTimeout(this._toolsSwapTimer);
 
     this._removeInputListeners();

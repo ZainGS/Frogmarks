@@ -56,6 +56,16 @@ export function clothBuilderInitFor(sm: ShapeManager | null, meshId?: string): C
            dropPosition: sm?.getIllustrationCenter3D() ?? [0, 0, 0] };
 }
 
+/** A new cloth's grid + physics: the builder's starting values (Add Mesh › Cloth… adds one at once; Edit Cloth… opens
+ *  the builder on it). */
+export function newClothDefaults(): { grid: ClothBuilderResult['grid'] & { subdivisions: number }; physics: ClothBuilderResult['physics'] } {
+  const cols = 8, rows = 10;
+  return {
+    grid: { cols, rows, cellSize: 0.1, cornerRadius: 0, subdivisions: 1, activeCells: Array(cols * rows).fill(true), pinnedVertices: [] },
+    physics: { gravity: 9.8, damping: 0.98, stiffness: 30, thickness: 0, solidifyRounded: false, wind: { x: 0, y: 0, z: 0 } },
+  };
+}
+
 /** Commit a builder result to the scene: replace / create the cloth mesh, then stitches and bend stiffness.
  *  Returns the cloth mesh id (null if nothing was created). */
 export function applyClothBuilderResult(sm: ShapeManager, result: ClothBuilderResult): string | null {

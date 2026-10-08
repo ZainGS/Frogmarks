@@ -47,7 +47,24 @@ export class EngineStatusService implements OnDestroy {
     let txt = '';
     if (this._pipeStatus.waiting) txt = `Preparing shaders… ${this._pipeStatus.compiled}/${this._pipeStatus.total}`;
     else if (this._jobStatus.active) txt = this._jobStatus.total > 1 ? `${this._jobStatus.label}… ${this._jobStatus.done}/${this._jobStatus.total}` : `${this._jobStatus.label}…`;
+    else if (this._busyLabel) txt = `${this._busyLabel}…`;
     this._statusThrottle.set(txt);
+  }
+
+  /** An editor task the user waits on (Add Mesh › Character… generating a body): its label shows in the same pill. */
+  private _busyLabel = '';
+
+  /** Run `work` with `label` in the status pill; the pill gets a frame to paint before the (main-thread) work starts. */
+  async runBusy<T>(label: string, work: () => Promise<T>): Promise<T> {
+    this._busyLabel = label;
+    this._updateEngineStatus();
+    await new Promise<void>(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    try {
+      return await work();
+    } finally {
+      this._busyLabel = '';
+      this._updateEngineStatus();
+    }
   }
 
   /** Engine boot: start listening (pipeline warm-up, worker jobs, device status, deferred saves). */

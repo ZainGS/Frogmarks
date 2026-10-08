@@ -323,6 +323,10 @@
             </span>
             <span class="exp-check">{{ exp.classicArmature ? '✓' : '' }}</span>
         </div>
+        <div class="edit-menu-item" data-item="city-meshes" (click)="exp.toggleCityMeshes()">
+            <span>Show city meshes</span>
+            <span class="exp-check">{{ exp.cityMeshes ? '✓' : '' }}</span>
+        </div>
     </div>
 </div>
 <!-- Result dialog of the two Experimental actions: selectable text + Copy, sized for a tablet. -->
