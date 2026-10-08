@@ -1,18 +1,24 @@
-import { Component, inject, Input, NgZone, Output, EventEmitter, OnInit, OnChanges, OnDestroy } from '@angular/core';
+import { Component, inject, Input, NgZone, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { FrameCoalescer } from '../../../shared/utilities/frame-coalescer';
-import { Subscription } from 'rxjs';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
 interface GpObject { id: string; name: string; skeletonId?: string; }
 interface GpLayer  { id: string; name: string; visible: boolean; opacity: number; }
 interface GpDrawPlane { meshId: string; triangleIndex: number; offset: number; }
 
+/**
+ * Grease Pencil: draw strokes in 3D (salsa docs/reviews/grease-pencil-2026-10-09.md).
+ * Placement: SURFACE (default) — the pencil is out as soon as the panel opens and every point lands on the selected
+ * mesh under the pen (no face tap); FLAT SHEET — the panel opens in face-select → tap a mesh face → Draw turns on by
+ * itself and strokes go on the sheet in front of that face; ✕ on the plane picks another face. A GP object is created
+ * when there is none. Draw with pen / finger / mouse; two fingers still navigate. Eraser: Partial (default) / Whole stroke.
+ */
 @Component({
   selector: 'app-grease-pencil-panel',
   templateUrl: './grease-pencil-panel.component.html',
   styleUrls:  ['./grease-pencil-panel.component.scss'],
 })
-export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy {
+export class GreasePencilPanelComponent implements OnChanges, OnDestroy {
   private ngZone = inject(NgZone);
   @Input() shapeManager: ShapeManager = null;
   @Output() closeRequest       = new EventEmitter<void>();
@@ -21,6 +27,9 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _sub: { unsubscribe(): void } | null = null;
   private _drawPlanePollId: any = null;
   private _activeModeKey: string | null = null;
+  /** The engine the listeners / poll are bound to (ngOnChanges runs before the first ngOnInit too: binding twice
+   *  leaked a subscription and a 250 ms poll that outlived the panel). */
+  private _boundTo: ShapeManager | null = null;
 
   // ── GP objects ───────────────────────────────────────────────────
   gpObjects:    GpObject[] = [];
@@ -45,6 +54,10 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   gpDrawPlane:          GpDrawPlane | null = null;
   planeOffset         = 0.003;
   drawingPlaneCollapsed = false;
+  /** Where strokes go: onto the mesh surface, or on the flat sheet in front of a tapped face. */
+  placement: 'surface' | 'sheet' = 'surface';
+  /** Surface placement: how far points are lifted off the surface (world units). */
+  surfaceOffset       = 0.01;
 
   // ── Stroke settings ──────────────────────────────────────────────
   gpTool:        'draw' | 'erase' = 'draw';
@@ -58,6 +71,8 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   parentJoint    = '';
   closed         = false;
   eraserRadius   = 0.1;
+  /** Partial: erase only what is under the eraser (strokes split). Whole stroke: remove every stroke it touches. */
+  eraseMode: 'partial' | 'stroke' = 'partial';
 
   // ── Keyframes ────────────────────────────────────────────────────
   gpFrame = 0;
@@ -71,40 +86,44 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   settingsCollapsed = false;
   keyframeCollapsed = false;
 
-  get canDraw(): boolean { return this.gpDrawPlane !== null; }
+  get canDraw(): boolean { return this.placement === 'surface' || this.gpDrawPlane !== null; }
 
-  ngOnInit(): void {
-    if (this.shapeManager) {
-      this._subscribe();
-      this.refreshAll();
-      this.sm?.enterGpFaceSelectMode3D();
-      this._startDrawPlanePoll();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['shapeManager'] || this.shapeManager === this._boundTo) return;
+    this._unbind();
+    if (!this.shapeManager) return;
+    this._boundTo = this.shapeManager;
+    this._subscribe();
+    this.refreshAll();
+    // The keyframe field starts at the animation timeline's frame (the frame the viewport shows)
+    const f = (this.sm as unknown as { getCurrentFrame?(): number }).getCurrentFrame?.();
+    if (typeof f === 'number' && Number.isFinite(f)) this.gpFrame = f;
+    this.refreshDrawPlane();
+    if (!this.isDrawActive) {
+      if (this.placement === 'surface') this.setTool(this.gpTool);   // Surface: no face to tap, the pencil is out at once
+      else this.sm?.enterGpFaceSelectMode3D();
     }
-  }
-
-  ngOnChanges(): void {
-    if (this.shapeManager) {
-      this._unsubscribe();
-      this._stopDrawPlanePoll();
-      this._subscribe();
-      this.refreshAll();
-      this.sm?.enterGpFaceSelectMode3D();
-      this._startDrawPlanePoll();
-    }
+    this._startDrawPlanePoll();
   }
 
   ngOnDestroy(): void {
+    const sm = this._boundTo;
+    this._unbind();
+    sm?.exitGpDrawMode3D();
+    sm?.exitGpFaceSelectMode3D();
+    sm?.clearGpDrawPlane3D();
+  }
+
+  private _unbind(): void {
     this._unsubscribe();
     this._stopDrawPlanePoll();
-    this.sm?.exitGpDrawMode3D();
-    this.sm?.exitGpFaceSelectMode3D();
-    this.sm?.clearGpDrawPlane3D();
+    this._boundTo = null;
   }
 
   private _subscribe(): void {
     const obs = this.shapeManager?.interactionService?.onSceneGraphChanged;
     if (obs) {
-      // Fires per stroke move from the engine's zoneless listeners: one zone entry per frame (at once when in the zone)
+      // Fires per stroke from the engine's zoneless listeners: one zone entry per frame (at once when in the zone)
       this._sub = obs.subscribe(() => {
         if (NgZone.isInAngularZone()) this.refreshAll();
         else this._sceneFrame.mark('scene');
@@ -118,14 +137,18 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _startDrawPlanePoll(): void {
     // Polled outside Angular's zone (audit Phase 5.4: an in-zone 250 ms interval re-checked the whole editor 4× a
     // second); change detection runs only when the draw plane actually changed.
+    this._stopDrawPlanePoll();
     this.ngZone.runOutsideAngular(() => {
-      this._drawPlanePollId = setInterval(() => {
-        const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D() ?? null;
-        const changed = !!plane !== !!this.gpDrawPlane || (plane && this.gpDrawPlane
-          && (plane.offset !== this.gpDrawPlane.offset || JSON.stringify(plane) !== JSON.stringify(this.gpDrawPlane)));
-        if (changed) this.ngZone.run(() => this.refreshDrawPlane());
-      }, 250);
+      this._drawPlanePollId = setInterval(() => this.pollDrawPlane(), 250);
     });
+  }
+
+  /** One poll tick (public for tests): re-read the engine's drawing plane when it changed. */
+  pollDrawPlane(): void {
+    const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D() ?? null;
+    const changed = !!plane !== !!this.gpDrawPlane || (plane && this.gpDrawPlane
+      && (plane.offset !== this.gpDrawPlane.offset || JSON.stringify(plane) !== JSON.stringify(this.gpDrawPlane)));
+    if (changed) this.ngZone.run(() => this.refreshDrawPlane());
   }
 
   private _stopDrawPlanePoll(): void {
@@ -142,17 +165,52 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   refreshDrawPlane(): void {
     const plane: GpDrawPlane | null = this.sm?.getGpDrawPlane3D() ?? null;
+    const picked = !!plane && !this.gpDrawPlane;
     this.gpDrawPlane = plane;
     if (plane) this.planeOffset = plane.offset;
+    // A face was just tapped: the pencil is ready at once (the Draw button used to stay off until pressed, and drawing
+    // needed a GP object made by hand first). Erase stays the tool if it was picked.
+    if (picked && !this.isDrawActive && this.placement === 'sheet') this.setTool(this.gpTool);
   }
 
+  /** Placement: Surface | Flat sheet. Surface draws on the mesh at once; Flat sheet needs a tapped face first. */
+  setPlacement(p: 'surface' | 'sheet'): void {
+    if (p === this.placement) return;
+    this.placement = p;
+    this._sendSettings({ placement: p });
+    if (p === 'surface') {
+      this.sm?.exitGpFaceSelectMode3D();
+      if (!this.isDrawActive) this.setTool(this.gpTool);
+    } else if (!this.gpDrawPlane) {
+      // No face picked yet: the pencil goes back to face-select until one is tapped.
+      if (this.isDrawActive) this._exitDrawIfActive();
+      else this.sm?.enterGpFaceSelectMode3D();
+    }
+  }
+
+  /** Eraser: Partial | Whole stroke (the pen's eraser end uses it too). */
+  setEraseMode(m: 'partial' | 'stroke'): void {
+    if (m === this.eraseMode) return;
+    this.eraseMode = m;
+    this._sendSettings({ eraseMode: m });
+  }
+
+  /** Settings the engine build may not type yet (placement / eraseMode / surfaceOffset arrive with the Salsa rebuild;
+   *  an older engine ignores unknown keys). */
+  private _sendSettings(opts: object): void {
+    this.sm?.setGpDrawSettings3D(opts);
+  }
+
+  onSurfaceOffsetChange(): void {
+    this._sendSettings({ surfaceOffset: this.surfaceOffset });
+  }
+
+  /** ✕ on the plane: pick another face (the pencil goes back to face-select until one is tapped). */
   clearDrawPlane(): void {
+    this._exitDrawIfActive();
     this.sm?.clearGpDrawPlane3D();
     this.gpDrawPlane = null;
-    // After clearing, re-enter face-select so user can pick a new face
-    if (!this.isDrawActive) {
-      this.sm?.enterGpFaceSelectMode3D();
-    }
+    this.sm?.enterGpFaceSelectMode3D();
   }
 
   onPlaneOffsetChange(): void {
@@ -169,6 +227,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
     if (this.activeGpId) {
       if (!this.gpObjects.find(g => g.id === this.activeGpId)) {
+        this._exitDrawIfActive();
         this.activeGpId = this.gpObjects[0]?.id ?? null;
       }
     } else if (this.gpObjects.length > 0) {
@@ -187,6 +246,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       opacity: l.opacity ?? 1,
     }));
     if (this.activeLayerId && !this.gpLayers.find(l => l.id === this.activeLayerId)) {
+      this._exitDrawIfActive();
       this.activeLayerId = null;
     }
     if (!this.activeLayerId && this.gpLayers.length > 0) {
@@ -210,26 +270,35 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   createGpObject(): void {
     if (!this.newGpName.trim()) return;
     const skelId = this.newGpSkeletonId || undefined;
-    this.sm?.createGpObject3D(this.newGpName.trim(), skelId);
+    const wasDrawing = this.isDrawActive;
+    this._exitDrawIfActive();
+    const id = this.sm?.createGpObject3D(this.newGpName.trim(), skelId);
     this.newGpName = 'GP Object';
+    if (id) { this.activeGpId = id; this.activeLayerId = null; }
+    this.refreshAll();
+    if (wasDrawing) this._enterDrawMode();
   }
 
   selectGpObject(id: string): void {
+    if (id === this.activeGpId) return;
+    const wasDrawing = this.isDrawActive;
     this._exitDrawIfActive();
     this.activeGpId = id;
     this.activeLayerId = null;
     this._refreshLayers();
+    if (wasDrawing) this._enterDrawMode();   // the pencil stays out, now on this object
   }
 
   removeGpObject(id: string, event: Event): void {
     event.stopPropagation();
+    if (this.activeGpId === id) this._exitDrawIfActive();
     this.sm?.removeGpObject3D(id);
     if (this.activeGpId === id) {
-      this._exitDrawIfActive();
       this.activeGpId = null;
       this.gpLayers = [];
       this.activeLayerId = null;
     }
+    this.refreshAll();
   }
 
   startRenameGp(id: string, current: string, event: Event): void {
@@ -255,23 +324,27 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
 
   addLayer(): void {
     if (!this.activeGpId || !this.newLayerName.trim()) return;
-    this.sm?.addGpLayer3D(this.activeGpId, this.newLayerName.trim());
+    const id = this.sm?.addGpLayer3D(this.activeGpId, this.newLayerName.trim());
     this.newLayerName = 'Layer';
+    this._refreshLayers();
+    if (id) this.selectLayer(id);           // draw on the new layer
   }
 
   selectLayer(id: string): void {
+    if (id === this.activeLayerId) return;
+    const wasDrawing = this.isDrawActive;
     this._exitDrawIfActive();
     this.activeLayerId = id;
+    if (wasDrawing) this._enterDrawMode();   // the pencil stays out, now on this layer
   }
 
   removeLayer(id: string, event: Event): void {
     event.stopPropagation();
     if (!this.activeGpId) return;
+    if (this.activeLayerId === id) this._exitDrawIfActive();
     this.sm?.removeGpLayer3D(this.activeGpId, id);
-    if (this.activeLayerId === id) {
-      this._exitDrawIfActive();
-      this.activeLayerId = null;
-    }
+    if (this.activeLayerId === id) this.activeLayerId = null;
+    this._refreshLayers();
   }
 
   toggleLayerVisible(layer: GpLayer, event: Event): void {
@@ -322,9 +395,22 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       return;
     }
     this.gpTool = tool;
-    if (this.canDraw && this.activeGpId && this.activeLayerId) {
-      this._enterDrawMode();
+    if (!this.canDraw) return;
+    this._ensureTarget();
+    this._enterDrawMode();
+  }
+
+  /** The first draw needs a GP object + layer: make one ("GP Object", with "Layer 1") instead of a disabled-looking
+   *  panel that only worked after "+ New" (the hidden prerequisite behind "Grease Pencil never worked"). */
+  private _ensureTarget(): void {
+    if (!this.activeGpId) {
+      const id = this.sm?.createGpObject3D('GP Object');
+      if (!id) return;
+      this.activeGpId = id;
+      this.activeLayerId = null;
+      this.refreshAll();
     }
+    if (!this.activeLayerId) this._refreshLayers();
   }
 
   private _enterDrawMode(): void {
@@ -347,7 +433,7 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
   private _exitDrawIfActive(): void {
     if (!this.isDrawActive) return;
     this.sm?.exitGpDrawMode3D();
-    this.sm?.enterGpFaceSelectMode3D();
+    if (this.placement === 'sheet') this.sm?.enterGpFaceSelectMode3D();
     this.isDrawActive = false;
     this._activeModeKey = null;
   }
@@ -364,10 +450,14 @@ export class GreasePencilPanelComponent implements OnInit, OnChanges, OnDestroy 
       depthMode:     'surface' as const,
       color:         this._hexToRgba(this.strokeColorHex, this.strokeOpacity),
       baseWidth:     this.strokeWidth,
-      fillColor:     this._hexToRgba(this.fillColorHex, this.fillOpacity),
+      // Only a FILLED stroke carries a fill colour: "Closed" alone used to fill too (the colour was always sent)
+      fillColor:     this.filled ? this._hexToRgba(this.fillColorHex, this.fillOpacity) : null,
       closed:        this.closed || this.filled,
-      parentJoint:   this.parentJoint || undefined,
+      parentJoint:   this.parentJoint || null,
       eraseRadius:   this.eraserRadius,
+      placement:     this.placement,
+      surfaceOffset: this.surfaceOffset,
+      eraseMode:     this.eraseMode,
     };
   }
 

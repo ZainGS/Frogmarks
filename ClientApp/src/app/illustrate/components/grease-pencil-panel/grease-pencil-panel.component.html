@@ -9,134 +9,39 @@
 
   <div class="gp-body">
 
-    <!-- ── GP Objects ──────────────────────────────────────────── -->
-    <div class="gp-section">
-      <div class="gp-section-title gp-section-title-toggle"
-           (click)="objectsCollapsed = !objectsCollapsed">
-        <span class="gp-chevron">{{ objectsCollapsed ? '▸' : '▾' }}</span>GP Objects
-      </div>
-
-      <ng-container *ngIf="!objectsCollapsed">
-        <!-- Create new GP object -->
-        <div class="gp-op-inline" style="margin-bottom:4px">
-          <input type="text" class="gp-text" placeholder="Name" [(ngModel)]="newGpName">
-        </div>
-        <div class="gp-op-inline" style="margin-bottom:6px">
-          <span class="gp-label">Skeleton</span>
-          <select class="gp-select" [(ngModel)]="newGpSkeletonId">
-            <option value="">none</option>
-            <option *ngFor="let sk of skeletonList; trackBy: trackByName" [value]="sk.id">{{ sk.name }}</option>
-          </select>
-          <button class="gp-op-btn" (click)="createGpObject()">+ New</button>
-        </div>
-
-        <div class="gp-list" *ngIf="gpObjects.length > 0; else noGpObjects">
-          <div *ngFor="let g of gpObjects; trackBy: trackById"
-               class="gp-list-row"
-               [class.active]="activeGpId === g.id"
-               (click)="selectGpObject(g.id)">
-
-            <ng-container *ngIf="renamingGpId === g.id; else viewGp">
-              <input type="text" class="gp-text gp-text-inline"
-                     [(ngModel)]="renameGpValue"
-                     (keyup.enter)="confirmRenameGp()"
-                     (keyup.escape)="cancelRenameGp()"
-                     (click)="$event.stopPropagation()">
-              <button class="gp-op-btn gp-op-xs" (click)="confirmRenameGp(); $event.stopPropagation()">✓</button>
-              <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="cancelRenameGp(); $event.stopPropagation()">✕</button>
-            </ng-container>
-            <ng-template #viewGp>
-              <span class="gp-row-name">{{ g.name }}</span>
-              <span *ngIf="g.skeletonId" class="gp-bone-badge" title="Bone parented">🦴</span>
-              <button class="gp-op-btn gp-op-xs gp-op-ghost"
-                      (click)="startRenameGp(g.id, g.name, $event)" title="Rename">✎</button>
-              <button class="gp-op-btn gp-op-xs gp-op-danger"
-                      (click)="removeGpObject(g.id, $event)" title="Delete">✕</button>
-            </ng-template>
-          </div>
-        </div>
-        <ng-template #noGpObjects>
-          <div class="gp-hint">No GP objects — create one above.</div>
-        </ng-template>
-
-        <!-- Draw order -->
-        <ng-container *ngIf="activeGpId">
-          <div class="gp-form-row" style="margin-top:6px">
-            <span class="gp-label">Draw Order</span>
-            <input type="number" class="gp-num" step="1" [(ngModel)]="renderOrder" (change)="setRenderOrder()">
-            <span class="gp-hint" style="flex:1;margin-left:4px">higher = in front</span>
-          </div>
-        </ng-container>
-      </ng-container>
-    </div>
-
-    <!-- ── Layers ───────────────────────────────────────────────── -->
-    <div class="gp-section" *ngIf="activeGpId">
-      <div class="gp-section-title gp-section-title-toggle"
-           (click)="layersCollapsed = !layersCollapsed">
-        <span class="gp-chevron">{{ layersCollapsed ? '▸' : '▾' }}</span>Layers
-      </div>
-
-      <ng-container *ngIf="!layersCollapsed">
-        <div class="gp-op-inline" style="margin-bottom:6px">
-          <input type="text" class="gp-text" placeholder="Layer name" [(ngModel)]="newLayerName">
-          <button class="gp-op-btn" (click)="addLayer()">+ Add</button>
-        </div>
-
-        <div class="gp-list" *ngIf="gpLayers.length > 0; else noLayers">
-          <div *ngFor="let l of gpLayers; trackBy: trackById"
-               class="gp-list-row gp-layer-row"
-               [class.active]="activeLayerId === l.id"
-               (click)="selectLayer(l.id)">
-
-            <ng-container *ngIf="renamingLayerId === l.id; else viewLayer">
-              <input type="text" class="gp-text gp-text-inline"
-                     [(ngModel)]="renameLayerValue"
-                     (keyup.enter)="confirmRenameLayer()"
-                     (keyup.escape)="cancelRenameLayer()"
-                     (click)="$event.stopPropagation()">
-              <button class="gp-op-btn gp-op-xs" (click)="confirmRenameLayer(); $event.stopPropagation()">✓</button>
-              <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="cancelRenameLayer(); $event.stopPropagation()">✕</button>
-            </ng-container>
-            <ng-template #viewLayer>
-              <button class="gp-vis-btn" [class.hidden]="!l.visible"
-                      (click)="toggleLayerVisible(l, $event)" title="Toggle visibility">
-                {{ l.visible ? '👁' : '🚫' }}
-              </button>
-              <span class="gp-row-name">{{ l.name }}</span>
-              <input type="range" class="gp-range gp-opacity-range" min="0" max="1" step="0.01"
-                     [(ngModel)]="l.opacity" (ngModelChange)="onLayerOpacityChange(l)"
-                     (click)="$event.stopPropagation()" title="Opacity">
-              <button class="gp-op-btn gp-op-xs gp-op-ghost"
-                      (click)="startRenameLayer(l.id, l.name, $event)" title="Rename">✎</button>
-              <button class="gp-op-btn gp-op-xs gp-op-danger"
-                      (click)="removeLayer(l.id, $event)" title="Delete">✕</button>
-            </ng-template>
-          </div>
-        </div>
-        <ng-template #noLayers>
-          <div class="gp-hint">No layers — add one above.</div>
-        </ng-template>
-      </ng-container>
-    </div>
-
     <!-- ── Drawing Plane ─────────────────────────────────────────── -->
-    <div class="gp-section" *ngIf="activeGpId">
+    <div class="gp-section">
       <div class="gp-section-title gp-section-title-toggle"
            (click)="drawingPlaneCollapsed = !drawingPlaneCollapsed">
         <span class="gp-chevron">{{ drawingPlaneCollapsed ? '▸' : '▾' }}</span>Drawing Plane
       </div>
 
       <ng-container *ngIf="!drawingPlaneCollapsed">
+        <div class="gp-form-row" style="margin-bottom:6px">
+          <span class="gp-label">Placement</span>
+          <div class="gp-seg">
+            <button class="gp-op-btn gp-op-xs" [class.gp-active]="placement === 'surface'"
+                    (click)="setPlacement('surface')">Surface</button>
+            <button class="gp-op-btn gp-op-xs" [class.gp-active]="placement === 'sheet'"
+                    (click)="setPlacement('sheet')">Flat sheet</button>
+          </div>
+        </div>
+        <div class="gp-form-row" *ngIf="placement === 'surface'">
+          <span class="gp-label">Offset</span>
+          <input type="range" class="gp-range" min="0" max="0.05" step="0.0005"
+                 [(ngModel)]="surfaceOffset" (ngModelChange)="onSurfaceOffsetChange()">
+          <span class="gp-val">{{ surfaceOffset | number:'1.4-4' }}</span>
+        </div>
+        <ng-container *ngIf="placement === 'sheet'">
         <ng-container *ngIf="!gpDrawPlane; else planeSelected">
           <div class="gp-hint gp-plane-prompt">
-            ✦ Click a mesh face to set the drawing plane
+            ✦ Tap a mesh face to draw on it
           </div>
         </ng-container>
         <ng-template #planeSelected>
           <div class="gp-form-row gp-plane-row" style="margin-bottom:6px">
             <span class="gp-plane-label">face {{ gpDrawPlane!.triangleIndex }}</span>
-            <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="clearDrawPlane()" title="Clear plane">✕</button>
+            <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="clearDrawPlane()" title="Pick another face">✕</button>
           </div>
           <div class="gp-form-row">
             <span class="gp-label">Offset</span>
@@ -145,11 +50,12 @@
             <span class="gp-val">{{ planeOffset | number:'1.4-4' }}</span>
           </div>
         </ng-template>
+        </ng-container>
       </ng-container>
     </div>
 
     <!-- ── Stroke Settings ─────────────────────────────────────── -->
-    <div class="gp-section" *ngIf="activeGpId && activeLayerId">
+    <div class="gp-section">
       <div class="gp-section-title gp-section-title-toggle"
            (click)="settingsCollapsed = !settingsCollapsed">
         <span class="gp-chevron">{{ settingsCollapsed ? '▸' : '▾' }}</span>Stroke Settings
@@ -158,8 +64,8 @@
       <ng-container *ngIf="!settingsCollapsed">
 
         <!-- Drawing plane required hint -->
-        <div *ngIf="!gpDrawPlane" class="gp-hint gp-plane-prompt" style="margin-bottom:8px">
-          ✦ Set a Drawing Plane above before drawing.
+        <div *ngIf="!canDraw" class="gp-hint gp-plane-prompt" style="margin-bottom:8px">
+          ✦ Tap a mesh face first.
         </div>
 
         <!-- Tool toggle -->
@@ -232,6 +138,15 @@
 
         <!-- Erase settings -->
         <ng-container *ngIf="gpTool === 'erase'">
+          <div class="gp-form-row" style="margin-bottom:4px">
+            <span class="gp-label">Eraser</span>
+            <div class="gp-seg">
+              <button class="gp-op-btn gp-op-xs" [class.gp-active]="eraseMode === 'partial'"
+                      (click)="setEraseMode('partial')">Partial</button>
+              <button class="gp-op-btn gp-op-xs" [class.gp-active]="eraseMode === 'stroke'"
+                      (click)="setEraseMode('stroke')">Whole stroke</button>
+            </div>
+          </div>
           <div class="gp-form-row">
             <span class="gp-label">Radius</span>
             <input type="range" class="gp-range" min="0.01" max="0.5" step="0.005"
@@ -240,6 +155,117 @@
           </div>
         </ng-container>
 
+      </ng-container>
+    </div>
+
+    <!-- ── GP Objects ──────────────────────────────────────────── -->
+    <div class="gp-section">
+      <div class="gp-section-title gp-section-title-toggle"
+           (click)="objectsCollapsed = !objectsCollapsed">
+        <span class="gp-chevron">{{ objectsCollapsed ? '▸' : '▾' }}</span>GP Objects
+      </div>
+
+      <ng-container *ngIf="!objectsCollapsed">
+        <!-- Create new GP object -->
+        <div class="gp-op-inline" style="margin-bottom:4px">
+          <input type="text" class="gp-text" placeholder="Name" [(ngModel)]="newGpName">
+        </div>
+        <div class="gp-op-inline" style="margin-bottom:6px">
+          <span class="gp-label">Skeleton</span>
+          <select class="gp-select" [(ngModel)]="newGpSkeletonId">
+            <option value="">none</option>
+            <option *ngFor="let sk of skeletonList; trackBy: trackByName" [value]="sk.id">{{ sk.name }}</option>
+          </select>
+          <button class="gp-op-btn" (click)="createGpObject()">+ New</button>
+        </div>
+
+        <div class="gp-list" *ngIf="gpObjects.length > 0; else noGpObjects">
+          <div *ngFor="let g of gpObjects; trackBy: trackById"
+               class="gp-list-row"
+               [class.active]="activeGpId === g.id"
+               (click)="selectGpObject(g.id)">
+
+            <ng-container *ngIf="renamingGpId === g.id; else viewGp">
+              <input type="text" class="gp-text gp-text-inline"
+                     [(ngModel)]="renameGpValue"
+                     (keyup.enter)="confirmRenameGp()"
+                     (keyup.escape)="cancelRenameGp()"
+                     (click)="$event.stopPropagation()">
+              <button class="gp-op-btn gp-op-xs" (click)="confirmRenameGp(); $event.stopPropagation()">✓</button>
+              <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="cancelRenameGp(); $event.stopPropagation()">✕</button>
+            </ng-container>
+            <ng-template #viewGp>
+              <span class="gp-row-name">{{ g.name }}</span>
+              <span *ngIf="g.skeletonId" class="gp-bone-badge" title="Bone parented">🦴</span>
+              <button class="gp-op-btn gp-op-xs gp-op-ghost"
+                      (click)="startRenameGp(g.id, g.name, $event)" title="Rename">✎</button>
+              <button class="gp-op-btn gp-op-xs gp-op-danger"
+                      (click)="removeGpObject(g.id, $event)" title="Delete">✕</button>
+            </ng-template>
+          </div>
+        </div>
+        <ng-template #noGpObjects>
+          <div class="gp-hint">None yet — one is made when you first draw.</div>
+        </ng-template>
+
+        <!-- Draw order -->
+        <ng-container *ngIf="activeGpId">
+          <div class="gp-form-row" style="margin-top:6px">
+            <span class="gp-label">Draw Order</span>
+            <input type="number" class="gp-num" step="1" [(ngModel)]="renderOrder" (change)="setRenderOrder()">
+            <span class="gp-hint" style="flex:1;margin-left:4px">higher = in front</span>
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <!-- ── Layers ───────────────────────────────────────────────── -->
+    <div class="gp-section" *ngIf="activeGpId">
+      <div class="gp-section-title gp-section-title-toggle"
+           (click)="layersCollapsed = !layersCollapsed">
+        <span class="gp-chevron">{{ layersCollapsed ? '▸' : '▾' }}</span>Layers
+      </div>
+
+      <ng-container *ngIf="!layersCollapsed">
+        <div class="gp-op-inline" style="margin-bottom:6px">
+          <input type="text" class="gp-text" placeholder="Layer name" [(ngModel)]="newLayerName">
+          <button class="gp-op-btn" (click)="addLayer()">+ Add</button>
+        </div>
+
+        <div class="gp-list" *ngIf="gpLayers.length > 0; else noLayers">
+          <div *ngFor="let l of gpLayers; trackBy: trackById"
+               class="gp-list-row gp-layer-row"
+               [class.active]="activeLayerId === l.id"
+               (click)="selectLayer(l.id)">
+
+            <ng-container *ngIf="renamingLayerId === l.id; else viewLayer">
+              <input type="text" class="gp-text gp-text-inline"
+                     [(ngModel)]="renameLayerValue"
+                     (keyup.enter)="confirmRenameLayer()"
+                     (keyup.escape)="cancelRenameLayer()"
+                     (click)="$event.stopPropagation()">
+              <button class="gp-op-btn gp-op-xs" (click)="confirmRenameLayer(); $event.stopPropagation()">✓</button>
+              <button class="gp-op-btn gp-op-xs gp-op-ghost" (click)="cancelRenameLayer(); $event.stopPropagation()">✕</button>
+            </ng-container>
+            <ng-template #viewLayer>
+              <button class="gp-vis-btn" [class.hidden]="!l.visible"
+                      (click)="toggleLayerVisible(l, $event)" title="Toggle visibility">
+                {{ l.visible ? '👁' : '🚫' }}
+              </button>
+              <span class="gp-row-name">{{ l.name }}</span>
+              <input type="range" class="gp-range gp-opacity-range" min="0" max="1" step="0.01"
+                     [(ngModel)]="l.opacity" (ngModelChange)="onLayerOpacityChange(l)"
+                     (click)="$event.stopPropagation()" title="Opacity">
+              <button class="gp-op-btn gp-op-xs gp-op-ghost"
+                      (click)="startRenameLayer(l.id, l.name, $event)" title="Rename">✎</button>
+              <button class="gp-op-btn gp-op-xs gp-op-danger"
+                      (click)="removeLayer(l.id, $event)" title="Delete">✕</button>
+            </ng-template>
+          </div>
+        </div>
+        <ng-template #noLayers>
+          <div class="gp-hint">No layers — add one above.</div>
+        </ng-template>
       </ng-container>
     </div>
 

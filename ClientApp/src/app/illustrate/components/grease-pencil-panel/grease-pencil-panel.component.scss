@@ -6,10 +6,13 @@ $muted:   rgba(255, 255, 255, 0.45);
 
 .gp-panel {
   position: fixed;
-  top: 0;
+  // Below the editor's top bar (Navigate, the view mode, Undo / Redo, Export stay reachable — it covered them) and,
+  // with the animation timeline open, above it (:host(.above-timeline)), like the Armature / Edit Mesh panels.
+  top: var(--fm-topbar-h, 40px);
   right: 0;
   bottom: 0;
   width: 280px;
+  box-sizing: border-box;
   background: $bg;
   border-left: 1px solid $border;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.55);
@@ -20,6 +23,8 @@ $muted:   rgba(255, 255, 255, 0.45);
   color: $text;
   user-select: none;
 }
+
+:host(.above-timeline) .gp-panel { bottom: var(--fm-timeline-h, 204px); }
 
 .gp-header {
   display: flex;
@@ -170,6 +175,16 @@ $muted:   rgba(255, 255, 255, 0.45);
     color: lighten($accent, 20%);
     font-weight: 600;
   }
+}
+
+// Segmented control (Placement, Eraser): joined square buttons, the chosen one in the active look.
+.gp-seg {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+
+  .gp-op-btn { flex: 1; border-radius: 0; }
+  .gp-op-btn + .gp-op-btn { margin-left: -1px; }
 }
 
 .gp-op-secondary {
