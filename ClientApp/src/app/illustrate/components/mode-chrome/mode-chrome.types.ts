@@ -91,7 +91,7 @@ export const MODE_CHROME_VARS = {
   modebarH: '--fm-modebar-h',
   /** Tool strip width (70 px: the rail's slot). */
   stripW: '--fm-modestrip-w',
-  /** Right properties panel width while open (284 px = 280 + 4 px border), 0px while collapsed. */
+  /** Right properties panel width while open (280 px, its 4 px border included), 0px while collapsed. */
   propsW: '--fm-modeprops-w',
 } as const;
 

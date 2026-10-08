@@ -6,7 +6,7 @@ import { releaseRootVar, setRootVar } from '../root-css-vars';
 /** localStorage key: '1' = the mode properties panel is collapsed (docked layout; the drawer keeps a session state). */
 export const MODE_PROPS_COLLAPSED_KEY = 'fm.modeProps.collapsed';
 /** Panel width incl. its 4 px left border (the editor's right column: 280 + 4). */
-export const MODE_PROPS_WIDTH_PX = 284;
+export const MODE_PROPS_WIDTH_PX = 280;
 
 /**
  * Right properties panel host for a mode (UI review 2026-10-07 §4 item 4): settings only, no verbs. Sits in the
@@ -16,7 +16,7 @@ export const MODE_PROPS_WIDTH_PX = 284;
  * Collapsible with the handle on its left edge. Docked (desktop, tablet landscape): the state is remembered in
  * localStorage (fm.modeProps.collapsed). Touch + narrow (SidePanelService.drawerMode, tablet portrait / phone): it is an
  * overlay drawer like the editor's right column — open only when the canvas beside it stays roomy, session state.
- * Publishes --fm-modeprops-w (284px open, 0px collapsed) so the op pill / hint line keep clear of it.
+ * Publishes --fm-modeprops-w (280px open, 0px collapsed) so the op pill / hint line keep clear of it.
  *
  * Content is projected; style it with the shared classes in styles/_mode-chrome.scss (.mode-props-section …).
  */

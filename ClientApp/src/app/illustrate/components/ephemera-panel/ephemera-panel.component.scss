@@ -25,7 +25,7 @@ $muted:   rgba(255, 255, 255, 0.5);
 
 // Beside the right column (Layers stays visible) when there is room for both and the canvas.
 @media (min-width: 900px) {
-  .ep-panel.ep-beside { right: 284px; }   // 280 column + its 4 px border
+  .ep-panel.ep-beside { right: 280px; }   // the 280 px column (border included)
 }
 
 .ep-header {

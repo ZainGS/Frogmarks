@@ -7,6 +7,10 @@
  *  - CONTEXT MENU (§2b): right-click (desktop) and long-press (touch, ~550 ms without moving) open the canvas menu.
  *    A long-press takes back the stroke it began (the engine's cancelRasterStroke, when the dist has it), and the
  *    click after the release is swallowed so it doesn't close the menu it just opened.
+ *    PEN (2026-10-07): a pen hold NEVER opens it — tiny precise scribbles stay inside the slop for the whole hold, and
+ *    the OS press-and-hold (Windows Ink / Android) sends a contextmenu for the pen; both are ignored. A pen's barrel
+ *    button (an explicit button-2 press) still right-clicks like a mouse. A FINGER on a drawing tool: any movement
+ *    after the press (not just past the slop) cancels the long-press.
  * Listeners run outside the Angular zone; the host re-enters the zone in its callbacks.
  */
 export interface CanvasPointerExtrasHost {
@@ -22,6 +26,14 @@ export interface CanvasPointerExtrasHost {
   armedChanged(armed: boolean): void;
   /** A long-press opened the menu: take back the stroke / mark the finger's press made. */
   cancelPress(): void;
+  /** A drawing tool is active (brush, eraser, fill, shapes, text …): a finger's movement at all cancels the long-press. */
+  drawingToolActive(): boolean;
+}
+
+/** The editor tools that draw / place on a press (everything but the cursor / hand, the pixel-selection tools and the
+ *  raster move tool). */
+export function isCanvasDrawingTool(tool: string): boolean {
+  return !!tool && !tool.startsWith('select:') && tool !== 'raster:move';
 }
 
 export class CanvasPointerExtras {
@@ -35,6 +47,9 @@ export class CanvasPointerExtras {
   private _lp: { id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private _swallowClickUntil = 0;
   private _lastTouchAt = -Infinity;
+  /** Pens down now, and when a pen last pressed / lifted (its OS press-and-hold contextmenu can land after the lift). */
+  private readonly _pensDown = new Set<number>();
+  private _lastPenAt = -Infinity;
   private _right: { x: number; y: number; allowed: boolean } | null = null;
 
   constructor(private readonly host: CanvasPointerExtrasHost, private readonly now: () => number = () => performance.now()) {}
@@ -86,6 +101,7 @@ export class CanvasPointerExtras {
 
   private readonly _onDown = (e: PointerEvent): void => {
     if (e.pointerType === 'touch') this._lastTouchAt = this.now();
+    if (e.pointerType === 'pen') { this._pensDown.add(e.pointerId); this._lastPenAt = this.now(); }
     // A second finger: a pinch, never a long-press
     if (this._lp && e.pointerId !== this._lp.id) { this._cancelLongPress(); return; }
     if (!this._onCanvas(e)) return;
@@ -123,14 +139,17 @@ export class CanvasPointerExtras {
 
   private readonly _onMove = (e: PointerEvent): void => {
     const lp = this._lp;
-    if (lp && e.pointerId === lp.id && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > CanvasPointerExtras.LONG_PRESS_SLOP) {
-      this._cancelLongPress();
+    if (lp && e.pointerId === lp.id) {
+      const d = Math.hypot(e.clientX - lp.x, e.clientY - lp.y);
+      // Past the slop always; with a drawing tool, ANY movement (a small stroke must never turn into the menu)
+      if (d > CanvasPointerExtras.LONG_PRESS_SLOP || (d > 0 && this.host.drawingToolActive())) this._cancelLongPress();
     }
     const r = this._right;
     if (r && Math.hypot(e.clientX - r.x, e.clientY - r.y) > CanvasPointerExtras.LONG_PRESS_SLOP) r.allowed = false;   // a right-drag
   };
 
   private readonly _onEnd = (e: PointerEvent): void => {
+    if (e.pointerType === 'pen') { this._pensDown.delete(e.pointerId); this._lastPenAt = this.now(); }
     if (this._lp && e.pointerId === this._lp.id) this._cancelLongPress();
   };
 
@@ -152,6 +171,10 @@ export class CanvasPointerExtras {
     if (fromTouch) return;
     const r = this._right;
     this._right = null;
+    // A pen's press-and-hold (the OS turns it into a contextmenu): never the menu. An explicit right press (the mouse,
+    // or a pen's barrel button) recorded r, so it still opens.
+    const fromPen = (e as PointerEvent).pointerType === 'pen' || this._pensDown.size > 0 || this.now() - this._lastPenAt < 1000;
+    if (!r && fromPen) return;
     if (r ? !r.allowed : !this.host.menuAllowed()) return;
     this.host.openMenu(e.clientX, e.clientY);
   };

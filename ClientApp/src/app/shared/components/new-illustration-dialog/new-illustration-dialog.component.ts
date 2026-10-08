@@ -30,9 +30,13 @@ export class NewIllustrationDialogComponent {
   docW = 1080;
   docH = 1080;
   aspectLocked = true;
-  bounded = true;
+  /** Illustrations are always bounded (2026-10-07): the Infinite option and the Canvas row were removed. */
+  readonly bounded = true;
   unit = 'px';
   syncMode = 2; // 0=CloudSync, 1=NoCloud, 2=LocalOnly
+  /** Local-only for now (2026-10-08); keep for when cloud returns. false hides the Storage section (Local only /
+   *  No-cloud / Cloud) and every new / imported illustration is Local only (syncMode 2). */
+  readonly showStorageOptions = false;
 
   private _lockedRatio = this.docW / this.docH;
 
@@ -152,11 +156,7 @@ export class NewIllustrationDialogComponent {
       this.dialogRef.close({ name: this.importName, syncMode: this.syncMode });
       return;
     }
-    if (!this.bounded) {
-      this.dialogRef.close({ name: 'Untitled Illustration', docW: null, docH: null, bounded: false, syncMode: this.syncMode });
-    } else {
-      this.dialogRef.close({ name: 'Untitled Illustration', docW: this.docW, docH: this.docH, bounded: true, syncMode: this.syncMode });
-    }
+    this.dialogRef.close({ name: 'Untitled Illustration', docW: this.docW, docH: this.docH, bounded: true, syncMode: this.syncMode });
   }
 
   cancel(): void {

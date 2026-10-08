@@ -50,7 +50,7 @@ import { ProjectFileService } from '../../services/project-file.service';
 import { ditherReveal } from '../../utils/dither-reveal';
 import { rasterLayerSignature } from '../../utils/raster-layer-signature';
 import { vectorLayerToolSwitch } from '../../utils/vector-layer-tools';
-import { CanvasPointerExtras } from '../../utils/canvas-pointer-extras';
+import { CanvasPointerExtras, isCanvasDrawingTool } from '../../utils/canvas-pointer-extras';
 import { sampleCanvasHex, type EyedropperEngine } from '../../utils/canvas-eyedropper';
 import { canvasMenuItems, clampMenuPosition, runCanvasMenuItem, type CanvasMenuId, type CanvasMenuItem } from './canvas-context-menu';
 import { liveTextPillTop, vectorToolHint } from './drawing-tool-ui';
@@ -420,6 +420,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     sample: (x, y) => { void this._sampleCanvasColor(x, y); },
     armedChanged: (on) => this.ngZone.run(() => { this.eyedropperArmed = on; }),
     cancelPress: () => { (this.shapeManager as unknown as { cancelRasterStroke?(): boolean }).cancelRasterStroke?.(); },
+    drawingToolActive: () => isCanvasDrawingTool(this.controlPanelActiveTool),
   });
   private async _sampleCanvasColor(clientX: number, clientY: number): Promise<void> {
     const hex = await sampleCanvasHex(this.shapeManager as unknown as EyedropperEngine, this.canvas ?? null, clientX, clientY);

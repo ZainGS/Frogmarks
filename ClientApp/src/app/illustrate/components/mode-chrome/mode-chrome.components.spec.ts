@@ -349,7 +349,7 @@ describe('mode chrome', () => {
     it('docked: open by default, collapse is remembered, publishes its width', () => {
       const { fixture, el, cmp } = create(false);
       expect(cmp.collapsed).toBeFalse();
-      expect(rootVarValue(MODE_CHROME_VARS.propsW)).toBe('284px');
+      expect(rootVarValue(MODE_CHROME_VARS.propsW)).toBe('280px');
       el.querySelector<HTMLButtonElement>('.mode-props-handle')!.click();
       fixture.detectChanges();
       expect(cmp.collapsed).toBeTrue();

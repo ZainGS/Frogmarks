@@ -1,8 +1,8 @@
-import { CanvasPointerExtras, type CanvasPointerExtrasHost } from './canvas-pointer-extras';
+import { CanvasPointerExtras, isCanvasDrawingTool, type CanvasPointerExtrasHost } from './canvas-pointer-extras';
 
 /** The extras listen on a "window" (here a container div: capture phase, like the real window) and act on presses on
  *  the canvas inside it. */
-function setup(o: { menuAllowed?: boolean; altAllowed?: boolean } = {}) {
+function setup(o: { menuAllowed?: boolean; altAllowed?: boolean; drawingTool?: boolean } = {}) {
   const root = document.createElement('div');
   const canvas = document.createElement('canvas');
   const other = document.createElement('div');
@@ -10,10 +10,11 @@ function setup(o: { menuAllowed?: boolean; altAllowed?: boolean } = {}) {
   document.body.appendChild(root);
   let t = 1000;
   const host: jasmine.SpyObj<CanvasPointerExtrasHost> = jasmine.createSpyObj('host',
-    ['canvas', 'menuAllowed', 'openMenu', 'altSampleAllowed', 'sample', 'armedChanged', 'cancelPress']);
+    ['canvas', 'menuAllowed', 'openMenu', 'altSampleAllowed', 'sample', 'armedChanged', 'cancelPress', 'drawingToolActive']);
   host.canvas.and.returnValue(canvas);
   host.menuAllowed.and.returnValue(o.menuAllowed ?? true);
   host.altSampleAllowed.and.returnValue(o.altAllowed ?? true);
+  host.drawingToolActive.and.returnValue(o.drawingTool ?? false);
   const extras = new CanvasPointerExtras(host, () => t);
   extras.attach(root as unknown as Window);
   // What the engine's own canvas listener sees
@@ -22,7 +23,7 @@ function setup(o: { menuAllowed?: boolean; altAllowed?: boolean } = {}) {
   const engineClick = jasmine.createSpy('engineClick');
   canvas.addEventListener('click', engineClick);
   const fire = (el: Element, type: string, init: PointerEventInit & { pointerType?: string } = {}) => {
-    const e = type === 'click' || type === 'contextmenu'
+    const e = (type === 'click' || type === 'contextmenu') && !init.pointerType
       ? new MouseEvent(type, { bubbles: true, cancelable: true, ...init })
       : new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse', isPrimary: true, ...init });
     el.dispatchEvent(e);
@@ -164,5 +165,62 @@ describe('CanvasPointerExtras', () => {
       expect(s.host.cancelPress).not.toHaveBeenCalled();
       s.done();
     });
+
+    it('a finger on a drawing tool: any movement after the press cancels the long-press (inside the slop too)', () => {
+      const s = setup({ drawingTool: true });
+      s.fire(s.canvas, 'pointerdown', { pointerType: 'touch', clientX: 30, clientY: 40 });
+      s.fire(s.canvas, 'pointermove', { pointerType: 'touch', clientX: 31, clientY: 40 });
+      s.advance(1000);
+      expect(s.host.openMenu).not.toHaveBeenCalled();
+      s.fire(s.canvas, 'pointerup', { pointerType: 'touch' });
+      // a move event without a position change is not movement
+      s.advance(1000);
+      s.fire(s.canvas, 'pointerdown', { pointerType: 'touch', clientX: 30, clientY: 40 });
+      s.fire(s.canvas, 'pointermove', { pointerType: 'touch', clientX: 30, clientY: 40 });
+      s.advance(CanvasPointerExtras.LONG_PRESS_MS + 10);
+      expect(s.host.openMenu).toHaveBeenCalledOnceWith(30, 40);
+      s.done();
+      // no drawing tool (cursor / selection): jitter inside the slop still opens it
+      const sel = setup({ drawingTool: false });
+      sel.fire(sel.canvas, 'pointerdown', { pointerType: 'touch', clientX: 30, clientY: 40 });
+      sel.fire(sel.canvas, 'pointermove', { pointerType: 'touch', clientX: 33, clientY: 40 });
+      sel.advance(CanvasPointerExtras.LONG_PRESS_MS + 10);
+      expect(sel.host.openMenu).toHaveBeenCalledOnceWith(30, 40);
+      sel.done();
+    });
+
+    it('a pen hold never opens it — not by the timer, not by the OS press-and-hold contextmenu (during or after)', () => {
+      const s = setup({ drawingTool: true });
+      s.fire(s.canvas, 'pointerdown', { pointerType: 'pen', button: 0, clientX: 30, clientY: 40 });
+      s.advance(2000);
+      expect(s.host.openMenu).not.toHaveBeenCalled();
+      const during = s.fire(s.canvas, 'contextmenu', { pointerType: 'pen', clientX: 30, clientY: 40 });
+      expect(during.defaultPrevented).toBeTrue();   // no browser menu either
+      s.fire(s.canvas, 'pointerup', { pointerType: 'pen' });
+      s.advance(200);
+      s.fire(s.canvas, 'contextmenu', { clientX: 30, clientY: 40 });   // Windows sends it on the lift, as a mouse event
+      expect(s.host.openMenu).not.toHaveBeenCalled();
+      expect(s.host.cancelPress).not.toHaveBeenCalled();
+      // a mouse right-click right after still opens it
+      s.fire(s.canvas, 'pointerdown', { pointerType: 'mouse', button: 2, clientX: 5, clientY: 6 });
+      s.fire(s.canvas, 'contextmenu', { clientX: 5, clientY: 6 });
+      expect(s.host.openMenu).toHaveBeenCalledOnceWith(5, 6);
+      s.done();
+    });
+
+    it('a pen barrel-button press (an explicit right press) still right-clicks', () => {
+      const s = setup();
+      s.fire(s.canvas, 'pointerdown', { pointerType: 'pen', button: 2, clientX: 10, clientY: 20 });
+      s.fire(s.canvas, 'contextmenu', { pointerType: 'pen', clientX: 10, clientY: 20 });
+      expect(s.host.openMenu).toHaveBeenCalledOnceWith(10, 20);
+      s.done();
+    });
+  });
+
+  it('isCanvasDrawingTool: drawing / placing tools yes; cursor, hand, pixel selection and raster move no', () => {
+    for (const t of ['raster:brush', 'raster:eraser', 'drawing:pen', 'fill', 'shape:square', 'text', 'live-text', 'stamp', 'arrow']) {
+      expect(isCanvasDrawingTool(t)).withContext(t).toBeTrue();
+    }
+    for (const t of ['', 'select:rect', 'select:lasso', 'raster:move']) expect(isCanvasDrawingTool(t)).withContext(t).toBeFalse();
   });
 });

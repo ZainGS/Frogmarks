@@ -1,6 +1,6 @@
 @import '../../../styles/mode-chrome-mixins';
 
-// The editor's right-column slot (illustration.component.scss .right-column: 280 px + a 4 px green border), below the
+// The editor's right-column slot (illustration.component.scss .right-column: 280 px including its 4 px green border), below the
 // top bar AND the mode header bar, down to the screen bottom or (class="above-timeline") the animation timeline.
 :host {
   --mpp-top: calc(var(--fm-topbar-h, 40px) + var(--fm-modebar-h, 40px));
@@ -15,7 +15,7 @@
   right: 0;
   bottom: var(--mpp-bottom);
   width: 280px;
-  box-sizing: content-box;
+  box-sizing: border-box;   // 280 px in all, like .right-column
   z-index: 999;
   display: flex;
   flex-direction: column;
@@ -87,7 +87,7 @@
   touch-action: manipulation;
   transition: right 0.18s ease;
 
-  &.open { right: 284px; }
+  &.open { right: 280px; }
   &:hover { background: var(--rc-surface-hi, #2e2e2e); }
   &:active { background: var(--rc-surface-hi, #2e2e2e); }
 }

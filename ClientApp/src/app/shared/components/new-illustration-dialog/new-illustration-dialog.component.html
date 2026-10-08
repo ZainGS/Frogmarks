@@ -12,17 +12,9 @@
       <span class="nid-import-name">{{ importName }}</span>
     </div>
 
-    <!-- Canvas mode (hidden in import mode — size comes from the file) -->
+    <!-- Canvas size (hidden in import mode — size comes from the file). Illustrations are always bounded
+         (2026-10-07): the Canvas row (Bounded / Infinite) is gone. -->
     <ng-container *ngIf="!importMode">
-    <div class="nid-row">
-      <span class="nid-label">Canvas</span>
-      <div class="nid-toggle">
-        <button [class.on]="bounded"  (click)="bounded = true">Bounded</button>
-        <button [class.on]="!bounded" (click)="bounded = false">Infinite</button>
-      </div>
-    </div>
-
-    <ng-container *ngIf="bounded">
 
       <!-- Preset -->
       <div class="nid-row">
@@ -69,16 +61,10 @@
         <div class="nid-preview-box" [ngStyle]="getPreviewStyle()"></div>
       </div>
 
-    </ng-container>
-
-    <div class="nid-infinite-hint" *ngIf="!bounded">
-      Infinite canvas — no fixed boundary. Pan and zoom freely.
-    </div>
-
     </ng-container><!-- end !importMode -->
 
-    <!-- Sync mode -->
-    <div class="nid-storage-section">
+    <!-- Sync mode — hidden while illustrations are local-only (showStorageOptions) -->
+    <div class="nid-storage-section" *ngIf="showStorageOptions">
       <span class="nid-label">Storage</span>
       <div class="nid-sync-modes">
 

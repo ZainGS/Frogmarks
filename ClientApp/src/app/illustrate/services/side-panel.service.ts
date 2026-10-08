@@ -23,7 +23,7 @@ export class SidePanelService {
    *  2026-10-07 #10): a handle on the right edge opens / closes it, so the artboard can have the whole width. */
   static readonly DRAWER_QUERY = '(pointer: coarse) and (max-width: 1023.98px)';
   /** The drawer starts closed when, with it open, less than this many CSS px of canvas would be left beside it
-   *  (viewport − 70 px rail − 284 px column). */
+   *  (viewport − 70 px rail − 280 px column). */
   static readonly DRAWER_MIN_CANVAS_PX = 560;
 
   private _drawerMode = false;
@@ -50,7 +50,7 @@ export class SidePanelService {
   updateDrawerMode(isDrawer: boolean, viewportWidth: number): void {
     if (isDrawer === this._drawerMode) return;
     this._drawerMode = isDrawer;
-    if (isDrawer) this._drawerOpen = this._visible && viewportWidth - 70 - 284 >= SidePanelService.DRAWER_MIN_CANVAS_PX;
+    if (isDrawer) this._drawerOpen = this._visible && viewportWidth - 70 - 280 >= SidePanelService.DRAWER_MIN_CANVAS_PX;
   }
 
   /** View › Zoom Controls: the floating zoom box (remembered per machine). Pinch / wheel zoom keep working. */

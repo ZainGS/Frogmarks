@@ -530,9 +530,8 @@ canvas {
     flex-direction: column;
     overflow: hidden;
     border-left: 4px solid #3b6151;
-    /* 280 px of content + the 4 px border (284 in all, what the drawer handle assumes). Bootstrap's border-box made the
-       content 276 px, so the 280 px panels inside overflowed by 4 px and lost their right edge (UI review p01). */
-    box-sizing: content-box;
+    /* 280 px INCLUDING the borders (Bootstrap's border-box). A content-box experiment (UI review p01) made it 284-288 px,
+       pushed the panel 4-8 px left and left the zoom box touching it — reverted 2026-10-08 (the user's original look). */
 
     &.no-timeline {
         bottom: 0;
@@ -2721,7 +2720,7 @@ svg {
 }
 
 /* Touch + narrow (SidePanelService.drawerMode): the handle that opens / closes the right column drawer. It sits on the
-   screen edge when closed and on the drawer's left edge (284 px = 280 column + 4 border) when open. */
+   screen edge when closed and on the drawer's left edge (280 px: the column, border included) when open. */
 .side-drawer-handle {
     position: absolute;
     top: calc(50% - 116px);   /* the middle of the column (top 40, bottom 200) */
@@ -2743,7 +2742,7 @@ svg {
     cursor: pointer;
     touch-action: manipulation;
 
-    &.open { right: 284px; }
+    &.open { right: 280px; }
     &.no-timeline { top: calc(50% - 16px); }
     &:active { background: var(--rc-surface-hi, #2e2e2e); }
 }
@@ -2790,9 +2789,9 @@ svg {
     .persistent-color-picker { display: none !important; }
 
     .toolbar-mode-label { bottom: 0; }
-    /* The zoom box keeps beside the props panel (open: 284 + 6 = where it sits beside the right column; collapsed /
+    /* The zoom box keeps beside the props panel (open: 280 + 10 = the 290 px it has beside the right column; collapsed /
        the portrait drawer shut: the screen edge — it sat over the op pill there) */
-    .zoom-control { right: calc(var(--fm-modeprops-w, 0px) + 6px); }
+    .zoom-control { right: calc(var(--fm-modeprops-w, 0px) + 10px); }
     &:has(.animation-timeline-wrapper) {
         .toolbar-mode-label { bottom: var(--fm-timeline-h, 204px); }
         .animation-timeline-wrapper { left: 70px; }
