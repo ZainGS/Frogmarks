@@ -287,7 +287,8 @@ export class PackageEditorComponent implements OnInit, OnDestroy {
   private async _leaveCurrentPackage(): Promise<void> {
     if (!this._pkgId) return;
     if (this._saveDebounce) { clearTimeout(this._saveDebounce); this._saveDebounce = null; await this._saveState(); }
-    if (this.autoSaveService.docId === this._docId) await this.autoSaveService.saveNow().catch(() => false);
+    // Incremental: only what changed is read back + written (perf audit 2026-10-09 B5)
+    if (this.autoSaveService.docId === this._docId) await this.autoSaveService.saveNow({ incremental: true }).catch(() => false);
     this._strokeSub?.unsubscribe?.();
     this._strokeSub = undefined;
     if (this._sm?.packaging) this._sm.packaging.exitEditor(this._pkgId);

@@ -1988,7 +1988,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._rasterStrokeStartSub?.unsubscribe(); this._rasterStrokeCancelSub?.unsubscribe();
     this._rasterStrokeStartSub = this._rasterStrokeCancelSub = null;
     this.resetSceneState();
-    this.persist.lastSavedThumbnailJSON = '';
+    this.persist._thumbnailChangeCount = -1;
     this.persist.lastThumbnailTime = 0;
 
     // WebGPU bootstrap — run outside Angular's zone so Salsa's canvas.addEventListener
@@ -2819,6 +2819,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     try {
       const ok = await this.shapeManager?.rasterUndo();
       if (ok) this._noteRasterHistoryEdit('__undo_');   // the cloud copy of that layer is now stale (mobile-parity 7.3c)
+      if (ok) this.fx.syncLayerDitherEnabledFromEngine();   // undoing a Bake Dither turns that layer's dither back on
       if (!ok) this.notifyService.error('Raster undo returned false');
     } catch (e) {
       this.notifyService.error('Raster undo failed');
@@ -2830,6 +2831,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     try {
       const ok = await this.shapeManager?.rasterRedo();
       if (ok) this._noteRasterHistoryEdit('__redo_');
+      if (ok) this.fx.syncLayerDitherEnabledFromEngine();   // redoing a Bake Dither turns it off again
       if (!ok) this.notifyService.error('Raster redo returned false');
     } catch (e) {
       this.notifyService.error('Raster redo failed');
@@ -3134,7 +3136,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   /** Ctrl+S / Save: flush the engine's local store AND the document metadata (cloud / browser-only) — it used to
    *  flush only the engine's OPFS store. */
   async saveNow(): Promise<void> {
-    await this.autoSaveService.saveNow();
+    // Incremental (perf audit 2026-10-09 B5): only what changed since the last save is read back + written
+    await this.autoSaveService.saveNow({ incremental: true });
     await this.persist.saveIllustrationV2();
   }
 

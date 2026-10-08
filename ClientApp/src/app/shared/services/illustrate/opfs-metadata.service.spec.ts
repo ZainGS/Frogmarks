@@ -74,4 +74,14 @@ describe('OpfsMetadataService (audit Phase 2.4)', () => {
     expect(stored.layers[0].pixelDataUrl).toBeNull();
     expect(stored.layers[0].cels[0].pixelDataUrl).toBeNull();
   });
+
+  it('stores the scene graph the caller gives (the editor decides — perf audit B6); the rest is kept', async () => {
+    use(fakeDir());
+    const scene = '{"root":{"children":[{"type":"Rectangle"}]}}';
+    await svc.write('doc', { ...state(1), sceneGraph: scene, bgColor: '#123' });
+    const stored = JSON.parse(fake.files.get('ill-doc-meta.json')!);
+    expect(stored.sceneGraph).toBe(scene);
+    expect(stored.bgColor).toBe('#123');
+    expect(stored.layers[0].layerId).toBe('l1');
+  });
 });

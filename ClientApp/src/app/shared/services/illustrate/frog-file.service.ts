@@ -261,12 +261,19 @@ export class FrogFileService {
   //  SHARED — Build the state payload (used by export AND v2 cloud save)
   // ════════════════════════════════════════════════════════════
 
-  async buildStatePayload(name?: string): Promise<{
+  /**
+   * @param opts.sceneGraph which scene graph JSON goes in: 'full' (default — the .frog export) = getSceneGraphJSON;
+   *   'none' = no scene graph at all (`state.sceneGraph` null, `sceneGraph` '') — the editor's saves: Salsa's own
+   *   document stores the scene, and building it (skinned geometry, texture data URLs) cost every save (perf audit
+   *   2026-10-09 B6).
+   */
+  async buildStatePayload(name?: string, opts: { sceneGraph?: 'full' | 'none' } = {}): Promise<{
     state: IllustrationStateDto;
     sceneGraph: string;
   }> {
     const sm = this.sm;
-    const sceneGraph: string = sm?.getSceneGraphJSON() ?? '{}';
+    const withScene = opts.sceneGraph !== 'none';
+    const sceneGraph: string = withScene ? sm?.getSceneGraphJSON() ?? '{}' : '';
 
     const engineLayers: any[] = sm?.getRasterLayers() ?? [];
     const timelineLayers = await firstValueFrom(this.animationService.timelineLayers$);
@@ -341,7 +348,7 @@ export class FrogFileService {
 
     const state: IllustrationStateDto = {
       version: 2,
-      sceneGraph,
+      sceneGraph: withScene ? sceneGraph : null,
       animation,
       layers,
       savedAt: Date.now()

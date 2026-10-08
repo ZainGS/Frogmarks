@@ -22,7 +22,8 @@ export class OpfsMetadataService {
   private _lastSeq = new Map<string, number>();
 
   /**
-   * Write metadata to OPFS. Strip transient SAS pixel URLs — only metadata is cached.
+   * Write metadata to OPFS. Strip transient SAS pixel URLs — only metadata is cached. (The scene graph is the caller's
+   * choice: the editor leaves it out when the engine saves its own document on every change — perf audit B6.)
    * @param seq  Optional snapshot sequence, taken BEFORE the state was built; a write older than one already written
    *             for this document is skipped (counts as success).
    * @returns true when the file was written (or skipped as stale), false on failure.

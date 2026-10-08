@@ -269,7 +269,7 @@ export class DocumentActionsService implements OnDestroy {
       } else {
         await firstValueFrom(this.illustrationService.uploadThumbnail(this.persist.illustrationUid, blob, true));
       }
-      this.persist.lastSavedThumbnailJSON = this.shapeManager.getSceneGraphJSON();
+      this.persist.markThumbnailCurrent();
       this.notifyService.success('Thumbnail updated to the current view.');
     } catch (e) {
       console.error(e);

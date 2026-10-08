@@ -25,9 +25,10 @@ import { CanvasAppearanceService } from './canvas-appearance.service';
 import { ArtboardService } from './artboard.service';
 import { EditorStateService } from './editor-state.service';
 import { startBlankEngineDocument } from '../utils/blank-engine-document';
+import { celImagesFromImportEntries, restoreAnimatedLayerCels } from '../utils/restore-animation-cels';
 import { SaveStatus, saveStatusOf } from './save-status';
 import { takePendingProjectImport, type PendingProjectImport } from 'app/shared/services/illustrate/pending-project-import';
-import { cloudSceneGraphJSON, toVectorSceneGraphJSON } from '../utils/cloud-scene-graph';
+import { cloudSceneGraphJSON, documentSceneGraphJSON, toVectorSceneGraphJSON } from '../utils/cloud-scene-graph';
 import { celExporter, CloudUploadVersions, contentVersionsDiffer, hasContentVersionApi, readContentVersions, type RasterContentVersions } from '../utils/cloud-pixel-versions';
 
 /** How often a cloud document checks the engine's raster content versions for edits no other event announced
@@ -82,7 +83,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     this.saveBlockedReason = null;
     this.saveBlockedAreas = [];
     this.saveBlockedByNewerVersion = false;
-    this.lastSavedThumbnailJSON = '';
+    this._thumbnailChangeCount = -1;
     this.lastThumbnailTime = 0;
     this._rasterEditedSinceThumbnail = false;
     this.autoSaveState = 'idle';
@@ -108,6 +109,7 @@ export class IllustrationPersistenceService implements OnDestroy {
   private _autoSaveStateSub: { unsubscribe(): void } | null = null;
 
   ngOnDestroy(): void {
+    this._changeCountSub.unsubscribe();
     this._stopPixelPoll();
     this._autoSaveStateSub?.unsubscribe();
     this.autoSaveSubscription?.unsubscribe();
@@ -148,6 +150,8 @@ export class IllustrationPersistenceService implements OnDestroy {
    * Save the CURRENT document now: wait for a running save, write a change still waiting in the 2 s autosave
    * debounce, and let Salsa save its pixel layers. Call before switching documents or leaving the editor — a pending
    * change used to be dropped (audit Phase 2.3). Never throws.
+   * Salsa's save is the INCREMENTAL one (perf audit 2026-10-09 B5): only layers / cels whose content changed since the
+   * last save / load are read back + encoded — every change is still written (an older dist does a full save).
    */
   async flushPendingSave(): Promise<void> {
     if (!this.illustration || this.host.isLoading) return;
@@ -159,7 +163,7 @@ export class IllustrationPersistenceService implements OnDestroy {
         await this.saveIllustrationV2();
       }
       if (this._saveInFlight) await this._saveInFlight.catch(() => {});
-      if (!this._isSaveBlocked()) await this.autoSaveService.saveNow();
+      if (!this._isSaveBlocked()) await this.autoSaveService.saveNow({ incremental: true });
     } catch (e) {
       console.warn('[Save] flush before leaving the document failed', e);
     }
@@ -225,6 +229,8 @@ export class IllustrationPersistenceService implements OnDestroy {
   }
 
   sceneChanged$ = new Subject<string>();
+  /** Counts every change for the thumbnail check (lives as long as the service — not a per-document subscription). */
+  private readonly _changeCountSub = this.sceneChanged$.subscribe(() => { this._sceneChangeCount++; });
 
   _metaFlush$ = new Subject<void>();
 
@@ -282,9 +288,22 @@ export class IllustrationPersistenceService implements OnDestroy {
 
   /** The full metadata payload every save path writes: engine scene payload + dither (global / per-layer), document
    *  size, canvas colours + paper grain, the 3D settings snapshot (incl. host-owned camera cuts / can designs) and
-   *  groups + frame-link buckets. (The local-only and quick-flush paths used to write a subset and lost the rest.) */
+   *  groups + frame-link buckets. (The local-only and quick-flush paths used to write a subset and lost the rest.)
+   *  WITHOUT the scene graph (`sceneGraph: null`, perf audit 2026-10-09 B6) when the engine saves its own document
+   *  soon after every change (_engineSavesOnChange): Salsa's document (scene.json / scene3d.json) then holds it; the
+   *  metadata copy only doubled every save (skinned geometry, texture data URLs included) and no load reads it (an old
+   *  metadata file that has one is still honoured, see _loadLocalOnly). The cloud's 2D scene graph is then built with
+   *  the server payload (_serverStatePayload). An older Salsa dist saves its document only on the interval / stroke
+   *  pauses / tab hide: there the full scene graph stays in, exactly as before (a quick refresh's safety net). */
+  /** The engine schedules its own (incremental) document save soon after every change (Salsa sm.notifyDocumentChanged,
+   *  2026-10-09) — the capability the scene-less metadata relies on. */
+  _engineSavesOnChange(): boolean {
+    return typeof (this.shapeManager as unknown as { notifyDocumentChanged?: unknown } | null)?.notifyDocumentChanged === 'function';
+  }
+
   async _buildFullState(): Promise<IllustrationStateDto> {
-    const { state } = await this.frogFileService.buildStatePayload(this.host.doc.illustrationTitle);
+    const { state } = await this.frogFileService.buildStatePayload(this.host.doc.illustrationTitle,
+      { sceneGraph: this._engineSavesOnChange() ? 'none' : 'full' });
 
     // Attach dither config (held locally on the component)
     state.ditherConfig = { ...this.fx.ditherConfig };
@@ -448,8 +467,11 @@ export class IllustrationPersistenceService implements OnDestroy {
       // Cloud-sync only: upload blobs to Azure
 
       // Always keep the full mesh ID list in state so the load path knows which blobs exist
-      const allNodes: any[] = sm3d.getScene3DNodeStates() ?? [];
-      const allMeshIds = allNodes.map((n: any) => n.id ?? n.nodeId).filter(Boolean) as string[];
+      // (sm.getScene3DNodeIds: the ids without serializing every mesh — newer Salsa dist; else the node states)
+      const idApi = sm3d as unknown as { getScene3DNodeIds?: () => string[] };
+      const allMeshIds = (typeof idApi.getScene3DNodeIds === 'function'
+        ? idApi.getScene3DNodeIds() ?? []
+        : ((sm3d.getScene3DNodeStates() ?? []) as any[]).map((n: any) => n.id ?? n.nodeId)).filter(Boolean) as string[];
       state.meshIds = allMeshIds.length > 0 ? allMeshIds : undefined;
 
       // Opt 2+3: per-mesh dirty upload using getMeshState3D — avoids serializing the full scene
@@ -771,6 +793,7 @@ export class IllustrationPersistenceService implements OnDestroy {
       if (result?.success) {
         this._afterEngineDocumentLoaded();
         const opfsMeta = await this.opfsMetadataService.read(opfsDocId);
+        // (Metadata written by a Salsa dist with the change-triggered save holds no scene graph — perf audit B6.)
         if (opfsMeta?.sceneGraph) {
           try {
             // ★ 2026-09-29: Salsa's loadDocument above ALREADY restored the scene graph + all 3D from its own
@@ -1006,7 +1029,7 @@ export class IllustrationPersistenceService implements OnDestroy {
     this._applyLayerMeta(state.layers);
 
     // 5. Restore animation state
-    this._restoreAnimation(state);
+    await this._restoreAnimation(state, importPayload);
 
     this.host.refreshRasterLayers();
     console.timeLog('[V2 Load] total', 'raster-layers-restored');
@@ -1146,7 +1169,7 @@ export class IllustrationPersistenceService implements OnDestroy {
   }
 
   /** Timeline settings + animated layers / cels from the server state. */
-  private _restoreAnimation(state: IllustrationStateDto): void {
+  private async _restoreAnimation(state: IllustrationStateDto, importPayload: Array<{ celId?: string; imageData?: string }> = []): Promise<void> {
     if (!state.animation?.enabled) return;
     const anim = state.animation;
     this.host.setAnimationEnabled(true);
@@ -1157,13 +1180,15 @@ export class IllustrationPersistenceService implements OnDestroy {
     if (anim.onionSkin) {
       this.animationService.setOnionSkin(anim.onionSkin as OnionSkinConfig);
     }
-    // Restore animated flag per layer + cels
+    // Restore animated flag per layer + cels — each cel with its saved id / hold / type and its OWN pixels (audit A4)
+    const celImages = celImagesFromImportEntries(importPayload);
     for (const layer of state.layers) {
       if (layer.animated) {
         this.animationService.setLayerAnimated(layer.layerId, true);
-        for (const cel of layer.cels) {
-          this.animationService.addCelAtFrame(layer.layerId, cel.frame);
-        }
+        await restoreAnimatedLayerCels(
+          this.shapeManager, (id, frame) => this.animationService.addCelAtFrame(id, frame),
+          layer.layerId, layer.cels ?? [], anim.frameCount, celImages,
+        );
       }
     }
     this.animationService.refreshTimeline();
@@ -1465,7 +1490,18 @@ export class IllustrationPersistenceService implements OnDestroy {
 
   lastThumbnailTime = 0;
 
-  lastSavedThumbnailJSON = '';
+  /** Change counter (perf audit 2026-10-09 B6a): every sceneChanged$ tick (vector / 3D / settings / raster edits) bumps
+   *  it; the thumbnail is captured when it moved since the last capture. The check used to build the whole scene
+   *  JSON (skinned geometry, texture data URLs) every 5 s just to compare strings — and kept that string. */
+  private _sceneChangeCount = 0;
+  /** _sceneChangeCount as of the last thumbnail (-1 = none yet this document: the first check captures). */
+  _thumbnailChangeCount = -1;
+
+  /** The current view is the thumbnail now (a custom thumbnail was just set): no capture until the next change. */
+  markThumbnailCurrent(): void {
+    this._thumbnailChangeCount = this._sceneChangeCount;
+    this._rasterEditedSinceThumbnail = false;
+  }
 
   saveThumbnailIfChanged() {
     void this.saveThumbnailIfChangedNow();
@@ -1474,12 +1510,11 @@ export class IllustrationPersistenceService implements OnDestroy {
   /** saveThumbnailIfChanged, awaitable: before leaving a document the capture must finish while it is still on screen
    *  (New Illustration used to start it and navigate at once). */
   async saveThumbnailIfChangedNow(): Promise<void> {
-    const current = this.shapeManager.getSceneGraphJSON();
     const now = Date.now();
-    // The scene-graph JSON carries no pixels, so raster-only edits are tracked separately (they never refreshed it)
-    if (current !== this.lastSavedThumbnailJSON || this._rasterEditedSinceThumbnail) {
+    // Raster edits also set their own flag (noteRasterStroke), whatever ticked sceneChanged$
+    if (this._sceneChangeCount !== this._thumbnailChangeCount || this._rasterEditedSinceThumbnail) {
       this._rasterEditedSinceThumbnail = false;
-      this.lastSavedThumbnailJSON = current;
+      this._thumbnailChangeCount = this._sceneChangeCount;
       this.lastThumbnailTime = now;
       await this.saveThumbnail();
     }
@@ -1516,10 +1551,12 @@ export class IllustrationPersistenceService implements OnDestroy {
   private _cloudWarningShown = false;
 
   /** The state the server gets: the cloud keeps only the vector scene graph (3D lives in the mesh blobs; see
-   *  cloud-scene-graph.ts); a No-Cloud document sends none (its content stays on this device). The local metadata copy
-   *  keeps the full `state`. */
+   *  cloud-scene-graph.ts) — Salsa's 2D export, or on an older dist the document scene JSON (stripped, like Salsa's own
+   *  save) filtered, built only here; a No-Cloud document sends none (its content stays on this device). */
   _serverStatePayload(state: IllustrationStateDto): IllustrationStateDto {
-    return { ...state, sceneGraph: this.syncMode === 0 ? cloudSceneGraphJSON(this.shapeManager, state.sceneGraph) : null };
+    if (this.syncMode !== 0) return { ...state, sceneGraph: null };
+    const sm = this.shapeManager;
+    return { ...state, sceneGraph: cloudSceneGraphJSON(sm, state.sceneGraph ?? (() => documentSceneGraphJSON(sm))) };
   }
 
   /** The server stored the save but not all of it (the scene graph over the storage quota): say so once per document. */
@@ -1613,7 +1650,14 @@ export class IllustrationPersistenceService implements OnDestroy {
     this.host.resetSceneState();
     await this.loadIllustrationV2();
 
-    this._pendingChangeSub = this.sceneChanged$.subscribe(() => { this._pendingChange = true; });
+    // Every change also schedules Salsa's debounced incremental save (~1.5 s): the engine does so for scene-graph
+    // changes itself, this covers the ones it does not hear about (3D / canvas / dither settings …) — Salsa's document
+    // is the only copy of the scene (the OPFS metadata holds none since perf audit B6). No-op on an older dist.
+    this._pendingChangeSub = this.sceneChanged$.subscribe(() => {
+      this._pendingChange = true;
+      const a = this.autoSaveService as Partial<Pick<RasterAutoSaveService, 'notifyDocumentChanged'>>;
+      if (typeof a.notifyDocumentChanged === 'function') a.notifyDocumentChanged();
+    });
     // sceneChanged$ may be ticked from outside the zone (engine callbacks, debounce timers moved out of it — zone audit
     // H7), and then the audit timers run outside too: the saves re-enter, their status / prompts are bound.
     this.autoSaveSubscription = this.sceneChanged$

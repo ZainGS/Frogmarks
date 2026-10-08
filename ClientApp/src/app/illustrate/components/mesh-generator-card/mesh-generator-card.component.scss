@@ -47,4 +47,19 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.mg-note { flex: 1 0 100%; margin-top: 2px; }
+// The bake note: same colours as the Edit Mesh tool labels (.tool-name in mesh-edit-props), centred (user, 2026-10-09)
+.mg-note {
+  flex: 1 0 100%;
+  margin-top: 4px;
+  padding: 3px 6px;
+  font-size: 9px;
+  line-height: 1.35;
+  text-align: center;
+  border-radius: 0;
+  background: #999;
+  color: #ccc;
+}
+:host-context(body.theme-retro-chrome) .mg-note {
+  background: var(--rc-green);
+  color: var(--rc-green-txt);
+}

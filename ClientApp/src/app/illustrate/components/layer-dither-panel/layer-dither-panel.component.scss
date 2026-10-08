@@ -14,3 +14,11 @@
     border-color: #9B59B6;
     box-shadow: 0 0 0 0.2rem rgba(155, 89, 182, 0.25);
 }
+
+// Bake: a full-width row under the dither controls; retro chrome = square corners.
+.dither-bake-btn {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    border-radius: 0;
+}

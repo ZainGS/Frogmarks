@@ -28,6 +28,10 @@ export interface DocumentInfo {
   layerCount: number;
 }
 
+/** ShapeManager.saveDocument with the incremental option (Salsa 2026-10-09; typed here — Frogmarks types Salsa from its
+ *  built dist, and an older dist's saveDocument takes no argument and simply ignores it). */
+type SaveDocumentApi = { saveDocument(opts?: { incremental?: boolean }): Promise<boolean> };
+
 // ── Service ────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -165,11 +169,15 @@ export class RasterAutoSaveService {
 
   // ── Manual save (Ctrl+S) ──────────────────────────────────
 
-  async saveNow(): Promise<boolean> {
+  /** @param opts.incremental write only what changed since the document was last saved / loaded (perf audit 2026-10-09
+   *  B5: leaving a document, Ctrl+S) — Salsa reads back + encodes only the changed layers / cels. An older Salsa dist
+   *  ignores the option and saves everything (as before). Without it: a full save. */
+  async saveNow(opts?: { incremental?: boolean }): Promise<boolean> {
     if (!this._docId) return false;
     this._state$.next('saving');
     try {
-      const success = await this.sm?.saveDocument() ?? false;
+      const sm = this.sm as unknown as SaveDocumentApi | null;
+      const success = await (opts?.incremental ? sm?.saveDocument({ incremental: true }) : sm?.saveDocument()) ?? false;
       if (success) {
         this._state$.next('saved');
         this._lastSaved$.next(Date.now());
@@ -230,6 +238,17 @@ export class RasterAutoSaveService {
     this._strokeTimer = setTimeout(() => {
       if (this._enabled) void this.saveNow();
     }, this._strokeDebounceMs);
+  }
+
+  /** The document changed (not a raster stroke): Salsa schedules its debounced incremental save (sm.notifyDocumentChanged,
+   *  Salsa 2026-10-09 — it also does so on every scene-graph change by itself). Outside the zone like the engine's
+   *  other autosave timers (M7). No-op while no document is bound, or on an older dist. */
+  notifyDocumentChanged(): void {
+    if (!this._enabled) return;
+    const sm = this.sm as unknown as { notifyDocumentChanged?: () => void } | null;
+    const notify = sm?.notifyDocumentChanged;
+    if (typeof notify !== 'function') return;
+    this.ngZone.runOutsideAngular(() => notify.call(sm));
   }
 
   // ── Interval setting ───────────────────────────────────────

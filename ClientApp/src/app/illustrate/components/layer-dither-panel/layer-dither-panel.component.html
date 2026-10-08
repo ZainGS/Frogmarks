@@ -220,4 +220,10 @@
             </div>
         </ng-container>
     </div>
+
+    <!-- Bake: write the dithered look into the layer pixels and turn the layer dither off (one undo step) -->
+    <button class="scene3d-btn scene3d-btn-sm dither-bake-btn"
+            [disabled]="!fx.canBakeLayerDither() || fx.bakingLayerDither"
+            [attr.title]="fx.canBakeLayerDither() ? null : 'Needs the engine update'"
+            (click)="fx.onLayerDitherBake(selectedRasterLayerId)">Bake</button>
 </div>

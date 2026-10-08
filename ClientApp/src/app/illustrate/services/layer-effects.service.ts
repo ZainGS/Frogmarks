@@ -343,6 +343,51 @@ export class LayerEffectsService {
     this.host.markStateDirty();
   }
 
+  /** Bake Dither needs a Salsa build with sm.bakeLayerDither (2026-10-08). */
+  canBakeLayerDither(): boolean {
+    return typeof (this.shapeManager as unknown as { bakeLayerDither?: unknown } | undefined)?.bakeLayerDither === 'function';
+  }
+
+  /** A bake is running (the button is disabled meanwhile). */
+  bakingLayerDither = false;
+
+  /** Bake: the engine writes the layer's dithered look into its pixels (one raster undo entry) and turns the dither
+   *  off, keeping the settings. Mirrored here so the panel and the saved document agree. */
+  async onLayerDitherBake(layerId: string | null): Promise<void> {
+    const sm = this.shapeManager as unknown as { bakeLayerDither?: (id: string) => Promise<boolean> } | undefined;
+    if (!layerId || this.bakingLayerDither || typeof sm?.bakeLayerDither !== 'function') return;
+    this.bakingLayerDither = true;
+    try {
+      if (!(await sm.bakeLayerDither(layerId))) return;
+      const cfg = this.layerDitherConfigs.get(layerId);
+      if (cfg) cfg.enabled = false;
+      this.host.markStateDirty();
+    } catch (e) {
+      console.warn('[LayerEffects] bake dither failed', e);
+    } finally {
+      this.bakingLayerDither = false;
+    }
+  }
+
+  /** After a raster undo / redo: undoing a Bake turns the layer's dither back on in the engine, redoing it turns it
+   *  off — follow the engine's on / off state (only where it differs from ours). */
+  syncLayerDitherEnabledFromEngine(): void {
+    const sm = this.shapeManager;
+    if (!sm?.getLayerDitherConfig) return;
+    let changed = false;
+    for (const layer of sm.getRasterLayers?.() ?? []) {
+      try {
+        const raw = sm.getLayerDitherConfig(layer.id);
+        if (!raw || typeof raw.enabled !== 'boolean') continue;
+        const cur = this.layerDitherConfigs.get(layer.id);
+        if (cur && cur.enabled === raw.enabled) continue;
+        this.layerDitherConfigs.set(layer.id, { ...raw } as DitherConfig);
+        changed = true;
+      } catch { /* API may not exist */ }
+    }
+    if (changed) this.host.markStateDirty();
+  }
+
   /** Sync the UI-side layerDitherConfigs map from the engine's per-layer dither state. */
   _syncLayerDitherConfigsFromEngine(): void {
     const sm = this.shapeManager;

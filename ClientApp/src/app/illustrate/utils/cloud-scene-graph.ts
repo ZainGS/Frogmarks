@@ -14,6 +14,23 @@
 
 /** The Salsa API used when the dist has it (typed here: Frogmarks types Salsa from its built dist). */
 type VectorSceneApi = { getSceneGraphJSON2D?: () => string };
+/** Salsa's scene JSONs: the full one (every node's data — SkinnedMesh3D baked geometry + base64 skinning, the inline
+ *  texture library) and the DOCUMENT one its own save writes (that heavy SkinnedMesh3D data and runtime-only nodes
+ *  stripped — the restore never used them). */
+type SceneJsonApi = { getSceneGraphJSON: () => string; getSceneGraphJSONForDocument?: () => string };
+
+/**
+ * The scene graph JSON a SAVE uses (perf audit 2026-10-09 B6): Salsa's stripped document JSON
+ * (sm.getSceneGraphJSONForDocument — what Salsa's own save writes) when the dist has it, else the full one.
+ */
+export function documentSceneGraphJSON(sm: unknown): string | null {
+  const api = sm as SceneJsonApi | null;
+  if (!api) return null;
+  if (typeof api.getSceneGraphJSONForDocument === 'function') {
+    try { return api.getSceneGraphJSONForDocument(); } catch (e) { console.warn('[save] getSceneGraphJSONForDocument failed — using the full scene graph', e); }
+  }
+  return typeof api.getSceneGraphJSON === 'function' ? api.getSceneGraphJSON() : null;
+}
 
 /** True for a top-level scene-graph JSON node that belongs to the 3D scene. */
 export function isSceneNodeJSON3D(node: unknown): boolean {
@@ -40,12 +57,13 @@ export function toVectorSceneGraphJSON(json: string | null | undefined): string 
 
 /**
  * What a cloud save sends as `sceneGraph`: Salsa's own 2D export (`sm.getSceneGraphJSON2D`, serializes the 2D nodes
- * only) when the dist has it, else `fullJson` (getSceneGraphJSON) filtered here.
+ * only) when the dist has it, else `fullJson` (a scene graph JSON — or a function building one, called only then)
+ * filtered here.
  */
-export function cloudSceneGraphJSON(sm: unknown, fullJson: string | null | undefined): string | null {
+export function cloudSceneGraphJSON(sm: unknown, fullJson: string | null | undefined | (() => string | null | undefined)): string | null {
   const api = sm as VectorSceneApi | null;
   if (typeof api?.getSceneGraphJSON2D === 'function') {
     try { return api.getSceneGraphJSON2D(); } catch (e) { console.warn('[cloud] getSceneGraphJSON2D failed — filtering the full scene graph', e); }
   }
-  return toVectorSceneGraphJSON(fullJson);
+  return toVectorSceneGraphJSON(typeof fullJson === 'function' ? fullJson() : fullJson);
 }

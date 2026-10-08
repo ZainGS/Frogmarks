@@ -18,6 +18,7 @@ import {
   buildFrogmarksStateFile, FROGMARKS_STATE_FILE, FROGMARKS_THUMBNAIL_FILE, FrogmarksPackageError, NOT_A_PROJECT_MESSAGE,
   readFrogmarksPackage, type FrogmarksEditorState,
 } from 'app/shared/services/illustrate/frogmarks-package';
+import { engineCelRestore, restoreAnimatedLayerCels } from '../utils/restore-animation-cels';
 /** Exactly the editor state the project-file actions read and write. Typed against the editor so a rename breaks here at compile time. */
 export type ProjectFileHost = Pick<IllustrationComponent, 'shapeManager' | 'doc' | '_disableAllViewerTools' | 'setAnimationEnabled' |
   'canvas' | 'closeContextMenu' |
@@ -122,9 +123,18 @@ export class ProjectFileService implements OnDestroy {
       await this.shapeManager.setSceneGraphJSON(sceneGraph);
     }
 
-    // 2. Import pixel data
-    if (layerPixelData.length > 0 && this.shapeManager?.importRasterLayersFromDataURLs) {
-      const importPayload = layerPixelData.map(lp => ({
+    // 2. Import pixel data. With the exact cel restore (step 4, audit A4) an animated layer needs only ONE entry here to
+    // create it — its cels get their own pixels there (every cel image used to be decoded into the one layer texture).
+    const exactCels = !!engineCelRestore(this.shapeManager);
+    const createdAnimated = new Set<string>();
+    const layerEntries = layerPixelData.filter(lp => {
+      if (!exactCels || !lp.celId) return true;
+      if (createdAnimated.has(lp.layerId)) return false;
+      createdAnimated.add(lp.layerId);
+      return true;
+    });
+    if (layerEntries.length > 0 && this.shapeManager?.importRasterLayersFromDataURLs) {
+      const importPayload = layerEntries.map(lp => ({
         id: lp.layerId,
         celId: lp.celId,
         name: lp.name,
@@ -173,12 +183,16 @@ export class ProjectFileService implements OnDestroy {
       if (anim.onionSkin) {
         this.animationService.setOnionSkin(anim.onionSkin as OnionSkinConfig);
       }
+      // Each cel back with its saved id / hold / type and its OWN pixels (audit A4 — addCelAtFrame(frame) lost them)
+      const celImages = new Map<string, string>();
+      for (const lp of layerPixelData) if (lp.celId) celImages.set(lp.celId, lp.imageDataUrl);
       for (const layer of manifest.layers) {
         if (layer.animated) {
           this.animationService.setLayerAnimated(layer.layerId, true);
-          for (const cel of layer.cels) {
-            this.animationService.addCelAtFrame(layer.layerId, cel.frame);
-          }
+          await restoreAnimatedLayerCels(
+            this.shapeManager, (id, frame) => this.animationService.addCelAtFrame(id, frame),
+            layer.layerId, layer.cels ?? [], anim.frameCount, celImages,
+          );
         }
       }
       this.animationService.refreshTimeline();

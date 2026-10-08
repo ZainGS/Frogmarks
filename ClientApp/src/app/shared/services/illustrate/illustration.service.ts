@@ -104,7 +104,8 @@ export interface DitherConfigDto {
 export interface IllustrationStateDto {
   version: number;
   /** The scene graph JSON. Cloud saves send the vector (2D) part only (cloud-scene-graph.ts); the server stores it
-   *  since 2026-10-07 (null on older documents). The local metadata copy keeps the full one. */
+   *  since 2026-10-07 (null on older documents). The local metadata copy keeps the full one on a Salsa dist without
+   *  the change-triggered document save; with it (2026-10-09+) none — Salsa's own document stores the scene. */
   sceneGraph: string | null;
   animation: AnimationStateDto | null;
   layers: LayerStateDto[];
