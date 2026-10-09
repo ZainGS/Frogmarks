@@ -66,6 +66,7 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
 
   /** The modifier list follows the engine (undo / redo change it too): re-read, replaced only when it changed. */
   ngDoCheck(): void {
+    this.syncProportional();
     // Picking a tool (the panel, the rail, a key) turns Rotate plane off: the plane handle replaces the selection gizmo
     const tool = this.ed?.meshEdit?.tool;
     if (tool !== this.toolSeen) {
@@ -107,7 +108,7 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   setMode(id: string): void { this.ed.meshEdit.setSelectionMode(id as MeshSelectMode); }
   deselectAll(): void { this.pickSvc.cancelMirrorFacePick?.(); this.ed.meshEdit.deselectAll(); }
 
-  /** Drag Lock: dragging the selection doesn't move it (MeshEditService.setDragLock). */
+  /** Drag Lock: no drag moves a vertex or the selection; a press only selects (MeshEditService.setDragLock). */
   private get _lockSvc(): { dragLock?: boolean; setDragLock?(on: boolean): void } { return this.ed.meshEdit as unknown as { dragLock?: boolean; setDragLock?(on: boolean): void }; }
   get dragLock(): boolean { return !!this._lockSvc.dragLock; }
   toggleDragLock(): void { this.pickSvc.cancelMirrorFacePick?.(); this._lockSvc.setDragLock?.(!this.dragLock); }
@@ -300,6 +301,21 @@ export class MeshEditPropsComponent implements DoCheck, OnDestroy {
   }
 
   // ── Proportional ──
+
+  /** The mesh (and its EditMesh) whose saved proportional settings the controls show. */
+  private _propFor: unknown = null;
+  /** Read the proportional settings saved on the mesh when the panel opens / the edited mesh changes. */
+  private syncProportional(): void {
+    const id = this.meshId;
+    const em = id && typeof this.sm?.getEditMesh3D === 'function' ? this.sm.getEditMesh3D(id) : null;
+    if (em === this._propFor) return;
+    this._propFor = em;
+    const p = ops.readProportional(this.sm, id);
+    if (!p) return;
+    this.proportionalEnabled = p.enabled;
+    this.proportionalRadius = p.radius;
+    this.proportionalFalloff = p.falloff;
+  }
 
   setProportional(on: boolean): void {
     this.proportionalEnabled = on;

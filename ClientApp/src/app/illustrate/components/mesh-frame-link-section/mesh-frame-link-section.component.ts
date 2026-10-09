@@ -42,10 +42,23 @@ export class MeshFrameLinkSectionComponent implements OnChanges {
 
   scene3dBucketSelections: string[] = []; // per-bucket dropdown selection (transient)
 
+  /** "Scroll (UV)" only moves a RIBBON's UVs (the ribbon pre-render pass; other meshes skip scroll): offered on a
+   *  ribbon, or a group with a ribbon child (set on load). */
+  scene3dFrameLinkCanScroll = false;
+
+  /** Spin turns at a constant rate and Shake jitters every frame — neither reads the cycle length or the phase
+   *  (evalFrameLink3D); Scroll has its own Speed (sec/loop) and no phase. */
+  get scene3dFrameLinkUsesCycle(): boolean { return this.scene3dFrameLinkType !== 'spin' && this.scene3dFrameLinkType !== 'shake' && this.scene3dFrameLinkType !== 'scroll'; }
+  get scene3dFrameLinkUsesPhase(): boolean { return this.scene3dFrameLinkUsesCycle; }
+  /** Offer Scroll (UV) here — also when a saved animation already is Scroll, so the select shows it. */
+  get scene3dFrameLinkShowScroll(): boolean { return this.scene3dFrameLinkCanScroll || this.scene3dFrameLinkType === 'scroll'; }
+
   /** Frame-link fields from the mesh, or — for a group — from its first child, plus the group's bucket rows. */
   _syncFrameLinkFromMesh(id: string): void {
     const sm2 = this.shapeManager;
+    const isRibbon = (mid: string | undefined): boolean => !!mid && typeof sm2.getRibbonData3D === 'function' && !!sm2.getRibbonData3D(mid);
     if (sm2.scene3d?.getMesh(id)) {
+      this.scene3dFrameLinkCanScroll = isRibbon(id);
       // Load frame-link config from mesh if available
       const fl = sm2.getFrameLinkAnimation3D(id);
       if (fl) {
@@ -70,6 +83,7 @@ export class MeshFrameLinkSectionComponent implements OnChanges {
     } else if (sm2.scene3d?.getMeshGroup(id)) {
       // Load FLA from the first child as representative values for the group panel
       const groupNode = this.scene3dHierarchy.find((n: any) => n.id === id);
+      this.scene3dFrameLinkCanScroll = (groupNode?.children ?? []).some((c: any) => isRibbon(c?.id));
       const firstChildId: string | undefined = groupNode?.children?.[0]?.id;
       const fl = firstChildId ? sm2.getFrameLinkAnimation3D(firstChildId) : null;
       if (fl) {

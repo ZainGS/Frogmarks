@@ -106,6 +106,7 @@ import { ArmaturePanelComponent } from '../armature-panel/armature-panel.compone
 import { followClassicArmature } from '../armature-mode/armature-mode.logic';
 import { releaseViewGizmo, syncViewGizmoHidden, ViewGizmoEngine } from './view-gizmo-host';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
+import { cameraPanelState, viewModeForProjection, type CameraPanelState } from '../../utils/scene3d-panel-visibility';
 import {
   SelectionTool, CanvasGrainType, CanvasGrainOption, CANVAS_GRAIN_OPTIONS, ArrowheadStyle,
   ARROWHEAD_OPTIONS,
@@ -422,7 +423,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       !this.meshEdit.scene3dIsEditingMesh &&   // Edit Mesh: its long-press radial menu
       !this.liveTextOptions?.liveTextIsEditing && !this.shapeManager?.lineDrawingService?.isDrawing,
     openMenu: (x, y) => this.ngZone.run(() => this.openContextMenu(x, y)),
-    altSampleAllowed: () => !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible && !this.isPathEditActive,
+    // Selection tools (marquee / lasso / wand): Alt+click subtracts from the selection in the engine, not the eyedropper
+    altSampleAllowed: () => !this.isViewerMode && !this.scene3dViewIsPlaying && !this.editorState.scene3dPanelVisible && !this.isPathEditActive &&
+      !this.controlPanelActiveTool?.startsWith('select:'),
     sample: (x, y) => { void this._sampleCanvasColor(x, y); },
     armedChanged: (on) => this.ngZone.run(() => { this.eyedropperArmed = on; }),
     cancelPress: () => { (this.shapeManager as unknown as { cancelRasterStroke?(): boolean }).cancelRasterStroke?.(); },
@@ -857,8 +860,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     // Disable all tools except cursor/pan while 3D viewport is active.
     this.selectCursor('cursor');
 
-    // Apply the stored illustration projection (default: orthographic).
-    sm.setIllustrationProjection3D(this.editorState.scene3dIllustrationProjection);
+    // The projection follows the VIEW MODE (2D Ortho / 2D Persp; 3D Free orbits in perspective) — the stored
+    // scene3dIllustrationProjection could disagree with the view bar and flip the camera behind its back.
+    { const rules: any = sm.getViewRules3D?.() ?? {}; if (!rules.freeNavigation && rules.projection) sm.setIllustrationProjection3D(rules.projection); }
     this.scene3dSyncIllustrationCamera();
 
     // Keep camera in sync on every pan/zoom
@@ -907,10 +911,20 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** Camera panel › Projection (and the 5 key): drives the VIEW-BAR mode (2D Ortho / 2D Persp), the one owner of the
+   *  projection — it used to set a separate preference the view bar overwrote. 3D Free has no projection choice. */
   scene3dSetIllustrationProjection(mode: 'perspective' | 'orthographic'): void {
+    if (this.editorState.scene3dViewCameraMode === 'free3D') return;
+    this.scene3dSetViewCameraMode(viewModeForProjection(mode));
     this.editorState.scene3dIllustrationProjection = mode;
-    this.shapeManager.setIllustrationProjection3D(mode);
     this._markStateDirty();
+  }
+
+  /** Camera panel state read from the REAL camera + view mode (FOV shown whenever the camera is perspective). */
+  get scene3dCameraPanel(): CameraPanelState {
+    let cam: any = null;
+    try { cam = this.shapeManager?.getCamera3D?.() ?? null; } catch { cam = null; }
+    return cameraPanelState(this.editorState.scene3dViewCameraMode, cam);
   }
 
   // ── View mode: target × cameraMode ───────────────────────────────────────
@@ -921,6 +935,9 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this.editorState.scene3dViewTarget = state.target ?? 'illustration';
     this.editorState.scene3dViewCameraMode = state.cameraMode ?? 'ortho2D';
     this.scene3dViewArtboardFrame = state.showArtboardFrame ?? true;
+    // The Camera panel / 5 key / saved preference follow the view mode's projection (2D modes; 3D Free keeps it).
+    if (this.editorState.scene3dViewCameraMode !== 'free3D' && rules.projection) this.editorState.scene3dIllustrationProjection = rules.projection;
+    { const fov = this.scene3dCameraPanel.fovDeg; if (fov !== null) this.editorState.scene3dFOV = fov; }
     // Activate full 3D context (panel + toolbar) when in Scene target or 3D Free camera
     if ((this.editorState.scene3dViewTarget === 'scene' || this.editorState.scene3dViewCameraMode === 'free3D') && this.has3DScene) {
       if (!this.editorState.scene3dPanelVisible) {
@@ -2940,7 +2957,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
 
     // ── Arrow tool (line with default arrowheads) ──
     if (this.controlPanelActiveTool === 'arrow') {
-      this.shapeManager.setDefaultArrowheads(this.draw.arrowheadStart, this.draw.arrowheadEnd);
+      this.draw.applyArrowheadDefaults();   // styles + size (the Size slider was dead)
       this.draw.syncLineColor();   // arrows draw in the current colour (they were a fixed grey)
       this.shapeManager.enableLineDrawing();
     }

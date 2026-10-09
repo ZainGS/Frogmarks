@@ -1,6 +1,7 @@
 /**
  * Shell › Settings is the one home for the Shell's settings (UI review 2026-10-07 §3 #23): the colour theme and the
- * local AI model address used to live in Salsa's top-right cluster panels (and the theme was forgotten on reload).
+ * local GPU model address used to live in Salsa's top-right cluster panels (and the theme was forgotten on reload).
+ * The address is LocalInferenceService's (fm_inference_config — what the AI features read).
  * Pure helpers + the localStorage keys; StudioComponent wires them to the dialog.
  */
 
@@ -28,8 +29,6 @@ export const SHELL_THEME_OPTIONS: readonly ShellThemeOption[] = [
 export const DEFAULT_SHELL_THEME: ShellThemeId = 'polygon';
 
 export const SHELL_THEME_KEY = 'frogmarks.shellTheme';
-/** Same key Salsa's old cluster panel used (ShellUIManager.getLocalModelUrl reads it too). */
-export const LOCAL_MODEL_URL_KEY = 'frogmarks.localModelUrl';
 
 export function isShellThemeId(v: unknown): v is ShellThemeId {
   return typeof v === 'string' && SHELL_THEME_OPTIONS.some(o => o.id === v);
@@ -47,10 +46,6 @@ export function saveShellTheme(storage: Pick<Storage, 'setItem'> | null | undefi
   try { storage?.setItem(SHELL_THEME_KEY, id); } catch { /* storage blocked: this session only */ }
 }
 
-export function readLocalModelUrl(storage: Pick<Storage, 'getItem'> | null | undefined): string {
-  try { return storage?.getItem(LOCAL_MODEL_URL_KEY) ?? ''; } catch { return ''; }
-}
-
 /** The address to store: trimmed; '' turns it off. Returns null when it is not a usable http(s) URL. */
 export function normalizeLocalModelUrl(raw: string): string | null {
   const v = (raw ?? '').trim();
@@ -62,9 +57,3 @@ export function normalizeLocalModelUrl(raw: string): string | null {
   } catch { return null; }
 }
 
-export function saveLocalModelUrl(storage: Pick<Storage, 'setItem' | 'removeItem'> | null | undefined, url: string): void {
-  try {
-    if (url) storage?.setItem(LOCAL_MODEL_URL_KEY, url);
-    else storage?.removeItem(LOCAL_MODEL_URL_KEY);
-  } catch { /* storage blocked */ }
-}

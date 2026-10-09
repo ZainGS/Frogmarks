@@ -43,7 +43,7 @@ describe('SceneAddService (instant add)', () => {
     s.svc.scene3dAddCylinder();
     expect(s.sm.createCylinder3D).toHaveBeenCalledWith(0, 0, 0, 0.3, 0.8, 12, undefined, 0.3);
     s.svc.scene3dAddCircle();
-    expect(s.sm.addCircleMesh3D).toHaveBeenCalledWith(0, 0, 0, 0.5, 16, 0.2);
+    expect(s.sm.addCircleMesh3D).toHaveBeenCalledWith(0, 0, 0, 0.5, 16, 0, undefined, { doubleSided: true });   // flat, both sides
     s.svc.scene3dAddRevolve();
     s.svc.scene3dAddTube();
     s.svc.scene3dAddMetaball();

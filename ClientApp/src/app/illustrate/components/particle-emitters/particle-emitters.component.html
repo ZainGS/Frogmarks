@@ -29,9 +29,10 @@
         <span class="scene3d-val">{{ r.maxParticles }}</span>
     </div>
     <div class="scene3d-toggle-row">
-        <label>Loop</label>
+        <label title="On: emits forever. Off: one burst of Max particles (spawned at Rate), then stops; it fires again when the timeline rewinds or a setting changes.">Loop</label>
         <input type="checkbox" [(ngModel)]="r.loop" (change)="onConfigChange(r)">
     </div>
+    <div class="scene3d-hint" *ngIf="!r.loop">One burst of {{ r.maxParticles }} particles, then it stops. Rewinding the timeline fires it again.</div>
     <div class="scene3d-material-row">
         <label>Direction</label>
         <div class="scene3d-seg-btn-group">

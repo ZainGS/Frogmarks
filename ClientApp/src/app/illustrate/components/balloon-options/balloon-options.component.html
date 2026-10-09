@@ -195,7 +195,7 @@
                         </div>
                         <div class="fx-param-row">
                             <label>Color</label>
-                            <input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))">
+                            <input type="color" [ngModel]="fxColorToHex(glowColorOf(entry))" (ngModelChange)="onTextEffectParamChange(entry, 'color', fxHexToColor($event, glowColorOf(entry)?.[3] ?? 1))">
                         </div>
                     </ng-container>
                     <!-- Wave -->
@@ -287,6 +287,10 @@
         <button (click)="addTextEffect()"
                 style="width: 100%; background: #333; border: 1px solid #555; border-radius: 3px; color: #aaa; padding: 3px; cursor: pointer; font-size: 10px; margin-bottom: 6px;"
                 title="Add another effect to the chain">+ Add Effect</button>
+
+        <!-- Preview (the ▶ animation draws here; hidden until the first frame lands) -->
+        <canvas #fxPreviewCanvas class="fx-preview" [hidden]="!textEffectPreviewShown"
+                aria-label="Text effect preview" title="Text effect preview"></canvas>
 
         <!-- Action buttons -->
         <div style="display: flex; gap: 4px;">

@@ -8,7 +8,10 @@
 export type ShellKeyAction =
   | { type: 'system'; id: string; systemKey?: string }
   | { type: 'import' }
+  /** The cart's sheet (Play / Remove). */
   | { type: 'cart'; id: string }
+  /** Play the cart (the Shell's launch → the Player). */
+  | { type: 'cart-play'; id: string }
   | { type: 'back' }
   | { type: 'new' }
   | { type: 'project'; id: string };
@@ -30,6 +33,8 @@ export interface ShellKeyInput {
   projects: readonly ShellKeyProject[];
   /** The engine can open the .frogcart picker from a button (newer Salsa builds). Default true. */
   canImport?: boolean;
+  /** The engine can launch carts (Salsa shell.launchSupported): each cart gets Play + Options. Default true. */
+  canPlay?: boolean;
 }
 
 /** The buttons for the current Shell view, in the order the Shell shows its tiles / chips / cards. */
@@ -47,7 +52,13 @@ export function shellKeyItems(s: ShellKeyInput): ShellKeyItem[] {
     if (slot.type === 'system') {
       out.push({ key: 's:' + slot.id, label: slot.name || slot.id, action: { type: 'system', id: slot.id, systemKey: slot.systemKey } });
     } else {
-      out.push({ key: 'c:' + slot.id, label: 'Cart: ' + (slot.name || 'Untitled'), action: { type: 'cart', id: slot.id } });
+      const name = slot.name || 'Untitled';
+      if (s.canPlay !== false) {
+        out.push({ key: 'c:' + slot.id, label: 'Play “' + name + '”', action: { type: 'cart-play', id: slot.id } });
+        out.push({ key: 'co:' + slot.id, label: 'Options for “' + name + '”', action: { type: 'cart', id: slot.id } });
+      } else {
+        out.push({ key: 'c:' + slot.id, label: 'Cart: ' + name, action: { type: 'cart', id: slot.id } });
+      }
     }
     // The Shell puts its Import tile right after the first app (Illustrator).
     if (i === 0 && s.canImport !== false) out.push({ key: 'import', label: 'Import a FrogCart…', action: { type: 'import' } });

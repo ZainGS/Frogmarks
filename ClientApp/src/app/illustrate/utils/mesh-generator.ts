@@ -35,7 +35,8 @@ export const METABALL_SHAPES: MetaballShape[] = ['sphere', 'capsule', 'ellipsoid
 export function meshGenDefaults(type: Exclude<MeshGenType, 'polygon'>): Record<string, any> {
   switch (type) {
     case 'cylinder': return { radius: 0.3, radiusTop: 0.3, height: 0.8, segments: 12 };
-    case 'circle':   return { radius: 0.5, segments: 16, height: 0.2 };
+    // flat, like Blender's Circle: ONE n-gon face (an older circle's height > 0 still loads + regenerates as saved)
+    case 'circle':   return { radius: 0.5, segments: 16, height: 0 };
     case 'revolve':  return { profile: [[0.3, -0.4], [0.4, 0], [0.3, 0.4]], segments: 16 };
     case 'tube':     return { path: [[0, -0.4, 0], [0, 0, 0], [0, 0.4, 0]], radii: [0.1, 0.15, 0.1], segments: 8 };
     case 'metaball': return {

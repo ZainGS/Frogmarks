@@ -199,6 +199,23 @@ export function setProportional(sm: ShapeManager, meshId: string | null, on: boo
   sm.setProportionalEdit3D(meshId, on, radius, falloff);
 }
 
+export interface ProportionalSettings { enabled: boolean; radius: number; falloff: ProportionalFalloff }
+
+/** The proportional-edit settings SAVED ON the mesh's EditMesh (toJSON / fromJSON keep them), so the panels show what
+ *  the engine will do; null when there is no editable mesh. */
+export function readProportional(sm: ShapeManager | null | undefined, meshId: string | null | undefined): ProportionalSettings | null {
+  if (!sm || !meshId || typeof sm.getEditMesh3D !== 'function') return null;
+  const em = sm.getEditMesh3D(meshId) as { proportionalEditEnabled?: boolean; proportionalEditRadius?: number; proportionalEditFalloff?: string } | null;
+  if (!em) return null;
+  const f = em.proportionalEditFalloff;
+  const r = em.proportionalEditRadius;
+  return {
+    enabled: !!em.proportionalEditEnabled,
+    radius: typeof r === 'number' && Number.isFinite(r) && r > 0 ? r : 1.0,
+    falloff: f === 'linear' || f === 'sharp' ? f : 'smooth',
+  };
+}
+
 // ── Modifiers ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function readModifiers(sm: ShapeManager | null | undefined, meshId: string | null | undefined): MeshModifier[] {

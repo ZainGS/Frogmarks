@@ -19,6 +19,9 @@ import {
   readFrogmarksPackage, type FrogmarksEditorState,
 } from 'app/shared/services/illustrate/frogmarks-package';
 import { engineCelRestore, restoreAnimatedLayerCels } from '../utils/restore-animation-cels';
+import {
+  CART_DISC_FIT_DEFAULT, cartDiscEngine, fallbackDiscSeed, type CartDiscArtMode, type CartDiscFit,
+} from '../components/export-modal/cart-disc-art';
 /** Exactly the editor state the project-file actions read and write. Typed against the editor so a rename breaks here at compile time. */
 export type ProjectFileHost = Pick<IllustrationComponent, 'shapeManager' | 'doc' | '_disableAllViewerTools' | 'setAnimationEnabled' |
   'canvas' | 'closeContextMenu' |
@@ -64,16 +67,64 @@ export class ProjectFileService implements OnDestroy {
 
   exportCartSounds: string[] = [];
 
+  // ── Disc art (what the cart's CD prints on the Shell home; the export dialog's "Disc art" field) ──
+  /** Pattern (default: the cart's seeded wavy pattern) / Image (a picked file) / Snapshot (the artboard). */
+  exportCartArtMode: CartDiscArtMode = 'pattern';
+  /** The pattern seed (stable per document until shuffled). */
+  exportCartPatternSeed = 0;
+  /** The picked image (Image mode) and the artboard capture (Snapshot mode) — the UNCROPPED sources. */
+  exportCartArtImage: Blob | null = null;
+  exportCartArtSnapshot: Blob | null = null;
+  /** The crop of the active source (zoom ≥ 1, pan -1..1). */
+  exportCartArtFit: CartDiscFit = { ...CART_DISC_FIT_DEFAULT };
+  exportCartArtError = '';
+
+  /** Reset the disc-art choice for a fresh dialog: the pattern, seeded from the document id (re-exporting the same
+   *  project gives the same disc unless shuffled). */
+  resetExportCartArt(docId?: string | null): void {
+    const tools = cartDiscEngine(this.host?.shapeManager).cartDisc;
+    this.exportCartArtMode = 'pattern';
+    this.exportCartPatternSeed = docId ? (tools?.seedFromId(docId) ?? fallbackDiscSeed(docId)) : (tools?.randomSeed() ?? fallbackDiscSeed());
+    this.exportCartArtImage = null;
+    this.exportCartArtSnapshot = null;
+    this.exportCartArtFit = { ...CART_DISC_FIT_DEFAULT };
+    this.exportCartArtError = '';
+  }
+
+  /** The source the disc prints in the current mode (null = the pattern). */
+  get exportCartArtSource(): Blob | null {
+    return this.exportCartArtMode === 'image' ? this.exportCartArtImage
+      : this.exportCartArtMode === 'snapshot' ? this.exportCartArtSnapshot : null;
+  }
+
+  /** The disc fields of the .frogcart meta: the cropped art (when an image / snapshot is chosen and the engine can
+   *  render it) + the pattern seed (always: it is what the disc prints without art). */
+  async exportCartDiscMeta(): Promise<{ cdArt: Blob | null; cdPattern: { seed: number } }> {
+    const tools = cartDiscEngine(this.shapeManager).cartDisc;
+    const src = this.exportCartArtSource;
+    let cdArt: Blob | null = null;
+    if (src && tools) {
+      try { cdArt = await tools.renderArt(src, this.exportCartArtFit); } catch (e) {
+        this.exportCartArtError = 'The disc image could not be prepared. Choose another image, or use the pattern.';
+        throw e;
+      }
+    }
+    return { cdArt, cdPattern: { seed: this.exportCartPatternSeed >>> 0 } };
+  }
+
   async exportModalFrogcart(): Promise<void> {
     if (this.exportCartBusy) return;
     this.exportCartBusy = true;
     try {
       const sm = this.shapeManager;
-      const blob: Blob | undefined = await sm.exportFrogcart({
+      // cdArt / cdPattern: .frogcart 1.1 (Salsa 2026-10-09); an older engine ignores the extra fields.
+      const meta = {
         title:       this.exportCartTitle || 'Untitled',
         author:      this.exportCartAuthor || undefined,
         description: this.exportCartDescription || undefined,
-      });
+        ...(await this.exportCartDiscMeta()),
+      };
+      const blob: Blob | undefined = await sm.exportFrogcart(meta as Parameters<ShapeManager['exportFrogcart']>[0]);
       if (!blob) { this.exportCartBusy = false; return; }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

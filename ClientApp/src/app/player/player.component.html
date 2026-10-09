@@ -6,7 +6,8 @@
 
   <!-- Canvas (always mounted so WebGPU has a target; absolutely placed, so while hidden it doesn't push the drop zone
        off-screen) -->
-  <canvas #webgpuCanvas id="playerCanvas" class="player-canvas" [class.hidden]="!isLoaded"></canvas>
+  <canvas #webgpuCanvas id="playerCanvas" class="player-canvas" [class.hidden]="!isLoaded"
+          [class.player-canvas--reveal]="fromShell && isLoaded"></canvas>
 
   <!-- Header bar (shown when a cart is loaded) -->
   <div class="player-header" *ngIf="isLoaded">
@@ -16,7 +17,8 @@
   </div>
 
   <!-- Back (before a cart is loaded): an installed, full-screen app has no browser Back button -->
-  <button type="button" class="player-btn player-back-btn" *ngIf="!isLoaded" (click)="goHome()" title="Back to Frogmarks">← Back</button>
+  <!-- (hidden while a cart launched from the Shell loads: that screen stays the launch's black until the cart fades in) -->
+  <button type="button" class="player-btn player-back-btn" *ngIf="!isLoaded && !(fromShell && isLoading && !spinnerVisible)" (click)="goHome()" title="Back to Frogmarks">← Back</button>
 
   <!-- Drop zone (shown when nothing loaded) -->
   <div class="player-drop-zone" *ngIf="!isLoaded && !isLoading" [class.drag-over]="isDragOver">
@@ -29,8 +31,8 @@
     <div class="player-error" *ngIf="errorMsg" role="alert">Couldn't play this file: {{ errorMsg }}</div>
   </div>
 
-  <!-- Loading spinner -->
-  <div class="player-loading" *ngIf="isLoading" role="status">
+  <!-- Loading spinner (from the Shell: only when loading takes longer than SPINNER_DELAY_MS) -->
+  <div class="player-loading" *ngIf="isLoading && spinnerVisible" role="status">
     <div class="player-loading-spinner"></div>
     <div class="player-loading-label">Loading…</div>
   </div>

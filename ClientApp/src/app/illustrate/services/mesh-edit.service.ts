@@ -101,9 +101,10 @@ export class MeshEditService {
     this._applyDragLock();
   }
 
-  /** Drag Lock (user request 2026-10-08): dragging the selection never moves it (a drag orbits instead), so a wobbly
-   *  pen tap can't nudge geometry. Remembered on this device; applied on every Edit Mesh entry. Engine:
-   *  setMeshEditDragMovesSelection3D (guarded — an older dist has no drag-to-move to lock). */
+  /** Drag Lock (user request 2026-10-08): no drag moves geometry — neither the selection nor (Vertex mode) the single
+   *  vertex under the pointer; a press only selects and a finger / pen drag orbits, so a wobbly pen tap can't nudge
+   *  geometry. Remembered on this device; applied on every Edit Mesh entry. Engine: setMeshEditDragLock3D +
+   *  setMeshEditDragMovesSelection3D (guarded — an older dist has neither / only the selection drag to lock). */
   dragLock = readDragLock();
   setDragLock(on: boolean): void {
     this.dragLock = on;
@@ -111,8 +112,11 @@ export class MeshEditService {
     this._applyDragLock();
   }
   private _applyDragLock(): void {
-    const sm = this.shapeManager as unknown as { setMeshEditDragMovesSelection3D?(on: boolean): void } | null;
+    const sm = this.shapeManager as unknown as {
+      setMeshEditDragMovesSelection3D?(on: boolean): void; setMeshEditDragLock3D?(on: boolean): void;
+    } | null;
     if (typeof sm?.setMeshEditDragMovesSelection3D === 'function') sm.setMeshEditDragMovesSelection3D(!this.dragLock);
+    if (typeof sm?.setMeshEditDragLock3D === 'function') sm.setMeshEditDragLock3D(this.dragLock);
   }
 
   /** Change the focus background (the classic panel's dropdown / the chrome's ⋯ menu). */

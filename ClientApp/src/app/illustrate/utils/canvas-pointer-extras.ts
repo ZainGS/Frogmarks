@@ -18,7 +18,7 @@ export interface CanvasPointerExtrasHost {
   /** The canvas menu may open now (2D editing: not Play / the 3D view / hidden UI / a line mid-draw …). */
   menuAllowed(): boolean;
   openMenu(clientX: number, clientY: number): void;
-  /** Alt+click samples now (2D: Alt-drag orbits in 3D, Alt bends handles in the path editor). */
+  /** Alt+click samples now (2D: Alt-drag orbits in 3D, Alt bends handles in the path editor, Alt subtracts with the selection tools). */
   altSampleAllowed(): boolean;
   /** Sample the canvas colour at a viewport point (async; the host applies it). */
   sample(clientX: number, clientY: number): void;

@@ -2,6 +2,7 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleCh
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { colorToHex, hexToRgba01Obj } from '../../utils/color-utils';
 import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
+import * as foliageVis from './foliage-panel.logic';
 
 /**
  * Edit Foliage panel: type, seed, shape, blades/branches/flowers/ivy params, colours, delete, save-to-library.
@@ -26,6 +27,8 @@ export class FoliagePanelComponent implements OnChanges {
   readonly nav = new SubNav(() => scrollPanelToTop(this.el.nativeElement));
   /** Delete plant is asking first. */
   confirmingDelete = false;
+  /** Per-type control visibility (foliage-panel.logic.ts) — a control only shows where the engine reads it. */
+  readonly vis = foliageVis;
 
   constructor(private el: ElementRef<HTMLElement>) {}
 
@@ -44,7 +47,6 @@ export class FoliagePanelComponent implements OnChanges {
   foliageRender: 'chunky' | 'card' = 'chunky';
   foliageCelShade = false;
   foliageBloom = false;
-  foliagePotMaterial: 'terracotta' | 'ceramic' | 'metal' | 'wood' | 'stone' = 'terracotta';
   foliageColor = '#4a7a35';
   foliageTipColor = '#7ab84a';
   foliageBloomColor = '#e05050';
@@ -64,6 +66,12 @@ export class FoliagePanelComponent implements OnChanges {
   leafGaps        = 0.3;
   hedgeSprigs     = 3;
   branchLod       = 0;
+  // Conifer params (conifer only — whorl model; unset Tiers follows the height)
+  coniferSpread   = 0.2;
+  coniferTiers    = 5;
+  coniferDroop    = 0.42;
+  /** Tiers has been set on the plant (else the slider shows the height-driven default). */
+  private _coniferTiersSet = false;
   // Vessel params (potted / planter / window-box only — P4v arrangement)
   foliageSpill      = 0.5;
   foliagePlantCount = 2;
@@ -79,6 +87,8 @@ export class FoliagePanelComponent implements OnChanges {
   ivyWander       = 0.35;
   ivyStemColor    = '#8a7060';
   ivyRunnerLod    = 0;
+  /** The plant has an authored ivyPath (2+ points). Without one, Path mode grows over the area like Area mode. */
+  ivyHasPath      = false;
   // Flower params (daisy / rapeseed / lavender / flower-bed only)
   foliageBloomStart      = 0.5;
   foliageBloomScaleCurve = 0.5;
@@ -104,7 +114,6 @@ export class FoliagePanelComponent implements OnChanges {
     if (p.render != null)       this.foliageRender       = p.render;
     if (p.celShade != null)     this.foliageCelShade     = p.celShade;
     if (p.bloom != null)        this.foliageBloom        = p.bloom;
-    if (p.potMaterial != null)  this.foliagePotMaterial  = p.potMaterial;
     if (p.foliageColor != null) this.foliageColor        = col(p.foliageColor);
     if (p.tipColor != null)     this.foliageTipColor     = col(p.tipColor);
     if (p.bloomColor != null)   this.foliageBloomColor   = col(p.bloomColor);
@@ -135,8 +144,14 @@ export class FoliagePanelComponent implements OnChanges {
     if (p.soilColor != null)        this.foliageSoilColor       = col(p.soilColor);
     if (p.plantLod != null)         this.foliagePlantLod        = p.plantLod;
     if (p.ivyMode != null)          this.ivyMode                = p.ivyMode;
-    if (p.areaWidth != null)        this.ivyAreaWidth           = p.areaWidth;
-    if (p.areaHeight != null)       this.ivyAreaHeight          = p.areaHeight;
+    // Unset area = the engine falls back to width / size (foliage.ts vine/ivy case) — show what it uses.
+    this.ivyAreaWidth  = p.areaWidth  ?? p.width ?? this.ivyAreaWidth;
+    this.ivyAreaHeight = p.areaHeight ?? p.size  ?? this.ivyAreaHeight;
+    this.ivyHasPath = Array.isArray(p.ivyPath) && p.ivyPath.length > 1;
+    this.coniferSpread = p.coniferSpread ?? 0.2;    // engine defaults when unset (foliage.ts conifer case)
+    this.coniferDroop  = p.coniferDroop ?? 0.42;
+    this._coniferTiersSet = p.coniferTiers != null;
+    this.coniferTiers = p.coniferTiers ?? foliageVis.coniferAutoTiers(this.foliageSize);
     if (p.leafDensity != null)      this.ivyLeafDensity         = p.leafDensity;
     if (p.coverage != null)         this.ivyCoverage            = p.coverage;
     if (p.growthBias != null)       this.ivyGrowthBias          = p.growthBias;
@@ -152,7 +167,15 @@ export class FoliagePanelComponent implements OnChanges {
       ? (() => { const c = hexToRgba01Obj(value); return [c.r, c.g, c.b]; })()
       : value;
     this.shapeManager.setFoliageParams3D(id, { [field]: v });
+    if (field === 'coniferTiers') this._coniferTiersSet = true;
+    if (field === 'size' && !this._coniferTiersSet) this.coniferTiers = foliageVis.coniferAutoTiers(this.foliageSize);
     this.dirty.emit();
+  }
+
+  /** Type switch: re-read the params so type-dependent displays (climber area, conifer tiers) match the new type. */
+  scene3dApplyFoliageType(type: string): void {
+    this.scene3dApplyFoliageParam('type', type);
+    this._initFoliageParams();
   }
 
   scene3dRandomizeFoliageSeed(): void {

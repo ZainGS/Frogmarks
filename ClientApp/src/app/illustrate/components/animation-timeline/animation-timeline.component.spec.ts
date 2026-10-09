@@ -522,6 +522,32 @@ describe('AnimationTimelineComponent touch / tablet', () => {
 
 /** Playback perf A2 (2026-10-09): one moving current-frame column instead of per-cell .current classes; a frame of
  *  playback writes the playhead / column / cap / counter straight to the DOM and runs no change detection. */
+describe('AnimationTimelineComponent onion skin panel (audit 2026-10-09)', () => {
+  it('Before / After / Opacity / tints only while Enable is on; a tint only while its side has frames', fakeAsync(() => {
+    const { fixture, cmp, el, render } = setup();
+    cmp.showOnionSkinPanel = true;
+    render();
+    const panel = () => el.querySelector('.onion-panel')!;
+    expect(panel()).toBeTruthy();
+    expect(panel().querySelectorAll('.slider-row').length).toBe(0);      // Enable off: only the checkbox
+    expect(panel().querySelector('.onion-prev-tint')).toBeNull();
+    cmp.onionSkin = { ...cmp.onionSkin, enabled: true, framesBefore: 2, framesAfter: 1 };
+    render();
+    expect(panel().querySelectorAll('.slider-row').length).toBe(3);      // Before / After / Opacity
+    expect(panel().querySelector('.onion-prev-tint')).toBeTruthy();
+    expect(panel().querySelector('.onion-next-tint')).toBeTruthy();
+    cmp.onionSkin = { ...cmp.onionSkin, framesBefore: 0 };
+    render();
+    expect(panel().querySelector('.onion-prev-tint')).toBeNull();
+    expect(panel().querySelector('.onion-next-tint')).toBeTruthy();
+    cmp.onionSkin = { ...cmp.onionSkin, framesBefore: 3, framesAfter: 0 };
+    render();
+    expect(panel().querySelector('.onion-prev-tint')).toBeTruthy();
+    expect(panel().querySelector('.onion-next-tint')).toBeNull();
+    flush(); fixture.destroy();
+  }));
+});
+
 describe('AnimationTimelineComponent playback frame updates', () => {
   const tf = (el: HTMLElement, sel: string) => (el.querySelector(sel) as HTMLElement).style.transform;
 

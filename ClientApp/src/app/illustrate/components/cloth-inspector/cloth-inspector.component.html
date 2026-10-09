@@ -123,8 +123,11 @@
         </div>
         <div class="scene3d-material-row">
             <label>Falloff</label>
-            <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZoneFalloff" (input)="updateSelectedWindZone()">
-            <span class="scene3d-val">{{ windZoneFalloff | number:'1.2-2' }}</span>
+            <select class="scene3d-select" [(ngModel)]="windZoneFalloff" (ngModelChange)="updateSelectedWindZone()"
+                    title="Uniform: the same strength everywhere in the zone. Fade to edge: full at the centre, none at the edge">
+                <option value="none">Uniform</option>
+                <option value="linear">Fade to edge</option>
+            </select>
         </div>
         <div class="scene3d-toggle-row">
             <label>Pulse</label>
@@ -133,12 +136,14 @@
         <ng-container *ngIf="windZonePulseEnabled">
             <div class="scene3d-material-row">
                 <label>Period</label>
-                <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="windZonePulsePeriod" (change)="updateSelectedWindZone()">
+                <input type="number" min="1" step="1" class="scene3d-input-small" [(ngModel)]="windZonePulsePeriod" (change)="updateSelectedWindZone()"
+                       title="Frames per pulse (the live cloth runs 60 frames a second)">
                 <span class="scene3d-val" style="font-size:10px">fr</span>
             </div>
             <div class="scene3d-material-row">
                 <label>Phase</label>
-                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZonePulsePhase" (input)="updateSelectedWindZone()">
+                <input type="range" min="0" max="1" step="0.01" [(ngModel)]="windZonePulsePhase" (input)="updateSelectedWindZone()"
+                       title="Where in the pulse cycle the zone starts (0–1 of a cycle)">
                 <span class="scene3d-val">{{ windZonePulsePhase | number:'1.2-2' }}</span>
             </div>
         </ng-container>

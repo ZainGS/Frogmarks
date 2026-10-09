@@ -17,8 +17,8 @@ import { PendingProjectDeletes, type PendingProjectDelete } from './pending-proj
 import { nextShellDeviceBanner, type ShellDeviceBanner, type ShellDeviceStatusLike } from './shell-device-banner';
 import { AppInstallService } from '../../services/pwa/app-install.service';
 import {
-  SHELL_THEME_OPTIONS, DEFAULT_SHELL_THEME, readSavedShellTheme, saveShellTheme, readLocalModelUrl, normalizeLocalModelUrl,
-  saveLocalModelUrl, type ShellThemeId,
+  SHELL_THEME_OPTIONS, DEFAULT_SHELL_THEME, readSavedShellTheme, saveShellTheme, normalizeLocalModelUrl,
+  type ShellThemeId,
 } from './shell-settings';
 import { shellKeyItems, shellKeySignature, type ShellKeyItem } from './shell-keys';
 import { prepareShellProjectImport } from './shell-project-import';
@@ -26,9 +26,19 @@ import { planShellImport, shellImportProblem } from './shell-import-router';
 import { FrogFileService } from '../../services/illustrate/frog-file.service';
 import { FrogmarksPackageError } from '../../services/illustrate/frogmarks-package';
 import { NotifyService } from '../../services/notify/notify.service';
+import { LocalInferenceService } from '../../services/inference/local-inference.service';
+import { PlayerCartService } from '../../services/player-cart.service';
+import { canLaunchCarts, launchCartToPlayer } from './cart-launch';
 
-/** A FrogCart tile was opened: what its dialog shows. */
-interface CartDialog { id: string; name: string; description: string; removable: boolean; confirmRemove: boolean; removing: boolean }
+/** A FrogCart's sheet (long-press / right-click / the keyboard strip's Options): Play / Remove. `playable` = this
+ *  engine launches carts (Salsa shell.launchSupported). */
+interface CartDialog { id: string; name: string; description: string; playable: boolean; removable: boolean; confirmRemove: boolean; removing: boolean }
+
+/** The Shell comes back from the Player: its black cover fades out over this long (reduced motion: the short one). */
+const RETURN_FADE_MS = 400;
+const RETURN_FADE_REDUCED_MS = 160;
+/** …at the latest this long after the Shell started mounting (a mount that fails must not leave the screen black). */
+const RETURN_COVER_MAX_MS = 4000;
 
 /** The Salsa Shell APIs added after the dist Frogmarks may still be built against (typeof-guarded at each use). */
 type ShellNewer = {
@@ -94,7 +104,15 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   /** A modal (Settings / Install) is up: the host layer (Shell canvas + modal) goes above Salsa's top-right cluster
    *  (z-index 50, on <body>), so the cluster is covered and can't be clicked under the modal. */
-  @HostBinding('class.shell-raised') get raised(): boolean { return this.modalOpen; }
+  @HostBinding('class.shell-raised') get raised(): boolean { return this.modalOpen || this.returnCover; }
+
+  /** Back from the Player: a #0a0a0a cover over the Shell (and Salsa's cluster — hence raised) that fades out once the
+   *  Shell has mounted. */
+  returnCover = false;
+  returnCoverFading = false;
+  returnFadeMs = RETURN_FADE_MS;
+  private _returnTimer: ReturnType<typeof setTimeout> | undefined;
+  private _slotMenuSub?: { unsubscribe(): void };
   get modalOpen(): boolean { return this.showSettingsOverlay || !!this.cartDialog; }
 
   constructor(
@@ -107,6 +125,8 @@ export class StudioComponent implements OnInit, OnDestroy {
     readonly install: AppInstallService,
     private frogFileService: FrogFileService,
     private notify: NotifyService,
+    private localInference: LocalInferenceService,
+    private playerCartService: PlayerCartService,
   ) {}
 
   // ── PWA: update popup + storage notice (salsa/docs/ui/pwa.md) ────────────
@@ -130,7 +150,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this.cartDialog = null;
     this.showSettingsOverlay = true;
     this.themeId = this._currentThemeId();
-    this.localModelUrl = readLocalModelUrl(this._storage());
+    this.localModelUrl = this.localInference.baseUrl;   // the address the AI features use
     this.localModelStatus = '';
     this._syncModalChrome();
     void this.storageInfo.refreshEstimate();
@@ -158,13 +178,14 @@ export class StudioComponent implements OnInit, OnDestroy {
     if (saved && shell && typeof shell.setTheme === 'function') shell.setTheme(saved);
   }
 
-  // ── Settings › Local AI model ──
+  // ── Settings › Local GPU model ──
 
+  /** Saves into LocalInferenceService (fm_inference_config), which the AI features read; empty = the default. */
   saveLocalModel(): void {
     const url = normalizeLocalModelUrl(this.localModelUrl);
     if (url === null) { this.localModelStatus = 'invalid'; return; }
-    saveLocalModelUrl(this._storage(), url);
-    this.localModelUrl = url;
+    this.localInference.setBaseUrl(url);
+    this.localModelUrl = this.localInference.baseUrl;
     this.localModelStatus = 'saved';
   }
 
@@ -240,6 +261,11 @@ export class StudioComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    // Back from the Player: start black (its #0a0a0a) and fade in once the Shell is up (_revealFromBlack).
+    if (this.playerCartService.takeReturningToShell()) {
+      this.returnCover = true;
+      this._returnTimer = setTimeout(() => this._revealFromBlack(), RETURN_COVER_MAX_MS);
+    }
     // webgpuCanvas persists in AppComponent but must not intercept shell input.
     const webgpuCanvas = document.getElementById('webgpuCanvas') as HTMLCanvasElement | null;
     if (webgpuCanvas) webgpuCanvas.style.pointerEvents = 'none';
@@ -324,8 +350,16 @@ export class StudioComponent implements OnInit, OnDestroy {
       });
     });
 
+    // A cart's sheet (Play / Remove): long-press (touch / pen) or right-click on its tile. Fires outside the zone.
+    const slotMenu = (this.sm.shell as unknown as { onSlotMenu?: { subscribe(fn: (e: { id: string }) => void): { unsubscribe(): void } } } | undefined)?.onSlotMenu;
+    this._slotMenuSub = slotMenu?.subscribe(({ id }) => this.ngZone.run(() => this.openCartDialog(id)));
+
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
-    await this.ngZone.runOutsideAngular(() => this.sm.shell?.initializeScene(shellCanvas));
+    try {
+      await this.ngZone.runOutsideAngular(() => this.sm.shell?.initializeScene(shellCanvas));
+    } finally {
+      if (this.returnCover) this._revealFromBlack();   // (also when the mount failed: never leave the screen black)
+    }
     if (this._destroyed) return;
     this.ngZone.run(() => this._refreshKeys());
 
@@ -351,6 +385,8 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._activateSub?.unsubscribe();
     this._changeSub?.unsubscribe();
     this._deleteSub?.unsubscribe();
+    this._slotMenuSub?.unsubscribe();
+    clearTimeout(this._returnTimer);
     this._setShellImportHandler(false);
     clearTimeout(this._idlePreloadTimer);
     clearTimeout(this._gridPreloadTimer);
@@ -452,22 +488,46 @@ export class StudioComponent implements OnInit, OnDestroy {
         break;
       case 'local':
       case 'remote':
-        // A cart tile opened (double-click, or a tap on the selected cart). Carts can't run yet (Salsa launchSlot is
-        // Phase 6) — it used to do nothing at all; now it says so, and an installed cart can be removed.
-        this.openCartDialog(id);
+        // ONE tap on a cart plays it: the Shell's CD launch animation, then the Player (an engine that can't launch
+        // carts gets the cart's sheet, as before).
+        this._launchCart(id);
         break;
     }
   }
 
   // ── FrogCarts ──
 
+  /** Play a cart: Salsa's launch animation runs while it reads + checks the cart, then (black) the Player opens it.
+   *  Started OUTSIDE the zone — the animation's frames must not run change detection; toasts / navigation re-enter. */
+  private _launchCart(id: string): void {
+    const shell = this.sm?.shell;
+    if (!canLaunchCarts(shell)) { this.openCartDialog(id); return; }
+    perfMark('nav-start');
+    this.ngZone.runOutsideAngular(() => {
+      void launchCartToPlayer(shell, id, {
+        handOff: (cart) => this.playerCartService.handOff(cart, true),
+        navigate: () => this.ngZone.run(() => this.router.navigate(['/player'])),
+        toast: (m) => this.ngZone.run(() => { if (!this._destroyed) this.notify.error(m); }),
+      });
+    });
+  }
+
+  /** The cart sheet's Play. */
+  playCartFromDialog(): void {
+    const d = this.cartDialog;
+    if (!d || !d.playable) return;
+    this.closeCartDialog();
+    this._launchCart(d.id);
+  }
+
   openCartDialog(id: string): void {
     const slot = this.sm?.shell?.getSlot?.(id) ?? null;
     this.showSettingsOverlay = false;
     this.cartDialog = {
+      playable: !!slot && slot.type !== 'system' && canLaunchCarts(this.sm?.shell),
       id,
-      name: slot?.name || (id === '__demo_cart__' ? 'Demo Cart' : 'FrogCart'),
-      description: slot?.description || (id === '__demo_cart__' ? 'A sample cart that shows how installed FrogCarts look on the home screen.' : ''),
+      name: slot?.name || 'FrogCart',
+      description: slot?.description || '',
       removable: !!slot && slot.type !== 'system',
       confirmRemove: false,
       removing: false,
@@ -607,6 +667,7 @@ export class StudioComponent implements OnInit, OnDestroy {
       slots: shell.getSlots?.() ?? [],
       projects: view?.mode === 'illustrations' ? (shell.getProjects?.() ?? []) : [],
       canImport: typeof (shell as unknown as ShellNewer).importCart === 'function',
+      canPlay: canLaunchCarts(shell),
     });
   }
 
@@ -632,6 +693,7 @@ export class StudioComponent implements OnInit, OnDestroy {
         break;
       case 'import': this.importCart(); break;
       case 'cart': this.openCartDialog(a.id); break;
+      case 'cart-play': this._launchCart(a.id); break;
       case 'back': this._refocusKeys = true; this.ngZone.runOutsideAngular(() => shell.closeIllustratorDashboard()); break;
       case 'new': this._handleActivation('__new_project__', 'empty', kind); break;
       case 'project': this._openProject(a.id, kind); break;
@@ -641,6 +703,22 @@ export class StudioComponent implements OnInit, OnDestroy {
   closeSettingsOverlay(): void {
     this.showSettingsOverlay = false;
     this._syncModalChrome();
+  }
+
+  // ── Back from the Player: fade in from its black ──
+
+  /** Start the cover's fade-out (next frame, so the opacity transition runs), then drop it. Idempotent. */
+  private _revealFromBlack(): void {
+    if (!this.returnCover || this.returnCoverFading) return;
+    clearTimeout(this._returnTimer);
+    let reduced = false;
+    try { reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* no matchMedia */ }
+    this.returnFadeMs = reduced ? RETURN_FADE_REDUCED_MS : RETURN_FADE_MS;
+    requestAnimationFrame(() => this.ngZone.run(() => {
+      if (this._destroyed) return;
+      this.returnCoverFading = true;
+      this._returnTimer = setTimeout(() => this.ngZone.run(() => { this.returnCover = false; this.returnCoverFading = false; }), this.returnFadeMs + 50);
+    }));
   }
 
   // ── Settings / cart modal: Esc, backdrop, the Shell chrome under it ──

@@ -335,6 +335,17 @@ describe('MeshEditService Drag Lock', () => {
     expect(make().svc.dragLock).toBeFalse();
   });
 
+  it('also locks the single-vertex drag (setMeshEditDragLock3D) when the engine has it', () => {
+    try { localStorage.removeItem('fm-mesh-drag-lock'); } catch { /* */ }
+    const { svc, sm } = make();
+    sm.setMeshEditDragLock3D = jasmine.createSpy('dragLock');
+    svc.setDragLock(true);
+    expect(sm.setMeshEditDragLock3D).toHaveBeenCalledWith(true);
+    expect(sm.setMeshEditDragMovesSelection3D).toHaveBeenCalledWith(false);
+    svc.setDragLock(false);
+    expect(sm.setMeshEditDragLock3D).toHaveBeenCalledWith(false);
+  });
+
   it('an older engine without the switch: no throw', () => {
     const { svc } = make(false);
     expect(() => svc.setDragLock(true)).not.toThrow();

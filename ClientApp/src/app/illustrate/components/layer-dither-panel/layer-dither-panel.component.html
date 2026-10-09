@@ -16,8 +16,8 @@
         </select>
     </div>
 
-    <!-- Color Mode -->
-    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+    <!-- Color Mode (ordered algorithms only: error diffusion dithers the colours as they are) -->
+    <div *ngIf="fx.ditherModeApplies(cfg)" style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
         <label style="width: 50px; color:#aaa; font-size: 10px;">Mode</label>
         <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
                 [ngModel]="cfg.colorMode"
@@ -26,8 +26,11 @@
         </select>
     </div>
 
+    <!-- Duotone picked earlier, error diffusion now: say why the colours are gone (they come back with an ordered algorithm) -->
+    <div *ngIf="fx.ditherDuotoneSuspended(cfg)" class="dither-note">Duotone needs an ordered algorithm (Bayer, Halftone, Noise). Error diffusion dithers the colours as they are.</div>
+
     <!-- Duotone colors -->
-    <div *ngIf="cfg.colorMode === 'duotone'">
+    <div *ngIf="fx.ditherDuotoneActive(cfg)">
         <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
             <label style="width: 20px; color:#aaa; font-size: 10px;">FG</label>
             <input type="color" [value]="rgba01ToHex(cfg.foregroundColor)"
@@ -62,9 +65,10 @@
                    (input)="fx.onLayerDitherBiasChange(selectedRasterLayerId, $any($event.target).value)">
             <span style="min-width: 22px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(cfg.duotoneBias * 100) }}%</span>
         </div>
-        <!-- Tint -->
+        <!-- Tint: how much the two colours replace the artwork (Strength sets how much of the dot pattern shows) -->
         <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-            <label style="width: 50px; color:#aaa; font-size: 10px;">Tint</label>
+            <label style="width: 50px; color:#aaa; font-size: 10px;"
+                   title="How strongly the two colours replace the original artwork. 0% = the original, 100% = only the duotone.">Tint</label>
             <input type="range" min="0" max="100" step="1" style="flex: 1;"
                    [value]="mathRound(cfg.tintOpacity * 100)"
                    (input)="fx.onLayerDitherTintChange(selectedRasterLayerId, $any($event.target).value)">
@@ -82,17 +86,18 @@
         </select>
     </div>
 
-    <!-- Strength -->
+    <!-- Strength: how strongly the dither pattern applies -->
     <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-        <label style="width: 50px; color:#aaa; font-size: 10px;">Strength</label>
+        <label style="width: 50px; color:#aaa; font-size: 10px;"
+               [title]="fx.ditherDuotoneActive(cfg) ? 'How much of the dot pattern shows. 0% = a flat blend of the two colours (at the Bias coverage), 100% = crisp dots.' : 'Blend between the original (0%) and the fully dithered result (100%).'">Strength</label>
         <input type="range" min="0" max="100" step="1" style="flex: 1;"
                [value]="mathRound(cfg.strength * 100)"
                (input)="fx.onLayerDitherStrengthChange(selectedRasterLayerId, $any($event.target).value)">
         <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ mathRound(cfg.strength * 100) }}%</span>
     </div>
 
-    <!-- Scale -->
-    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+    <!-- Scale (ordered algorithms only: error diffusion works pixel by pixel) -->
+    <div *ngIf="fx.ditherScaleApplies(cfg)" style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
         <label style="width: 50px; color:#aaa; font-size: 10px;">Scale</label>
         <input type="range" min="0.25" max="8" step="0.25" style="flex: 1;"
                [value]="cfg.patternScale"
@@ -100,7 +105,8 @@
         <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ cfg.patternScale }}</span>
     </div>
 
-    <!-- Per-Channel -->
+    <!-- Per-Channel + Invert Colors: only where they apply (ordered algorithms, Quantize mode) -->
+    <ng-container *ngIf="fx.ditherChannelOptionsApply(cfg)">
     <div style="margin-bottom: 5px;">
         <label class="scene3d-checkbox-row">
             <input type="checkbox"
@@ -110,15 +116,15 @@
         </label>
     </div>
 
-    <!-- Invert Pattern -->
     <div style="margin-bottom: 5px;">
         <label class="scene3d-checkbox-row">
             <input type="checkbox"
                    [checked]="cfg.invertPattern"
                    (change)="fx.onLayerDitherInvertChange(selectedRasterLayerId, $any($event.target).checked)">
-            <span style="color: #ccc; font-size: 10px;">Invert Pattern</span>
+            <span style="color: #ccc; font-size: 10px;">Invert Colors</span>
         </label>
     </div>
+    </ng-container>
 
     <!-- Bayer settings (only when algorithm = 'bayer') -->
     <div *ngIf="cfg.algorithm === 'bayer'">
@@ -171,13 +177,21 @@
         <div style="border-top: 1px solid #555; margin: 4px 0; padding-top: 4px;">
             <label style="font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">Edge Effects</label>
         </div>
-        <!-- Edge Width -->
-        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-            <label style="width: 50px; color:#aaa; font-size: 10px;">Width px</label>
-            <input type="range" min="0" max="100" step="1" style="flex: 1;"
-                   [value]="cfg.edgeWidth ?? 0"
-                   (input)="fx.onLayerDitherEdgeWidthChange(selectedRasterLayerId, $any($event.target).value)">
-            <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ cfg.edgeWidth ?? 0 }}</span>
+        <!-- Edge Width: a non-linear slider (fine at small widths) + an exact number box; Canvas mode reads in % of the
+             page's shorter side -->
+        <div class="edge-width-row">
+            <label style="width: 50px; color:#aaa; font-size: 10px;">Width {{ edgeInPct(cfg) ? '%' : 'px' }}</label>
+            <input type="range" min="0" step="1" style="flex: 1; min-width: 0;"
+                   [max]="edgeInPct(cfg) ? edgeMaxPct * 10 : edgeSliderSteps"
+                   [value]="edgeSlider(cfg)"
+                   (input)="onEdgeSlider(cfg, $any($event.target).value)"
+                   aria-label="Edge width">
+            <input type="number" class="edge-width-num" min="0" inputmode="decimal"
+                   [max]="edgeInPct(cfg) ? edgeMaxPct : edgeMaxPx"
+                   [step]="edgeInPct(cfg) ? 0.5 : 1"
+                   [value]="edgeValue(cfg)"
+                   (change)="onEdgeNumber(cfg, $any($event.target).value)"
+                   [attr.aria-label]="edgeInPct(cfg) ? 'Edge width, % of the page' : 'Edge width in px'">
         </div>
         <!-- Edge sub-controls (only when width > 0) -->
         <ng-container *ngIf="(cfg.edgeWidth ?? 0) > 0">

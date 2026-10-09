@@ -24,3 +24,14 @@
     input[type="color"] { width: 32px !important; height: 32px !important; }
     .btn-sm { min-height: 32px; }
 }
+
+// A muted one-line note (why a section is gone for this algorithm); retro chrome = square corners.
+.dither-note {
+    margin: 0 0 6px;
+    padding: 3px 6px;
+    border-left: 2px solid #666;
+    border-radius: 0;
+    color: #999;
+    font-size: 9px;
+    line-height: 1.35;
+}

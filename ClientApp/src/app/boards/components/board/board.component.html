@@ -668,7 +668,7 @@
                     <div class="row mb-2" style="flex-flow: nowrap; align-items: center;">
                         <label style="width: 60px; color:#cecece; font-size: 12px;">Size</label>
                         <input type="range" min="2" max="20" step="1" style="flex: 1;"
-                               [(ngModel)]="arrowheadSize">
+                               [(ngModel)]="arrowheadSize" (ngModelChange)="onArrowheadChange()">
                         <span style="min-width: 20px; text-align: right; color: #cecece; font-size: 12px;">{{ arrowheadSize }}</span>
                     </div>
                 </div>

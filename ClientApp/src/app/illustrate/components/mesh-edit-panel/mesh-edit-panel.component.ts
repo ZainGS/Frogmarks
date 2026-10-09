@@ -86,6 +86,11 @@ export class MeshEditPanelComponent implements OnChanges {
   private get sm(): ShapeManager { return this.shapeManager; }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if ((changes['meshId'] || changes['shapeManager']) && this.meshId) {
+      // the proportional settings are saved on the mesh: show them (not the panel's defaults)
+      const p = ops.readProportional(this.sm, this.meshId);
+      if (p) { this.proportionalEnabled = p.enabled; this.proportionalRadius = p.radius; this.proportionalFalloff = p.falloff; }
+    }
     if (changes['meshId'] && this.meshId) {
       this.refreshModifiers();
       if (!this.meshEditState) this._localMode = 'face';   // the service resets it on every entry

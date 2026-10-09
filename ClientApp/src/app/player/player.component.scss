@@ -22,6 +22,18 @@
     outline: none;
 
     &.hidden { visibility: hidden; pointer-events: none; }
+
+    // Launched from the Shell: the cart fades in from the launch's black (the Player's own background).
+    &.player-canvas--reveal { animation: player-canvas-reveal 400ms ease-out both; }
+}
+
+@keyframes player-canvas-reveal {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .player-canvas.player-canvas--reveal { animation-duration: 160ms; }
 }
 
 // ── Buttons (retro chrome: square, bevelled; 44 px on touch) ──────

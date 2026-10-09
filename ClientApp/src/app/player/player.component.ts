@@ -5,6 +5,9 @@ import { isRendererLive, reinitializeWebGPURendering, startWebGPURendering } fro
 import { PlayerCartService } from '../shared/services/player-cart.service';
 import { resetEngineTo2DView } from '../shared/utilities/engine-view-reset';
 
+/** From the Shell the screen is already black: a cart that loads within this long shows no spinner at all. */
+export const SPINNER_DELAY_MS = 400;
+
 @Component({
   selector: 'app-player',
   standalone: false,
@@ -25,6 +28,12 @@ export class PlayerComponent implements OnInit, OnDestroy {
   cartAuthor = '';
   isDragOver = false;
   errorMsg   = '';
+  /** The cart came from the Shell's launch animation (the screen is already black): the spinner waits
+   *  SPINNER_DELAY_MS (a quick load shows none) and the cart fades in from black. */
+  fromShell = false;
+  /** The loading spinner may show (at once for a dropped / picked file; after SPINNER_DELAY_MS from the Shell). */
+  spinnerVisible = true;
+  private _spinnerTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly router: Router,
@@ -34,12 +43,13 @@ export class PlayerComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const pending = this.playerCartService.pendingCart;
-    this.playerCartService.pendingCart = null;
-    if (pending) void this._loadCart(pending);
+    const { cart, fromShell } = this.playerCartService.take();
+    this.fromShell = fromShell;
+    if (cart) void this._loadCart(cart);
   }
 
   ngOnDestroy(): void {
+    clearTimeout(this._spinnerTimer);
     this._stopTick();
     this._sm?.exitUIPlayerMode();
     if (this._msgListener) {
@@ -83,6 +93,9 @@ export class PlayerComponent implements OnInit, OnDestroy {
   private async _loadCart(blob: Blob): Promise<void> {
     this.isLoading = true;
     this.errorMsg  = '';
+    clearTimeout(this._spinnerTimer);
+    this.spinnerVisible = !this.fromShell;
+    if (this.fromShell) this._spinnerTimer = setTimeout(() => { this.spinnerVisible = true; }, SPINNER_DELAY_MS);
     try {
       // Engine boot / load / mode entry run OUTSIDE Angular's zone (H8, zone audit): the timers and listeners they start
       // must not run app change detection. The awaits resume in the zone, so the state below is still bound normally.
@@ -120,6 +133,7 @@ export class PlayerComponent implements OnInit, OnDestroy {
       console.error('[Player] load failed', e);
       this.errorMsg = e?.message || "it couldn't be loaded";
     }
+    clearTimeout(this._spinnerTimer);
     this.isLoading = false;
   }
 
@@ -189,6 +203,8 @@ export class PlayerComponent implements OnInit, OnDestroy {
   // ── Nav ──────────────────────────────────────────────────────
 
   goHome(): void {
+    // The Shell fades in from this black (StudioComponent takes the flag).
+    this.playerCartService.returningToShell = true;
     void this.router.navigate(['/']);
   }
 }

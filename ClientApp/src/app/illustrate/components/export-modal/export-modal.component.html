@@ -7,18 +7,15 @@
     <div class="export-modal-body">
       <nav class="export-modal-nav">
         <button class="export-modal-nav-item" [class.active]="tab === 'image'" (click)="tab = 'image'">
-          <span class="export-modal-nav-icon">🖼</span>
-          <span class="export-modal-nav-label">Export Image</span>
+          <span class="export-modal-nav-label">Image</span>
           <span class="export-modal-nav-ext">.png</span>
         </button>
         <button class="export-modal-nav-item" [class.active]="tab === 'scene'" (click)="tab = 'scene'; refreshExportCartSounds()">
-          <span class="export-modal-nav-icon">💿</span>
-          <span class="export-modal-nav-label">Export Scene</span>
+          <span class="export-modal-nav-label">Scene</span>
           <span class="export-modal-nav-ext">.frogcart</span>
         </button>
         <button class="export-modal-nav-item" [class.active]="tab === 'workfile'" (click)="tab = 'workfile'">
-          <span class="export-modal-nav-icon">🐸</span>
-          <span class="export-modal-nav-label">Export Workfile</span>
+          <span class="export-modal-nav-label">Workfile</span>
           <span class="export-modal-nav-ext">.frogmarks</span>
         </button>
       </nav>
@@ -28,10 +25,10 @@
         <!-- Image panel -->
         <ng-container *ngIf="tab === 'image'">
           <div class="export-modal-panel-title">Export Image</div>
-          <p class="export-modal-panel-desc">Download the artboard as an image.</p>
+          <p class="export-modal-panel-desc">Download the artboard as a <code>.png</code> or <code>.jpeg</code> image.</p>
           <div class="export-modal-field">
             <span class="export-modal-field-label" id="exp-bg-label">Background</span>
-            <div class="export-seg" role="radiogroup" aria-labelledby="exp-bg-label">
+            <div class="export-seg export-seg--fill" role="radiogroup" aria-labelledby="exp-bg-label">
               <button type="button" class="export-seg-btn" role="radio" [class.active]="imageBackground === 'canvas'"
                       [attr.aria-checked]="imageBackground === 'canvas'" (click)="setImageBackground('canvas')">Canvas</button>
               <button type="button" class="export-seg-btn" role="radio" [class.active]="imageBackground === 'transparent'"
@@ -45,7 +42,7 @@
           </div>
           <div class="export-modal-field">
             <span class="export-modal-field-label" id="exp-fmt-label">Format</span>
-            <div class="export-seg" role="radiogroup" aria-labelledby="exp-fmt-label">
+            <div class="export-seg export-seg--fill" role="radiogroup" aria-labelledby="exp-fmt-label">
               <button type="button" class="export-seg-btn" role="radio" [class.active]="imageFormat === 'png'"
                       [attr.aria-checked]="imageFormat === 'png'" (click)="imageFormat = 'png'">PNG</button>
               <button type="button" class="export-seg-btn" role="radio" [class.active]="imageFormat === 'jpeg'"
@@ -80,8 +77,73 @@
             <label class="export-modal-field-label">Description</label>
             <textarea class="export-modal-field-input export-modal-field-textarea" [(ngModel)]="files.exportCartDescription" placeholder="Optional description" rows="3"></textarea>
           </div>
+          <!-- Disc art: what the cart's CD prints on the Shell home (its pattern, an image, or an artboard snapshot) -->
+          <div class="export-modal-field">
+            <span class="export-modal-field-label" id="exp-disc-label">Disc art</span>
+            <div class="export-seg export-seg--fill" role="radiogroup" aria-labelledby="exp-disc-label">
+              <button *ngFor="let m of discModes" type="button" class="export-seg-btn" role="radio"
+                      [class.active]="files.exportCartArtMode === m.id" [attr.aria-checked]="files.exportCartArtMode === m.id"
+                      [title]="m.title" (click)="setDiscMode(m.id)">{{ m.label }}</button>
+            </div>
+            <!-- A grid that always fills the row: the live 3D disc square on the left (every mode).
+                 Pattern: Preview launch + Shuffle pattern stacked beside it, together exactly the square's height.
+                 Image / Snapshot: the crop square (same size) + the zoom slider's green strip, as tall as the squares;
+                 Preview launch under the 3D square and Choose image / Recapture under the crop + slider. -->
+            <div class="export-disc" [class.export-disc--edit]="files.exportCartArtMode !== 'pattern'">
+              <!-- the live disc: the Shell's own CD shader + idle spin -->
+              <div class="export-disc-live" [class.export-disc-live--off]="!hasDiscPreview">
+                <canvas #discCanvas class="export-disc-live-canvas" aria-label="Disc preview"></canvas>
+                <!-- stop / play the disc's idle spin -->
+                <button *ngIf="canPauseDisc" type="button" class="export-disc-playpause"
+                        [attr.aria-label]="discAnimating ? 'Stop the disc' : 'Play the disc'"
+                        [title]="discAnimating ? 'Stop the disc' : 'Play the disc'"
+                        (click)="toggleDiscAnimation()">
+                  <!-- drawn, not text glyphs (a glyph's own spacing put it off centre); the triangle sits on its visual centre -->
+                  <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+                    <rect *ngIf="discAnimating" x="3" y="3" width="6" height="6" fill="currentColor"></rect>
+                    <polygon *ngIf="!discAnimating" points="3.5,2 10.5,6 3.5,10" fill="currentColor"></polygon>
+                  </svg>
+                </button>
+              </div>
+              <div *ngIf="files.exportCartArtMode === 'pattern'" class="export-disc-stack">
+                <button *ngIf="canPreviewLaunch" type="button" class="export-disc-btn"
+                        title="Play the animation a tap on this cart in the Shell plays" (click)="previewLaunch()">Preview launch</button>
+                <button type="button" class="export-disc-btn" title="Another pattern" (click)="shuffleDiscPattern()">Shuffle pattern</button>
+              </div>
+              <ng-container *ngIf="files.exportCartArtMode !== 'pattern'">
+                <div #cropBox class="export-disc-crop"
+                     (pointerdown)="onDiscPointerDown($event)" (pointermove)="onDiscPointerMove($event)"
+                     (pointerup)="onDiscPointerUp($event)" (pointercancel)="onDiscPointerUp($event)" (wheel)="onDiscWheel($event)">
+                  <canvas #cropCanvas class="export-disc-crop-canvas"></canvas>
+                  <svg class="export-disc-crop-guides" [attr.viewBox]="'0 0 ' + cropSize + ' ' + cropSize" aria-hidden="true">
+                    <circle [attr.cx]="discGuides.c" [attr.cy]="discGuides.c" [attr.r]="discGuides.outer" class="g-cut"></circle>
+                    <circle [attr.cx]="discGuides.c" [attr.cy]="discGuides.c" [attr.r]="discGuides.safe" class="g-safe"></circle>
+                    <circle [attr.cx]="discGuides.c" [attr.cy]="discGuides.c" [attr.r]="discGuides.hole" class="g-hole"></circle>
+                  </svg>
+                </div>
+                <!-- zoom: starts in the middle (the image covers the disc); up = bigger, down = smaller (foil around it).
+                     Off until there is an image / a capture. A normal slider turned 90° (the theme styles it). -->
+                <div class="export-disc-zoom-wrap" [class.export-disc-zoom-wrap--off]="!files.exportCartArtSource">
+                  <input type="range" class="export-disc-zoom" min="0" [max]="discZoomSteps" step="1" aria-label="Zoom"
+                         [style.width.px]="cropSize - 16"
+                         [value]="discZoomSlider" [disabled]="!files.exportCartArtSource" (input)="onDiscZoomSlider($any($event.target).value)">
+                </div>
+                <button *ngIf="canPreviewLaunch" type="button" class="export-disc-btn export-disc-btn--a"
+                        title="Play the animation a tap on this cart in the Shell plays" (click)="previewLaunch()">Preview launch</button>
+                <label *ngIf="files.exportCartArtMode === 'image'" class="export-disc-btn export-disc-btn--b">
+                  Choose image…
+                  <input type="file" accept="image/*" class="export-disc-file" (change)="onDiscImagePicked($event)">
+                </label>
+                <button *ngIf="files.exportCartArtMode === 'snapshot'" type="button" class="export-disc-btn export-disc-btn--b"
+                        [disabled]="discArtBusy" (click)="recaptureDiscSnapshot()">
+                  {{ discArtBusy ? 'Capturing…' : 'Recapture' }}</button>
+              </ng-container>
+            </div>
+            <span *ngIf="discHint" class="export-modal-hint">{{ discHint }}</span>
+            <p *ngIf="files.exportCartArtError" class="export-modal-error" role="alert">{{ files.exportCartArtError }}</p>
+          </div>
           <div class="export-cart-sounds" *ngIf="files.exportCartSounds.length > 0">
-            <span class="export-cart-sounds-label">🔊 {{ files.exportCartSounds.length }} sound{{ files.exportCartSounds.length === 1 ? '' : 's' }} will be bundled</span>
+            <span class="export-cart-sounds-label">{{ files.exportCartSounds.length }} sound{{ files.exportCartSounds.length === 1 ? '' : 's' }} will be bundled</span>
             <span class="export-cart-sounds-ids">{{ files.exportCartSounds.join(', ') }}</span>
           </div>
           <button class="export-modal-action-btn" (click)="files.exportModalFrogcart()" [disabled]="files.exportCartBusy">
@@ -92,9 +154,11 @@
         <!-- Workfile panel -->
         <ng-container *ngIf="tab === 'workfile'">
           <div class="export-modal-panel-title">Export Workfile</div>
-          <p class="export-modal-panel-desc">Download the full editable project file. Use this to back up your work or open it on another device.</p>
-          <button class="export-modal-action-btn" (click)="exportWorkfile()" [disabled]="files.frogmarksSaving">
-            {{ files.frogmarksSaving ? 'Saving…' : 'Download .frogmarks' }}
+          <p class="export-modal-panel-desc">Download the full editable <code>.frogmarks</code> project file. Use this to back up your work or open it on another device.</p>
+          <!-- the only action on this tab: one big square-cornered button filling the rest of the panel -->
+          <button class="export-modal-action-btn export-modal-action-btn--big" (click)="exportWorkfile()" [disabled]="files.frogmarksSaving">
+            <span class="export-big-label">{{ files.frogmarksSaving ? 'Saving…' : 'Download' }}</span>
+            <span class="export-big-ext">.frogmarks</span>
           </button>
         </ng-container>
 

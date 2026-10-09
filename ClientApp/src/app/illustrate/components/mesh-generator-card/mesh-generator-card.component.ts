@@ -31,8 +31,13 @@ export class MeshGeneratorCardComponent implements DoCheck, OnDestroy {
   /** A field is being changed (live steps not committed yet): the card's values lead the engine's. */
   private _editing = false;
   private _raf = 0;
+  /** This circle was loaded with a height > 0 (an older circle): its Height slider stays while the mesh is selected. */
+  private _circleHeight = false;
 
   constructor(private ngZone: NgZone) {}
+
+  /** Circles are flat now (a single n-gon, no Height); only an older circle saved with a height offers the slider. */
+  get showCircleHeight(): boolean { return this._circleHeight; }
 
   private get sm() { return this.ed?.shapeManager; }
   get meshId(): string | null { return this.ed?.editorState.scene3dSelectedMeshId ?? null; }
@@ -44,7 +49,7 @@ export class MeshGeneratorCardComponent implements DoCheck, OnDestroy {
     const id = this.meshId;
     const applies = meshGeneratorApplies(this.sm, id);
     if (id !== this._id || applies !== this._applies) {
-      if (id !== this._id) this._land();
+      if (id !== this._id) { this._land(); this._circleHeight = false; }
       this._id = id;
       this._applies = applies;
       this.load();
@@ -55,6 +60,7 @@ export class MeshGeneratorCardComponent implements DoCheck, OnDestroy {
 
   load(): void {
     this.gen = this._applies ? readMeshGenerator(this.sm, this._id) : null;
+    if (this.gen?.type === 'circle' && Number(this.gen.params['height']) > 0) this._circleHeight = true;
     this._sig = this.gen ? JSON.stringify(this.gen.params) : '';
   }
 

@@ -348,3 +348,73 @@ describe('RasterLayersComponent fresh-document auto-select (a PAINT layer, highl
     expect(t.activeRows()).toEqual(['BG']);
   });
 });
+
+describe('RasterLayersComponent clip toggle + Merge Down read the ENGINE order (bottom-first)', () => {
+  // Engine order: index 0 = bottom. The panel displays it reversed (top row = last entry).
+  const clipBtn = (t: Awaited<ReturnType<typeof setup>>, id: string) => t.row(id).querySelector<HTMLElement>('.rl-clip');
+
+  it('the clip toggle shows on every layer except the bottom one', async () => {
+    const t = await setup(false, [layer('a'), layer('b'), layer('c')]);
+    expect(clipBtn(t, 'a')).withContext('bottom').toBeNull();
+    expect(clipBtn(t, 'b')).not.toBeNull();
+    expect(clipBtn(t, 'c')).withContext('top').not.toBeNull();
+  });
+
+  it('folders draw nothing: a layer above only folders is the bottom; a reference below counts; a hidden layer below counts', async () => {
+    const t = await setup(false, [
+      layer('grp', 1, { type: 'folder' }), layer('a'), layer('ref', 1, { type: 'reference' }), layer('b'),
+      layer('h', 1, { visible: false }), layer('c'),
+    ]);
+    expect(clipBtn(t, 'a')).toBeNull();
+    expect(clipBtn(t, 'b')).not.toBeNull();
+    expect(clipBtn(t, 'c')).not.toBeNull();
+  });
+
+  it('the first layer above the 3D scene is the bottom of its own (foreground) stack', async () => {
+    const t = await setup(false, [layer('a'), layer('s', 1, { type: '3d-scene' }), layer('fg1'), layer('fg2')]);
+    expect(clipBtn(t, 'a')).toBeNull();
+    expect(clipBtn(t, 'fg1')).toBeNull();
+    expect(clipBtn(t, 'fg2')).not.toBeNull();
+  });
+
+  it('a clipped bottom layer keeps its toggle (to release it); Alt+click never switches a clip on there', async () => {
+    const t = await setup(false, [layer('a', 1, { clipped: true }), layer('b')]);
+    (t.service as any).setLayerClipping = jasmine.createSpy('setLayerClipping');
+    expect(clipBtn(t, 'a')).not.toBeNull();
+    t.tap(clipBtn(t, 'a')!);
+    expect((t.service as any).setLayerClipping).toHaveBeenCalledOnceWith('a', false);
+    t.layers$.next([layer('a'), layer('b')]);
+    t.fixture.detectChanges();
+    t.row('a').dispatchEvent(new MouseEvent('click', { altKey: true, bubbles: true }));
+    expect((t.service as any).setLayerClipping).toHaveBeenCalledTimes(1);
+    t.row('b').dispatchEvent(new MouseEvent('click', { altKey: true, bubbles: true }));
+    expect((t.service as any).setLayerClipping).toHaveBeenCalledWith('b', true);
+  });
+
+  it('the clipping tooltips say it clips to everything below, not just one layer', async () => {
+    const t = await setup(false, [layer('a'), layer('b', 1, { clipped: true })]);
+    const ind = t.row('b').querySelector<HTMLElement>('.clip-indicator')!;
+    expect(ind.title).toContain('everything below');
+    expect(ind.title).not.toBe('Clipped to layer below');
+  });
+
+  it('Merge Down: enabled where the engine merges (a paint layer below), disabled on the bottom', async () => {
+    const t = await setup(false, [layer('a'), layer('grp', 1, { type: 'folder' }), layer('ref', 1, { type: 'reference' }), layer('b')]);
+    (t.service as any).mergeLayerDown = jasmine.createSpy('mergeLayerDown');
+    const mergeBtn = () => t.el.querySelector<HTMLButtonElement>('button[title="Merge Down"]')!;
+    t.comp.activeLayerId = 'b'; t.fixture.detectChanges();
+    expect(t.comp.canMergeDown).toBeTrue();   // skips the reference + folder, like the engine
+    expect(mergeBtn().disabled).toBeFalse();
+    mergeBtn().click();
+    expect((t.service as any).mergeLayerDown).toHaveBeenCalledOnceWith('b');
+    t.comp.activeLayerId = 'a'; t.fixture.detectChanges();
+    expect(t.comp.canMergeDown).toBeFalse();
+    expect(mergeBtn().disabled).toBeTrue();
+  });
+
+  it('Merge Down: nothing but a reference / the 3D scene below = disabled', async () => {
+    const t = await setup(false, [layer('ref', 1, { type: 'reference' }), layer('s', 1, { type: '3d-scene' }), layer('a')]);
+    t.comp.activeLayerId = 'a';
+    expect(t.comp.canMergeDown).toBeFalse();
+  });
+});

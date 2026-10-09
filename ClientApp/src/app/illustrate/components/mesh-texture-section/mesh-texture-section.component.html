@@ -14,13 +14,18 @@
         <button class="scene3d-btn scene3d-btn-sm" [disabled]="!scene3dNormalMapSet" (click)="scene3dClearNormalMap()">Clear</button>
         <input #normalMapFileInput type="file" accept="image/*" style="display:none" (change)="scene3dUploadNormalMap($event)">
     </div>
-    <div *ngIf="scene3dNormalMapSet" class="scene3d-normal-badge">Per-pixel lighting active</div>
-    <div class="scene3d-material-row" *ngIf="scene3dDiffuseTextureSet">
+    <ng-container *ngIf="controls as c">
+    <div *ngIf="scene3dNormalMapSet && c.normalMapLive" class="scene3d-normal-badge">Per-pixel lighting active</div>
+    <div *ngIf="scene3dNormalMapSet && !c.normalMapLive" class="scene3d-hint">The normal map has no effect in Gouraud / Unlit.</div>
+    <!-- Tiling / Offset: both the diffuse and the normal map sample with them -->
+    <div class="scene3d-material-row" *ngIf="c.tiling">
         <label>Tiling</label>
         <input type="number" step="0.5" min="0.01" class="scene3d-short-input" [(ngModel)]="scene3dTexTileX" (change)="scene3dTexTilingChanged()" title="Horizontal repeat (tiles per world unit when Triplanar is on)">
-        <input type="number" step="0.5" min="0.01" class="scene3d-short-input" [(ngModel)]="scene3dTexTileY" (change)="scene3dTexTilingChanged()" title="Vertical repeat">
+        <input *ngIf="c.tilingY" type="number" step="0.5" min="0.01" class="scene3d-short-input" [(ngModel)]="scene3dTexTileY" (change)="scene3dTexTilingChanged()" [title]="c.tilingYNormalOnly ? 'Vertical repeat — normal map only (Triplanar diffuse uses the first value)' : 'Vertical repeat'">
     </div>
-    <div class="scene3d-material-row" *ngIf="scene3dDiffuseTextureSet">
+    <div class="scene3d-hint" *ngIf="c.tilingYNormalOnly">Triplanar: the diffuse uses the first Tiling value; the second only tiles the normal map.</div>
+    </ng-container>
+    <div class="scene3d-material-row" *ngIf="controls.tiling">
         <label>Offset</label>
         <input type="number" step="0.05" class="scene3d-short-input" [(ngModel)]="scene3dTexOffX" (change)="scene3dTexTilingChanged()" title="Horizontal pan">
         <input type="number" step="0.05" class="scene3d-short-input" [(ngModel)]="scene3dTexOffY" (change)="scene3dTexTilingChanged()" title="Vertical pan">

@@ -61,13 +61,15 @@ export class FillWandService {
     this._syncMagicWandOptions();
   }
 
+  /** Push the wand options to the engine. `mode` = the wand's own New / Add / Subtract (Salsa 2026-10-09; Shift / Alt
+   *  held on a click still override it there). `referenceLayerId` is always sent, so "None" clears the reference. */
   _syncMagicWandOptions(): void {
-    // NOTE: engine options are {tolerance, contiguous, referenceLayerId} — 'mode' is
-    // not consumed (the wand Mode control is currently a no-op; needs an engine option).
-    this.shapeManager.setMagicWandOptions({
+    const opts: { tolerance: number; contiguous: boolean; referenceLayerId: string | undefined; mode: WandSelectionMode } = {
       tolerance: this.wandTolerance,
       contiguous: this.wandContiguous,
       referenceLayerId: this.wandReferenceLayerId || undefined,
-    });
+      mode: this.wandMode,
+    };
+    this.shapeManager.setMagicWandOptions(opts);
   }
 }

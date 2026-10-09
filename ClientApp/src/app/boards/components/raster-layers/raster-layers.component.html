@@ -152,7 +152,7 @@
       <!-- ═══ Normal layer row ═══ -->
       <ng-container *ngIf="!layer.type || layer.type === 'layer'">
         <!-- Clipping indicator -->
-        <span *ngIf="layer.clipped" class="clip-indicator" title="Clipped to layer below">⤵</span>
+        <span *ngIf="layer.clipped" class="clip-indicator" title="Clipped: shows only where everything below it in the stack is painted (all lower layers together, not just the one directly below)">⤵</span>
 
         <!-- Row 1: visibility, name, toggles -->
         <div class="rl-row-top">
@@ -177,12 +177,12 @@
                  (click)="$event.stopPropagation()"
                  autofocus>
 
-          <!-- Clipping toggle (not on bottom layer) -->
-          <span *ngIf="!isBottomLayer(layer)"
+          <!-- Clipping toggle (not on the bottom of its stack: nothing below to clip to; kept while on so it can be released) -->
+          <span *ngIf="!isBottomLayer(layer) || layer.clipped"
                 class="rl-icon rl-clip"
                 [class.on]="layer.clipped"
                 (click)="toggleClipping(layer, $event)"
-                title="Clipping mask">
+                [title]="layer.clipped ? 'Clipping mask on: shows only where the layers below are painted. Click to release (Alt+click the row)' : 'Clipping mask: show this layer only where the layers below it are painted (Alt+click the row)'">
             🔗
           </span>
 

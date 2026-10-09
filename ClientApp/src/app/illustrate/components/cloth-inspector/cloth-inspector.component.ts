@@ -1,6 +1,12 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 
+/** The live cloth sim's wind clock: 1/60 s per rendered frame (Salsa WIND_ZONE_FRAMES_PER_SECOND). The inspector
+ *  shows a wind zone's pulse Period in those frames and its Phase as a 0–1 fraction of the cycle; the engine reads
+ *  pulsePeriod in seconds and pulsePhase in radians. */
+export const WIND_ZONE_FPS = 60;
+const TAU = 2 * Math.PI;
+
 /**
  * Cloth section of the mesh inspector: grid / sim info, re-simulate, live cloth, wind frame-link, wind zones.
  * Extracted from illustration.component (refactor-plan 2.7b). Shown by the editor only for a selected cloth mesh.
@@ -95,7 +101,8 @@ export class ClothInspectorComponent implements OnChanges {
 
   windZoneWindX = 0; windZoneWindY = 5; windZoneWindZ = 0;
 
-  windZoneFalloff = 1.0;
+  /** 'none' = the same strength everywhere in the zone, 'linear' = fades to 0 at the edge (the engine's options). */
+  windZoneFalloff: 'none' | 'linear' = 'none';
 
   windZonePulseEnabled = false;
 
@@ -175,7 +182,11 @@ export class ClothInspectorComponent implements OnChanges {
       (this.windZoneBoxMax[1] - this.windZoneBoxMin[1]) / 2,
       (this.windZoneBoxMax[2] - this.windZoneBoxMin[2]) / 2,
     ];
-    if (this.windZonePulseEnabled) zone.pulse = { period: this.windZonePulsePeriod, phase: this.windZonePulsePhase };
+    // flat engine fields (seconds / radians); off = period 0 (the engine's "constant") so an update clears it
+    const frames = Math.max(1, Number(this.windZonePulsePeriod) || 0);
+    zone.pulsePeriod = this.windZonePulseEnabled ? frames / WIND_ZONE_FPS : 0;
+    zone.pulsePhase = this.windZonePulseEnabled ? (Number(this.windZonePulsePhase) || 0) * TAU : 0;
+    zone.pulse = undefined;   // (older saves' nested pulse — never read by the engine)
     return zone;
   }
 
@@ -190,10 +201,18 @@ export class ClothInspectorComponent implements OnChanges {
     this.windZoneWindX = zone.windVec?.[0] ?? 0;
     this.windZoneWindY = zone.windVec?.[1] ?? 5;
     this.windZoneWindZ = zone.windVec?.[2] ?? 0;
-    this.windZoneFalloff = zone.falloff ?? 1.0;
-    this.windZonePulseEnabled = !!zone.pulse;
-    this.windZonePulsePeriod = zone.pulse?.period ?? 60;
-    this.windZonePulsePhase = zone.pulse?.phase ?? 0;
+    // (an older save's number never reached the engine: the zone was uniform)
+    this.windZoneFalloff = zone.falloff === 'linear' ? 'linear' : 'none';
+    if (typeof zone.pulsePeriod === 'number') {
+      this.windZonePulseEnabled = zone.pulsePeriod > 0;
+      this.windZonePulsePeriod = zone.pulsePeriod > 0 ? Math.round(zone.pulsePeriod * WIND_ZONE_FPS * 100) / 100 : 60;
+      this.windZonePulsePhase = zone.pulsePeriod > 0 ? wrap01((zone.pulsePhase ?? 0) / TAU) : 0;
+    } else {
+      // an older save: the nested pulse in frames / cycle fraction (the engine maps it the same way)
+      this.windZonePulseEnabled = !!zone.pulse && (zone.pulse.period ?? 0) > 0;
+      this.windZonePulsePeriod = zone.pulse?.period ?? 60;
+      this.windZonePulsePhase = zone.pulse?.phase ?? 0;
+    }
   }
 
   addWindZone(): void {
@@ -249,4 +268,10 @@ export class ClothInspectorComponent implements OnChanges {
     this.windZoneSelectedIdx = null;
     this.dirty.emit();
   }
+}
+
+/** x into [0, 1) (a phase in cycles). */
+function wrap01(x: number): number {
+  const r = x - Math.floor(x);
+  return Number.isFinite(r) ? Math.round(r * 100) / 100 : 0;
 }

@@ -83,4 +83,27 @@ describe('MeshGeneratorCardComponent', () => {
     expect(call.args[0]).toBe('m1');
     expect(call.args[2]).toEqual({ commit: true });
   });
+
+  it('Circle: flat (no Height) for a new circle; an older circle saved with a height keeps the slider, even at 0', () => {
+    const { c, state } = setup();
+    const sm = c.ed.shapeManager as any;
+    let type = 'circle';
+    sm.getMeshGenerator3D = () => (state.applies ? { type, params: JSON.parse(JSON.stringify(state.params)) } : null);
+    state.params = { radius: 0.5, segments: 16, height: 0 };
+    (c.ed.editorState as any).scene3dSelectedMeshId = 'flat';
+    c.ngDoCheck();
+    expect(c.gen?.type).toBe('circle');
+    expect(c.showCircleHeight).toBeFalse();
+    state.params = { radius: 0.5, segments: 16, height: 0.2 };
+    (c.ed.editorState as any).scene3dSelectedMeshId = 'old';
+    c.ngDoCheck();
+    expect(c.showCircleHeight).toBeTrue();
+    state.params = { ...state.params, height: 0 };   // dragged to 0: the slider stays for this mesh
+    c.load();
+    expect(c.showCircleHeight).toBeTrue();
+    type = 'cylinder';
+    (c.ed.editorState as any).scene3dSelectedMeshId = 'other';
+    c.ngDoCheck();
+    expect(c.showCircleHeight).toBeFalse();
+  });
 });

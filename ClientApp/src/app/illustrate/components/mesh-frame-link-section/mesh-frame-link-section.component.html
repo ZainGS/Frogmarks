@@ -10,7 +10,7 @@
     <div class="scene3d-material-row">
         <label>Type</label>
         <select class="scene3d-select" [(ngModel)]="scene3dFrameLinkType" (ngModelChange)="scene3dApplyFrameLink()">
-            <option value="scroll">Scroll (UV)</option>
+            <option value="scroll" *ngIf="scene3dFrameLinkShowScroll">Scroll (UV)</option>
             <option value="bounce">Bounce</option>
             <option value="sway">Sway</option>
             <option value="spin">Spin</option>
@@ -48,25 +48,27 @@
                    title="Seconds for one full UV scroll cycle">
         </div>
     </ng-container>
-    <ng-container *ngIf="scene3dFrameLinkType !== 'scroll'">
+    <!-- Cycle + Phase: Spin (constant turn) / Shake (per-frame jitter) / Scroll ignore them -->
+    <ng-container *ngIf="scene3dFrameLinkUsesCycle">
         <div class="scene3d-material-row">
             <label>Cycle (frames)</label>
             <input type="number" step="1" min="1" class="scene3d-input-small" [(ngModel)]="scene3dFrameLinkFramesPerCycle" (input)="scene3dApplyFrameLink()">
         </div>
     </ng-container>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="scene3dFrameLinkUsesPhase">
         <label>Phase</label>
         <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dFrameLinkPhase" (input)="scene3dApplyFrameLink()">
         <span class="scene3d-val">{{ scene3dFrameLinkPhase | number:'1.2-2' }}</span>
     </div>
-    <div class="scene3d-material-row" *ngIf="scene3dSelectedIsGroup">
+    <!-- Stagger (+ its buckets) offsets each child's phase: nothing for the types without a phase -->
+    <div class="scene3d-material-row" *ngIf="scene3dSelectedIsGroup && scene3dFrameLinkUsesPhase">
         <label>Stagger</label>
         <input type="range" min="0" max="1" step="0.01" [(ngModel)]="scene3dFrameLinkStagger" (input)="scene3dApplyFrameLink()">
         <span class="scene3d-val">{{ scene3dFrameLinkStagger | number:'1.2-2' }}</span>
     </div>
 
     <!-- Phase Buckets — group children that share the same stagger phase offset -->
-    <div class="scene3d-bucket-section" *ngIf="scene3dSelectedIsGroup">
+    <div class="scene3d-bucket-section" *ngIf="scene3dSelectedIsGroup && scene3dFrameLinkUsesPhase">
         <div class="scene3d-bucket-header">
             <span class="scene3d-bucket-section-label">Phase Buckets</span>
             <button class="scene3d-btn scene3d-btn-sm" (click)="scene3dAddBucket()">+ Create Bucket</button>

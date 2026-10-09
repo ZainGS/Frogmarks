@@ -8,7 +8,7 @@
     </div>
     <!-- Core vertex / color params -->
     <div class="scene3d-material-row">
-        <label>Vertex Jitter</label>
+        <label title="0–100%: how far each vertex is pulled onto the Snap Grid (100% = the full PS1 wobble). 100–200%: the grid itself gets coarser (200% = half the Snap Grid).">Vertex Jitter</label>
         <input type="range" min="0" max="200" step="1" [value]="s3.scene3dPS1Jitter * 100" (input)="s3.scene3dPS1Jitter = +$any($event.target).value / 100; s3.scene3dApplyPS1()">
         <span class="scene3d-val">{{ mathRound(s3.scene3dPS1Jitter * 100) }}%</span>
     </div>
@@ -337,7 +337,7 @@
         </label>
         <button class="scene3d-btn" [disabled]="!s3.scene3dIblEnabled" (click)="s3.scene3dClearEnvironmentMap()">Clear</button>
     </div>
-    <div class="scene3d-hint" style="margin-top:4px">Equirectangular image projected to spherical harmonics for diffuse IBL. Cel/ink/sketch styles unaffected.</div>
+    <div class="scene3d-hint" style="margin-top:4px">Equirectangular image projected to spherical harmonics for diffuse IBL. Affects Default (PBR) materials only; Cel, Cel-HD, Sketch, Ink, Gouraud and Unlit ignore it.</div>
 </details>
 
 <details class="scene3d-details">
@@ -486,6 +486,7 @@
                 Ambient Occlusion
             </label>
         </div>
+        <div class="scene3d-hint">Affects Default (PBR) materials only.</div>
         <ng-container *ngIf="s3.scene3dSSAOEnabled">
             <div class="scene3d-material-row">
                 <label>Radius</label>

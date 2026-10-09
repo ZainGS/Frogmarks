@@ -13,6 +13,20 @@
   z-index: 60;
 }
 
+// Back from the Player: the Player's black over the Shell (the host is raised above Salsa's cluster meanwhile), faded
+// out once the Shell is up (StudioComponent._revealFromBlack sets the duration).
+.shell-return-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: #0a0a0a;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 400ms ease-out;
+
+  &.is-fading { opacity: 0; }
+}
+
 .shell-overlay {
   width: 100%;
   height: 100%;

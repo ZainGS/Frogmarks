@@ -103,6 +103,7 @@
                (input)="s3.scene3dSetSpecularIBL(+$any($event.target).value)">
         <span class="scene3d-qf-val">{{ s3.scene3dSpecularIBL | number:'1.1-1' }}</span>
     </div>
+    <div class="scene3d-hint">Diffuse / Specular apply to Default (PBR) materials only (from the baked IBL).</div>
 </details>
 
 <!-- SSR -->
@@ -110,7 +111,7 @@
     <summary>Reflections (SSR)</summary>
     <div class="scene3d-qf-row" style="margin-top:4px">
         <span class="scene3d-qf-label" style="flex:1">Screen-space</span>
-        <input type="checkbox" [(ngModel)]="s3.scene3dSSREnabled" (change)="s3.scene3dToggleSSR()" title="Reflect on-screen objects in metallic surfaces">
+        <input type="checkbox" [(ngModel)]="s3.scene3dSSREnabled" (change)="s3.scene3dToggleSSR()" title="Reflect on-screen objects in metallic and smooth Default (PBR) surfaces">
     </div>
     <div class="scene3d-qf-row" *ngIf="s3.scene3dSSREnabled">
         <span class="scene3d-qf-label">Intensity</span>
@@ -147,5 +148,5 @@
                (input)="s3.scene3dSetSSRShadow(+$any($event.target).value)">
         <span class="scene3d-qf-val">{{ s3.scene3dSSRShadow | number:'1.2-2' }}</span>
     </div>
-    <div class="scene3d-hint">Reflects nearby objects in metallic surfaces. Requires a sky preset. Off-screen objects fall back to sky.</div>
+    <div class="scene3d-hint">Reflects nearby objects in metallic and smooth Default (PBR) surfaces (not Cel, Cel-HD, Sketch, Ink, Gouraud or Unlit). Requires a sky preset. Off-screen objects fall back to sky.</div>
 </details>

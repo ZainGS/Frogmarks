@@ -10,10 +10,18 @@ const slots = [
 describe('shellKeyItems (Shell keyboard path)', () => {
   it('home: the apps in tile order, Import right after Illustrator, then the carts', () => {
     const items = shellKeyItems({ mode: 'shell', slots, projects: [] });
-    expect(items.map(i => i.label)).toEqual(['Illustrator', 'Import a FrogCart…', 'Package Designer', 'Settings', 'Cart: Snake']);
+    expect(items.map(i => i.label)).toEqual(['Illustrator', 'Import a FrogCart…', 'Package Designer', 'Settings', 'Play “Snake”', 'Options for “Snake”']);
     expect(items[0].action).toEqual({ type: 'system', id: 'system:illustrator', systemKey: 'illustrator' });
     expect(items[3].action).toEqual({ type: 'system', id: 'system:settings', systemKey: 'settings' });
-    expect(items[4].action).toEqual({ type: 'cart', id: 'cart-1' });
+    expect(items[4].action).toEqual({ type: 'cart-play', id: 'cart-1' });
+    expect(items[5].action).toEqual({ type: 'cart', id: 'cart-1' });
+    expect(new Set(items.map(i => i.key)).size).toBe(items.length);   // unique ngFor keys
+  });
+
+  it('an engine that cannot launch carts keeps one cart button (its sheet)', () => {
+    const items = shellKeyItems({ mode: 'shell', slots, projects: [], canPlay: false });
+    expect(items.map(i => i.label).slice(-1)).toEqual(['Cart: Snake']);
+    expect(items[items.length - 1].action).toEqual({ type: 'cart', id: 'cart-1' });
   });
 
   it('project grid: Back, New, then one Open per project (untitled named)', () => {

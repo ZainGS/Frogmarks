@@ -5,7 +5,7 @@
         <button *ngFor="let s of segments" type="button" class="me-mode-btn" [class.active]="mode === s.id"
                 [attr.aria-pressed]="mode === s.id" [title]="s.title" (click)="setMode(s.id)">{{ s.label }}</button>
         <button type="button" class="me-clear-btn me-lock-btn" [class.active]="dragLock" [attr.aria-pressed]="dragLock"
-                (click)="toggleDragLock()" title="Drag Lock: dragging the selection doesn't move it">Drag Lock</button>
+                (click)="toggleDragLock()" title="Drag Lock: dragging never moves a vertex or the selection — a press only selects">Drag Lock</button>
         <button type="button" class="me-clear-btn" [disabled]="!hasSelection" (click)="deselectAll()"
                 title="Deselect all (Alt+A)">Deselect all</button>
     </div>

@@ -785,23 +785,29 @@
                             </button>
                             <span class="scene3d-frame-badge" title="Current timeline frame"><app-timeline-frame-badge></app-timeline-frame-badge></span>
                         </div>
-                        <div class="scene3d-material-row">
+                        <ng-container *ngIf="scene3dCameraPanel as camPanel">
+                        <!-- Projection = the view-bar mode (2D Ortho / 2D Persp); 3D Free always orbits in perspective. -->
+                        <div class="scene3d-material-row" *ngIf="camPanel.showProjection">
                             <label>Projection</label>
                             <div class="scene3d-seg-btn-group">
-                                <button class="scene3d-seg-btn"
-                                        [class.active]="editorState.scene3dIllustrationProjection === 'orthographic'"
-                                        (click)="scene3dSetIllustrationProjection('orthographic')">Ortho</button>
-                                <button class="scene3d-seg-btn"
-                                        [class.active]="editorState.scene3dIllustrationProjection === 'perspective'"
-                                        (click)="scene3dSetIllustrationProjection('perspective')">Persp</button>
+                                <button class="scene3d-seg-btn" [disabled]="viewModesLocked"
+                                        [class.active]="camPanel.projection === 'orthographic'"
+                                        (click)="scene3dSetIllustrationProjection('orthographic')"
+                                        title="2D Ortho (same as the view bar)">Ortho</button>
+                                <button class="scene3d-seg-btn" [disabled]="viewModesLocked"
+                                        [class.active]="camPanel.projection === 'perspective'"
+                                        (click)="scene3dSetIllustrationProjection('perspective')"
+                                        title="2D Persp (same as the view bar)">Persp</button>
                             </div>
                             <span class="scene3d-shortcut-hint">5</span>
                         </div>
-                        <div class="scene3d-material-row" *ngIf="editorState.scene3dIllustrationProjection === 'perspective'">
+                        <div class="scene3d-hint" *ngIf="!camPanel.showProjection">3D Free orbits in perspective. Pick 2D Ortho / 2D Persp in the view bar for an orthographic camera.</div>
+                        <div class="scene3d-material-row" *ngIf="camPanel.showFov">
                             <label>FOV</label>
-                            <input type="range" min="10" max="120" step="1" [(ngModel)]="editorState.scene3dFOV" (input)="scene3dSetFOV(editorState.scene3dFOV)">
-                            <span class="scene3d-val">{{ editorState.scene3dFOV }}°</span>
+                            <input type="range" min="10" max="120" step="1" [ngModel]="camPanel.fovDeg ?? editorState.scene3dFOV" (ngModelChange)="scene3dSetFOV($event)">
+                            <span class="scene3d-val">{{ camPanel.fovDeg ?? editorState.scene3dFOV }}°</span>
                         </div>
+                        </ng-container>
                     </details>
 
                     <app-scene-cinematic-section></app-scene-cinematic-section>

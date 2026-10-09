@@ -185,6 +185,10 @@ export class UiSystemPanelComponent implements OnInit, OnDestroy {
     this.uiPushMachine();
   }
 
+  /** The state's Dim world strength as the slider shows it (0..1; an older save's 1..20 was already full strength). */
+  dimWorldStrength(v: unknown): number { return dimWorldStrength(v); }
+  dimWorldLabel(v: unknown): string { return `${Math.round(dimWorldStrength(v) * 100)}%`; }
+
   uiSetStateField(stateId: string, field: string, value: any): void {
     if (!this.uiActiveMachine) return;
     this.uiActiveMachine = {
@@ -644,4 +648,11 @@ export class UiSystemPanelComponent implements OnInit, OnDestroy {
   }
   kitTrackById(_i: number, r: { id: string }): string { return r.id; }
   kitTrackByKey(_i: number, r: { key: string }): string { return r.key; }
+}
+
+/** A state's worldBlur on the Dim world slider: the engine's 0..1 strength (it clamps above 1; the old 0–20 slider saved
+ *  1..20, all full strength). */
+export function dimWorldStrength(v: unknown): number {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  return Math.max(0, Math.min(1, n));
 }

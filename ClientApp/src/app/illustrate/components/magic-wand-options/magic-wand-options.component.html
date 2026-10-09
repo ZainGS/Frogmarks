@@ -23,11 +23,11 @@
     <label style="width: 40px; color:#aaa; font-size: 11px;">Mode</label>
     <div style="display: flex; gap: 2px;">
         <button class="mode-btn" [class.active]="fw.wandMode === 'new'" (click)="fw.onWandModeChange('new')"
-                title="Replace any existing selection.">New</button>
+                title="Each click replaces the selection. Hold Shift to add or Alt to subtract for one click.">New</button>
         <button class="mode-btn" [class.active]="fw.wandMode === 'add'" (click)="fw.onWandModeChange('add')"
-                title="Expand the selection (Shift+click).">+Add</button>
+                title="Each click adds the region to the selection (or hold Shift on a click in any mode).">+Add</button>
         <button class="mode-btn" [class.active]="fw.wandMode === 'subtract'" (click)="fw.onWandModeChange('subtract')"
-                title="Remove from the selection (Alt+click).">−Sub</button>
+                title="Each click removes the region from the selection (or hold Alt on a click in any mode).">−Sub</button>
     </div>
 </div>
 <!-- Reference Layer -->

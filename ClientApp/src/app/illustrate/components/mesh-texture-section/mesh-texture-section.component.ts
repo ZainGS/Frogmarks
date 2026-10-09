@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
+import { textureControlVisibility, type TextureControlVisibility } from '../../utils/scene3d-panel-visibility';
 
 /** Mesh inspector: Texture (diffuse / normal map upload + clear, tiling / offset, triplanar). Extracted from illustration.component (refactor-plan 2.9D). */
 @Component({
@@ -36,6 +37,16 @@ export class MeshTextureSectionComponent implements OnChanges {
   scene3dTexOffY = 0;
 
   scene3dTriplanar = false;
+
+  /** Which texture controls do anything (audit 2026-10-09 §2 #12-14). The render style is read LIVE from the mesh —
+   *  the Material section changes it without telling this one. */
+  get controls(): TextureControlVisibility {
+    let style: string | undefined;
+    try { style = this.meshId ? (this.shapeManager?.scene3d?.getMesh(this.meshId) as any)?.material?.renderStyle : undefined; } catch { style = undefined; }
+    return textureControlVisibility(style ?? 'default', {
+      diffuse: this.scene3dDiffuseTextureSet, normalMap: this.scene3dNormalMapSet, triplanar: this.scene3dTriplanar,
+    });
+  }
 
   scene3dTexTilingChanged(): void {
     if (!this.meshId) return;

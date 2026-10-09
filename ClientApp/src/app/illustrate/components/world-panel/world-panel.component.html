@@ -81,6 +81,7 @@
 
     <!-- ── Look ── -->
     <ng-container *ngIf="worldNav.id === 'look'">
+    <div class="scene3d-hint" style="margin:0 0 6px" *ngIf="worldLookLightingHint">Turn on City lighting for time of day, sky and look (Time &amp; Weather).</div>
     <ng-container *ngIf="worldSub.id === 'style'"><!-- Style -->
     <div class="scene3d-material-row">
         <label>Style</label>
@@ -115,11 +116,11 @@
         </select>
     </div></ng-container>
     <ng-container *ngIf="worldSub.id === 'lighting'"><!-- Lighting -->
-    <div class="scene3d-toggle-row">
+    <div class="scene3d-toggle-row" *ngIf="wv('skyLighting')">
         <label>Sky lighting</label>
         <input type="checkbox" [ngModel]="worldSkyLighting" (ngModelChange)="worldSetSkyLighting($event)" title="Light the city from its own sky (blue from above, warm from the sun side)">
     </div>
-    <div class="scene3d-toggle-row">
+    <div class="scene3d-toggle-row" *ngIf="wv('wetReflections')">
         <label>Wet reflections</label>
         <input type="checkbox" [ngModel]="worldWetReflections" (ngModelChange)="worldSetWetReflections($event)" title="Screen-space reflections on wet / night streets and water">
     </div>
@@ -144,7 +145,8 @@
         </div>
     </ng-container></ng-container>
     <ng-container *ngIf="worldSub.id === 'surfaces'"><!-- Surfaces -->
-    <div class="scene3d-material-row">
+    <div class="scene3d-hint" style="margin:0 0 6px" *ngIf="wv('hazeFogHint')">Street haze needs Fog on (Time &amp; Weather).</div>
+    <div class="scene3d-material-row" *ngIf="wv('streetHaze')">
         <label>Street haze</label>
         <input type="range" min="0" max="1.2" step="0.05" [ngModel]="worldHeightFog" (ngModelChange)="worldSetHeightFog(+$event)" title="Ground-hugging height fog: street canyons haze, rooftops stay crisp (needs Fog on)">
         <span class="scene3d-val">{{ worldHeightFog ? (worldHeightFog | number:'1.2-2') : 'off' }}</span>
@@ -174,24 +176,24 @@
         <input type="checkbox" [ngModel]="worldPaintedClouds" (ngModelChange)="worldSetLookValue('setPaintedClouds', $event, 'worldPaintedClouds')">
     </div>
     <!-- Salsa visual-polish #9: the stylised sky dome (night gradient + city glow, moon, stars, anime clouds) -->
-    <div class="scene3d-toggle-row">
+    <div class="scene3d-toggle-row" *ngIf="wv('skyDome')">
         <label title="Stylised sky: horizon-to-zenith gradient with a city glow at night, a moon with a halo, stars and painted anime clouds. Off = the older flat sky.">Sky dome</label>
         <input type="checkbox" [ngModel]="worldSkyDomeOn" (ngModelChange)="worldSetSkyDome($event ? {} : null)" [disabled]="!worldHasWorld">
     </div>
-    <ng-container *ngIf="worldSkyDomeOn">
-        <div class="scene3d-material-row scene3d-indent">
+    <ng-container *ngIf="worldSkyDomeOn && wv('skyDome')">
+        <div class="scene3d-material-row scene3d-indent" *ngIf="wv('cloudStyle')">
             <label title="Anime = painted cumulus with lit tops and shaded undersides. Soft cards = the older blurred cloud cards.">Cloud style</label>
             <select class="scene3d-select" [ngModel]="worldSkyClouds" (ngModelChange)="worldSkyClouds = $event; worldSetSkyDome({ clouds: $event })">
                 <option value="anime">Anime</option>
                 <option value="cards">Soft cards</option>
             </select>
         </div>
-        <div class="scene3d-material-row scene3d-indent">
+        <div class="scene3d-material-row scene3d-indent" *ngIf="wv('starsMoon')">
             <label title="Star brightness (clear nights only; they fade near the city glow)">Stars</label>
             <input type="range" min="0" max="1" step="0.05" [ngModel]="worldSkyStars" (ngModelChange)="worldSkyStars = +$event; worldSetSkyDome({ stars: +$event })">
             <span class="scene3d-val">{{ worldSkyStars | number:'1.2-2' }}</span>
         </div>
-        <div class="scene3d-material-row scene3d-indent">
+        <div class="scene3d-material-row scene3d-indent" *ngIf="wv('starsMoon')">
             <label title="Moon visibility (clear nights only)">Moon</label>
             <input type="range" min="0" max="1" step="0.05" [ngModel]="worldSkyMoon" (ngModelChange)="worldSkyMoon = +$event; worldSetSkyDome({ moon: +$event })">
             <span class="scene3d-val">{{ worldSkyMoon | number:'1.2-2' }}</span>
@@ -212,7 +214,7 @@
         <input type="range" min="0.5" max="4" step="0.1" [ngModel]="worldShadowSoftness" (ngModelChange)="worldSetLookValue('setCityShadowSoftness', +$event, 'worldShadowSoftness')">
         <span class="scene3d-val">{{ worldShadowSoftness | number:'1.1-1' }}</span>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('goldenWarmth')">
         <label title="How gold the low sun gets at dawn / dusk">Golden warmth</label>
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldSunWarmth" (ngModelChange)="worldSetLookValue('setSunWarmth', +$event, 'worldSunWarmth')">
         <span class="scene3d-val">{{ worldSunWarmth | number:'1.2-2' }}</span>
@@ -249,12 +251,13 @@
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldGroundContactStrength" (ngModelChange)="worldSetGroundContact(true, +$event)">
         <span class="scene3d-val">{{ worldGroundContactStrength | number:'1.2-2' }}</span>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('keyFill')">
         <label title="Warm, stronger sun over a cooler, lower fill (more lit/shade contrast by day)">Key / fill</label>
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldKeyFill" (ngModelChange)="worldSetLookValue('setKeyFill', +$event, 'worldKeyFill')">
         <span class="scene3d-val">{{ worldKeyFill | number:'1.2-2' }}</span>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-hint" style="margin:0 0 6px" *ngIf="wv('hazeFogHint')">Aerial haze needs Fog on (Time &amp; Weather).</div>
+    <div class="scene3d-material-row" *ngIf="wv('aerialHaze')">
         <label title="Distance fades contrast and tints toward the horizon (needs Fog on)">Aerial haze</label>
         <input type="range" min="0" max="1" step="0.05" [ngModel]="worldAerialHaze" (ngModelChange)="worldSetLookValue('setAerialHaze', +$event, 'worldAerialHaze')">
         <span class="scene3d-val">{{ worldAerialHaze | number:'1.2-2' }}</span>
@@ -267,7 +270,7 @@
             <option value="heavy">Heavy</option>
         </select>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('lampColor')">
         <label>Lamp colour</label>
         <input type="color" [ngModel]="worldLampColor" (ngModelChange)="worldSetLampColor($event)" title="Street-lamp light colour at night">
     </div>
@@ -301,7 +304,7 @@
             <option value="clustered">Clustered</option>
         </select>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('lookCrowdDensity')">
         <label title="How many people stand and walk on the streets (1.4 = the default for new cities). Rebuilds the crowd.">Crowd density</label>
         <input type="range" min="0.2" max="4" step="0.1" [ngModel]="worldPedestrianDensity" (ngModelChange)="worldSetCrowdDensity(+$event)">
         <span class="scene3d-val">{{ worldPedestrianDensity | number:'1.1-1' }}×</span>
@@ -328,7 +331,7 @@
             <option value="off">None</option>
         </select>
     </div></ng-container>
-    <ng-container *ngIf="worldSub.id === 'per-time-of-day'"><!-- Per time of day -->
+    <ng-container *ngIf="worldSub.id === 'per-time-of-day' && wv('perTimeOfDay')"><!-- Per time of day -->
     <div style="display:flex;gap:3px;padding:2px 0 4px;">
         <button *ngFor="let ph of ['night','dawn','noon','dusk']"
                 class="scene3d-btn scene3d-btn-sm" style="flex:1;"
@@ -389,7 +392,7 @@
         <button class="nav-tile" (click)="worldSub.open('rendering', 'Rendering')">
             <span class="nav-tile-text"><span class="nav-tile-label">Rendering</span><span class="nav-tile-hint">Anti-aliasing · Shadow quality · Crisp range · Ground contact …</span></span><span class="nav-tile-chev">›</span>
         </button>
-        <button class="nav-tile" (click)="worldSub.open('per-time-of-day', 'Per time of day')">
+        <button class="nav-tile" *ngIf="wv('perTimeOfDay')" (click)="worldSub.open('per-time-of-day', 'Per time of day')">
             <span class="nav-tile-text"><span class="nav-tile-label">Per time of day</span><span class="nav-tile-hint">Shadow colour · Cinematic · Bloom · Vignette …</span></span><span class="nav-tile-chev">›</span>
         </button>
     </div>
@@ -402,14 +405,15 @@
         <input type="checkbox" [ngModel]="worldOverrideGlobalLighting" (ngModelChange)="worldSetOverrideLighting($event)"
                title="City drives its own day/night lighting (on) vs. inherits global scene lighting (off)">
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-hint" style="margin:0 0 6px" *ngIf="wv('lightingHint')">Turn on City lighting for time of day, sky and look.</div>
+    <div class="scene3d-material-row" *ngIf="wv('time')">
         <label>Time</label>
         <input type="range" min="0" max="1" step="0.01"
                [ngModel]="worldTimeOfDay ?? 0.5"
                (ngModelChange)="worldSetTimeOfDay(+$event)">
         <span class="scene3d-val">{{ worldTimeOfDay !== null ? (worldTimeOfDay | number:'1.2-2') : '—' }}</span>
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('cycle')">
         <label>Cycle</label>
         <input type="range" min="10" max="300" step="10" [(ngModel)]="worldDayCycleSec" (ngModelChange)="worldApplyCycleSpeed()">
         <span class="scene3d-val">{{ worldDayCycleSec }}s</span>
@@ -441,7 +445,7 @@
         <input type="checkbox" [(ngModel)]="worldNightMode" (ngModelChange)="worldParamChanged()">
     </div>
     <div style="display:flex;gap:4px;padding:2px 0 8px;">
-        <button class="scene3d-btn scene3d-btn-sm" style="flex:1;"
+        <button class="scene3d-btn scene3d-btn-sm" style="flex:1;" *ngIf="wv('dayCycle')"
                 [class.scene3d-btn-active]="worldDayCyclePlaying"
                 (click)="worldToggleDayCycle()">{{ worldDayCyclePlaying ? '⏸ Pause' : '▶ Day cycle' }}</button>
         <button class="scene3d-btn scene3d-btn-sm" style="flex:1;"
@@ -535,6 +539,16 @@
             <input type="range" min="1" max="8" step="1" [(ngModel)]="worldRingCount" (ngModelChange)="worldParamChanged()">
             <span class="scene3d-val">{{ worldRingCount }}</span>
         </div>
+        <div class="scene3d-material-row">
+            <label>Street W</label>
+            <input type="range" min="0.06" max="0.5" step="0.01" [(ngModel)]="worldStreetWidth" (ngModelChange)="worldParamChanged()">
+            <span class="scene3d-val">{{ worldStreetWidth | number:'1.2-2' }}</span>
+        </div>
+        <div class="scene3d-material-row" *ngIf="wv('plaza')">
+            <label>Plaza</label>
+            <input type="range" min="0.03" max="0.2" step="0.005" [(ngModel)]="worldPlazaRadius" (ngModelChange)="worldParamChanged()">
+            <span class="scene3d-val">{{ worldPlazaRadius | number:'1.3-3' }}</span>
+        </div>
     </ng-container></ng-container>
 
     <ng-container *ngIf="worldSub.id === 'roads-2'"><ng-container *ngIf="worldPattern === 'grid'">
@@ -555,11 +569,7 @@
         <input type="range" min="0.06" max="0.5" step="0.01" [(ngModel)]="worldStreetWidth" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldStreetWidth | number:'1.2-2' }}</span>
     </div>
-    <div class="scene3d-material-row">
-        <label>Plaza</label>
-        <input type="range" min="0.03" max="0.2" step="0.005" [(ngModel)]="worldPlazaRadius" (ngModelChange)="worldParamChanged()">
-        <span class="scene3d-val">{{ worldPlazaRadius | number:'1.3-3' }}</span>
-    </div></ng-container>
+    </ng-container>
     <ng-container *ngIf="worldSub.id === 'lots'"><ng-container *ngIf="worldPattern === 'radial'">
     <!-- Lots -->
     <div class="scene3d-material-row">
@@ -623,10 +633,10 @@
             <span class="nav-tile-text"><span class="nav-tile-label">Shape &amp; size</span><span class="nav-tile-hint">Tile radius · Stream to camera · Outside tiles · Skyline distance …</span></span><span class="nav-tile-chev">›</span>
         </button>
         <button class="nav-tile" *ngIf="worldPattern === 'radial'" (click)="worldSub.open('roads', 'Roads')">
-            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Main roads · Rings</span></span><span class="nav-tile-chev">›</span>
+            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Main roads · Rings · Street W · Plaza</span></span><span class="nav-tile-chev">›</span>
         </button>
         <button class="nav-tile" *ngIf="worldPattern === 'grid'" (click)="worldSub.open('roads-2', 'Roads')">
-            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Columns · Rows · Street W · Plaza</span></span><span class="nav-tile-chev">›</span>
+            <span class="nav-tile-text"><span class="nav-tile-label">Roads</span><span class="nav-tile-hint">Columns · Rows · Street W</span></span><span class="nav-tile-chev">›</span>
         </button>
         <button class="nav-tile" *ngIf="worldPattern === 'radial'" (click)="worldSub.open('lots', 'Lots')">
             <span class="nav-tile-text"><span class="nav-tile-label">Lots</span><span class="nav-tile-hint">Radial · Angular</span></span><span class="nav-tile-chev">›</span>
@@ -673,7 +683,7 @@
         <input type="checkbox" [(ngModel)]="worldRailway" (ngModelChange)="worldParamChanged()">
     </div>
     <ng-container *ngIf="worldRailway">
-        <div class="scene3d-material-row scene3d-indent">
+        <div class="scene3d-material-row scene3d-indent" *ngIf="wv('viaduct')">
             <label title="Portal = over the road on frames. Arcade = beside the road with shops, izakaya and bike parking in the arches (grid cities).">Viaduct</label>
             <select class="scene3d-select" [(ngModel)]="worldRailViaduct" (ngModelChange)="worldParamChanged()">
                 <option value="portal">Over the road</option>
@@ -708,11 +718,11 @@
             <span class="scene3d-val">{{ worldRailDwellScale | number:'1.1-1' }}x</span>
         </div>
     </ng-container>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('localLine')">
         <label title="A street-level local line (Enoden style) with level crossings, barrier arms and small stations (grid cities)">Local line</label>
         <input type="checkbox" [(ngModel)]="worldLocalLine" (ngModelChange)="worldParamChanged()">
     </div>
-    <div class="scene3d-material-row scene3d-indent" *ngIf="worldLocalLine">
+    <div class="scene3d-material-row scene3d-indent" *ngIf="worldLocalLine && wv('localLine')">
         <label>Local cars</label>
         <input type="range" min="2" max="4" step="1" [(ngModel)]="worldLocalLineCars" (ngModelChange)="worldParamChanged()">
         <span class="scene3d-val">{{ worldLocalLineCars }}</span>
@@ -723,11 +733,11 @@
         <input type="checkbox" [(ngModel)]="worldDetailedBuildings" (ngModelChange)="worldParamChanged()"
                title="Use the procedural building generator per lot (full facades, windows, balconies). Off = basic extruded city.">
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('facadeDetail')">
         <label>Facade detail</label>
         <input type="checkbox" [(ngModel)]="worldFacadeDetail" (ngModelChange)="worldParamChanged()">
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-material-row" *ngIf="wv('rooftopDetail')">
         <label>Rooftop detail</label>
         <input type="checkbox" [(ngModel)]="worldRooftops" (ngModelChange)="worldParamChanged()">
     </div>
@@ -759,7 +769,8 @@
         <label>Awnings</label>
         <input type="checkbox" [(ngModel)]="worldAwnings" (ngModelChange)="worldParamChanged()">
     </div>
-    <div class="scene3d-material-row">
+    <div class="scene3d-hint" style="margin:0 0 6px" *ngIf="wv('frontageHint')">Frontage dressing needs Furniture on (Life &amp; Props).</div>
+    <div class="scene3d-material-row" *ngIf="wv('frontageDressing')">
         <label title="Nobori flags, noren door curtains and bikes against the wall at shopfronts">Frontage dressing</label>
         <input type="checkbox" [(ngModel)]="worldFrontageDressing" (ngModelChange)="worldParamChanged()">
     </div>
@@ -956,6 +967,7 @@
         <label title="Hide small things once the camera is far from them (per chunk, every camera mode)">Distance LOD</label>
         <input type="checkbox" [ngModel]="perfDistanceLod" (ngModelChange)="perfSetLod({ distanceLod: $event })">
     </div>
+    <ng-container *ngIf="wv('lodDistances')">
     <div class="scene3d-material-row">
         <label title="Multiplies every draw distance below (1 = as shipped)">Everything</label>
         <input type="range" min="0.25" max="3" step="0.05" [ngModel]="perfGlobal" (ngModelChange)="perfSetLod({ global: +$event })">
@@ -969,7 +981,8 @@
         <label [title]="f.label + ': hidden beyond about ' + (f.metres | number:'1.0-0') + ' m'">{{ f.label }}</label>
         <input type="range" min="0.1" max="3" step="0.05" [ngModel]="f.multiplier" (ngModelChange)="perfSetFamily(f.id, +$event)">
         <span class="scene3d-val">{{ f.metres | number:'1.0-0' }}m</span>
-    </div></ng-container>
+    </div>
+    </ng-container></ng-container>
 
     <ng-container *ngIf="worldSub.id === 'zoom-tiers'"><!-- Zoom tiers -->
     <div class="scene3d-toggle-row">

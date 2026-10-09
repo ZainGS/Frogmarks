@@ -1,7 +1,8 @@
 import {
-  DEFAULT_SHELL_THEME, isShellThemeId, LOCAL_MODEL_URL_KEY, normalizeLocalModelUrl, readLocalModelUrl, readSavedShellTheme,
-  saveLocalModelUrl, saveShellTheme, SHELL_THEME_KEY, SHELL_THEME_OPTIONS,
+  DEFAULT_SHELL_THEME, isShellThemeId, normalizeLocalModelUrl, readSavedShellTheme,
+  saveShellTheme, SHELL_THEME_KEY, SHELL_THEME_OPTIONS,
 } from './shell-settings';
+import { StudioComponent } from './studio.component';
 
 /** A Map-backed Storage stand-in. */
 function memStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { map: Map<string, string> } {
@@ -50,14 +51,23 @@ describe('Shell settings (one home for the Shell settings)', () => {
     expect(normalizeLocalModelUrl('ftp://x')).toBeNull();
     expect(normalizeLocalModelUrl('not a url')).toBeNull();
   });
+});
 
-  it('saves the address under the key Salsa reads, and removes it when empty', () => {
-    const s = memStorage();
-    saveLocalModelUrl(s, 'http://localhost:11434');
-    expect(s.map.get(LOCAL_MODEL_URL_KEY)).toBe('http://localhost:11434');
-    expect(readLocalModelUrl(s)).toBe('http://localhost:11434');
-    saveLocalModelUrl(s, '');
-    expect(s.map.has(LOCAL_MODEL_URL_KEY)).toBeFalse();
-    expect(readLocalModelUrl(throwing)).toBe('');
+describe('Shell › Settings › Local GPU model address (audit 2026-10-09)', () => {
+  it('opens with and saves to LocalInferenceService (what the AI features read)', () => {
+    const inference = { baseUrl: 'http://localhost:11434', setBaseUrl: jasmine.createSpy('setBaseUrl').and.callFake((u: string) => { inference.baseUrl = u || 'http://localhost:11434'; }) };
+    const none = null as never;
+    const c = new StudioComponent(none, none, none, none, none, { refreshEstimate: () => Promise.resolve() } as never, none, none, none, inference as never, none);
+    (c as unknown as { _syncModalChrome(): void })._syncModalChrome = () => undefined;
+    c.openStorageSettings();
+    expect(c.localModelUrl).toBe('http://localhost:11434');
+    c.localModelUrl = ' http://gpu.box:11434/ ';
+    c.saveLocalModel();
+    expect(inference.setBaseUrl).toHaveBeenCalledOnceWith('http://gpu.box:11434');
+    expect(c.localModelStatus).toBe('saved');
+    c.localModelUrl = 'not a url';
+    c.saveLocalModel();
+    expect(c.localModelStatus).toBe('invalid');
+    expect(inference.setBaseUrl).toHaveBeenCalledTimes(1);
   });
 });

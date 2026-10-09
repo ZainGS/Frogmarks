@@ -111,7 +111,8 @@ export class SceneAddService implements OnDestroy {
   scene3dAddCircle(): void {
     const p = meshGenDefaults('circle');
     const [cx, cy, cz] = this._center();
-    this._added(this.shapeManager.addCircleMesh3D(cx, cy, cz, p['radius'], p['segments'], p['height'])?.id);
+    // a flat n-gon (height 0) seen from both sides, like Blender's Circle
+    this._added(this.shapeManager.addCircleMesh3D(cx, cy, cz, p['radius'], p['segments'], p['height'], undefined, { doubleSided: true })?.id);
   }
 
   scene3dAddRevolve(): void {

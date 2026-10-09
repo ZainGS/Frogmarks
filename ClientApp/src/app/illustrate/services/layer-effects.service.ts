@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { hexToRgba01, rgba01ToHex } from '../utils/color-utils';
+import { clampEdgeWidthPx } from '../utils/dither-edge-width';
 import { DEFAULT_DITHER_CONFIG, DEFAULT_FRAME_LINK_ANIMATION, DitherAlgorithm, DitherAlgorithmMenuValue, DitherColorMode, DitherConfig, DITHER_ALGORITHM_OPTIONS, FrameLinkAnimation, FrameLinkAnimationType, FrameLinkLoopMode, FRAME_LINK_TYPE_OPTIONS, FRAME_LINK_LOOP_MODE_OPTIONS, HalftoneShapeGroup, ditherAlgorithmMenuValue, halftoneShapeGroupsFor, isHalftoneAlgorithm, resolveDitherAlgorithmMenuChoice } from 'app/boards/models/brush-preset.model';
 
 /** The engine's own dither types. Frogmarks' DitherAlgorithm can list halftone shapes a published Salsa build predates
@@ -441,7 +442,13 @@ export class LayerEffectsService {
   }
 
   onLayerDitherEdgeWidthChange(layerId: string, value: number): void {
-    this.updateLayerDitherField(layerId, 'edgeWidth', +value);
+    this.updateLayerDitherField(layerId, 'edgeWidth', clampEdgeWidthPx(+value));
+  }
+
+  /** The page's shorter side in px (Canvas-mode edge width in %), or 0 for an unbounded canvas. */
+  pageMinSide(): number {
+    const s = this.shapeManager?.getDocumentSize?.();
+    return s && s.w > 0 && s.h > 0 ? Math.min(s.w, s.h) : 0;
   }
 
   onLayerDitherEdgeFadeChange(layerId: string, value: number): void {
@@ -467,6 +474,31 @@ export class LayerEffectsService {
 
   isGpuDitherAlgorithm(algorithm: DitherAlgorithm): boolean {
     return isHalftoneAlgorithm(algorithm) || ['bayer', 'blue_noise', 'noise'].includes(algorithm as string);
+  }
+
+  /** Per-Channel and Invert Colors only do something for the ordered (GPU) algorithms in Quantize mode: Duotone
+   *  draws its pattern from the bias (and swaps / biases its two colours instead), and error diffusion (WASM) always
+   *  dithers each channel, never inverted. Elsewhere the panels hide them. */
+  ditherChannelOptionsApply(cfg: Pick<DitherConfig, 'algorithm' | 'colorMode'>): boolean {
+    return this.isGpuDitherAlgorithm(cfg.algorithm) && cfg.colorMode !== 'duotone';
+  }
+
+  /** Mode (Quantize / Duotone) and Scale only do something for the ordered (GPU) algorithms: error diffusion (WASM)
+   *  dithers the raw colours at 1:1 — the panels hide both there (UI audit 2026-10-09). A Duotone mode picked earlier
+   *  stays stored and comes back with an ordered algorithm; ditherDuotoneActive is what the panels show. */
+  ditherModeApplies(cfg: Pick<DitherConfig, 'algorithm'>): boolean {
+    return this.isGpuDitherAlgorithm(cfg.algorithm);
+  }
+  ditherScaleApplies(cfg: Pick<DitherConfig, 'algorithm'>): boolean {
+    return this.isGpuDitherAlgorithm(cfg.algorithm);
+  }
+  /** Duotone as rendered: Duotone mode with an algorithm that draws it. */
+  ditherDuotoneActive(cfg: Pick<DitherConfig, 'algorithm' | 'colorMode'>): boolean {
+    return cfg.colorMode === 'duotone' && this.ditherModeApplies(cfg);
+  }
+  /** Duotone is stored but the algorithm can't draw it (error diffusion): the panels say so. */
+  ditherDuotoneSuspended(cfg: Pick<DitherConfig, 'algorithm' | 'colorMode'>): boolean {
+    return cfg.colorMode === 'duotone' && !this.ditherModeApplies(cfg);
   }
 
   frameLinkTypeOptions = FRAME_LINK_TYPE_OPTIONS;

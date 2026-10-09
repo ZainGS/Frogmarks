@@ -1,3 +1,16 @@
 // Shared editor controls — same rules the editor uses.
 @import '../../styles/panel-controls';
 :host { display: block; }
+
+// Text Effects preview — square retro-chrome frame on a dark backdrop (white text is the default)
+.fx-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  margin: 0 auto 6px;
+  background: #1b1b1b;
+  border: 1px solid #555;
+  border-radius: 0;
+  image-rendering: auto;
+}
+.fx-preview[hidden] { display: none; }

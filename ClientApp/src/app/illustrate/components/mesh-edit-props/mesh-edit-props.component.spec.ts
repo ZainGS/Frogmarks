@@ -39,6 +39,30 @@ describe('MeshEditPropsComponent', () => {
     return { c, sm, meshEdit, sel, mods };
   }
 
+  it('Proportional: shows the settings saved on the mesh when the panel opens / the mesh changes', () => {
+    const { c, sm } = setup();
+    expect(c.proportionalEnabled).toBeFalse();                    // no editable mesh API: the defaults
+    const meshes: Record<string, any> = {
+      m1: { proportionalEditEnabled: true, proportionalEditRadius: 2.5, proportionalEditFalloff: 'sharp' },
+      m2: { proportionalEditEnabled: false, proportionalEditRadius: 0.5, proportionalEditFalloff: 'linear' },
+    };
+    sm.getEditMesh3D = (id: string) => meshes[id] ?? null;
+    sm.setProportionalEdit3D = jasmine.createSpy('setProportionalEdit3D');
+    c.ngDoCheck();
+    expect(c.proportionalEnabled).toBeTrue();
+    expect(c.proportionalRadius).toBe(2.5);
+    expect(c.proportionalFalloff).toBe('sharp');
+    c.setProportional(false);                                      // the user's change sticks (same mesh: no re-read)
+    c.ngDoCheck();
+    expect(c.proportionalEnabled).toBeFalse();
+    expect(sm.setProportionalEdit3D).toHaveBeenCalledWith('m1', false, 2.5, 'sharp');
+    c.ed.editorState.scene3dSelectedMeshId = 'm2';
+    c.ngDoCheck();
+    expect(c.proportionalEnabled).toBeFalse();
+    expect(c.proportionalRadius).toBe(0.5);
+    expect(c.proportionalFalloff).toBe('linear');
+  });
+
   it('tools: a tool goes on, tapping it again turns it off; a verb runs once; a greyed one does nothing', () => {
     const { c, meshEdit, sel } = setup();
     const extrude = c.tools.find(t => t.id === 'extrude')!;

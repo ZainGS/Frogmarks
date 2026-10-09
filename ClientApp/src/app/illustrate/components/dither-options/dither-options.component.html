@@ -29,17 +29,18 @@
         </select>
     </div>
 
-    <!-- Strength -->
+    <!-- Strength: how strongly the dither pattern applies -->
     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-        <label style="width: 60px; color:#aaa; font-size: 10px;">Strength</label>
+        <label style="width: 60px; color:#aaa; font-size: 10px;"
+               [title]="fx.ditherDuotoneActive(fx.ditherConfig) ? 'How much of the dot pattern shows. 0% = a flat blend of the two colours (at the Bias coverage), 100% = crisp dots.' : 'Blend between the original (0%) and the fully dithered result (100%).'">Strength</label>
         <input type="range" min="0" max="100" step="1" style="flex: 1;"
                [ngModel]="fx.ditherStrengthPercent"
                (input)="fx.onDitherStrengthChange($any($event.target).value)">
         <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherStrengthPercent }}%</span>
     </div>
 
-    <!-- Scale -->
-    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+    <!-- Scale (ordered algorithms only: error diffusion works pixel by pixel) -->
+    <div *ngIf="fx.ditherScaleApplies(fx.ditherConfig)" style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
         <label style="width: 60px; color:#aaa; font-size: 10px;">Scale</label>
         <input type="range" min="0.25" max="8" step="0.25" style="flex: 1;"
                [(ngModel)]="fx.ditherConfig.patternScale"
@@ -47,8 +48,8 @@
         <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ fx.ditherConfig.patternScale }}</span>
     </div>
 
-    <!-- Per-channel -->
-    <div style="margin-bottom: 6px;">
+    <!-- Per-channel: only where it applies (ordered algorithms, Quantize mode) -->
+    <div *ngIf="fx.ditherChannelOptionsApply(fx.ditherConfig)" style="margin-bottom: 6px;">
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="illDitherPerChannel"
                    [checked]="fx.ditherConfig.perChannel"
@@ -57,7 +58,8 @@
         </div>
     </div>
 
-    <!-- ── Colors ── -->
+    <!-- ── Colors (ordered algorithms only: error diffusion dithers the colours as they are) ── -->
+    <ng-container *ngIf="fx.ditherModeApplies(fx.ditherConfig)">
     <div style="border-top: 1px solid #444; margin: 6px 0; padding-top: 6px;">
         <label style="font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Colors</label>
     </div>
@@ -72,8 +74,12 @@
         </select>
     </div>
 
+    </ng-container>
+    <!-- Duotone picked earlier, error diffusion now: say why the colours are gone (they come back with an ordered algorithm) -->
+    <div *ngIf="fx.ditherDuotoneSuspended(fx.ditherConfig)" class="dither-note">Duotone needs an ordered algorithm (Bayer, Halftone, Noise). Error diffusion dithers the colours as they are.</div>
+
     <!-- Duotone-specific controls -->
-    <div *ngIf="fx.ditherConfig.colorMode === 'duotone'">
+    <div *ngIf="fx.ditherDuotoneActive(fx.ditherConfig)">
         <!-- Foreground color -->
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
             <label style="width: 60px; color:#aaa; font-size: 10px;">Foreground</label>
@@ -121,9 +127,10 @@
             <span style="min-width: 28px; text-align: right; color: #aaa; font-size: 10px;">{{ mathRound(fx.ditherConfig.duotoneBias * 100) }}%</span>
         </div>
 
-        <!-- Tint opacity -->
+        <!-- Tint: how much the two colours replace the artwork (Strength sets how much of the dot pattern shows) -->
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <label style="width: 60px; color:#aaa; font-size: 10px;">Tint</label>
+            <label style="width: 60px; color:#aaa; font-size: 10px;"
+                   title="How strongly the two colours replace the original artwork. 0% = the original, 100% = only the duotone.">Tint</label>
             <input type="range" min="0" max="100" step="1" style="flex: 1;"
                    [ngModel]="fx.ditherTintPercent"
                    (input)="fx.onDitherTintOpacityChange($any($event.target).value)">

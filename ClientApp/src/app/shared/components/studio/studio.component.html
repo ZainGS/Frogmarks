@@ -1,5 +1,9 @@
 <canvas id="shellCanvas" style="display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;touch-action:none;pointer-events:auto;"></canvas>
 
+<!-- Back from the Player: its black (#0a0a0a) over the Shell + Salsa's cluster, faded out once the Shell is up -->
+<div *ngIf="returnCover" class="shell-return-cover" [class.is-fading]="returnCoverFading"
+     [style.transition-duration.ms]="returnFadeMs" aria-hidden="true"></div>
+
 <!-- Thin HTML overlay — pointer-events:none except when a dialog is open (then it is the dialog's backdrop: a press
      that starts on it closes the dialog; Esc closes it too — installShellEscapeGuard) -->
 <div class="shell-overlay" [class.has-dialog]="modalOpen"
@@ -26,24 +30,26 @@
     </div>
   </div>
 
-  <!-- FrogCart dialog: a cart tile was opened (double-click, or a tap on the selected cart). Carts can't run yet. -->
-  <div *ngIf="cartDialog as cart" class="shell-dialog" (click)="$event.stopPropagation()"
+  <!-- FrogCart sheet: long-press / right-click on a cart tile, or the keyboard strip's Options. A plain tap plays it. -->
+  <div *ngIf="cartDialog as cart" class="shell-dialog shell-cart-sheet" (click)="$event.stopPropagation()"
        role="dialog" aria-modal="true" aria-labelledby="shell-cart-title" aria-describedby="shell-cart-body"
        cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
     <h3 id="shell-cart-title">{{ cart.name }}</h3>
     <p *ngIf="cart.description" class="shell-dialog-sub">{{ cart.description }}</p>
     <p id="shell-cart-body" class="shell-dialog-text">
-      FrogCarts can't be opened yet — that comes in a later update. Your cart stays on the home screen until then.
+      <ng-container *ngIf="cart.playable">Play opens it in the Frogmarks Player. Remove deletes it from this device.</ng-container>
+      <ng-container *ngIf="!cart.playable">This version of Frogmarks can't play FrogCarts. Your cart stays on the home screen.</ng-container>
     </p>
     <div class="shell-dialog-actions">
       <button *ngIf="cart.removable" class="shell-btn shell-btn-danger" [disabled]="cart.removing" (click)="removeCart()">
         {{ cart.confirmRemove ? 'Remove from this device — sure?' : 'Remove' }}
       </button>
-      <button class="shell-btn" (click)="closeCartDialog()">Close</button>
+      <button class="shell-btn shell-btn-ghost" (click)="closeCartDialog()">Close</button>
+      <button *ngIf="cart.playable" class="shell-btn" [disabled]="cart.removing" (click)="playCartFromDialog()">▶ Play</button>
     </div>
   </div>
 
-  <!-- Settings: the one home for the Shell's settings (theme, storage, install, updates, local AI model) -->
+  <!-- Settings: the one home for the Shell's settings (theme, storage, install, updates, local GPU model) -->
   <div *ngIf="showSettingsOverlay" class="shell-dialog shell-settings" (click)="$event.stopPropagation()"
        role="dialog" aria-modal="true" aria-labelledby="shell-settings-title"
        cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
@@ -103,10 +109,10 @@
       <button *ngIf="updates.state !== 'none'" class="fm-pwa-btn fm-pwa-btn-primary" [disabled]="updates.applying" (click)="reloadForUpdate()">Reload</button>
     </section>
 
-    <!-- Local AI model (was the cluster's 🧠 panel; same storage key) -->
+    <!-- Local GPU model (LocalInferenceService: the address the AI features use; the dashboard's Local GPU Inference) -->
     <section class="fm-pwa-section" aria-labelledby="shell-set-model">
-      <label class="fm-pwa-section-title" id="shell-set-model" for="shell-set-model-url">Local AI model address</label>
-      <p class="fm-pwa-note">For AI features that run on your own computer (for example Ollama). Leave it empty to turn it off.</p>
+      <label class="fm-pwa-section-title" id="shell-set-model" for="shell-set-model-url">Local GPU model address</label>
+      <p class="fm-pwa-note">For AI features that run on your own GPU (for example Ollama). Leave it empty for the default, http://localhost:11434.</p>
       <div class="shell-field-row">
         <input id="shell-set-model-url" class="shell-dialog-input" type="url" inputmode="url" autocomplete="off"
                placeholder="http://localhost:11434" [(ngModel)]="localModelUrl" (ngModelChange)="localModelStatus = ''"

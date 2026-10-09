@@ -22,20 +22,61 @@ export interface BrushDynamics {
   scatterDistance?: number;
 }
 
-/** Optional grain / texture overlay */
+/** The brush's own grain / texture (per preset; Salsa BrushPreset.texture) */
 export interface BrushTexture {
+  /** Tiling grayscale image (data URL or base64); empty = the built-in `grain` pattern. */
   imageData: string;
+  /** Built-in paper pattern used when there is no image (Salsa default 'cold-press'). */
+  grain?: Exclude<CanvasGrainType, 'none'>;
   scale: number;
   strength: number;
   mode: 'multiply' | 'subtract';
+  /** true = anchored to the canvas (strokes line up); false = anchored at each stroke's start. */
   fixedToCanvas: boolean;
+}
+
+/** Dual brush: a second texture multiplied into each dab (Salsa DualBrushSettings) */
+export interface BrushDualBrush {
+  enabled: boolean;
+  textureData: string;
+  textureSize: number;
+  tileMode: 'dab-local' | 'canvas-tiling';
+  scale: number;
+  blendOp: 'multiply' | 'subtract' | 'minimum';
+  strength: number;
+  randomRotation: boolean;
+}
+
+/** Per-dab colour variation (Salsa ColorJitter) */
+export interface BrushColorJitter {
+  hueJitter: number;
+  saturationJitter: number;
+  brightnessJitter: number;
+  opacityJitter: number;
+}
+
+/** Wet edges (Salsa WetEdgeSettings) */
+export interface BrushWetEdges {
+  enabled: boolean;
+  edgeDarkness: number;
+  edgeWidth: number;
+  strength: number;
+}
+
+/** Stroke texture strip (Salsa StrokeTextureSettings) */
+export interface BrushStrokeTexture {
+  enabled: boolean;
+  textureData: string;
+  textureSize: number;
+  texelsPerUnit: number;
+  edgeSoftness: number;
 }
 
 /** Blending settings per-stroke */
 export interface BrushBlending {
   mode: 'normal' | 'multiply' | 'screen' | 'overlay';
-  opacity: number;  // 0-1
-  flow: number;     // 0-1
+  opacity: number;  // 0-1: the stroke's ceiling (most coverage one stroke reaches)
+  flow: number;     // 0-1: how much each dab deposits (overlapping dabs build up toward the ceiling)
   colorMixing?: number;
   colorStretch?: number;
 }
@@ -79,6 +120,10 @@ export interface BrushPreset {
 
   bleed?: BrushBleed;
   smudge?: BrushSmudge;
+  dualBrush?: BrushDualBrush;
+  colorJitter?: BrushColorJitter;
+  wetEdges?: BrushWetEdges;
+  strokeTexture?: BrushStrokeTexture;
 
   antiAliasing: boolean;
   minSize: number; // px
@@ -263,6 +308,23 @@ export const ARROWHEAD_OPTIONS: ArrowheadOption[] = [
   { value: 'closedCircle', label: 'Closed Circle' },
   { value: 'openCircle',   label: 'Open Circle' },
 ];
+
+/** Default arrowhead size for new lines (Salsa Line.arrowSize: a multiple of the stroke width). */
+export const DEFAULT_ARROWHEAD_SIZE = 6;
+
+/**
+ * Push the arrowhead defaults for newly drawn lines to the engine — styles AND size. Salsa took the size as a third
+ * argument from 2026-10-09 (the Size slider did nothing before); an older dist ignores the extra argument.
+ */
+export function applyArrowheadDefaults(
+  sm: { setDefaultArrowheads?(start: ArrowheadStyle, end: ArrowheadStyle): void } | null | undefined,
+  start: ArrowheadStyle, end: ArrowheadStyle, size: number,
+): void {
+  const set = sm?.setDefaultArrowheads as ((s: ArrowheadStyle, e: ArrowheadStyle, size?: number) => void) | undefined;
+  if (typeof set !== 'function') return;
+  const n = Number(size);
+  set.call(sm, start, end, Number.isFinite(n) && n > 0 ? n : DEFAULT_ARROWHEAD_SIZE);
+}
 
 /** State of the raster text tool (from ShapeManager.getRasterTextState) */
 export interface RasterTextState {

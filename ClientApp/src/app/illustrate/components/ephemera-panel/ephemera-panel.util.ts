@@ -68,3 +68,42 @@ export function visibleCanvasCentre(
   const visRight = edges.length ? Math.min(...edges) : right;
   return { x: (visRight - canvas.left) / 2, y: canvas.height / 2 };
 }
+
+/**
+ * One visibility condition from a generator's param schema (`showIf`, Salsa ephemera-types.ts — kept in step with
+ * `isEphemeraParamVisible` there; the host can't import it from an older dist). Values compare as strings, so a
+ * select's '4' matches 4.
+ */
+export interface EphemeraParamCondition {
+  key: string;
+  equals?: string | number | boolean | Array<string | number | boolean>;
+  notEquals?: string | number | boolean | Array<string | number | boolean>;
+  truthy?: boolean;
+}
+
+function asStrings(v: unknown): string[] {
+  return (Array.isArray(v) ? v : [v]).map(x => String(x));
+}
+
+/**
+ * Whether a param row should be shown for the current params (UI dead-controls audit 2026-10-09): rows whose
+ * generator ignores them in this state (Badge Points for a circle, Rainbow Bands for a smooth gradient, …) are
+ * hidden. No `showIf` = always shown. A missing value falls back to the schema default.
+ */
+export function isEphemeraParamShown(
+  entry: { showIf?: EphemeraParamCondition | EphemeraParamCondition[] },
+  params: Record<string, unknown>,
+  schema: ReadonlyArray<{ key: string; default?: unknown }> = [],
+): boolean {
+  const cond = entry?.showIf;
+  if (!cond) return true;
+  for (const c of Array.isArray(cond) ? cond : [cond]) {
+    if (!c || typeof c.key !== 'string') continue;
+    let v = params?.[c.key];
+    if (v === undefined) v = schema.find(s => s.key === c.key)?.default;
+    if (c.equals !== undefined && !asStrings(c.equals).includes(String(v))) return false;
+    if (c.notEquals !== undefined && asStrings(c.notEquals).includes(String(v))) return false;
+    if (c.truthy !== undefined && Boolean(v) !== c.truthy) return false;
+  }
+  return true;
+}

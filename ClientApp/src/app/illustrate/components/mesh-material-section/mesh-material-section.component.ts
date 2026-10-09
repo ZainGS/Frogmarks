@@ -1,6 +1,8 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Optional, Output, SimpleChanges } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { colorToHex, hexToRgba01, hexToRgba01Obj } from '../../utils/color-utils';
+import { materialControlVisibility, type MaterialControlVisibility } from '../../utils/scene3d-panel-visibility';
+import { Scene3dSettingsService } from '../../services/scene3d-settings.service';
 
 /** The engine's mesh render styles (derived, so new ones such as 'cel-hd' are covered — the hand list missed it). */
 type MeshRenderStyle = Parameters<ShapeManager['setRenderStyle3D']>[1];
@@ -21,6 +23,20 @@ export class MeshMaterialSectionComponent implements OnChanges {
   confirmMaterial: number | 'single' | null = null;
   @Output() dirty = new EventEmitter<void>();
   @Output() sketchPaperEdited = new EventEmitter<number>();
+
+  /** Scene settings (SSR / IBL state for the Matte / True mirror rules); optional so the section also stands alone. */
+  constructor(@Optional() public s3: Scene3dSettingsService | null) {}
+
+  /** Which material controls do anything for this mesh's style + state (audit 2026-10-09 §2 #1-4). */
+  get controls(): MaterialControlVisibility {
+    return materialControlVisibility(this.scene3dRenderStyle, {
+      metalness: +this.scene3dMeshMetalness || 0, matte: !!this.scene3dMeshNoEnvReflection,
+      mirror: !!this.scene3dMeshPlanarReflector, ssrOn: !!this.s3?.scene3dSSREnabled,
+    });
+  }
+
+  /** True mirror is on but no Sky IBL is baked (it samples the mirror pass inside the IBL path). */
+  get mirrorNeedsIbl(): boolean { return !!this.scene3dMeshPlanarReflector && !!this.s3 && !this.s3.scene3dIblEnabled; }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['meshId']) { this.confirmMaterial = null; this.load(); }

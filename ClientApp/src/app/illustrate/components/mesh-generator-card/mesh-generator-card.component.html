@@ -31,7 +31,8 @@
             <div class="mg-row"><span class="me-label">Segments</span>
                 <input type="range" min="3" max="64" step="1" [ngModel]="p['segments']" (ngModelChange)="num('segments', $event)" (change)="commit()">
                 <span class="mg-val">{{ p['segments'] }}</span></div>
-            <div class="mg-row"><span class="me-label">Height</span>
+            <!-- a circle is flat (Blender's Circle); an older one saved with a height keeps its slider -->
+            <div class="mg-row" *ngIf="showCircleHeight"><span class="me-label">Height</span>
                 <input type="range" min="0" max="3" step="0.01" [ngModel]="p['height']" (ngModelChange)="num('height', $event)" (change)="commit()">
                 <span class="mg-val">{{ p['height'] | number:'1.2-2' }}</span></div>
         </ng-container>

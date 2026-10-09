@@ -1,7 +1,8 @@
 import {
   fallbackEphemeraName, ephemeraPlacementLabels, formatEphemeraUnits, formatEphemeraSize, clampEphemeraSize,
-  placementOriginForCentre, visibleCanvasCentre, EPHEMERA_MIN_SIZE,
+  placementOriginForCentre, visibleCanvasCentre, EPHEMERA_MIN_SIZE, isEphemeraParamShown,
 } from './ephemera-panel.util';
+import { EphemeraPanel } from './ephemera-panel.component';
 
 describe('ephemera panel helpers (UI review 2026-10-07)', () => {
   it('names placements by the generator display name, numbering repeats', () => {
@@ -43,5 +44,40 @@ describe('ephemera panel helpers (UI review 2026-10-07)', () => {
     expect(visibleCanvasCentre(canvas, [])).toEqual({ x: 700, y: 430 });
     expect(visibleCanvasCentre(canvas, [1120, 836])).toEqual({ x: 418, y: 430 });
     expect(visibleCanvasCentre(canvas, [1500])).toEqual({ x: 700, y: 430 });   // off the canvas: ignored
+  });
+
+  it('hides params the generator ignores in the current state (schema showIf, audit 2026-10-09)', () => {
+    expect(isEphemeraParamShown({}, {})).toBeTrue();
+    const points = { showIf: { key: 'shape', equals: 'starburst' } };
+    expect(isEphemeraParamShown(points, { shape: 'starburst' })).toBeTrue();
+    expect(isEphemeraParamShown(points, { shape: 'circle' })).toBeFalse();
+    // a select hands back strings: '1' matches 1
+    expect(isEphemeraParamShown({ showIf: { key: 'lines', notEquals: 1 } }, { lines: '1' })).toBeFalse();
+    expect(isEphemeraParamShown({ showIf: { key: 'style', equals: ['creases', 'all'] } }, { style: 'all' })).toBeTrue();
+    expect(isEphemeraParamShown({ showIf: { key: 'showText', truthy: true } }, { showText: false })).toBeFalse();
+    // all conditions must hold; a missing value uses the schema default
+    const scatter = { showIf: [{ key: 'style', notEquals: 'starburst' }, { key: 'count', notEquals: 1 }] };
+    expect(isEphemeraParamShown(scatter, { style: 'filled' }, [{ key: 'count', default: 1 }])).toBeFalse();
+    expect(isEphemeraParamShown(scatter, { style: 'filled', count: 3 })).toBeTrue();
+  });
+
+  it('the panel lists only the shown rows, for a new placement and while editing one', () => {
+    const panel = new EphemeraPanel(null as any, null as any, null as any);
+    const schema: any[] = [
+      { key: 'shape', label: 'Shape', type: 'select', default: 'starburst' },
+      { key: 'points', label: 'Points', type: 'range', default: 12, showIf: { key: 'shape', equals: 'starburst' } },
+      { key: 'text', label: 'Text', type: 'text', default: 'PROMO' },
+    ];
+    panel.paramSchemaList = schema;
+    panel.params = { shape: 'starburst', points: 12, text: 'PROMO' };
+    expect(panel.paramKeys()).toEqual(['shape', 'points', 'text']);
+    panel.onParamChange('shape', 'circle', 'select');
+    expect(panel.paramKeys()).toEqual(['shape', 'text']);
+
+    panel.editParamSchemaList = schema;
+    panel.editParams = { shape: 'seal', points: 12, text: 'X' };
+    expect(panel.editParamKeys()).toEqual(['shape', 'text']);
+    panel.onEditParamChange('shape', 'starburst', 'select');
+    expect(panel.editParamKeys()).toEqual(['shape', 'points', 'text']);
   });
 });

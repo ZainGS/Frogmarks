@@ -319,6 +319,8 @@
                title="Show ghost images of adjacent frames. Essential for smooth animation.">
         <label for="onionEnable">Enable</label>
       </div>
+      <!-- the settings only while Enable is on; a tint only while its side shows ghosts -->
+      <ng-container *ngIf="onionSkin.enabled">
       <div class="slider-row">
         <span class="slider-label" title="How many previous frames to show as ghosts.">Before</span>
         <input type="range" min="0" max="6" step="1"
@@ -338,7 +340,7 @@
         <span class="slider-value">{{ onionSkin.opacity | number:'1.2-2' }}</span>
       </div>
       <!-- Tint presets -->
-      <div class="tint-row">
+      <div class="tint-row onion-prev-tint" *ngIf="onionSkin.framesBefore > 0">
         <span class="slider-label" title="Color tint for previous frames. Red is the industry standard.">Prev Tint</span>
         <div class="tint-swatches">
           <div *ngFor="let t of beforeTintPresets; trackBy: trackByIndex"
@@ -348,7 +350,7 @@
                (click)="setBeforeTint(t)"></div>
         </div>
       </div>
-      <div class="tint-row">
+      <div class="tint-row onion-next-tint" *ngIf="onionSkin.framesAfter > 0">
         <span class="slider-label" title="Color tint for upcoming frames. Blue is the industry standard.">Next Tint</span>
         <div class="tint-swatches">
           <div *ngFor="let t of afterTintPresets; trackBy: trackByIndex"
@@ -358,6 +360,7 @@
                (click)="setAfterTint(t)"></div>
         </div>
       </div>
+      </ng-container>
     </div>
   </div>
 

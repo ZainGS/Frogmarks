@@ -48,7 +48,34 @@ export interface ToolExecutor {
 }
 
 const STORAGE_KEY = 'fm_inference_config';
-const DEFAULT_BASE_URL = 'http://localhost:11434';
+export const DEFAULT_BASE_URL = 'http://localhost:11434';
+/** Where Shell › Settings (and Salsa's old cluster panel) kept the address before 2026-10-09 — never read by the AI
+ *  features. Migrated into fm_inference_config once, then removed (one source of truth). */
+export const LEGACY_LOCAL_MODEL_URL_KEY = 'frogmarks.localModelUrl';
+
+/** The saved inference config (fm_inference_config), adopting an older Shell Settings address when there is none
+ *  yet (written back + the old key removed). Null = nothing saved. */
+export function readInferenceConfig(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null | undefined): InferenceConfig | null {
+  try {
+    const saved = storage?.getItem(STORAGE_KEY);
+    let cfg: InferenceConfig | null = null;
+    if (saved) {
+      try {
+        const p = JSON.parse(saved) as Partial<InferenceConfig>;
+        cfg = { baseUrl: typeof p.baseUrl === 'string' ? p.baseUrl : '', selectedModel: typeof p.selectedModel === 'string' ? p.selectedModel : '' };
+      } catch { cfg = null; }
+    }
+    const legacy = (storage?.getItem(LEGACY_LOCAL_MODEL_URL_KEY) ?? '').trim();
+    if (legacy) {
+      if (!cfg?.baseUrl) {
+        cfg = { baseUrl: legacy.replace(/\/+$/, ''), selectedModel: cfg?.selectedModel ?? '' };
+        storage?.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      }
+      storage?.removeItem(LEGACY_LOCAL_MODEL_URL_KEY);
+    }
+    return cfg;
+  } catch { return null; }
+}
 
 // Frogmarks scene tools exposed to local models
 export const SCENE_TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -199,18 +226,16 @@ export class LocalInferenceService {
   get isConnected(): boolean { return this.connectionStatus$.value === 'connected'; }
 
   constructor(private http: HttpClient) {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const cfg: InferenceConfig = JSON.parse(saved);
-        this._baseUrl = cfg.baseUrl || DEFAULT_BASE_URL;
-        this._selectedModel = cfg.selectedModel || '';
-      } catch {}
+    const cfg = readInferenceConfig(typeof localStorage === 'undefined' ? null : localStorage);
+    if (cfg) {
+      this._baseUrl = cfg.baseUrl || DEFAULT_BASE_URL;
+      this._selectedModel = cfg.selectedModel || '';
     }
   }
 
+  /** The server address (Shell › Settings › Local GPU model address, or the dashboard's Connect). '' = the default. */
   setBaseUrl(url: string): void {
-    this._baseUrl = url.replace(/\/$/, '');
+    this._baseUrl = (url ?? '').trim().replace(/\/+$/, '') || DEFAULT_BASE_URL;
     this._save();
     this.connectionStatus$.next('disconnected');
     this.availableModels$.next([]);

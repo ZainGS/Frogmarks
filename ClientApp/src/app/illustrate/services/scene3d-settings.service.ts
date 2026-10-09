@@ -185,7 +185,11 @@ export class Scene3dSettingsService {
   sceneWindSpeed = 1.0;
 
   // IBL / Environment Map (global scene)
-  scene3dIblEnabled = false;
+  /** Read from the ENGINE (sm.iblEnabled3D): a Sky preset bake, an upload, a load and Clear all show here — the old
+   *  field was set only by Upload / Clear, so a Sky preset's IBL had no badge and Clear stayed disabled. */
+  get scene3dIblEnabled(): boolean {
+    try { return !!this.shapeManager?.iblEnabled3D; } catch { return false; }
+  }
 
   scene3dIblIntensity = 1.0;
 
@@ -384,13 +388,11 @@ export class Scene3dSettingsService {
     const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
     const sm = this.shapeManager;
     sm.setEnvironmentMap3D(imageData, this.scene3dIblIntensity);
-    this.scene3dIblEnabled = true;
     this.host.markDirty();
   }
 
   scene3dClearEnvironmentMap(): void {
     this.shapeManager.clearEnvironmentMap3D();
-    this.scene3dIblEnabled = false;
     this.host.markDirty();
   }
 

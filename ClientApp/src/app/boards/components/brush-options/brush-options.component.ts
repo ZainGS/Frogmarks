@@ -20,6 +20,7 @@ import {
   CANVAS_GRAIN_OPTIONS,
   BrushBleed,
   BrushSmudge,
+  BrushTexture,
 } from '../../models/brush-preset.model';
 import { SIZE_SLIDER_STEPS, sizeFromSlider, sliderFromSize } from './brush-size-slider';
 
@@ -33,6 +34,15 @@ export type BrushPanelView = 'grid' | 'editor';
  * carry it); while it is the active preset the panel shows the Eraser row as selected.
  */
 export const HIDDEN_BRUSH_PRESET_IDS: ReadonlySet<string> = new Set(['default_eraser']);
+
+/** Where a brush's own Texture comes from: an uploaded image, or one of the engine's built-in paper patterns. */
+export type BrushTextureSource = 'image' | Exclude<CanvasGrainType, 'none'>;
+
+/** An image for an <img> preview: engine presets may hold raw base64 (brush packs) or a data: URL (uploads). */
+export function imagePreviewSrc(data: string | undefined | null): string {
+  if (!data) return '';
+  return data.startsWith('data:') ? data : `data:image/png;base64,${data}`;
+}
 
 @Component({
   selector: 'app-brush-options',
@@ -107,12 +117,22 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   sizeJitter = 0;
   rotationJitterDeg = 0;
 
-  // Texture
+  // Texture (the brush's own, per preset — BrushPreset.texture)
   textureEnabled = false;
   textureScale = 1;
   textureStrength = 0.5;
   textureMode: 'multiply' | 'subtract' = 'multiply';
   textureFixed = false;
+  textureSource: BrushTextureSource = 'cold-press';
+  textureImageData = '';
+  readonly textureSourceOptions: { value: BrushTextureSource; label: string; tooltip: string }[] = [
+    ...CANVAS_GRAIN_OPTIONS.filter(o => o.value !== 'none')
+      .map(o => ({ value: o.value as BrushTextureSource, label: o.label, tooltip: o.tooltip })),
+    { value: 'image', label: 'Image\u2026', tooltip: 'Your own tiling grayscale image (white = paint, black = none).' },
+  ];
+
+  /** The active brush has an IMAGE tip (from a brush pack): hardness / roundness / angle don't apply to it. */
+  tipIsImage = false;
 
   // ── Canvas Grain (Paper Texture) ──────────────────────────────
   showCanvasGrain = false;
@@ -124,6 +144,18 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   // ── Eraser sub-options ────────────────────────────────────────
   eraserHardness: 'soft' | 'hard' = 'soft';
   eraserStyle: 'fade' | 'clear' = 'fade';
+
+  // ── What applies in the current state (controls that would do nothing are hidden) ──
+  /** Wet Edges, Bleed and Stroke Texture run on the stroke layer, which only Normal blend paints into. */
+  get normalBlend(): boolean { return this.brushBlendMode === 'normal'; }
+  /** Stroke Texture draws ONE textured strip at pen-up instead of the dabs: the dab settings don't apply. */
+  get strokeTextureActive(): boolean { return this.strokeTextureEnabled && this.normalBlend; }
+  /** The Clear eraser removes everything the tip touches: Opacity and Flow don't apply. */
+  get eraserClears(): boolean { return this.eraserActive && this.eraserStyle === 'clear'; }
+  /** Grid quick Opacity: not for the Clear eraser. */
+  get quickShowOpacity(): boolean { return !this.eraserClears; }
+  /** Grid quick Flow: not for the Clear eraser, nor for a stroke-texture brush (the eraser still stamps dabs). */
+  get quickShowFlow(): boolean { return this.eraserActive ? !this.eraserClears : !this.strokeTextureActive; }
 
   // ── Dynamics curves ───────────────────────────────────────────
   sizeCurve: { x: number; y: number }[] = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
@@ -178,6 +210,9 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   showSmudge = false;
   smudgeEnabled = false;
   smudgeStrength = 0.5;
+
+  /** The editor is open on a NEW brush: its controls only edit the form (saved by Save), never the active brush. */
+  private get live(): boolean { return !this.isCreating; }
 
   // ── Stroke Texture ────────────────────────────────────────────
   showStrokeTexture = false;
@@ -377,6 +412,7 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const preset = this.presets.find(p => p.id === id);
     this.editingPresetName = preset?.name ?? 'Brush';
+    this._syncedPresetId = null;   // a fresh editor reads the preset as saved (no UI-only state carried over)
     this._syncFromPreset();
     this.view = 'editor';
     this._scrollHostToTop();
@@ -404,12 +440,14 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   // ═══════════════════════════════════════════════════════════════
 
   closeEditor(): void {
+    const wasCreating = this.isCreating;
     this.view = 'grid';
     this.isCreating = false;
     this.editingPresetId = null;
     this._editSnapshot = null;
     this.showColorPicker = false;
     this.confirmingDelete = false;
+    if (wasCreating) this._syncFromPreset();   // the grid's quick controls show the active brush again, not the form
   }
 
   /** Save a brand-new brush built from the editor's current values */
@@ -449,6 +487,13 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
       minSize: this.minSize,
       maxSize: this.maxSize,
       version: 1,
+      texture: this.textureEnabled ? this._textureSettings() : undefined,
+      dualBrush: this._dualBrushSettings(),
+      colorJitter: this._colorJitterSettings(),
+      wetEdges: this._wetEdgesSettings(),
+      strokeTexture: this._strokeTextureSettings(),
+      bleed: this._bleedSettings(),
+      smudge: this._smudgeSettings(),
     };
     const newId = this.rasterService.createPreset(preset);
     if (newId) {
@@ -524,11 +569,12 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onMinSizeChange(v: number): void {
     this.minSize = Math.min(v, this.maxSize);
-    this.rasterService.updatePresetSize(this.minSize, this.maxSize);
+    if (this.live) this.rasterService.updatePresetSize(this.minSize, this.maxSize);
   }
 
   onMaxSizeChange(v: number): void {
     this.maxSize = Math.max(v, this.minSize);
+    if (!this.live) return;
     this.rasterService.updatePresetSize(this.minSize, this.maxSize);
     this.rasterService.setSize(this.maxSize);
   }
@@ -540,12 +586,12 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onOpacityChange(v: number): void {
     this.opacity = v;
-    this.rasterService.updateOpacity(v / 100);
+    if (this.live) this.rasterService.updateOpacity(v / 100);
   }
 
   onFlowChange(v: number): void {
     this.flow = v;
-    this.rasterService.updateFlow(v / 100);
+    if (this.live) this.rasterService.updateFlow(v / 100);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -554,46 +600,46 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onStabilizationMethodChange(m: StabilizationMethod): void {
     this.stabilizationMethod = m;
-    this.rasterService.updateStabilization(m, this.stabilizationLevel, m === 'pull-string' ? this.pullStringLength : undefined);
+    if (this.live) this.rasterService.updateStabilization(m, this.stabilizationLevel, m === 'pull-string' ? this.pullStringLength : undefined);
   }
 
   onStabilizationLevelChange(v: number): void {
     this.stabilizationLevel = v;
-    this.rasterService.updateStabilization(this.stabilizationMethod, v, this.stabilizationMethod === 'pull-string' ? this.pullStringLength : undefined);
+    if (this.live) this.rasterService.updateStabilization(this.stabilizationMethod, v, this.stabilizationMethod === 'pull-string' ? this.pullStringLength : undefined);
   }
 
   onPullStringLengthChange(v: number): void {
     this.pullStringLength = v;
-    this.rasterService.updateStabilization(this.stabilizationMethod, this.stabilizationLevel, v);
+    if (this.live) this.rasterService.updateStabilization(this.stabilizationMethod, this.stabilizationLevel, v);
   }
 
   // ═══════════════════════════════════════════════════════════════
   //  Tip Shape
   // ═══════════════════════════════════════════════════════════════
 
-  onHardnessChange(v: number): void { this.tipHardness = v; this.rasterService.updateTipHardness(v); }
-  onRoundnessChange(v: number): void { this.tipRoundness = v; this.rasterService.updateTipRoundness(v); }
-  onAngleChange(deg: number): void { this.tipAngleDeg = deg; this.rasterService.updateTipAngle(deg * Math.PI / 180); }
+  onHardnessChange(v: number): void { this.tipHardness = v; if (this.live) this.rasterService.updateTipHardness(v); }
+  onRoundnessChange(v: number): void { this.tipRoundness = v; if (this.live) this.rasterService.updateTipRoundness(v); }
+  onAngleChange(deg: number): void { this.tipAngleDeg = deg; if (this.live) this.rasterService.updateTipAngle(deg * Math.PI / 180); }
 
   // ═══════════════════════════════════════════════════════════════
   //  Dynamics Curves
   // ═══════════════════════════════════════════════════════════════
 
-  onSizeCurveChange(pts: { x: number; y: number }[]): void { this.sizeCurve = pts; this.rasterService.updateSizeCurve(pts); }
-  onOpacityCurveChange(pts: { x: number; y: number }[]): void { this.opacityCurve = pts; this.rasterService.updateOpacityCurve(pts); }
-  onFlowCurveChange(pts: { x: number; y: number }[]): void { this.flowCurve = pts; this.rasterService.updateFlowCurve(pts); }
-  onVelocitySizeCurveChange(pts: { x: number; y: number }[]): void { this.velocitySizeCurve = pts; this.rasterService.updateVelocitySizeCurve(pts); }
-  onScatterPressureCurveChange(pts: { x: number; y: number }[]): void { this.scatterPressureCurve = pts; this.rasterService.updateScatterPressureCurve(pts); }
-  onBrushBlendModeChange(mode: 'normal' | 'multiply' | 'screen' | 'overlay'): void { this.brushBlendMode = mode; this.rasterService.updateBrushBlendMode(mode); }
+  onSizeCurveChange(pts: { x: number; y: number }[]): void { this.sizeCurve = pts; if (this.live) this.rasterService.updateSizeCurve(pts); }
+  onOpacityCurveChange(pts: { x: number; y: number }[]): void { this.opacityCurve = pts; if (this.live) this.rasterService.updateOpacityCurve(pts); }
+  onFlowCurveChange(pts: { x: number; y: number }[]): void { this.flowCurve = pts; if (this.live) this.rasterService.updateFlowCurve(pts); }
+  onVelocitySizeCurveChange(pts: { x: number; y: number }[]): void { this.velocitySizeCurve = pts; if (this.live) this.rasterService.updateVelocitySizeCurve(pts); }
+  onScatterPressureCurveChange(pts: { x: number; y: number }[]): void { this.scatterPressureCurve = pts; if (this.live) this.rasterService.updateScatterPressureCurve(pts); }
+  onBrushBlendModeChange(mode: 'normal' | 'multiply' | 'screen' | 'overlay'): void { this.brushBlendMode = mode; if (this.live) this.rasterService.updateBrushBlendMode(mode); }
 
   // ═══════════════════════════════════════════════════════════════
   //  Spacing / Scatter
   // ═══════════════════════════════════════════════════════════════
 
-  onSpacingChange(v: number): void { this.spacing = v; this.rasterService.updateSpacing(v); }
-  onScatterChange(v: number): void { this.scatterDistance = v; this.rasterService.updateScatterDistance(v); }
-  onSizeJitterChange(v: number): void { this.sizeJitter = v; this.rasterService.updateSizeJitter(v); }
-  onRotJitterChange(deg: number): void { this.rotationJitterDeg = deg; this.rasterService.updateRotationJitter(deg * Math.PI / 180); }
+  onSpacingChange(v: number): void { this.spacing = v; if (this.live) this.rasterService.updateSpacing(v); }
+  onScatterChange(v: number): void { this.scatterDistance = v; if (this.live) this.rasterService.updateScatterDistance(v); }
+  onSizeJitterChange(v: number): void { this.sizeJitter = v; if (this.live) this.rasterService.updateSizeJitter(v); }
+  onRotJitterChange(deg: number): void { this.rotationJitterDeg = deg; if (this.live) this.rasterService.updateRotationJitter(deg * Math.PI / 180); }
 
   // ═══════════════════════════════════════════════════════════════
   //  Texture
@@ -601,24 +647,52 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onTextureToggle(enabled: boolean): void {
     this.textureEnabled = enabled;
-    if (!enabled) { this.rasterService.updateTexture(null); return; }
-    this.rasterService.updateTexture({
-      scale: this.textureScale, strength: this.textureStrength,
-      mode: this.textureMode, fixedToCanvas: this.textureFixed,
-    });
+    this._applyTexture();
   }
 
-  onTextureScaleChange(v: number): void { this.textureScale = v; this.rasterService.updateTexture({ scale: v }); }
-  onTextureStrengthChange(v: number): void { this.textureStrength = v; this.rasterService.updateTexture({ strength: v }); }
-  onTextureModeChange(m: 'multiply' | 'subtract'): void { this.textureMode = m; this.rasterService.updateTexture({ mode: m }); }
-  onTextureFixedChange(f: boolean): void { this.textureFixed = f; this.rasterService.updateTexture({ fixedToCanvas: f }); }
+  onTextureScaleChange(v: number): void { this.textureScale = v; this._applyTexture(); }
+  onTextureStrengthChange(v: number): void { this.textureStrength = v; this._applyTexture(); }
+  onTextureModeChange(m: 'multiply' | 'subtract'): void { this.textureMode = m; this._applyTexture(); }
+  onTextureFixedChange(f: boolean): void { this.textureFixed = f; this._applyTexture(); }
+  /** A built-in pattern drops an uploaded image (the engine uses the image whenever there is one). */
+  onTextureSourceChange(src: BrushTextureSource): void {
+    this.textureSource = src;
+    if (src !== 'image') this.textureImageData = '';
+    this._applyTexture();
+  }
+
+  /** The image preview of the Texture section (Image source only). */
+  get texturePreview(): string { return this.textureSource === 'image' ? imagePreviewSrc(this.textureImageData) : ''; }
 
   onTextureFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { this.rasterService.updateTexture({ imageData: reader.result as string }); };
+    reader.onload = () => {
+      this.textureSource = 'image';
+      this.textureImageData = reader.result as string;
+      this._applyTexture();
+    };
     reader.readAsDataURL(file);
+  }
+
+  /** The Texture block as the engine reads it (BrushPreset.texture). */
+  private _textureSettings(): BrushTexture {
+    const image = this.textureSource === 'image' ? this.textureImageData : '';
+    return {
+      imageData: image,
+      // the built-in pattern (also the stand-in while Image has no file yet)
+      grain: this.textureSource === 'image' ? 'cold-press' : this.textureSource,
+      scale: this.textureScale,
+      strength: this.textureStrength,
+      mode: this.textureMode,
+      fixedToCanvas: this.textureFixed,
+    };
+  }
+
+  private _applyTexture(): void {
+    if (!this.live) return;
+    this.rasterService.updateTexture(this.textureEnabled ? this._textureSettings() : null);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -700,8 +774,8 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     reader.readAsDataURL(file);
   }
 
-  private _applyDualBrush(): void {
-    this.rasterService.setDualBrush({
+  private _dualBrushSettings() {
+    return {
       enabled: this.dualBrushEnabled,
       textureData: this.dualBrushTextureData,
       textureSize: this.dualBrushTextureSize,
@@ -710,7 +784,11 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
       blendOp: this.dualBrushBlendOp,
       strength: this.dualBrushStrength,
       randomRotation: this.dualBrushRandomRotation,
-    });
+    };
+  }
+
+  private _applyDualBrush(): void {
+    if (this.live) this.rasterService.setDualBrush(this._dualBrushSettings());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -722,13 +800,17 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   onBrightnessJitterChange(v: number): void { this.brightnessJitter = v; this._applyColorJitter(); }
   onOpacityJitterChange(v: number): void { this.opacityJitter = v; this._applyColorJitter(); }
 
-  private _applyColorJitter(): void {
-    this.rasterService.setColorJitter({
+  private _colorJitterSettings() {
+    return {
       hueJitter: this.hueJitter,
       saturationJitter: this.saturationJitter,
       brightnessJitter: this.brightnessJitter,
       opacityJitter: this.opacityJitter,
-    });
+    };
+  }
+
+  private _applyColorJitter(): void {
+    if (this.live) this.rasterService.setColorJitter(this._colorJitterSettings());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -744,13 +826,17 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   onWetEdgeWidthChange(v: number): void { this.wetEdgeWidth = Math.round(v); this._applyWetEdges(); }
   onWetEdgeStrengthChange(v: number): void { this.wetEdgeStrength = v; this._applyWetEdges(); }
 
-  private _applyWetEdges(): void {
-    this.rasterService.setWetEdges({
+  private _wetEdgesSettings() {
+    return {
       enabled: this.wetEdgesEnabled,
       edgeDarkness: this.wetEdgeDarkness,
       edgeWidth: this.wetEdgeWidth,
       strength: this.wetEdgeStrength,
-    });
+    };
+  }
+
+  private _applyWetEdges(): void {
+    if (this.live) this.rasterService.setWetEdges(this._wetEdgesSettings());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -777,14 +863,18 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     reader.readAsDataURL(file);
   }
 
-  private _applyStrokeTexture(): void {
-    this.rasterService.setStrokeTexture({
+  private _strokeTextureSettings() {
+    return {
       enabled: this.strokeTextureEnabled,
       textureData: this.strokeTextureData,
       textureSize: this.strokeTextureSize,
       texelsPerUnit: this.strokeTextureTilingDensity,
       edgeSoftness: this.strokeTextureEdgeSoftness,
-    });
+    };
+  }
+
+  private _applyStrokeTexture(): void {
+    if (this.live) this.rasterService.setStrokeTexture(this._strokeTextureSettings());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -821,25 +911,31 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Bleed handlers ────────────────────────────────────────────
 
-  onBleedChange(): void {
-    const settings: BrushBleed = {
+  private _bleedSettings(): BrushBleed {
+    return {
       enabled: this.bleedEnabled,
       perDab: this.bleedPerDab,
       radius: this.bleedRadius,
       strength: this.bleedStrength,
     };
-    this.rasterService.setBrushBleed(settings);
+  }
+
+  onBleedChange(): void {
+    if (this.live) this.rasterService.setBrushBleed(this._bleedSettings());
   }
 
   // ── Smudge handlers ───────────────────────────────────────────
 
-  onSmudgeChange(): void {
-    const settings: BrushSmudge = {
+  private _smudgeSettings(): BrushSmudge {
+    return {
       enabled: this.smudgeEnabled,
       strength: this.smudgeStrength,
       sampleRadius: 0,
     };
-    this.rasterService.setBrushSmudge(settings);
+  }
+
+  onSmudgeChange(): void {
+    if (this.live) this.rasterService.setBrushSmudge(this._smudgeSettings());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -884,9 +980,15 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
   //  Private helpers
   // ═══════════════════════════════════════════════════════════════
 
+  /** The preset _syncFromPreset last read (a re-sync of the SAME preset keeps UI-only state, e.g. Image picked but no
+   *  file chosen yet). */
+  private _syncedPresetId: string | null = null;
+
   private _syncFromPreset(): void {
     const preset = this.rasterService.getActivePreset();
     if (!preset) return;
+    const samePreset = this._syncedPresetId === preset.id;
+    this._syncedPresetId = preset.id;
     this.minSize = preset.minSize;
     this.maxSize = preset.maxSize;
     this.opacity = Math.round(preset.blending.opacity * 100);
@@ -896,6 +998,7 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pullStringLength = preset.stabilization.pullStringLength ?? 30;
     this.spacing = preset.spacing;
 
+    this.tipIsImage = preset.tip.type === 'image';
     if (preset.tip.type === 'parametric') {
       this.tipHardness = preset.tip.hardness;
       this.tipRoundness = preset.tip.roundness;
@@ -920,9 +1023,52 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.textureStrength = preset.texture.strength;
       this.textureMode = preset.texture.mode;
       this.textureFixed = preset.texture.fixedToCanvas;
+      this.textureImageData = preset.texture.imageData ?? '';
+      // "Image" with no file yet stays picked while the same brush is edited (the pattern stands in meanwhile)
+      const keepImage = samePreset && this.textureSource === 'image';
+      this.textureSource = this.textureImageData || keepImage ? 'image' : (preset.texture.grain ?? 'cold-press');
     } else {
       this.textureEnabled = false;
+      this.textureScale = 1;
+      this.textureStrength = 0.5;
+      this.textureMode = 'multiply';
+      this.textureFixed = false;
+      this.textureImageData = '';
+      this.textureSource = 'cold-press';
     }
+
+    // Dual Brush / Color Variation / Wet Edges / Stroke Texture: the preset's own values (or the defaults when it has
+    // none), so the editor shows the preset as it is and touching one control writes back only what was changed.
+    const dual = preset.dualBrush;
+    this.dualBrushEnabled = dual?.enabled ?? false;
+    this.dualBrushTileMode = dual?.tileMode ?? 'dab-local';
+    this.dualBrushScale = dual?.scale ?? 1.0;
+    this.dualBrushBlendOp = dual?.blendOp ?? 'multiply';
+    this.dualBrushStrength = dual?.strength ?? 0.7;
+    this.dualBrushRandomRotation = dual?.randomRotation ?? true;
+    this.dualBrushTextureData = dual?.textureData ?? '';
+    this.dualBrushTextureSize = dual?.textureSize ?? 256;
+    this.dualBrushTexturePreview = imagePreviewSrc(this.dualBrushTextureData);
+
+    const jitter = preset.colorJitter;
+    this.hueJitter = jitter?.hueJitter ?? 0;
+    this.saturationJitter = jitter?.saturationJitter ?? 0;
+    this.brightnessJitter = jitter?.brightnessJitter ?? 0;
+    this.opacityJitter = jitter?.opacityJitter ?? 0;
+
+    const wet = preset.wetEdges;
+    this.wetEdgesEnabled = wet?.enabled ?? false;
+    this.wetEdgeDarkness = wet?.edgeDarkness ?? 0.4;
+    this.wetEdgeWidth = wet?.edgeWidth ?? 2;
+    this.wetEdgeStrength = wet?.strength ?? 0.5;
+
+    const st = preset.strokeTexture;
+    this.strokeTextureEnabled = st?.enabled ?? false;
+    this.strokeTextureTilingDensity = st?.texelsPerUnit ?? 0.5;
+    this.strokeTextureEdgeSoftness = st?.edgeSoftness ?? 0.2;
+    this.strokeTextureData = st?.textureData ?? '';
+    this.strokeTextureSize = st?.textureSize ?? 256;
+    this.strokeTexturePreview = imagePreviewSrc(this.strokeTextureData);
 
     // Sync brush grain from engine (per-brush)
     const grain = this.rasterService.getBrushGrain();
@@ -971,6 +1117,14 @@ export class BrushOptionsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sizeJitter = 0;
     this.rotationJitterDeg = 0;
     this.textureEnabled = false;
+    this.textureScale = 1;
+    this.textureStrength = 0.5;
+    this.textureMode = 'multiply';
+    this.textureFixed = false;
+    this.textureSource = 'cold-press';
+    this.textureImageData = '';
+    this.tipIsImage = false;
+    this.pullStringLength = 30;
     this.showTipShape = false;
     this.showDynamics = false;
     this.showSpacing = false;

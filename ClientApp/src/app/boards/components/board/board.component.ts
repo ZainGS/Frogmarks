@@ -17,7 +17,7 @@ import { ColorPickerComponent } from 'app/shared/components/color-picker/color-p
 import { LayerTreeNode } from 'app/boards/models/layer-tree-node.model';
 import { AuthService } from 'app/shared/services/auth/auth.service';
 import { NotifyService } from 'app/shared/services/notify/notify.service';
-import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
+import { ArrowheadStyle, ARROWHEAD_OPTIONS, applyArrowheadDefaults } from 'app/boards/models/brush-preset.model';
 import { toggleAppFullscreen } from 'app/shared/utilities/app-fullscreen';
 import { FrameCoalescer } from 'app/shared/utilities/frame-coalescer';
 import { resetEngineTo2DView } from 'app/shared/utilities/engine-view-reset';
@@ -112,8 +112,9 @@ export class BoardComponent implements OnInit {
   arrowheadSize = 6;
   arrowheadOptions = ARROWHEAD_OPTIONS;
 
+  /** Start / End / Size changed: new lines take all three (Size was dead before 2026-10-09). */
   onArrowheadChange(): void {
-    this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
+    applyArrowheadDefaults(this.shapeManager, this.arrowheadStart, this.arrowheadEnd, this.arrowheadSize);
   }
 
   // Polygon tool
@@ -1101,7 +1102,7 @@ onNodeFillColorSelected(layerId: string, color: string) {
 
     if(this.controlPanelActiveTool === 'connector')
     {
-      this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
+      this.onArrowheadChange();
       this.shapeManager.enableLineDrawing();
     }
     else {

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
 import { ShapeType } from '../../shared/enums/shape-type';
-import { ArrowheadStyle, ARROWHEAD_OPTIONS } from 'app/boards/models/brush-preset.model';
+import { ArrowheadStyle, ARROWHEAD_OPTIONS, applyArrowheadDefaults } from 'app/boards/models/brush-preset.model';
 
 /** The engine's preset polygon kinds. */
 type PolygonPreset = Parameters<ShapeManager['createPresetPolygon']>[4];
@@ -140,16 +140,24 @@ export class DrawingOptionsService {
 
   onArrowheadStartChange(style: ArrowheadStyle): void {
     this.arrowheadStart = style;
-    this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
+    this.applyArrowheadDefaults();
   }
 
   onArrowheadEndChange(style: ArrowheadStyle): void {
     this.arrowheadEnd = style;
-    this.shapeManager.setDefaultArrowheads(this.arrowheadStart, this.arrowheadEnd);
+    this.applyArrowheadDefaults();
   }
 
+  /** Size slider: new lines' arrowheads (a multiple of the stroke width). It only set this field before 2026-10-09. */
   onArrowheadSizeChange(v: number): void {
-    this.arrowheadSize = +v;
+    const n = +v;
+    if (Number.isFinite(n) && n > 0) this.arrowheadSize = n;
+    this.applyArrowheadDefaults();
+  }
+
+  /** Push the arrowhead defaults for new lines to the engine (styles + size). */
+  applyArrowheadDefaults(): void {
+    applyArrowheadDefaults(this.shapeManager, this.arrowheadStart, this.arrowheadEnd, this.arrowheadSize);
   }
 
   // Pen/Highlight/Pattern

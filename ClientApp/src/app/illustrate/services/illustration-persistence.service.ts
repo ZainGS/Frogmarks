@@ -1286,8 +1286,12 @@ export class IllustrationPersistenceService implements OnDestroy {
     const s3d = sm.scene3d;
     if (s.cameraMode !== undefined) { this.editorState.scene3dCameraMode = s.cameraMode as any; s3d?.setCameraMode(s.cameraMode as any); }
     if (s.illustrationProjection !== undefined) {
-      this.editorState.scene3dIllustrationProjection = s.illustrationProjection as any;
-      sm.setIllustrationProjection3D(s.illustrationProjection as any);
+      // The VIEW MODE owns the projection (2D Ortho / 2D Persp; the view state rides the engine scene) — applying the
+      // saved preference could flip the camera to the other projection behind the view bar's back (audit 2026-10-09).
+      const rules: any = sm.getViewRules3D?.() ?? {};
+      const p = !rules.freeNavigation && rules.projection ? rules.projection : s.illustrationProjection;
+      this.editorState.scene3dIllustrationProjection = p as any;
+      if (!rules.freeNavigation) sm.setIllustrationProjection3D(p as any);
     }
     if (s.fov !== undefined) { this.editorState.scene3dFOV = s.fov; s3d?.setFOV(s.fov); }
     if (s.shadowsEnabled !== undefined) {

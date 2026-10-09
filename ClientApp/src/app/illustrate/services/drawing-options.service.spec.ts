@@ -38,3 +38,36 @@ describe('DrawingOptionsService pen colour → vector tools', () => {
     expect(sm.setShapeColor).toHaveBeenCalledWith('#abcdef');
   });
 });
+
+/** Line (Arrow) options — the Size slider only set a field before 2026-10-09 (UI dead-controls audit). */
+describe('DrawingOptionsService arrowhead defaults', () => {
+  function rig() {
+    const sm = jasmine.createSpyObj('ShapeManager', ['setDefaultArrowheads']);
+    const svc = new DrawingOptionsService();
+    svc.bind({ shapeManager: sm, setActiveTool: () => {} } as never);
+    return { sm, svc };
+  }
+
+  it('the Size slider reaches the engine with the current styles', () => {
+    const { sm, svc } = rig();
+    svc.onArrowheadSizeChange('12' as unknown as number);
+    expect(svc.arrowheadSize).toBe(12);
+    expect(sm.setDefaultArrowheads).toHaveBeenCalledWith('none', 'triangle', 12);
+  });
+
+  it('Start / End changes keep the chosen size', () => {
+    const { sm, svc } = rig();
+    svc.onArrowheadSizeChange(9);
+    svc.onArrowheadStartChange('closedCircle');
+    expect(sm.setDefaultArrowheads).toHaveBeenCalledWith('closedCircle', 'triangle', 9);
+    svc.onArrowheadEndChange('openCircle');
+    expect(sm.setDefaultArrowheads).toHaveBeenCalledWith('closedCircle', 'openCircle', 9);
+  });
+
+  it('a bad size keeps the last good one', () => {
+    const { sm, svc } = rig();
+    svc.onArrowheadSizeChange(0);
+    expect(svc.arrowheadSize).toBe(6);
+    expect(sm.setDefaultArrowheads).toHaveBeenCalledWith('none', 'triangle', 6);
+  });
+});

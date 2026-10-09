@@ -114,7 +114,7 @@
                         <ng-container *ngIf="entry.type === 'glow'">
                             <div class="fx-param-row"><label>Radius</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['radius']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'radius', +$event)"><span>{{ entry.params['radius'] }}</span></div>
                             <div class="fx-param-row"><label>Intensity</label><input type="range" min="0.5" max="5" step="0.1" [ngModel]="entry.params['intensity']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'intensity', +$event)"><span>{{ entry.params['intensity'] | number:'1.1-1' }}</span></div>
-                            <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(entry.params['glowColor'])" (ngModelChange)="onLiveTextEffectParamChange(entry, 'glowColor', fxHexToColor($event, entry.params['glowColor']?.[3] ?? 1))"></div>
+                            <div class="fx-param-row"><label>Color</label><input type="color" [ngModel]="fxColorToHex(glowColorOf(entry))" (ngModelChange)="onLiveTextEffectParamChange(entry, 'color', fxHexToColor($event, glowColorOf(entry)?.[3] ?? 1))"></div>
                         </ng-container>
                         <ng-container *ngIf="entry.type === 'wave'">
                             <div class="fx-param-row"><label>Amplitude</label><input type="range" min="1" max="20" step="1" [ngModel]="entry.params['amplitude']" (ngModelChange)="onLiveTextEffectParamChange(entry, 'amplitude', +$event)"><span>{{ entry.params['amplitude'] }}</span></div>

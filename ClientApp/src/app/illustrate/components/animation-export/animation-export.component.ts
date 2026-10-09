@@ -3,6 +3,22 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { AnimationFrameSource } from '../../models/animation-frame-source';
 
 export type ExportFormat = 'gif' | 'mp4' | 'sprite-sheet' | 'png-sequence' | 'gif-sticker';
+/** canvas = the artboard as on screen (its background, 3D included); transparent / color = the 2D content alone, on
+ *  nothing or on the picked colour (the transparent capture: no canvas background, no 3D). */
+export type AnimationExportBackground = 'canvas' | 'transparent' | 'color';
+
+/** The background a format's frames are actually captured with: MP4 is always on the canvas; a GIF Sticker is
+ *  transparent; transparent / colour need the transparent capture (a document size), else the canvas. */
+export function effectiveExportBackground(format: ExportFormat, picked: AnimationExportBackground, canSeeThrough: boolean): AnimationExportBackground {
+  if (format === 'mp4') return 'canvas';
+  const want: AnimationExportBackground = format === 'gif-sticker' ? 'transparent' : picked;
+  return want !== 'canvas' && !canSeeThrough ? 'canvas' : want;
+}
+
+/** The palette entry a transparent GIF frame shows as see-through (alpha 0), or -1 when the frame has none. */
+export function gifTransparentIndex(palette: ReadonlyArray<ReadonlyArray<number>>): number {
+  return palette.findIndex(c => c.length > 3 && c[3] === 0);
+}
 
 @Component({
   selector: 'app-animation-export',
@@ -21,7 +37,8 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
   rangeEnd = 24;
   scale: '0.5x' | '1x' | '2x' = '1x';
   spriteColumns = 8;
-  bgTransparent = true;
+  /** Background of PNG Sequence / Sprite Sheet / GIF frames (default: the canvas, as on screen). */
+  background: AnimationExportBackground = 'canvas';
   bgColor = '#ffffff';
   quality = 80;
   isExporting = false;
@@ -33,10 +50,33 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
     { value: 'mp4',          label: 'MP4 Video',       tooltip: 'Export as a video file. Best quality and smallest file size. Requires Chrome/Edge.' },
     { value: 'sprite-sheet', label: 'Sprite Sheet',    tooltip: 'Export all frames in a single image grid. Used for game development and spritesheets.' },
     { value: 'png-sequence', label: 'PNG Sequence',    tooltip: 'Export every frame as a separate PNG inside a ZIP. Standard for professional animation pipelines.' },
-    { value: 'gif-sticker',  label: 'GIF Sticker',     tooltip: 'Export as a transparent animated sticker. Perfect for messaging apps and stream overlays.' },
+    { value: 'gif-sticker',  label: 'GIF Sticker',     tooltip: 'Export as a transparent animated sticker: drawings, shapes and ephemera only (no background, no 3D; needs a canvas size). Perfect for messaging apps and stream overlays.' },
   ];
 
   scaleOptions = ['0.5x', '1x', '2x'];
+
+  /** The engine can capture a frame without its background: the API and a document (artboard) size. */
+  get canSeeThrough(): boolean {
+    const sm = this.shapeManager;
+    if (typeof sm?.exportIllustrationTransparentPNG !== 'function') return false;
+    const doc = sm.getDocumentSize?.();
+    return !!doc && doc.w > 0 && doc.h > 0;
+  }
+  /** The Background row: the formats with a choice (MP4 is opaque on the canvas; a sticker is always transparent). */
+  get showBackground(): boolean { return this.format === 'png-sequence' || this.format === 'sprite-sheet' || this.format === 'gif'; }
+  get backgroundHint(): string {
+    if (!this.canSeeThrough) return 'This document has no canvas size, so frames keep the canvas background (Edit › Resize Canvas… sets one).';
+    if (this.background === 'canvas') return 'Everything on the artboard, on its background (3D included).';
+    return this.background === 'color'
+      ? 'Drawings, shapes and ephemera only (no 3D), on this colour.'
+      : 'Drawings, shapes and ephemera only (no background, no 3D): empty areas stay see-through.';
+  }
+  /** The sticker can't be transparent without a canvas size. */
+  get stickerHint(): string | null {
+    return this.format === 'gif-sticker' && !this.canSeeThrough
+      ? 'This document has no canvas size: the sticker keeps the canvas background (Edit › Resize Canvas… sets one).' : null;
+  }
+  private get _frameBg(): AnimationExportBackground { return effectiveExportBackground(this.format, this.background, this.canSeeThrough); }
 
   constructor(private cdr: ChangeDetectorRef, private host: ElementRef<HTMLElement>) {}
 
@@ -108,11 +148,14 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  /** Capture frame f from Salsa, scale if needed, return ImageBitmap. */
-  private async _captureFrame(frame: number, scaleFactor: number): Promise<ImageBitmap> {
+  /** Capture frame f from Salsa, scale if needed, return ImageBitmap. `seeThrough`: the transparent 2D capture (no
+   *  canvas background, no 3D) instead of the artboard as on screen. */
+  private async _captureFrame(frame: number, scaleFactor: number, seeThrough = false): Promise<ImageBitmap> {
     this.shapeManager.setCurrentFrame(frame);
     // captureDocumentBoundsToBlob calls waitForFrameSettled() internally
-    const blob: Blob = await this.shapeManager.captureDocumentBoundsToBlob('png', 8192);
+    const blob: Blob = seeThrough && this.shapeManager.exportIllustrationTransparentPNG
+      ? await this.shapeManager.exportIllustrationTransparentPNG(8192)
+      : await this.shapeManager.captureDocumentBoundsToBlob('png', 8192);
     const img = await createImageBitmap(blob);
     if (scaleFactor === 1.0) return img;
     const w = Math.max(1, Math.round(img.width  * scaleFactor));
@@ -137,14 +180,17 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
   private async _exportPngSequence(scale: number): Promise<void> {
     const savedFrame = this.shapeManager.getCurrentFrame?.() ?? 1;
     const frames = this._getFrameRange();
+    const bg = this._frameBg;
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     for (let i = 0; i < frames.length; i++) {
       this._setProgress(i, frames.length, `Capturing frame ${i + 1} / ${frames.length}…`);
-      const img = await this._captureFrame(frames[i], scale);
+      const img = await this._captureFrame(frames[i], scale, bg !== 'canvas');
       const canvas = new OffscreenCanvas(img.width, img.height);
-      (canvas.getContext('2d') as OffscreenCanvasRenderingContext2D).drawImage(img, 0, 0);
+      const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      if (bg === 'color') { ctx.fillStyle = this.bgColor; ctx.fillRect(0, 0, img.width, img.height); }
+      ctx.drawImage(img, 0, 0);
       img.close();
       const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
       zip.file(`frame_${String(frames[i]).padStart(4, '0')}.png`, pngBlob);
@@ -161,11 +207,12 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
   private async _exportSpriteSheet(scale: number): Promise<void> {
     const savedFrame = this.shapeManager.getCurrentFrame?.() ?? 1;
     const frames = this._getFrameRange();
+    const bg = this._frameBg;
     const bitmaps: ImageBitmap[] = [];
 
     for (let i = 0; i < frames.length; i++) {
       this._setProgress(i, frames.length, `Capturing frame ${i + 1} / ${frames.length}…`);
-      bitmaps.push(await this._captureFrame(frames[i], scale));
+      bitmaps.push(await this._captureFrame(frames[i], scale, bg !== 'canvas'));
     }
     this.shapeManager.setCurrentFrame(savedFrame);
 
@@ -177,7 +224,7 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
     const canvas = new OffscreenCanvas(fw * cols, fh * rows);
     const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
 
-    if (!this.bgTransparent) {
+    if (bg === 'color') {
       ctx.fillStyle = this.bgColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
@@ -266,11 +313,13 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
     const savedFrame = this.shapeManager.getCurrentFrame?.() ?? 1;
     const frames = this._getFrameRange();
     const delayMs = Math.round(1000 / this.fps);
-    const isTransparent = stickerMode || this.bgTransparent;
+    const bg = this._frameBg;   // (a sticker: transparent when the engine can capture one)
+    const isTransparent = bg === 'transparent';
+    const seeThrough = bg !== 'canvas';
 
     // Determine dimensions from first frame
     this._setProgress(0, frames.length, 'Reading first frame…');
-    const firstImg = await this._captureFrame(frames[0], scale);
+    const firstImg = await this._captureFrame(frames[0], scale, seeThrough);
     const w = firstImg.width;
     const h = firstImg.height;
     firstImg.close();
@@ -282,22 +331,25 @@ export class AnimationExportComponent implements OnChanges, OnInit, OnDestroy {
     for (let i = 0; i < frames.length; i++) {
       this._setProgress(i, frames.length, `Encoding frame ${i + 1} / ${frames.length}…`);
       ctx.clearRect(0, 0, w, h);
-      if (!isTransparent) {
+      if (bg === 'color') {
         ctx.fillStyle = this.bgColor;
         ctx.fillRect(0, 0, w, h);
       }
-      const img = await this._captureFrame(frames[i], scale);
+      const img = await this._captureFrame(frames[i], scale, seeThrough);
       ctx.drawImage(img, 0, 0);
       img.close();
 
       const imageData = ctx.getImageData(0, 0, w, h);
-      const palette   = quantize(imageData.data, 256, { format: 'rgba4444' });
+      // GIF has 1-bit transparency: alpha thresholded; the clear palette entry is the frame's transparent index
+      const palette   = quantize(imageData.data, 256, isTransparent ? { format: 'rgba4444', oneBitAlpha: true } : { format: 'rgba4444' });
       const index     = applyPalette(imageData.data, palette, 'rgba4444');
+      const clearIdx  = isTransparent ? gifTransparentIndex(palette) : -1;
       gif.writeFrame(index, w, h, {
         palette,
         delay: delayMs,
-        transparent: isTransparent,
-        disposal: 2,
+        transparent: clearIdx >= 0,
+        transparentIndex: Math.max(0, clearIdx),
+        dispose: isTransparent ? 2 : -1,   // transparent: clear to the background before the next frame
       });
     }
 

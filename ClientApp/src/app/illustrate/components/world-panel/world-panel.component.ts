@@ -3,6 +3,7 @@ import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { hexToRgba01Obj } from '../../utils/color-utils';
 import { TEMPORAL_AA_OPTIONS } from '../../services/scene3d-settings.service';
+import { WorldPanelControl, worldControlVisible, worldLookLightingHint } from './world-panel.logic';
 
 /**
  * World / City panel: generation, regions, time of day, city look & style packs, performance, streaming.
@@ -836,6 +837,25 @@ export class WorldPanelComponent implements OnDestroy {
     this.worldOverrideGlobalLighting = on;
     this.shapeManager.world?.setOverrideGlobalLighting(on);
   }
+
+  /** Whether a control does anything in the current state (world-panel.logic.ts; audit 2026-10-09 §3). */
+  wv(id: WorldPanelControl): boolean {
+    return worldControlVisible(id, {
+      lighting: this.worldOverrideGlobalLighting,
+      dayCyclePlaying: this.worldDayCyclePlaying,
+      fog: this.worldFog,
+      clouds: this.worldClouds,
+      paintedClouds: this.worldPaintedClouds,
+      weather: this.worldWeather,
+      pattern: this.worldPattern,
+      detailedBuildings: this.worldDetailedBuildings,
+      streetFurniture: this.worldStreetFurniture,
+      pedestrians: this.worldPedestrians,
+      distanceLod: this.perfDistanceLod,
+    });
+  }
+  /** The "turn on City lighting" hint on the Look hub / the Look pages that lost controls. */
+  get worldLookLightingHint(): boolean { return worldLookLightingHint(this.worldOverrideGlobalLighting, this.worldSub.id); }
 
   worldSetGradeKey(field: string, value: number): void {
     const phase = this.worldGradePhase;

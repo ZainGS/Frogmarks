@@ -35,17 +35,19 @@
         <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).frequency }}</span>
     </div>
 
-    <!-- Speed -->
-    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-        <label style="width: 60px; color:#aaa; font-size: 10px;">Speed</label>
+    <!-- Speed (not for Shake: it jitters once per frame, whatever the speed) -->
+    <div *ngIf="showSpeed(fx.getLayerFrameLinkConfig(selectedRasterLayerId).type)"
+         style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+        <label style="width: 60px; color:#aaa; font-size: 10px;"
+               [title]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).loopMode === 'loop-to-fit' && fitsWholeCycles(fx.getLayerFrameLinkConfig(selectedRasterLayerId).type) ? 'How fast it moves. Loop to Fit rounds it to a whole number of cycles over the play range.' : 'How fast it moves (phase advance per frame).'">Speed</label>
         <input type="range" min="1" max="100" step="1" style="flex: 1;"
                [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).speed * 100)"
                (input)="fx.onFrameLinkSpeedChange(selectedRasterLayerId, $any($event.target).value)">
         <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).speed }}</span>
     </div>
 
-    <!-- Direction (hidden for shake) -->
-    <div *ngIf="fx.getLayerFrameLinkConfig(selectedRasterLayerId).type !== 'shake'"
+    <!-- Direction (Wave only: the other types have no direction) -->
+    <div *ngIf="showDirection(fx.getLayerFrameLinkConfig(selectedRasterLayerId).type)"
          style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
         <label style="width: 60px; color:#aaa; font-size: 10px;">Direction</label>
         <input type="range" min="0" max="360" step="1" style="flex: 1;"
@@ -54,8 +56,9 @@
         <span style="min-width: 24px; text-align: right; color: #aaa; font-size: 9px;">{{ fx.getLayerFrameLinkConfig(selectedRasterLayerId).direction }}°</span>
     </div>
 
-    <!-- Phase -->
-    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+    <!-- Phase (not for Shake) -->
+    <div *ngIf="showPhase(fx.getLayerFrameLinkConfig(selectedRasterLayerId).type)"
+         style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
         <label style="width: 60px; color:#aaa; font-size: 10px;">Phase</label>
         <input type="range" min="0" max="628" step="1" style="flex: 1;"
                [value]="mathRound(fx.getLayerFrameLinkConfig(selectedRasterLayerId).phase * 100)"
@@ -82,8 +85,10 @@
 
     <!-- Loop Mode -->
     <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-        <label style="width: 60px; color:#aaa; font-size: 10px;">Loop</label>
+        <label style="width: 60px; color:#aaa; font-size: 10px;"
+               title="Free: keeps moving at its speed. Loop to Fit: repeats exactly over the timeline's play range, so playback loops without a jump.">Loop</label>
         <select class="form-select form-select-sm" style="flex: 1; font-size: 10px;"
+                [title]="loopModeHint(fx.getLayerFrameLinkConfig(selectedRasterLayerId))"
                 [ngModel]="fx.getLayerFrameLinkConfig(selectedRasterLayerId).loopMode"
                 (ngModelChange)="fx.onFrameLinkLoopModeChange(selectedRasterLayerId, $event)">
             <option *ngFor="let opt of fx.frameLinkLoopModeOptions" [ngValue]="opt.value">{{ opt.label }}</option>

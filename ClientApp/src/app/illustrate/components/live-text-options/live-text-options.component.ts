@@ -1,7 +1,7 @@
 import { Component, Input, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { fxColorToHex, fxHexToColor, hexToRgba01Obj, rgba01ObjToHex } from '../../utils/color-utils';
-import { TextEffectType, TextEffectEntry, TextEffectPreset, TEXT_EFFECT_TYPE_OPTIONS, createEffectEntry, createDefaultParams, ShaderSnippet, SHADER_SNIPPETS } from 'app/illustrate/models/text-effect.model';
+import { TextEffectType, TextEffectEntry, TextEffectPreset, TEXT_EFFECT_TYPE_OPTIONS, createEffectEntry, createDefaultParams, textEffectGlowColor, engineTextEffectParams, setTextEffectParam, ShaderSnippet, SHADER_SNIPPETS } from 'app/illustrate/models/text-effect.model';
 
 /** Live Text tool options (font, layout, colours, background, effect chain, flatten) and the custom text shader.
  *  Always mounted — the settings survive tool switches; the content shows while [active]. The editor calls
@@ -192,7 +192,7 @@ export class LiveTextOptionsComponent {
   }
 
   _buildLiveTextEffects(): { type: string; params: Record<string, any> }[] {
-    return this.liveTextEffectChain.map(e => ({ type: e.type, params: { ...e.params } }));
+    return this.liveTextEffectChain.map(e => ({ type: e.type, params: engineTextEffectParams(e.type, e.params) }));
   }
 
   onLiveTextStyleChange(field: string, value: any): void {
@@ -254,9 +254,12 @@ export class LiveTextOptionsComponent {
   }
 
   onLiveTextEffectParamChange(entry: TextEffectEntry, key: string, value: any): void {
-    entry.params[key] = value;
+    setTextEffectParam(entry, key, value);
     this._pushLiveTextEffects();
   }
+
+  /** The glow swatch's colour (`color`, or the legacy `glowColor` a document saved before 2026-10-09 holds). */
+  glowColorOf(entry: TextEffectEntry): number[] | undefined { return textEffectGlowColor(entry.params); }
 
   applyLiveTextEffectPreset(preset: TextEffectPreset): void {
     let nextId = Date.now();
@@ -305,7 +308,7 @@ export class LiveTextOptionsComponent {
       this.liveTextEffectChain = effects.map((e: any) => ({
         id: nextId++,
         type: e.type,
-        params: { ...e.params },
+        params: engineTextEffectParams(e.type, e.params),
       }));
     } else {
       this.liveTextEffectChain = [];

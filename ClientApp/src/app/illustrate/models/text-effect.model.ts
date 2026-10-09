@@ -28,12 +28,36 @@ let _nextId = 1;
 export function createDefaultParams(type: TextEffectType): Record<string, any> {
   switch (type) {
     case 'chromatic-aberration': return { strength: 0.005, angle: 0 };
-    case 'glow':                 return { radius: 4, intensity: 1.5, glowColor: [1, 1, 1, 1] };
+    case 'glow':                 return { radius: 4, intensity: 1.5, color: [1, 1, 1, 1] };
     case 'wave':                 return { amplitude: 3, frequency: 10, speed: 1, time: 0 };
     case 'glitch':               return { intensity: 0.3, blockSize: 8, time: 0 };
     case 'outline':              return { thickness: 2, color: [0, 0, 0, 1], offset: [0, 0] as [number, number], gap: 0 };
     case 'feather':              return { mode: 'linear', angle: 90, start: 0.6, end: 1.0 };
   }
+}
+
+/**
+ * A glow's colour from its params: `color` (what Salsa's TextEffectEngine reads) or the legacy `glowColor` key —
+ * the panels wrote that before 2026-10-09, so the engine ignored the swatch (UI dead-controls audit).
+ */
+export function textEffectGlowColor(params: Record<string, any> | null | undefined): number[] | undefined {
+  return params?.['color'] ?? params?.['glowColor'];
+}
+
+/** A copy of an effect's params as the engine reads them: a glow's legacy `glowColor` becomes `color`. */
+export function engineTextEffectParams(type: string, params: Record<string, any> | null | undefined): Record<string, any> {
+  const p: Record<string, any> = { ...(params ?? {}) };
+  if (type === 'glow' && 'glowColor' in p) {
+    if (p['color'] === undefined) p['color'] = p['glowColor'];
+    delete p['glowColor'];
+  }
+  return p;
+}
+
+/** Set one effect param (writing a glow's `color` drops the legacy `glowColor` so the two can't disagree). */
+export function setTextEffectParam(entry: TextEffectEntry, key: string, value: any): void {
+  entry.params[key] = value;
+  if (entry.type === 'glow' && key === 'color') delete entry.params['glowColor'];
 }
 
 export function createEffectEntry(type: TextEffectType): TextEffectEntry {

@@ -1,8 +1,14 @@
-import { Component, Input, NgZone, OnDestroy } from '@angular/core';
+import { Component, ElementRef, Input, NgZone, OnDestroy, ViewChild } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { fxColorToHex, fxHexToColor, hexToRgba01Obj, rgba01ObjToHex } from '../../utils/color-utils';
 import { TailSide, BalloonStyle, WritingMode, BALLOON_STYLE_OPTIONS, DEFAULT_BALLOON_OPTIONS } from 'app/illustrate/models/speech-balloon.model';
-import { TextEffectType, TextEffectEntry, TextEffectPreset, TEXT_EFFECT_TYPE_OPTIONS, TEXT_EFFECT_PRESETS, createEffectEntry, createDefaultParams, BalloonPreset, BALLOON_PRESETS } from 'app/illustrate/models/text-effect.model';
+import { TextEffectType, TextEffectEntry, TextEffectPreset, TEXT_EFFECT_TYPE_OPTIONS, TEXT_EFFECT_PRESETS, createEffectEntry, createDefaultParams, textEffectGlowColor, engineTextEffectParams, setTextEffectParam, BalloonPreset, BALLOON_PRESETS } from 'app/illustrate/models/text-effect.model';
+
+/** Engine calls newer than the Salsa dist this host may be built against (feature-detected). */
+interface BalloonEngineExtras {
+  /** Salsa 2026-10-09: capture → effects → read back into a 2D canvas, freeing every GPU texture it made. */
+  previewEffectedTextToCanvas?(canvas: HTMLCanvasElement, textConfig: unknown, effects: unknown): Promise<boolean>;
+}
 
 /** Speech-balloon tool options (style, tail, text, colours, presets) and the text-effects stamp (chain, preview,
  *  animation). Always mounted — the settings survive tool switches; the content shows while [active].
@@ -22,8 +28,15 @@ export class BalloonOptionsComponent implements OnDestroy {
   fxHexToColor(hex: string, existingAlpha = 1): [number, number, number, number] { return fxHexToColor(hex, existingAlpha); }
 
   ngOnDestroy(): void {
+    this.textEffectAnimating = false;
     if (this._textEffectAnimFrame != null) { cancelAnimationFrame(this._textEffectAnimFrame); this._textEffectAnimFrame = null; }
   }
+
+  @ViewChild('fxPreviewCanvas') fxPreviewCanvas?: ElementRef<HTMLCanvasElement>;
+  /** The preview canvas shows once a frame has been drawn into it. */
+  textEffectPreviewShown = false;
+  private _previewBusy = false;
+  private _previewAgain = false;
 
   balloonStyleOptions = BALLOON_STYLE_OPTIONS;
 
@@ -257,8 +270,12 @@ export class BalloonOptionsComponent implements OnDestroy {
   }
 
   onTextEffectParamChange(entry: TextEffectEntry, key: string, value: any): void {
-    entry.params[key] = value;
+    setTextEffectParam(entry, key, value);
+    if (this.textEffectPreviewShown && !this.textEffectAnimating) this.previewTextEffect();   // keep the preview current
   }
+
+  /** The glow swatch's colour (`color`, or the legacy `glowColor` of an older chain). */
+  glowColorOf(entry: TextEffectEntry): number[] | undefined { return textEffectGlowColor(entry.params); }
 
   applyTextEffectPreset(preset: TextEffectPreset): void {
     let nextId = Date.now();
@@ -271,7 +288,7 @@ export class BalloonOptionsComponent implements OnDestroy {
 
   /** Build the Salsa TextEffectConfig[] from the UI chain. */
   _buildEffectChain(): { type: string; params: Record<string, any> }[] {
-    return this.textEffectChain.map(e => ({ type: e.type, params: { ...e.params } }));
+    return this.textEffectChain.map(e => ({ type: e.type, params: engineTextEffectParams(e.type, e.params) }));
   }
 
   /** Build the Salsa TextCaptureConfig from the UI fields. */
@@ -291,15 +308,26 @@ export class BalloonOptionsComponent implements OnDestroy {
     };
   }
 
-  /** Preview: capture + effects → display (non-destructive). */
+  /**
+   * Preview: capture + effects → the panel's preview canvas (non-destructive). This used to call createEffectedText
+   * and drop the texture — nothing showed it and nothing freed it, one GPU texture per ▶ frame (audit 2026-10-09).
+   * The engine's preview call frees its textures; an older Salsa without it gets no preview (and no leak).
+   * One render in flight at a time: a call while busy re-renders once when it lands (the ▶ loop just skips frames).
+   */
   previewTextEffect(): void {
-    const sm = this.shapeManager;
-    if (!sm.createEffectedText) return;
-    const result = sm.createEffectedText(this._buildTextCaptureConfig(), this._buildEffectChain() as any);
-    if (result) {
-      // GPU texture is created; renderer will pick it up if needed.
-      // For now this is a preview trigger — the texture lives until next call.
-    }
+    const sm = this.shapeManager as unknown as BalloonEngineExtras | null;
+    const canvas = this.fxPreviewCanvas?.nativeElement;
+    if (typeof sm?.previewEffectedTextToCanvas !== 'function' || !canvas) return;
+    if (this._previewBusy) { this._previewAgain = true; return; }
+    this._previewBusy = true;
+    this._previewAgain = false;
+    sm.previewEffectedTextToCanvas(canvas, this._buildTextCaptureConfig(), this._buildEffectChain())
+      .then(ok => { if (ok && !this.textEffectPreviewShown) this.ngZone.run(() => { this.textEffectPreviewShown = true; }); })
+      .catch(() => { /* preview only — a failed frame is skipped */ })
+      .finally(() => {
+        this._previewBusy = false;
+        if (this._previewAgain && !this.textEffectAnimating) this.previewTextEffect();
+      });
   }
 
   /** Stamp the effected text onto the active raster layer at the viewport center. */

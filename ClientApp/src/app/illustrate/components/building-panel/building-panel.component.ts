@@ -2,6 +2,7 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleCh
 import ShapeManager from '@zaings/salsa/shape-manager';
 import { colorToHex, hexToRgba01Obj } from '../../utils/color-utils';
 import { SubNav, scrollPanelToTop } from '../../utils/sub-nav';
+import { BuildingPanelVis, BuildingVisParams, buildingPanelVis, materialOptions } from './building-panel.logic';
 
 /**
  * Edit Building panel: category/archetype/seed, massing, facade, storefront, Japan details, greenery,
@@ -46,6 +47,71 @@ export class BuildingPanelComponent implements OnChanges {
     if (relevant && this.open && this.buildingId) this._initBuildingParams();
   }
 
+  /** Which controls do something for the current params (building-panel.logic.ts — mirrors the generator). Pure and
+   *  cheap, so it's simply recomputed on read. */
+  get vis(): BuildingPanelVis { return buildingPanelVis(this._visParams()); }
+
+  /** Material options for the window style — memoised so the ngFor keeps its option elements between checks. */
+  get materialOpts(): { value: string; label: string }[] {
+    const key = this.buildingWindowStyle + '|' + this.buildingMaterial;
+    if (key !== this._materialOptsKey) { this._materialOptsKey = key; this._materialOpts = materialOptions(this._visParams()); }
+    return this._materialOpts;
+  }
+  private _materialOptsKey = '';
+  private _materialOpts: { value: string; label: string }[] = [];
+
+  /** The Block Style / creator style sets a render style (applied over the building's own Render style). Read when
+   *  the building loads and each time the Style group opens (the Style is edited in the Block / Environment panels). */
+  private _renderStyleOverridden = false;
+
+  openStyleGroup(): void {
+    this._refreshRenderStyleOverride();
+    this.nav.open('style', 'Style');
+  }
+
+  private _refreshRenderStyleOverride(): void {
+    const sm = this.shapeManager;
+    if (!sm) { this._renderStyleOverridden = false; return; }
+    const style = this.blockBuildingIndex !== null && this.blockId
+      ? sm.getBlockStyle3D(this.blockId)
+      : this.buildingId ? sm.getCreatorStyle3D(this.buildingId) : null;
+    this._renderStyleOverridden = !!style?.renderStyle;
+  }
+
+  private _visParams(): BuildingVisParams {
+    const jp = this.buildingJp ?? {};
+    return {
+      category: this.buildingCategory, floors: this.buildingFloors, setbacks: this.buildingSetbacks, podium: this.buildingPodium,
+      windowStyle: this.buildingWindowStyle, material: this.buildingMaterial, windowSash: !!jp['windowSash'],
+      storefront: this.buildingStorefront, rollerDoors: this.buildingRollerDoors, canopy: this.buildingCanopy,
+      awning: this.buildingAwning, noren: this.buildingNoren, doorStyle: this.buildingDoorStyle, fascia: !!jp['fascia'],
+      openCorridor: !!jp['openCorridor'], outsideStair: !!jp['outsideStair'],
+      balconies: this.buildingBalconies, balconyStyle: this.buildingBalconyStyle,
+      julietBalconies: this.buildingJulietBalconies, windowTrim: this.buildingWindowTrim,
+      windowBoxes: this.buildingWindowBoxes, basePlanters: this.buildingBasePlanters,
+      roofStyle: this.buildingRoofStyle, roofPenthouse: this.buildingRoofPenthouse, helipad: this.buildingHelipad, crown: this.buildingCrown,
+      signage: this.buildingSignage, bladeSign: this.buildingBladeSign, wrapSign: this.buildingWrapSign,
+      rooftopSign: this.buildingRooftopSign, ledScreen: this.buildingLedScreen,
+      signStack: !!jp['signStack'], floorSigns: !!jp['floorSigns'],
+      inBlock: this.blockBuildingIndex !== null,
+      renderStyleOverridden: this._renderStyleOverridden,
+    };
+  }
+
+  /** Japan-details flags that do something for the current params (Sliding sash / sills / lit shop / konbini fascia /
+   *  floor signs / outside stair are conditional — see building-panel.logic.ts). */
+  jpFlagVisible(key: string): boolean {
+    switch (key) {
+      case 'windowSash': return this.vis.windowSash;
+      case 'windowSills': return this.vis.windowSills;
+      case 'shopInterior': return this.vis.shopInterior;
+      case 'fascia': return this.vis.fascia;
+      case 'floorSigns': return this.vis.floorSigns;
+      case 'outsideStair': return this.vis.outsideStair;
+      default: return true;
+    }
+  }
+
   // Japan details (Salsa city-quality B4–B9, 2026-09-29) — BuildingParams booleans, synced from the engine.
   readonly buildingJpFlags: { key: string; label: string; title: string }[] = [
     { key: 'windowSash', label: 'Sliding sash', title: 'Wide, low aluminium sash windows with a meeting rail' },
@@ -79,7 +145,8 @@ export class BuildingPanelComponent implements OnChanges {
   buildingGroundFloorHeight = 4.5;
   buildingCornerStyle: 'sharp' | 'chamfer' | 'round' = 'sharp';
   buildingCornerAmount = 0.5;
-  buildingSetbacks = false;
+  /** Setback count (0 = straight) — towers / offices only. */
+  buildingSetbacks = 0;
   buildingSetbackInset = 2.0;
   buildingPodium = false;
   buildingPodiumFloors = 2;
@@ -107,7 +174,7 @@ export class BuildingPanelComponent implements OnChanges {
   buildingRollerDoors = false;
   buildingCanopy = false;
   buildingLattice = false;
-  buildingDoorStyle: 'flush' | 'panel' | 'glazed' | 'double' | 'sliding' = 'panel';
+  buildingDoorStyle: 'flush' | 'panel' | 'glazed' | 'double' | 'sliding' | 'auto-slide' = 'panel';
   // Features
   buildingBalconies = false;
   buildingJulietBalconies = false;
@@ -143,7 +210,6 @@ export class BuildingPanelComponent implements OnChanges {
   buildingTrimColor = '#8a8a8a';
   buildingRoofColor = '#555555';
   buildingGlassColor = '#4a8fc4';
-  buildingAccentColor = '#c4623a';
   buildingSignColor = '#ff4444';
   buildingStorefrontColor = '#5a7a8a';
   buildingAwningColor = '#c43a3a';
@@ -181,7 +247,7 @@ export class BuildingPanelComponent implements OnChanges {
     if (p.groundFloorHeight != null)  this.buildingGroundFloorHeight = p.groundFloorHeight;
     if (p.cornerStyle != null)        this.buildingCornerStyle       = p.cornerStyle;
     if (p.cornerAmount != null)       this.buildingCornerAmount      = p.cornerAmount;
-    if (p.setbacks != null)           this.buildingSetbacks          = p.setbacks as any;
+    if (p.setbacks != null)           this.buildingSetbacks          = Math.max(0, Math.round(Number(p.setbacks) || 0));   // a count (old saves: boolean)
     if (p.setbackInset != null)       this.buildingSetbackInset      = p.setbackInset;
     if (p.podium != null)             this.buildingPodium            = p.podium;
     if (p.podiumFloors != null)       this.buildingPodiumFloors      = p.podiumFloors;
@@ -207,7 +273,7 @@ export class BuildingPanelComponent implements OnChanges {
     if (p.rollerDoors != null)        this.buildingRollerDoors       = p.rollerDoors;
     if (p.canopy != null)             this.buildingCanopy            = p.canopy;
     if (p.lattice != null)            this.buildingLattice           = p.lattice;
-    if (p.doorStyle != null)          this.buildingDoorStyle         = p.doorStyle as any;
+    if (p.doorStyle != null)          this.buildingDoorStyle         = p.doorStyle;
     if (p.balconies != null)          this.buildingBalconies         = p.balconies;
     if (p.julietBalconies != null)    this.buildingJulietBalconies   = p.julietBalconies;
     if (p.julietScroll != null)       this.buildingJulietScroll      = p.julietScroll;
@@ -238,7 +304,6 @@ export class BuildingPanelComponent implements OnChanges {
     if (p.trimColor != null)          this.buildingTrimColor         = col(p.trimColor);
     if (p.roofColor != null)          this.buildingRoofColor         = col(p.roofColor);
     if (p.glassColor != null)         this.buildingGlassColor        = col(p.glassColor);
-    if (p.accentColor != null)        this.buildingAccentColor       = col(p.accentColor);
     if (p.signColor != null)          this.buildingSignColor         = col(p.signColor);
     if (p.storefrontColor != null)    this.buildingStorefrontColor   = col(p.storefrontColor);
     if (p.awningColor != null)        this.buildingAwningColor       = col(p.awningColor);
@@ -261,6 +326,7 @@ export class BuildingPanelComponent implements OnChanges {
       if (typeof pp['shutterBays'] === 'number') this.buildingShutterBays = pp['shutterBays'] as number;
       if (pp['balconyStyle'] === 'rail' || pp['balconyStyle'] === 'panel') this.buildingBalconyStyle = pp['balconyStyle'] as 'rail' | 'panel'; }
     this.scene3dBuildingArchetypes = sm.buildingArchetypeNames3D() ?? [];
+    this._refreshRenderStyleOverride();
     this._refreshBuildingScaleInfo();
   }
 

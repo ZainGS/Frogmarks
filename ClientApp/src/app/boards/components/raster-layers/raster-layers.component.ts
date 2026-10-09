@@ -268,9 +268,22 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     return BLEND_MODE_OPTIONS.filter(o => o.category === cat);
   }
 
-  /** Whether this layer is the bottom-most (index 0) — can't clip */
+  /**
+   * Whether this layer is the bottom of its composite stack, where clipping can do nothing (the compositor copies the
+   * base layer straight in). `this.layers` is ENGINE order — bottom-first; only the display list is reversed. The
+   * stack is the drawable entries (paint + reference layers; folders draw nothing) below it, down to the 3D scene:
+   * layers above the scene composite as their own foreground stack. A hidden layer below still counts (the clip
+   * applies as soon as it is shown again), so the toggle doesn't jump around with the eye buttons.
+   */
   isBottomLayer(layer: RasterLayer): boolean {
-    return this.layers.length > 0 && this.layers[this.layers.length - 1]?.id === layer.id;
+    const idx = this.layers.findIndex(l => l.id === layer.id);
+    if (idx < 0) return false;
+    for (let j = idx - 1; j >= 0; j--) {
+      const t = this.layers[j].type ?? 'layer';
+      if (t === '3d-scene') return true;
+      if (t === 'layer' || t === 'reference') return false;
+    }
+    return true;
   }
 
   /** Whether the active layer can be deleted (must have more than 1 real layer) */
@@ -278,12 +291,14 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.layers.filter(l => this.isPaintable(l)).length > 1;
   }
 
-  /** Whether the active layer can be merged down (needs a paintable layer below it) */
+  /** Whether the active layer can be merged down: the engine merges a paint layer into the nearest PAINT layer below
+   *  it (engine order is bottom-first, so "below" = a lower index), skipping folders, references and the 3D scene. */
   get canMergeDown(): boolean {
     if (!this.activeLayerId) return false;
     const idx = this.layers.findIndex(l => l.id === this.activeLayerId);
-    if (idx < 0 || idx >= this.layers.length - 1) return false;
-    return this.isPaintable(this.layers[idx + 1]);
+    if (idx <= 0 || !this.isPaintable(this.layers[idx])) return false;
+    for (let j = idx - 1; j >= 0; j--) if (this.isPaintable(this.layers[j])) return true;
+    return false;
   }
 
   /** Index of the currently active layer */
@@ -646,6 +661,8 @@ export class RasterLayersComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleClipping(layer: RasterLayer, e: MouseEvent): void {
     e.stopPropagation();
+    // Nothing below to clip to (Alt+click on the bottom row): don't switch on a clip that does nothing. Off always works.
+    if (!layer.clipped && this.isBottomLayer(layer)) return;
     this.rasterService.setLayerClipping(layer.id, !layer.clipped);
   }
 

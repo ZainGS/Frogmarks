@@ -3,7 +3,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import {
   ephemeraPlacementLabels, formatEphemeraSize, clampEphemeraSize, placementOriginForCentre, visibleCanvasCentre,
-  EPHEMERA_MIN_SIZE,
+  EPHEMERA_MIN_SIZE, isEphemeraParamShown, EphemeraParamCondition,
 } from './ephemera-panel.util';
 
 /** Placement blend mode, derived from the engine's updateEphemeraPlacement signature. */
@@ -35,6 +35,8 @@ export interface EphemeraParamSchemaEntry {
   max?: number;
   step?: number;
   group?: string;
+  /** Show the row only while this holds against the current params (Salsa 2026-10-09; older dists omit it). */
+  showIf?: EphemeraParamCondition | EphemeraParamCondition[];
 }
 
 export interface EphemeraGlow {
@@ -275,7 +277,10 @@ export class EphemeraPanel implements OnInit, OnChanges, OnDestroy, AfterViewIni
     return list.find(s => s.key === key);
   }
 
-  paramKeys(): string[] { return this.paramSchemaList.map(s => s.key); }
+  /** Rows to show: the generator's params minus the ones it ignores in the current state (schema `showIf`). */
+  paramKeys(): string[] {
+    return this.paramSchemaList.filter(s => isEphemeraParamShown(s, this.params, this.paramSchemaList)).map(s => s.key);
+  }
   paramLabel(key: string): string { return this.schemaFor(this.paramSchemaList, key)?.label ?? key; }
   paramType(key: string): string { return this.schemaFor(this.paramSchemaList, key)?.type ?? 'text'; }
   paramOptions(key: string): EphemeraParamOption[] { return this.schemaFor(this.paramSchemaList, key)?.options ?? []; }
@@ -283,7 +288,9 @@ export class EphemeraPanel implements OnInit, OnChanges, OnDestroy, AfterViewIni
   paramMax(key: string): number { return this.schemaFor(this.paramSchemaList, key)?.max ?? 100; }
   paramStep(key: string): number { return this.schemaFor(this.paramSchemaList, key)?.step ?? 1; }
 
-  editParamKeys(): string[] { return this.editParamSchemaList.map(s => s.key); }
+  editParamKeys(): string[] {
+    return this.editParamSchemaList.filter(s => isEphemeraParamShown(s, this.editParams, this.editParamSchemaList)).map(s => s.key);
+  }
   editParamLabel(key: string): string { return this.schemaFor(this.editParamSchemaList, key)?.label ?? key; }
   editParamType(key: string): string { return this.schemaFor(this.editParamSchemaList, key)?.type ?? 'text'; }
   editParamOptions(key: string): EphemeraParamOption[] { return this.schemaFor(this.editParamSchemaList, key)?.options ?? []; }

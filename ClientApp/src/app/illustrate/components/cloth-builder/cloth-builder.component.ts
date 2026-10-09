@@ -423,9 +423,17 @@ export class ClothBuilderComponent implements AfterViewInit, OnChanges, OnDestro
       clearTimeout(this._stitchHoverDebounce);
       this.liveSimMode = mode;
 
+      // The picked mode + the Collision proxy (an older Salsa ignores the options and continues in the SAVED mode
+      // without the proxy — the reset below covers it either way), then restart from flat exactly as a second press
+      // of the same mode does (audit 2026-10-09: the first press on an existing cloth seemed to do nothing).
+      const s3d = this.scene3dManager as unknown as {
+        enableLiveCloth?(id: string, stepsPerFrame?: number, opts?: { mode?: 'hang' | 'drape'; proxy?: unknown }): boolean;
+      } | null;
+      const proxy = mode === 'drape' ? this._buildDrapeProxy() : undefined;
       this.ngZone.runOutsideAngular(() => {
-        this.scene3dManager?.enableLiveCloth?.(this.existingMeshId);
+        s3d?.enableLiveCloth?.(this.existingMeshId!, undefined, { mode, proxy });
       });
+      this._scheduleReset();
 
       this._attachPreviewCanvas(this.existingMeshId);
       return;

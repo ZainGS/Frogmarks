@@ -41,6 +41,17 @@ describe('MeshEditPanelComponent operations', () => {
       { mode: 'wavy', color1: [0.73, 0.80, 0.71, 1.0], color2: [0.93, 0.91, 0.84, 1.0] });
   });
 
+  it('Proportional: the On / Off, radius and falloff saved on the mesh show when the mesh is set', () => {
+    const { panel, sm } = setup(true);
+    sm['getModifiers3D'] = jasmine.createSpy('getModifiers3D').and.returnValue([]);
+    sm['getEditMesh3D'] = jasmine.createSpy('getEditMesh3D').and.returnValue(
+      { proportionalEditEnabled: true, proportionalEditRadius: 3, proportionalEditFalloff: 'linear' });
+    panel.ngOnChanges({ meshId: { currentValue: 'm1' } } as never);
+    expect(panel.proportionalEnabled).toBeTrue();
+    expect(panel.proportionalRadius).toBe(3);
+    expect(panel.proportionalFalloff).toBe('linear');
+  });
+
   it('Extrude / Inset: ONE region op on the whole face selection, which stays selected', () => {
     const { panel, sm } = setup(true);
     panel.extrudeSelected();

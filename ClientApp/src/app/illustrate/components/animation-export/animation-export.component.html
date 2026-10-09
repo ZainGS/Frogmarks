@@ -44,14 +44,19 @@
         <input type="number" class="range-input" min="1" max="64" [(ngModel)]="spriteColumns" [disabled]="isExporting">
       </div>
 
-      <!-- Background (non-MP4) -->
-      <div *ngIf="format !== 'mp4' && format !== 'gif-sticker'" class="export-row">
-        <span class="export-label" title="Include a background color or keep transparency.">Background</span>
-        <label class="toggle-label">
-          <input type="checkbox" [(ngModel)]="bgTransparent" [disabled]="isExporting"> Transparent
-        </label>
-        <input *ngIf="!bgTransparent" type="color" [(ngModel)]="bgColor" class="color-input" [disabled]="isExporting">
+      <!-- Background (PNG Sequence / Sprite Sheet / GIF; MP4 is on the canvas, a sticker is transparent) -->
+      <div *ngIf="showBackground" class="export-row">
+        <span class="export-label" title="The canvas as on screen, or the drawings alone on nothing / a colour.">Background</span>
+        <select [(ngModel)]="background" [disabled]="isExporting" aria-label="Background">
+          <option value="canvas">Canvas</option>
+          <option value="transparent" [disabled]="!canSeeThrough">Transparent</option>
+          <option value="color" [disabled]="!canSeeThrough">Colour</option>
+        </select>
+        <input *ngIf="background === 'color' && canSeeThrough" type="color" [(ngModel)]="bgColor" class="color-input"
+               [disabled]="isExporting" aria-label="Background colour">
       </div>
+      <div *ngIf="showBackground" class="export-row"><span class="range-hint export-bg-hint">{{ backgroundHint }}</span></div>
+      <div *ngIf="stickerHint" class="export-row"><span class="range-hint export-bg-hint">{{ stickerHint }}</span></div>
 
       <!-- Quality (MP4 only) -->
       <div *ngIf="format === 'mp4'" class="export-row">

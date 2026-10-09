@@ -7,7 +7,7 @@ import {
 describe('mesh-generator utils', () => {
   it('defaults are the old quick forms\' starting values, fresh copies each call', () => {
     expect(meshGenDefaults('cylinder')).toEqual({ radius: 0.3, radiusTop: 0.3, height: 0.8, segments: 12 });
-    expect(meshGenDefaults('circle')).toEqual({ radius: 0.5, segments: 16, height: 0.2 });
+    expect(meshGenDefaults('circle')).toEqual({ radius: 0.5, segments: 16, height: 0 });   // flat (Blender's Circle)
     expect(meshGenDefaults('revolve')['profile'].length).toBe(3);
     expect(meshGenDefaults('tube')['radii']).toEqual([0.1, 0.15, 0.1]);
     expect(meshGenDefaults('metaball')['blobs'].length).toBe(2);

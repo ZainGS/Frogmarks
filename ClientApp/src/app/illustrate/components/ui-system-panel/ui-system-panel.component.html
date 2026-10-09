@@ -108,11 +108,11 @@
 
         <!-- worldBlur dim slider -->
         <div class="ui-detail-row">
-          <span class="ui-label">Dim world</span>
-          <input type="range" min="0" max="20" step="0.5" class="ui-slider"
-                 [ngModel]="s.worldBlur || 0"
+          <span class="ui-label" title="Dims (fading in up to 50%) and blurs the world under the UI while this state is on; 0 = off">Dim world</span>
+          <input type="range" min="0" max="1" step="0.05" class="ui-slider"
+                 [ngModel]="dimWorldStrength(s.worldBlur)"
                  (ngModelChange)="uiSetStateField(uiSelectedStateId, 'worldBlur', +$event)">
-          <span class="ui-val">{{ s.worldBlur || 0 }}</span>
+          <span class="ui-val">{{ dimWorldLabel(s.worldBlur) }}</span>
         </div>
         <div *ngIf="s.worldBlur > 0" class="ui-hint-row">Requires layer backgroundOverlay color (set by default on create)</div>
 
