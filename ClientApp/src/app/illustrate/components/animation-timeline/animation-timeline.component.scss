@@ -133,6 +133,7 @@ $cur-col-2d: rgba(140, 190, 170, 0.2);
 
   &.static { opacity: 0.7; }
   &:hover { background: rgba(255, 255, 255, 0.03); }
+  &.tl-label-selected { background: $green; color: $green-txt; opacity: 1; }
 }
 
 .layer-type-icon {
@@ -520,6 +521,7 @@ $cur-col-2d: rgba(140, 190, 170, 0.2);
   &:hover { background: $surface-hi; }
   &:active, &.active { @include sunken; }
   &.active { background: $green; color: $green-txt; }
+  &:disabled { opacity: 0.35; cursor: default; &:hover { background: $surface; } }
 }
 
 .play-btn {

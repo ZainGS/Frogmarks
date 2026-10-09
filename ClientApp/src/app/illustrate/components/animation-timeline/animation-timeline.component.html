@@ -15,6 +15,7 @@
          class="tl-layer-label"
          [class.animated]="layer.animated"
          [class.static]="!layer.animated"
+         [class.tl-label-selected]="layer.id === selectedLayerId"
          (contextmenu)="onLayerLabelContextMenu($event, layer)"
          (pointerdown)="onLayerLabelPointerDown($event, layer)"
          (click)="onLayerTap(layer)"
@@ -93,6 +94,7 @@
 
         <!-- Static layer: solid bar -->
         <div *ngIf="!row.layer.animated" class="tl-static-bar"
+             [class.tl-bar-selected]="row.layer.id === selectedLayerId"
              [style.width.px]="frameCount * frameWidth"
              (contextmenu)="onStaticBarContextMenu($event, row.layer)"
              (pointerdown)="onStaticBarPointerDown($event, row.layer)"
@@ -203,23 +205,23 @@
     <!-- Playback controls -->
     <div class="transport-group">
       <button class="transport-btn" (click)="goToFirstFrame()" aria-label="First frame" title="Jump to the first frame.">⏮</button>
-      <button class="transport-btn" (click)="goToPrevFrame()" aria-label="Previous frame" title="Step back one frame. Keyboard: , (comma)">◀</button>
+      <button type="button" class="transport-btn" (fmHoldRepeat)="goToPrevFrame()" aria-label="Previous frame (comma)">◀</button>
       <button class="transport-btn play-btn" (click)="togglePlayPause()"
               [attr.aria-label]="isPlaying ? 'Pause' : 'Play'"
               [title]="isPlaying ? 'Pause the animation. Keyboard: Space' : 'Play the animation. Keyboard: Space'">
         {{ isPlaying ? '⏸' : '▶' }}
       </button>
-      <button class="transport-btn" (click)="goToNextFrame()" aria-label="Next frame" title="Step forward one frame. Keyboard: . (period)">▶</button>
+      <button type="button" class="transport-btn" (fmHoldRepeat)="goToNextFrame()" aria-label="Next frame (period)">▶</button>
       <button class="transport-btn" (click)="goToLastFrame()" aria-label="Last frame" title="Jump to the last frame.">⏭</button>
       <button class="transport-btn" (click)="stopPlayback()" aria-label="Stop" title="Stop playback and return to frame 1.">⏹</button>
     </div>
 
     <!-- Touch: the F6 / Ctrl+D keys + the right-click menu for the selection (Delete Cel is in that menu) -->
     <div class="transport-group cel-actions touch-only">
-      <button class="transport-btn icon-btn" (click)="newCelOnNextFrame()"
-              aria-label="New cel on the next frame" title="Step forward and add a new cel there. Keyboard: F6">+▸</button>
-      <button class="transport-btn icon-btn" (click)="duplicateAndAdvance()"
-              aria-label="Duplicate cel to the next frame" title="Copy this frame's drawing to the next frame and step there. Keyboard: Ctrl+D">⧉▸</button>
+      <button class="transport-btn icon-btn" (click)="newCelOnNextFrame()" [disabled]="!hasAnimatedLayer"
+              aria-label="New cel on the next frame" title="Step forward and add a new cel there. Keyboard: F6">◆</button>
+      <button class="transport-btn icon-btn" (click)="duplicateAndAdvance()" [disabled]="!canDuplicateCel"
+              aria-label="Duplicate cel to the next frame" title="Copy this frame's drawing to the next frame and step there. Keyboard: Ctrl+D">⧉</button>
       <button class="transport-btn icon-btn tl-more-btn" (click)="openSelectionMenu($event)"
               aria-label="Options for the selection" title="Options for the selected cel or keyframe (same as right-click).">⋯</button>
       <button *ngIf="mesh3dAllTracks.length > 0"
@@ -253,12 +255,12 @@
     <!-- FPS -->
     <div class="transport-group fps-group">
       <span class="transport-label">FPS</span>
-      <button class="tl-step" (click)="onFpsChange(fps - 1)" aria-label="Lower FPS" title="Lower FPS. Keyboard: Alt+, (comma)">−</button>
+      <button type="button" class="tl-step" (fmHoldRepeat)="onFpsChange(fps - 1)" aria-label="Lower FPS (Alt+comma)">−</button>
       <input type="number" class="transport-input" min="1" max="120" inputmode="numeric"
              [ngModel]="fps" (ngModelChange)="onFpsChange($event)"
              aria-label="Frames per second"
              title="Frames per second. 8 = simple, 12 = standard anime, 24 = full animation, 30 = smooth.">
-      <button class="tl-step" (click)="onFpsChange(fps + 1)" aria-label="Higher FPS" title="Higher FPS. Keyboard: Alt+. (period)">+</button>
+      <button type="button" class="tl-step" (fmHoldRepeat)="onFpsChange(fps + 1)" aria-label="Higher FPS (Alt+period)">+</button>
       <div class="fps-presets">
         <button class="fps-btn" [class.active]="fps === 8" (click)="setFpsPreset(8)" aria-label="8 FPS" title="8 fps — simple flipbook style.">8</button>
         <button class="fps-btn" [class.active]="fps === 12" (click)="setFpsPreset(12)" aria-label="12 FPS" title="12 fps — standard anime timing (on 2s).">12</button>
@@ -368,27 +370,27 @@
     <div class="fp-body">
       <div class="setting-row">
         <span class="slider-label">Total Frames</span>
-        <button class="tl-step" (click)="onFrameCountChange(frameCount - 1)" aria-label="Fewer frames">−</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onFrameCountChange(frameCount - 1)" aria-label="Fewer frames">−</button>
         <input type="number" class="setting-input" min="1" max="9999" inputmode="numeric"
                [ngModel]="frameCount" (ngModelChange)="onFrameCountChange($event)"
                title="Total number of frames in the animation.">
-        <button class="tl-step" (click)="onFrameCountChange(frameCount + 1)" aria-label="More frames">+</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onFrameCountChange(frameCount + 1)" aria-label="More frames">+</button>
       </div>
       <div class="setting-row">
         <span class="slider-label">Play Start</span>
-        <button class="tl-step" (click)="onPlayRangeStartChange(playRangeStart - 1)" aria-label="Play start earlier">−</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onPlayRangeStartChange(playRangeStart - 1)" aria-label="Play start earlier">−</button>
         <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric"
                [ngModel]="playRangeStart" (ngModelChange)="onPlayRangeStartChange($event)"
                title="Playback starts from this frame.">
-        <button class="tl-step" (click)="onPlayRangeStartChange(playRangeStart + 1)" aria-label="Play start later">+</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onPlayRangeStartChange(playRangeStart + 1)" aria-label="Play start later">+</button>
       </div>
       <div class="setting-row">
         <span class="slider-label">Play End</span>
-        <button class="tl-step" (click)="onPlayRangeEndChange(playRangeEnd - 1)" aria-label="Play end earlier">−</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onPlayRangeEndChange(playRangeEnd - 1)" aria-label="Play end earlier">−</button>
         <input type="number" class="setting-input" [min]="playRangeStart" [max]="frameCount" inputmode="numeric"
                [ngModel]="playRangeEnd" (ngModelChange)="onPlayRangeEndChange($event)"
                title="Playback ends at this frame.">
-        <button class="tl-step" (click)="onPlayRangeEndChange(playRangeEnd + 1)" aria-label="Play end later">+</button>
+        <button type="button" class="tl-step" (fmHoldRepeat)="onPlayRangeEndChange(playRangeEnd + 1)" aria-label="Play end later">+</button>
       </div>
     </div>
   </div>
@@ -421,12 +423,11 @@
              title="Key drawing — an important pose. Shown as ◆ in timeline.">◆ Set as Key Drawing</div>
         <div class="ctx-item" (click)="ctxSetCelType('inbetween')"
              title="Transitional drawing between keys. Shown as ○ in timeline.">○ Set as Inbetween</div>
-        <div class="ctx-item ctx-hold-row" (click)="$event.stopPropagation()"
-             title="How many frames this drawing is held for.">
+        <div class="ctx-item ctx-hold-row" (click)="$event.stopPropagation()">
           <span>Hold</span>
-          <button class="ctx-step" (click)="ctxHoldDelta($event, -1)" aria-label="Hold one frame less">−</button>
+          <button type="button" class="ctx-step" (fmHoldRepeat)="ctxHoldDelta(null, -1)" aria-label="Hold one frame less">−</button>
           <span class="ctx-hold-val">{{ contextCel?.duration }}</span>
-          <button class="ctx-step" (click)="ctxHoldDelta($event, 1)" aria-label="Hold one frame more">+</button>
+          <button type="button" class="ctx-step" (fmHoldRepeat)="ctxHoldDelta(null, 1)" aria-label="Hold one frame more">+</button>
         </div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" (click)="ctxDuplicateCel()"

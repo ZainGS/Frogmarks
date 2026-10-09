@@ -1591,6 +1591,14 @@ body.theme-retro-chrome .layer-name {
   font-size: 10px !important;
 }
 
+// The selected timeline layer (tapped label / static bar / one of its cels): solid green, so it reads at a glance
+// (the hover tint alone was all a tap left behind on touch).
+body.theme-retro-chrome .tl-layer-label.tl-label-selected {
+  background: var(--rc-green) !important;
+  &:hover { background: var(--rc-green-hi) !important; }
+  .layer-name, .layer-type-icon { color: var(--rc-green-txt) !important; }
+}
+
 body.theme-retro-chrome .layer-type-icon { color: var(--rc-green-hi) !important; }
 
 body.theme-retro-chrome .tl-frame-header {
@@ -1621,6 +1629,7 @@ body.theme-retro-chrome .tl-cell {
 body.theme-retro-chrome .tl-static-bar {
   background: rgba(46,107,40,0.15) !important;
   border: 1px solid rgba(46,107,40,0.4) !important;
+  &.tl-bar-selected { border-color: var(--rc-green-txt) !important; }
 }
 
 body.theme-retro-chrome .tl-playhead {
@@ -1675,6 +1684,13 @@ body.theme-retro-chrome .icon-btn {
   border-color: var(--rc-bevel-lt) var(--rc-bevel-dk) var(--rc-bevel-dk) var(--rc-bevel-lt) !important;
   color: var(--rc-text-muted) !important;
   &:hover { background: var(--rc-surface-hi) !important; color: var(--rc-text) !important; }
+}
+
+// A transport button with nothing to act on (⧉ with no drawing on this frame): dimmed, no hover
+body.theme-retro-chrome .transport-btn:disabled {
+  opacity: 0.35;
+  cursor: default !important;
+  &:hover { background: var(--rc-surface) !important; color: var(--rc-text-muted) !important; }
 }
 
 // A toggled transport button (the onion-skin 🧅 while on): pressed-in green, like an active segment

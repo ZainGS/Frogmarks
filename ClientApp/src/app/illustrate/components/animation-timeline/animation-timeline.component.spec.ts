@@ -579,3 +579,50 @@ describe('AnimationTimelineComponent playback frame updates', () => {
     flush(); fixture.destroy();
   }));
 });
+
+describe('AnimationTimelineComponent cel buttons + layer selection (touch feedback 2026-10-09)', () => {
+  it('a tapped layer label is highlighted; a cel tap highlights its layer', fakeAsync(() => {
+    const { fixture, cmp, el, render } = setup();
+    const labels = () => Array.from(el.querySelectorAll<HTMLElement>('.tl-layer-label'));
+    expect(labels().some(l => l.classList.contains('tl-label-selected'))).toBeFalse();
+    labels()[1].click(); render();
+    expect(cmp.selectedLayerId).toBe('L2');
+    expect(labels()[1].classList.contains('tl-label-selected')).toBeTrue();
+    expect(labels()[0].classList.contains('tl-label-selected')).toBeFalse();
+    expect(el.querySelector('.tl-static-bar')!.classList.contains('tl-bar-selected')).toBeTrue();
+    cmp.onCellClick(cmp.layers[0], 2); render();
+    expect(cmp.selectedLayerId).toBe('L1');
+    expect(labels()[0].classList.contains('tl-label-selected')).toBeTrue();
+    flush(); fixture.destroy();
+  }));
+
+  it('◆ / ⧉ buttons: ⧉ is disabled on a frame with no drawing, ◆ without an animated layer; no arrows', fakeAsync(() => {
+    const { fixture, cmp, el, anim, render } = setup();
+    const [newBtn, dupBtn] = Array.from(el.querySelectorAll<HTMLButtonElement>('.cel-actions .transport-btn'));
+    expect(newBtn.textContent!.trim()).toBe('◆');
+    expect(dupBtn.textContent!.trim()).toBe('⧉');
+    expect(cmp.canDuplicateCel).toBeTrue();          // frame 1: cel a
+    expect(dupBtn.disabled).toBeFalse();
+    anim.setCurrentFrame(4); render();               // frame 4: between a (1–3) and b (5–6)
+    expect(cmp.canDuplicateCel).toBeFalse();
+    expect(dupBtn.disabled).toBeTrue();
+    expect(newBtn.disabled).toBeFalse();
+    flush(); fixture.destroy();
+
+    TestBed.resetTestingModule();
+    const s2 = setup([{ id: 'L2', name: 'Paper', animated: false, cels: [] }]);
+    const [newBtn2, dupBtn2] = Array.from(s2.el.querySelectorAll<HTMLButtonElement>('.cel-actions .transport-btn'));
+    expect(s2.cmp.hasAnimatedLayer).toBeFalse();
+    expect(newBtn2.disabled).toBeTrue();
+    expect(dupBtn2.disabled).toBeTrue();
+    flush(); s2.fixture.destroy();
+  }));
+
+  it('step buttons carry no title (a long press would show it as a tooltip)', fakeAsync(() => {
+    const { fixture, el } = setup();
+    for (const b of Array.from(el.querySelectorAll<HTMLElement>('.tl-step, .ctx-step, [aria-label^="Previous frame"], [aria-label^="Next frame"]'))) {
+      expect(b.hasAttribute('title')).withContext(b.getAttribute('aria-label') ?? '').toBeFalse();
+    }
+    flush(); fixture.destroy();
+  }));
+});

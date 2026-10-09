@@ -1353,9 +1353,15 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
     this._menuTarget = { kind: 'cel', layerId: layer.id, frame };
   }
 
-  /** A tap / click on a layer's name or static bar: ⋯ opens that layer's menu. */
+  /** A tap / click on a layer's name or static bar: it is the selected layer (highlighted) and ⋯ opens its menu. */
   onLayerTap(layer: TimelineLayerInfo): void {
     this._menuTarget = { kind: 'layer', layerId: layer.id };
+  }
+
+  /** The layer the last tap picked (its label / static bar, or one of its cels): highlighted in the label column. */
+  get selectedLayerId(): string {
+    const t = this._menuTarget;
+    return t && (t.kind === 'layer' || t.kind === 'cel') ? t.layerId : '';
   }
 
   // ── Context menu ──────────────────────────────────────────
@@ -1551,8 +1557,8 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
 
   /** The menu's Hold − / +: one frame shorter / longer (never into the next drawing, never past the last frame). The
    *  menu stays open so it can be tapped again. */
-  ctxHoldDelta(event: Event, delta: number): void {
-    event.stopPropagation();
+  ctxHoldDelta(event: Event | null, delta: number): void {
+    event?.stopPropagation();
     const layer = this.layers.find(l => l.id === this.contextMenuLayerId);
     const cel = this.contextCel;
     if (!layer || !cel) return;
@@ -1753,6 +1759,15 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
   private _activeAnimLayer(): TimelineLayerInfo | undefined {
     const sel = this.layers.find(l => l.id === this.selectedCellLayerId);
     return sel?.animated ? sel : this.layers.find(l => l.animated);
+  }
+
+  /** The ◆ button has a layer to add a cel to. */
+  get hasAnimatedLayer(): boolean { return !!this._activeAnimLayer(); }
+
+  /** The ⧉ button has something to copy: a drawing on the current frame of the layer it acts on. */
+  get canDuplicateCel(): boolean {
+    const layer = this._activeAnimLayer();
+    return !!layer && !!this.getCelAtFrame(layer, this.currentFrame);
   }
 
   /** Duplicate current cel to next frame and advance (Ctrl+D) */
