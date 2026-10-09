@@ -95,6 +95,7 @@ import { RasterSelectionService } from 'app/shared/services/raster/raster-select
 import { RasterAnimationService } from 'app/shared/services/raster/raster-animation.service';
 import { RasterAutoSaveService } from 'app/shared/services/raster/raster-autosave.service';
 import { HiddenUiWake } from '../../utils/hidden-ui-wake';
+import { installTouchColorInputs } from '../../utils/touch-color-inputs';
 import { applyStoredRetroTheme, isRetroThemeOn, setRetroTheme } from 'app/shared/services/theme/retro-theme';
 import { OverlayManagerService } from 'app/shared/services/overlay/overlay-manager.service';
 import { installEditorChrome } from './editor-chrome';
@@ -381,6 +382,8 @@ export class IllustrationComponent implements OnInit, OnDestroy {
   private readonly _overlays = inject(OverlayManagerService);
   /** Uninstalls the editor's overlay entries + the two- / three-finger history taps (editor-chrome.ts). */
   private _uninstallChrome: (() => void) | null = null;
+  /** Touch / pen taps on colour inputs apply the picker colour (Android's dialog has presets only). */
+  private _uninstallTouchColors: (() => void) | null = null;
   private _unregisterUpdateGuard: (() => void) | null = null;
 
   @HostListener('document:fullscreenchange') onFullscreenChange() {
@@ -1873,6 +1876,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
       document.addEventListener('keyup', this._onDocKeyUpOutsideZone);
     });
     this._uninstallChrome = installEditorChrome(this, this._overlays, this.ngZone);
+    this._uninstallTouchColors = this.ngZone.runOutsideAngular(() => installTouchColorInputs(() => this.draw.selectedPenColor));
     this.editorState.bind(this);
     this.doc.bind(this);
     this.stats.bind(this);
@@ -3235,6 +3239,7 @@ export class IllustrationComponent implements OnInit, OnDestroy {
     this._unregisterUpdateGuard?.();
     this._unregisterUpdateGuard = null;
     this._uninstallChrome?.(); this._uninstallChrome = null;
+    this._uninstallTouchColors?.(); this._uninstallTouchColors = null;
     window.removeEventListener('scroll', this._onWinScrollOrResize);
     window.removeEventListener('resize', this._onWinScrollOrResize);
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
