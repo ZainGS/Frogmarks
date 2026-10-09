@@ -100,43 +100,46 @@
         <!-- Performance stats HUD -->
         <div *ngIf="!uiHidden && stats.scene3dStatsVisible && stats.scene3dStats" class="scene3d-stats-hud"
              [class.no-side-panel]="!sidePanel.visible">
-            <div class="scene3d-stats-headline">
-                <span>{{ stats.scene3dStats.fps | number:'1.0-0' }} fps</span>
-                <span class="scene3d-stats-sep">·</span>
-                <span>{{ stats.scene3dStats.frameMs | number:'1.1-1' }} ms</span>
-            </div>
-            <!-- P11 (Salsa performance-plan): drawn.main = triangles the colour pass really drew last frame (after culling / LOD); "in scene" = everything loaded, which does not change with the view. -->
-            <div class="scene3d-stats-tris" [style.color]="stats.scene3dStatsBudgetColor(stats.scene3dStats.drawn?.main ?? stats.scene3dStats.triangles)">
-                ▲ {{ (stats.scene3dStats.drawn?.main ?? stats.scene3dStats.triangles) | number }} tris {{ stats.scene3dStats.drawn ? 'drawn' : '' }}
-            </div>
-            <div *ngIf="stats.scene3dStats.drawn" class="scene3d-stats-breakdown">
-                shadow {{ stats.scene3dStats.drawn.shadow | number }} · other passes {{ stats.scene3dStats.drawn.other | number }} · {{ stats.scene3dStats.drawCalls?.total | number }} draws
-            </div>
-            <div *ngIf="stats.scene3dStats.drawn" class="scene3d-stats-breakdown">
-                in scene {{ stats.scene3dStats.triangles | number }} tris
-            </div>
-            <div *ngIf="stats.scene3dStats.byCategory" class="scene3d-stats-breakdown">
-                <ng-container *ngIf="stats.scene3dStats.byCategory.body">body {{ stats.scene3dStats.byCategory.body | number }}</ng-container>
-                <ng-container *ngIf="stats.scene3dStats.byCategory.hair"> · hair {{ stats.scene3dStats.byCategory.hair | number }}</ng-container>
-                <ng-container *ngIf="stats.scene3dStats.byCategory.clothing"> · clothing {{ stats.scene3dStats.byCategory.clothing | number }}</ng-container>
-                <ng-container *ngIf="stats.scene3dStats.byCategory.charms"> · charms {{ stats.scene3dStats.byCategory.charms | number }}</ng-container>
-                <ng-container *ngIf="stats.scene3dStats.byCategory.face"> · face {{ stats.scene3dStats.byCategory.face | number }}</ng-container>
-                <ng-container *ngIf="stats.scene3dStats.byCategory.scenery"> · scenery {{ stats.scene3dStats.byCategory.scenery | number }}</ng-container>
-            </div>
-            <div class="scene3d-stats-row">
-                <span>{{ stats.scene3dStats.objects }} objects</span>
-                <span class="scene3d-stats-sep">·</span>
-                <span>{{ stats.scene3dStats.vertices | number }} verts</span>
-                <ng-container *ngIf="stats.scene3dStats.gpStrokes">
+            <!-- Its own view: the stats poll (outside the zone) re-checks just this block, not the app (playback perf A4) -->
+            <ng-container *fmLocalView="stats.attachHudView">
+                <div class="scene3d-stats-headline">
+                    <span>{{ stats.scene3dStats.fps | number:'1.0-0' }} fps</span>
                     <span class="scene3d-stats-sep">·</span>
-                    <span>{{ stats.scene3dStats.gpStrokes }} GP</span>
-                </ng-container>
-            </div>
-            <div *ngIf="stats.scene3dStats.geometryBytes" class="scene3d-stats-row">
-                {{ (stats.scene3dStats.geometryBytes / 1048576) | number:'1.1-1' }} MB mesh
-            </div>
-            <div *ngIf="stats.scene3dBudgetWarning" class="scene3d-stats-warn" title="Salsa scene budgets (getSceneBudget3D): drawn triangles, draw calls, geometry and instances against their limits">⚠ {{ stats.scene3dBudgetWarning }}</div>
-            <div *ngIf="stats.scene3dStats.gpuName" class="scene3d-stats-gpu">{{ stats.scene3dStats.gpuName }}</div>
+                    <span>{{ stats.scene3dStats.frameMs | number:'1.1-1' }} ms</span>
+                </div>
+                <!-- P11 (Salsa performance-plan): drawn.main = triangles the colour pass really drew last frame (after culling / LOD); "in scene" = everything loaded, which does not change with the view. -->
+                <div class="scene3d-stats-tris" [style.color]="stats.scene3dStatsBudgetColor(stats.scene3dStats.drawn?.main ?? stats.scene3dStats.triangles)">
+                    ▲ {{ (stats.scene3dStats.drawn?.main ?? stats.scene3dStats.triangles) | number }} tris {{ stats.scene3dStats.drawn ? 'drawn' : '' }}
+                </div>
+                <div *ngIf="stats.scene3dStats.drawn" class="scene3d-stats-breakdown">
+                    shadow {{ stats.scene3dStats.drawn.shadow | number }} · other passes {{ stats.scene3dStats.drawn.other | number }} · {{ stats.scene3dStats.drawCalls?.total | number }} draws
+                </div>
+                <div *ngIf="stats.scene3dStats.drawn" class="scene3d-stats-breakdown">
+                    in scene {{ stats.scene3dStats.triangles | number }} tris
+                </div>
+                <div *ngIf="stats.scene3dStats.byCategory" class="scene3d-stats-breakdown">
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.body">body {{ stats.scene3dStats.byCategory.body | number }}</ng-container>
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.hair"> · hair {{ stats.scene3dStats.byCategory.hair | number }}</ng-container>
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.clothing"> · clothing {{ stats.scene3dStats.byCategory.clothing | number }}</ng-container>
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.charms"> · charms {{ stats.scene3dStats.byCategory.charms | number }}</ng-container>
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.face"> · face {{ stats.scene3dStats.byCategory.face | number }}</ng-container>
+                    <ng-container *ngIf="stats.scene3dStats.byCategory.scenery"> · scenery {{ stats.scene3dStats.byCategory.scenery | number }}</ng-container>
+                </div>
+                <div class="scene3d-stats-row">
+                    <span>{{ stats.scene3dStats.objects }} objects</span>
+                    <span class="scene3d-stats-sep">·</span>
+                    <span>{{ stats.scene3dStats.vertices | number }} verts</span>
+                    <ng-container *ngIf="stats.scene3dStats.gpStrokes">
+                        <span class="scene3d-stats-sep">·</span>
+                        <span>{{ stats.scene3dStats.gpStrokes }} GP</span>
+                    </ng-container>
+                </div>
+                <div *ngIf="stats.scene3dStats.geometryBytes" class="scene3d-stats-row">
+                    {{ (stats.scene3dStats.geometryBytes / 1048576) | number:'1.1-1' }} MB mesh
+                </div>
+                <div *ngIf="stats.scene3dBudgetWarning" class="scene3d-stats-warn" title="Salsa scene budgets (getSceneBudget3D): drawn triangles, draw calls, geometry and instances against their limits">⚠ {{ stats.scene3dBudgetWarning }}</div>
+                <div *ngIf="stats.scene3dStats.gpuName" class="scene3d-stats-gpu">{{ stats.scene3dStats.gpuName }}</div>
+            </ng-container>
         </div>
 
         <!-- Viewport transform shortcut HUD (G/R/S state machine). Not in Edit Mesh: its op pill shows the transform. -->

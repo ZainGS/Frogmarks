@@ -76,11 +76,20 @@ body.theme-retro-chrome {
 // § 1  GLOBAL RESETS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Every border-radius → 0
+// Every border-radius → 0. Transitions: none, except the short hover fade on interactive controls (next rule). The
+// fade used to be on EVERY element, so a class flip anywhere started a 50 ms transition: the timeline's per-frame
+// current-frame cells restyled + repainted on every display frame of playback (playback perf A1, 2026-10-09).
+// `none` (not just dropping the rule) keeps the components' own transitions off, as this rule always did.
 body.theme-retro-chrome * {
   border-radius: 0 !important;
-  transition: background 0.05s, border-color 0.05s !important;
+  transition: none !important;
   box-shadow: none !important;
+}
+
+// :where() = no added specificity, so the more specific `button` / `.nid-*` rules below still win as before
+body.theme-retro-chrome :where(button, input, select, textarea, a, summary, label, [role="button"], [role="menuitem"],
+    [role="tab"], [role="option"], .mat-mdc-menu-item, .mat-mdc-option, .menu-item, .edit-menu-item, .ctx-item) {
+  transition: background 0.05s, border-color 0.05s !important;
 }
 
 // Monospace everywhere inside panels
@@ -1600,12 +1609,6 @@ body.theme-retro-chrome .tl-frame-number.current {
   color: var(--rc-green-txt) !important;
 }
 
-// A blank frame under the playhead; a drawing keeps its own (lighter) green there (the component's .cel-start /
-// .cel-hold .current), so the cel colour isn't lost on the current frame.
-body.theme-retro-chrome .tl-cell.current:not(.cel-start):not(.cel-hold) {
-  background: rgba(79, 122, 104, 0.25) !important;
-}
-
 body.theme-retro-chrome .tl-layer-row {
   border-bottom: 1px solid #1e1e1e !important;
   background: var(--rc-panel-bg) !important;
@@ -1651,7 +1654,6 @@ body.theme-retro-chrome .tl-3d-header-cell {
   background: rgba(46,107,40,0.1) !important;
   border-right: 1px solid #1e1e1e !important;
   border-bottom: 1px solid #222 !important;
-  &.current { background: rgba(79, 122, 104, 0.35) !important; }
 }
 
 body.theme-retro-chrome .tl-3d-cell {

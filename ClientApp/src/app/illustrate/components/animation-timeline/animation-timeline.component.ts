@@ -4,6 +4,7 @@ import {
   OnDestroy,
   DoCheck,
   AfterViewInit,
+  AfterViewChecked,
   ElementRef,
   ViewChild,
   Input,
@@ -55,6 +56,10 @@ export interface TrackRowView {
   def: { key: string; label: string; color: string };
   /** 1-based frames with a keyframe on this track. */
   keys: Set<number>;
+  /** Per frame (index = frame - 1): the cell's title ('' without a keyframe). */
+  titles: string[];
+  /** Per frame (index = frame - 1): the keyframe's selection key (kfKey), '' without a keyframe. */
+  kfKeys: string[];
 }
 
 export interface Mesh3dRowView {
@@ -111,16 +116,27 @@ export interface PinchTouchEvent {
   preventDefault?: () => void;
 }
 
+/** An element's text, updated in its one Text node (characterData — as Angular's own text bindings do): replacing
+ *  the node (textContent =) cost ~10× more style + layout per frame of playback. */
+function setText(el: HTMLElement, text: string): void {
+  const n = el.firstChild;
+  if (n && n.nodeType === Node.TEXT_NODE && !n.nextSibling) (n as Text).data = text;
+  else el.textContent = text;
+}
+
 const CELL_TITLE_BLANK = 'Blank frame — no drawing. Click to jump here, double-click to create a new cel.';
 const CELL_TITLE_HOLD = 'This frame holds the previous drawing.';
 const CELL_TITLE_DRAWING = 'This frame has a drawing. Click to select it. Drag to move. Alt+drag to swap.';
 const NO_CUTS: { cameraId: string; frame: number }[] = [];
 
 /**
- * OnPush: playback runs outside the Angular zone (RasterAnimationService), so the per-frame update is this component's
- * own detectChanges from currentFrame$ — the template is a precomputed view model (frames / layerRows / mesh3dRows),
- * so a frame only re-evaluates cheap comparisons. Everything else marks for check: the service observables, inputs
- * (new arrays), template events, and the document-level drag listeners below (markForCheck in each).
+ * OnPush: playback runs outside the Angular zone (RasterAnimationService). Nothing in the template depends on the
+ * current frame: the playhead, the current-frame column (a header cap + one highlight per row section) and the
+ * "N / M" counter are written straight to the DOM by _syncFrameDom, so a frame of PLAYBACK runs no change detection
+ * (playback perf A2, 2026-10-09). A frame change while paused (scrub / step / click) still refreshes the view, and so
+ * does everything else: the service observables, inputs (new arrays), template events, and the document-level drag
+ * listeners below (markForCheck in each). Every check of this view re-syncs those DOM writes (ngAfterViewChecked /
+ * _detect), so they can't go stale. The template is a precomputed view model (frames / layerRows / mesh3dRows).
  *
  * Input is pointer events (mouse, touch and pen alike — timeline touch audit 2026-10-09): every drag goes through
  * _beginPointerDrag (pointer capture + pointercancel), right-click menus also open on a long-press, and a two-finger
@@ -133,7 +149,7 @@ const NO_CUTS: { cameraId: string; frame: number }[] = [];
   styleUrl: './animation-timeline.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, AfterViewInit {
+export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, AfterViewInit, AfterViewChecked {
 
   // ── State ─────────────────────────────────────────────────
 
@@ -233,6 +249,12 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
   @ViewChild('timelineGrid') timelineGridRef!: ElementRef<HTMLDivElement>;
   @ViewChild('timelineLayers') timelineLayersRef!: ElementRef<HTMLDivElement>;
   @ViewChild('timelinePanel') timelinePanelRef!: ElementRef<HTMLDivElement>;
+  // Written per frame by _syncFrameDom (never bound in the template: a binding and a direct write would fight)
+  @ViewChild('playhead', { static: true }) private playheadRef?: ElementRef<HTMLElement>;
+  @ViewChild('curFrameCap', { static: true }) private curFrameCapRef?: ElementRef<HTMLElement>;
+  @ViewChild('curCol2d', { static: true }) private curCol2dRef?: ElementRef<HTMLElement>;
+  @ViewChild('curCol3d', { static: true }) private curCol3dRef?: ElementRef<HTMLElement>;
+  @ViewChild('frameCounter', { static: true }) private frameCounterRef?: ElementRef<HTMLElement>;
 
   /** A floating panel / prompt / menu / hold tooltip is open: the host (illustration.component.scss) raises the
    *  timeline above the zoom box, which otherwise sat on top of them (they live in the timeline's stacking context). */
@@ -680,7 +702,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
           const dx = e.clientX - x0;
           this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
           this.kfDragIsCopy = e.altKey;
-          this.cdr.detectChanges();   // outside the zone (_beginPointerDrag): re-render this view only
+          this._detect();   // outside the zone (_beginPointerDrag): re-render this view only
         }
       },
       up: () => {
@@ -929,8 +951,14 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
   ngOnInit(): void {
     this.ngZone.runOutsideAngular(() => document.addEventListener('keydown', this._onDocKeyDownOutsideZone));
     this.subs.push(
-      // Per frame of playback — emitted OUTSIDE the Angular zone (no app tick), so refresh this view directly.
-      this.animService.currentFrame$.subscribe(f => { if (f !== this.currentFrame) { this.currentFrame = f; this._refresh(); } }),
+      // Per frame of playback (emitted OUTSIDE the Angular zone: no app tick): only the playhead / current column /
+      // counter move, by DOM writes, no change detection. Paused (scrub / step / click): the usual refresh.
+      this.animService.currentFrame$.subscribe(f => {
+        if (f === this.currentFrame) return;
+        this.currentFrame = f;
+        if (this.isPlaying && this._ready) this._syncFrameDom();
+        else this._refresh();
+      }),
       this.animService.frameCount$.subscribe(c => { this.frameCount = c; this._rebuildFrames(); this._refresh(); }),
       this.animService.fps$.subscribe(f => { this.fps = f; this._refresh(); }),
       this.animService.isPlaying$.subscribe(p => { this.isPlaying = p; this._refresh(); }),
@@ -1005,18 +1033,74 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
     }
   }
 
-  /** In the zone: mark (the app tick that follows checks this view). Outside it (playback, engine events): check
-   *  this view now — nothing else will. */
+  /** In the zone: mark (the app tick that follows checks this view). Outside it (engine events, drags, a paused
+   *  scrub): check this view now — nothing else will. */
   private _refresh(): void {
     if (!this._ready) return;
     if (NgZone.isInAngularZone()) this.cdr.markForCheck();
-    else this.cdr.detectChanges();
+    else this._detect();
   }
+
+  /** A local check of this view (outside the zone) + the per-frame DOM it doesn't bind. */
+  private _detect(): void {
+    this.cdr.detectChanges();
+    this._syncFrameDom();
+  }
+
+  /** After every check of this view by its parent (an app tick): keep the per-frame DOM in step. */
+  ngAfterViewChecked(): void {
+    this._syncFrameDom();
+  }
+
+  /** What _syncFrameDom last wrote. */
+  private _domFrame = -1;
+  private _domFrameWidth = -1;
+  private _domFrameCount = -1;
+
+  /** The playhead, the current-frame column (header cap + the row sections' highlights) and the "N / M" counter:
+   *  written here, not bound. Per frame of playback this is all the timeline does: transform-only moves (the two
+   *  columns on their own layers) + two short texts in size-contained boxes (no change detection or row repaint). */
+  private _syncFrameDom(): void {
+    const f = this.currentFrame;
+    const fw = this.frameWidth;
+    const fc = this.frameCount;
+    const cap = this.curFrameCapRef?.nativeElement;
+    if (f !== this._domFrame || fw !== this._domFrameWidth) {
+      const col = 'translateX(' + (f - 1) * fw + 'px)';
+      if (cap) cap.style.transform = col;
+      const c2 = this.curCol2dRef?.nativeElement;
+      if (c2) c2.style.transform = col;
+      const c3 = this.curCol3dRef?.nativeElement;
+      if (c3) c3.style.transform = col;
+      const ph = this.playheadRef?.nativeElement;
+      if (ph) ph.style.transform = this.playheadTransform;
+    }
+    if (f !== this._domFrame && cap) setText(cap, String(f));
+    if (f !== this._domFrame || fc !== this._domFrameCount) {
+      const counter = this.frameCounterRef?.nativeElement;
+      if (counter) {
+        const text = f + ' / ' + fc;
+        setText(counter, text);
+        // Its width = the text's (monospace ch), as the plain text had: set only when the digit count changes (9 → 10),
+        // the only frames where the counter can move anything around it
+        if (text.length !== this._domCounterLen) {
+          this._domCounterLen = text.length;
+          counter.style.width = text.length + 'ch';
+        }
+      }
+    }
+    this._domFrame = f;
+    this._domFrameWidth = fw;
+    this._domFrameCount = fc;
+  }
+  private _domCounterLen = -1;
 
   // ── View model for the template (rebuilt only when its inputs change) ─────
 
   /** 1..frameCount. */
   frames: number[] = [];
+  /** The frame numbers' titles (index = frame - 1). */
+  frameTitles: string[] = [];
   layerRows: LayerRowView[] = [];
   mesh3dRows: Mesh3dRowView[] = [];
   private _mesh3dSource: AnimationTimelineComponent['mesh3dAllTracks'] | null = null;
@@ -1025,8 +1109,13 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
   private _rebuildFrames(): void {
     if (this.frames.length !== this.frameCount) {
       const arr: number[] = [];
-      for (let i = 1; i <= this.frameCount; i++) arr.push(i);
+      const titles: string[] = [];
+      for (let i = 1; i <= this.frameCount; i++) {
+        arr.push(i);
+        titles.push('Click to jump to frame ' + i + '. Drag to scrub.');
+      }
       this.frames = arr;
+      this.frameTitles = titles;
     }
     this._rebuildLayerRows();
     this._rebuildMesh3dRows();
@@ -1061,7 +1150,17 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
     this._mesh3dSource = this.mesh3dAllTracks;
     this._mesh3dSig = this._mesh3dSignature();
     this.mesh3dRows = this.mesh3dAllTracks.map(entry => {
-      const tracks = this.getTrackDefsForEntry(entry).map(def => ({ def, keys: this.getTrackFrameSet(entry.tracks, def.key) }));
+      const tracks = this.getTrackDefsForEntry(entry).map(def => {
+        const keys = this.getTrackFrameSet(entry.tracks, def.key);
+        const titles: string[] = [];
+        const kfKeys: string[] = [];
+        for (let f = 1; f <= n; f++) {
+          const has = keys.has(f);
+          titles.push(has ? def.label + ' keyframe at frame ' + f + ' — right-click or long-press to change easing' : '');
+          kfKeys.push(has ? this.kfKey(entry.meshId, def.key, f) : '');
+        }
+        return { def, keys, titles, kfKeys };
+      });
       const anyKey: boolean[] = [];
       for (let f = 1; f <= n; f++) anyKey.push(tracks.some(t => t.keys.has(f)));
       return { entry, anyKey, tracks };
@@ -1202,7 +1301,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - (grid ? grid.getBoundingClientRect().left : 0);
       const anchor = grid ? (grid.scrollLeft + midX) / this.frameWidth : 0;
       this.frameWidth = fw;
-      this.cdr.detectChanges();
+      this._detect();
       if (grid) grid.scrollLeft = Math.max(0, anchor * fw - midX);
       return;
     }
@@ -1392,7 +1491,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
       }
       changed = true;
     }
-    if (changed) this.cdr.detectChanges();
+    if (changed) this._detect();
   }
 
   ctxNewCel(): void {
@@ -1561,7 +1660,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
           armed = true;
           this._touchDragLock = true;
           this.isDragging = true;      // the cel lights up: it is picked up
-          this.cdr.detectChanges();
+          this._detect();
         }, CEL_TOUCH_DRAG_DELAY_MS);
       });
     }
@@ -1586,7 +1685,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
           }
           this.dragGhostFrame = ghost;
           this.isDragSwap = e.altKey;
-          this.cdr.detectChanges();   // outside the zone (_beginPointerDrag): re-render this view only
+          this._detect();   // outside the zone (_beginPointerDrag): re-render this view only
         }
       },
       up: () => {
@@ -1706,7 +1805,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, A
     const before = this.panelHeight;
     const y0 = event.clientY;
     this._beginPointerDrag(event, {
-      move: (e) => { this.setPanelHeight(h0 + (y0 - e.clientY)); this.cdr.detectChanges(); },
+      move: (e) => { this.setPanelHeight(h0 + (y0 - e.clientY)); this._detect(); },
       up: () => {
         try { if (this.panelHeight != null) localStorage.setItem(TIMELINE_HEIGHT_KEY, String(this.panelHeight)); } catch { /* storage off */ }
       },

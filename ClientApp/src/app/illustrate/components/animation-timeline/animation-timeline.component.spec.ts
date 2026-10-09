@@ -519,3 +519,63 @@ describe('AnimationTimelineComponent touch / tablet', () => {
     discardPeriodicTasks();
   }));
 });
+
+/** Playback perf A2 (2026-10-09): one moving current-frame column instead of per-cell .current classes; a frame of
+ *  playback writes the playhead / column / cap / counter straight to the DOM and runs no change detection. */
+describe('AnimationTimelineComponent playback frame updates', () => {
+  const tf = (el: HTMLElement, sel: string) => (el.querySelector(sel) as HTMLElement).style.transform;
+
+  it('while playing, a frame moves the playhead, the column, the cap and the counter without change detection', fakeAsync(() => {
+    const { cmp, el, anim, fixture } = setup();
+    const cdr = (cmp as unknown as { cdr: { detectChanges(): void } }).cdr;
+    const cd = spyOn(cdr, 'detectChanges').and.callThrough();
+    anim.isPlaying$.next(true);
+    cd.calls.reset();
+    anim.currentFrame$.next(5);
+    anim.currentFrame$.next(6);
+    expect(cd).not.toHaveBeenCalled();
+    const fw = cmp.frameWidth;
+    expect(tf(el, '.tl-playhead')).toBe(`translateX(${5 * fw + fw / 2 - 1}px)`);
+    expect(tf(el, '.tl-cur-frame')).toBe(`translateX(${5 * fw}px)`);
+    el.querySelectorAll<HTMLElement>('.tl-cur-col').forEach(c => expect(c.style.transform).toBe(`translateX(${5 * fw}px)`));
+    expect(el.querySelector('.tl-cur-frame')!.textContent).toBe('6');
+    expect(el.querySelector('.frame-counter')!.textContent!.trim()).toBe('6 / 24');
+    // no cell carries the current frame (only the cap is a .current frame number)
+    expect(el.querySelectorAll('.current').length).toBe(1);
+    expect(el.querySelectorAll('.tl-cell.current, .tl-3d-cell.current, .tl-3d-header-cell.current').length).toBe(0);
+    flush(); fixture.destroy();
+  }));
+
+  it('pause, a paused step and a zoom refresh the view and keep the moved elements in step', fakeAsync(() => {
+    const { cmp, el, anim, fixture, render } = setup();
+    const cdr = (cmp as unknown as { cdr: { detectChanges(): void } }).cdr;
+    anim.isPlaying$.next(true);
+    anim.currentFrame$.next(9);
+    const cd = spyOn(cdr, 'detectChanges').and.callThrough();
+    anim.isPlaying$.next(false);
+    expect(cd).toHaveBeenCalled();
+    expect(el.querySelector('.play-btn')!.textContent!.trim()).toBe('▶');
+    cd.calls.reset();
+    anim.currentFrame$.next(3);   // a paused step / scrub: the usual refresh
+    expect(cd).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('.tl-cur-frame')!.textContent).toBe('3');
+    expect(el.querySelector('.frame-counter')!.textContent!.trim()).toBe('3 / 24');
+    // back to a frame the view saw before playback: nothing stale (no template binding to skip the write)
+    anim.currentFrame$.next(9);
+    expect(tf(el, '.tl-playhead')).toBe(`translateX(${8 * cmp.frameWidth + cmp.frameWidth / 2 - 1}px)`);
+    cmp.frameWidth = 40;
+    render();
+    expect(tf(el, '.tl-cur-col')).toBe('translateX(320px)');
+    expect((el.querySelector('.tl-cur-col') as HTMLElement).style.width).toBe('39px');
+    expect((el.querySelector('.tl-cur-frame') as HTMLElement).style.width).toBe('40px');
+    flush(); fixture.destroy();
+  }));
+
+  it('static layer rows are lifted over the column (not highlighted, as before)', fakeAsync(() => {
+    const { el, fixture } = setup();
+    const rows = el.querySelectorAll('.tl-layer-row');
+    expect(rows[0].classList.contains('tl-static-row')).toBeFalse();   // Ink: animated
+    expect(rows[1].classList.contains('tl-static-row')).toBeTrue();    // Paper: static
+    flush(); fixture.destroy();
+  }));
+});

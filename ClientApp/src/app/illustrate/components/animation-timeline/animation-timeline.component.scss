@@ -32,6 +32,11 @@ $blank: transparent;
 $row-3d-head: rgba(59, 97, 81, 0.16);
 $row-3d-line: #3a3a3a;
 $row-3d-bg: #161616;
+// A cel row's height, its 1 px bottom border included (border-box) — the current-frame column's stripes repeat at it
+$layer-row-h: 26px;
+// The current-frame column over the cel rows: a light green that lightens a blank / held / drawn frame alike (the
+// per-cell colours it replaced: $current-frame on a blank frame, $cel-hold-current / $cel-fill-current on a drawing)
+$cur-col-2d: rgba(140, 190, 170, 0.2);
 
 // Raised / sunken chrome bevels (2 px, square)
 @mixin raised { border: 2px solid; border-color: $bevel-lt $bevel-dk $bevel-dk $bevel-lt; border-radius: 0; }
@@ -179,10 +184,10 @@ $row-3d-bg: #161616;
   flex-shrink: 0;
   border-right: 1px solid rgba($border, 0.3);
   cursor: pointer;
-  transition: background 0.1s;
 
   &:hover { background: rgba(255, 255, 255, 0.05); }
   // (no font-weight here: it re-laid out the header on every frame of playback — colour + background only)
+  // .current is only the moving cap below (.tl-cur-frame) — the numbers themselves no longer change per frame
   &.current {
     background: $green;
     color: $green-txt;
@@ -220,8 +225,8 @@ $row-3d-bg: #161616;
 
 .tl-layer-row {
   display: flex;
-  height: 26px;
-  min-height: 26px;
+  height: $layer-row-h;
+  min-height: $layer-row-h;
   flex-shrink: 0;
   border-bottom: 1px solid rgba($border, 0.4);
   position: relative;
@@ -249,24 +254,13 @@ $row-3d-bg: #161616;
   flex-shrink: 0;
   border-right: 1px solid rgba($border, 0.2);
   cursor: pointer;
-  transition: background 0.1s;
   font-size: 10px;
 
   &:hover { background: rgba(255, 255, 255, 0.05); }
 
-  &.current {
-    background: $current-frame;
-  }
-
-  &.cel-start {
-    background: $cel-fill;
-    &.current { background: $cel-fill-current; }
-  }
-
-  &.cel-hold {
-    background: $cel-hold;
-    &.current { background: $cel-hold-current; }
-  }
+  // (the current frame: the .tl-cur-col column over the cells)
+  &.cel-start { background: $cel-fill; }
+  &.cel-hold { background: $cel-hold; }
 
   &.blank {
     background: transparent;
@@ -301,6 +295,56 @@ $row-3d-bg: #161616;
   z-index: 5;
   pointer-events: none;
   will-change: transform;
+}
+
+/* ── Current frame column (playback perf A2, 2026-10-09) ─────────
+   One moving highlight instead of a .current class on every row's cell: per frame of playback the component only
+   writes these elements' transforms (+ the cap's number) — no change detection over the grid, no restyle / repaint
+   of the rows. */
+
+// The frame number cap: a copy of the current .tl-frame-number (same classes = same look) laid over it
+.tl-cur-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;          // over the numbers, under the play-range handles
+  pointer-events: none;
+  contain: strict;     // its number changes per frame: lay out only this box
+  // (no will-change: an own layer would lose the header's subpixel text antialiasing on the number)
+}
+
+// The rows of one section (2D cel rows / 3D + camera rows): the column below spans exactly their height
+.tl-rows {
+  position: relative;
+}
+
+// Under the glyphs (z-index 2 below), over the cells' backgrounds. Its right pixel is the cells' border.
+.tl-cur-col {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+  will-change: transform;
+  // Each cel row's bottom border stays untinted, as under the old per-cell background
+  background: repeating-linear-gradient(to bottom, $cur-col-2d 0, $cur-col-2d $layer-row-h - 1px,
+    transparent $layer-row-h - 1px, transparent $layer-row-h);
+  &.tl-cur-col-3d { background: $current-frame; }
+}
+
+// Glyphs stay above the column (untinted, as on the old per-cell background)
+.cel-marker,
+.hold-marker,
+.kf-any {
+  position: relative;
+  z-index: 2;
+}
+
+// Rows the column does not highlight (as before): static layers, camera cut lanes — lifted over it, opaque
+.tl-layer-row.tl-static-row {
+  z-index: 2;
+  background: $bg;
 }
 
 /* ── 3D Dope Sheet rows ───────────────────────────────────────── */
@@ -359,8 +403,6 @@ $row-3d-bg: #161616;
   border-right: 1px solid rgba($border, 0.3);
   cursor: pointer;
 
-  &.current { background: $current-frame; }
-
   .kf-any {
     font-size: 8px;
     color: $green-txt;
@@ -384,13 +426,12 @@ $row-3d-bg: #161616;
   border-right: 1px solid rgba($border, 0.3);
   cursor: pointer;
 
-  &.current { background: $current-frame; }
-
   .kf-diamond {
     font-size: 9px;
     line-height: 1;
     display: block;
     position: relative;   // anchor for the touch hit area
+    z-index: 2;           // over the current-frame column
     transition: transform 0.1s;
     touch-action: none;   // a finger drags the keyframe
   }
@@ -423,6 +464,7 @@ $row-3d-bg: #161616;
 .tl-camera-cut-row {
   cursor: crosshair;
   background: #141414;
+  z-index: 2;   // over the current-frame column (not highlighted, as before)
 }
 
 .tl-cut-marker {
@@ -546,6 +588,19 @@ $row-3d-bg: #161616;
   font-weight: 600;
   min-width: 50px;
   text-align: center;
+}
+
+// "N / M", rewritten per frame of playback (playback perf A3): a one-line box sized by the component (the text's
+// width in ch of the monospace font, so it looks as the plain text did) with size + layout containment, so the new
+// text lays out only itself. (No paint containment: nothing to clip.)
+.frame-counter-text {
+  display: inline-block;
+  vertical-align: top;
+  min-width: 100%;   // = the counter's box (min-width 50 px): the text centres in it exactly as before
+  height: 1lh;
+  white-space: nowrap;
+  text-align: center;
+  contain: size layout style;
 }
 
 .transport-actions {
@@ -924,7 +979,7 @@ $row-3d-bg: #161616;
 
   // Hit areas: a transparent ::before around the small targets (pointer hits on it count as the element)
   .tl-3d-cell .kf-diamond {
-    z-index: 1;   // its hit area reaches over the next track row too
+    z-index: 2;   // its hit area reaches over the next track row too (and over the current-frame column)
     &::before { content: ''; position: absolute; inset: -7px -9px; }
   }
   .duration-handle::before {

@@ -13,11 +13,12 @@ export class SceneAnimSectionComponent implements OnInit, OnDestroy {
 
   private _sub: Subscription | null = null;
 
-  /** The frame readout: playback (raster timeline or 3D player) runs outside the Angular zone — no app tick per
-   *  frame — so refresh this section's own view when the frame moves. */
+  /** The frame readout is the 3D animation player's frame: its rAF clock runs outside the Angular zone (no app tick
+   *  per frame), so refresh this section's own view when that frame moves. Not per frame of the raster timeline
+   *  (playback perf A7, 2026-10-09) — only when its playback starts / stops, so the readout is right once it rests. */
   ngOnInit(): void {
     let ready = false;
-    this._sub = merge(this.anim.animationService.currentFrame$, this.anim.scene3dPlayerFrame$).subscribe(() => {
+    this._sub = merge(this.anim.scene3dPlayerFrame$, this.anim.animationService.isPlaying$).subscribe(() => {
       if (ready && !NgZone.isInAngularZone()) this.cdr.detectChanges();
     });
     ready = true;

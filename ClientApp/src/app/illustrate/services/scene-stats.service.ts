@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy, NgZone } from '@angular/core';
 import ShapeManager from '@zaings/salsa/shape-manager';
 import type { IllustrationComponent } from '../components/illustration/illustration.component';
+import type { LocalViewRefresh } from '../../shared/directives/local-view.directive';
 
 /** Exactly the editor state the stats overlay uses. */
 export type SceneStatsHost = Pick<IllustrationComponent, 'shapeManager'>;
@@ -40,6 +41,15 @@ export class SceneStatsService implements OnDestroy {
         const sig = this._scene3dStatsSig(s);
         if (sig === this._statsSig && bw === this.scene3dBudgetWarning) return;
         this._statsSig = sig;
+        // The HUD's contents re-check on their own (the fps changes nearly every poll: this was ~4 full app ticks a
+        // second, during playback too — playback perf A4). Into the zone only when the HUD itself appears / goes
+        // (stats null <-> not: the host's *ngIf) or before its view exists.
+        if (this._hudRefresh && s && this.scene3dStats) {
+          this.scene3dStats = s;
+          this.scene3dBudgetWarning = bw;
+          this._hudRefresh();
+          return;
+        }
         this.ngZone.run(() => { this.scene3dStats = s; this.scene3dBudgetWarning = bw; });
       }, 250));
     } else {
@@ -54,6 +64,10 @@ export class SceneStatsService implements OnDestroy {
   /** Salsa step 3 (docs/ui/performance.md §Budgets): getSceneBudget3D().warning — 'Over budget: 6.1 M tris (3.0 M tris), …', or null. */
   scene3dBudgetWarning: string | null = null;
   private _statsSig = '';
+
+  /** The HUD contents' own re-check (`*fmLocalView="stats.attachHudView"` in the editor template), while shown. */
+  private _hudRefresh: LocalViewRefresh = null;
+  readonly attachHudView = (refresh: LocalViewRefresh): void => { this._hudRefresh = refresh; };
 
   /** The stats HUD's displayed values (template rounding: fps integer, frame ms 1 dp, MB 1 dp). */
   private _scene3dStatsSig(s: any): string {
