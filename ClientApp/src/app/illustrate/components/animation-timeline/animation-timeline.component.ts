@@ -3,6 +3,7 @@ import {
   OnInit,
   OnDestroy,
   DoCheck,
+  AfterViewInit,
   ElementRef,
   ViewChild,
   Input,
@@ -10,6 +11,7 @@ import {
   EventEmitter,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  HostBinding,
   NgZone,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -62,6 +64,53 @@ export interface Mesh3dRowView {
   tracks: TrackRowView[];
 }
 
+// ── Touch / tablet (timeline touch audit 2026-10-09) ──
+/** Touch: a cel drag starts only after a press this long, so a quicker one-finger swipe still scrolls the grid. */
+export const CEL_TOUCH_DRAG_DELAY_MS = 200;
+/** Touch / pen: a still press this long opens the same menu as a right-click (or shows a button's tooltip). */
+export const LONG_PRESS_MS = 500;
+/** A press that moves further than this (CSS px) is a scroll / drag, not a long-press. */
+export const LONG_PRESS_SLOP_PX = 8;
+/** Mouse / pen: a cel / keyframe drag starts once the pointer has moved this far (as before). */
+const DRAG_THRESHOLD_PX = 4;
+/** How long a press-and-hold tooltip stays after the finger lifts. */
+const HOLD_TIP_LINGER_MS = 1500;
+/** The timeline's height (drag its top edge), remembered per device. */
+export const TIMELINE_HEIGHT_KEY = 'fm.animationTimeline.height';
+export const TIMELINE_MIN_H = 120;
+/** The animation timeline wrapper's 4 px top border (illustration.component.scss): --fm-timeline-h = height + this. */
+const TIMELINE_BORDER_PX = 4;
+
+/** Where a menu anchored at (x, y) — opening upward from it when flipUp — lands once kept inside the viewport. */
+export function clampMenuToViewport(x: number, y: number, w: number, h: number, vw: number, vh: number,
+                                    flipUp = false, margin = 4): { left: number; top: number } {
+  const top = flipUp ? y - h : y;
+  return {
+    left: Math.max(margin, Math.min(x, vw - w - margin)),
+    top: Math.max(margin, Math.min(top, vh - h - margin)),
+  };
+}
+
+/** The frame width after a pinch from distance d0 to d (scaled like Ctrl+wheel's zoom, same limits). */
+export function pinchFrameWidth(fw0: number, d0: number, d: number, min: number, max: number): number {
+  if (!(d0 > 0) || !(d > 0)) return fw0;
+  return Math.max(min, Math.min(max, Math.round(fw0 * d / d0)));
+}
+
+/** What the transport bar's ⋯ opens a menu for: the last cel / keyframe / layer / track tapped. */
+type MenuTarget =
+  | { kind: 'cel'; layerId: string; frame: number }
+  | { kind: 'layer'; layerId: string }
+  | { kind: 'kf'; meshId: string; trackKey: string; frame: number; isCamera: boolean }
+  | { kind: 'track'; meshId: string; trackKey: string; isCamera: boolean };
+
+/** The minimal touch-event shape the pinch handlers read (real TouchEvents in the app, plain objects in tests). */
+export interface PinchTouchEvent {
+  touches: ArrayLike<{ clientX: number; clientY: number }>;
+  cancelable?: boolean;
+  preventDefault?: () => void;
+}
+
 const CELL_TITLE_BLANK = 'Blank frame — no drawing. Click to jump here, double-click to create a new cel.';
 const CELL_TITLE_HOLD = 'This frame holds the previous drawing.';
 const CELL_TITLE_DRAWING = 'This frame has a drawing. Click to select it. Drag to move. Alt+drag to swap.';
@@ -72,6 +121,10 @@ const NO_CUTS: { cameraId: string; frame: number }[] = [];
  * own detectChanges from currentFrame$ — the template is a precomputed view model (frames / layerRows / mesh3dRows),
  * so a frame only re-evaluates cheap comparisons. Everything else marks for check: the service observables, inputs
  * (new arrays), template events, and the document-level drag listeners below (markForCheck in each).
+ *
+ * Input is pointer events (mouse, touch and pen alike — timeline touch audit 2026-10-09): every drag goes through
+ * _beginPointerDrag (pointer capture + pointercancel), right-click menus also open on a long-press, and a two-finger
+ * pinch on the grid zooms the frames like Ctrl+wheel.
  */
 @Component({
   selector: 'app-animation-timeline',
@@ -80,7 +133,7 @@ const NO_CUTS: { cameraId: string; frame: number }[] = [];
   styleUrl: './animation-timeline.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
+export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck, AfterViewInit {
 
   // ── State ─────────────────────────────────────────────────
 
@@ -146,6 +199,25 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
   showDuplicatePrompt = false;
   duplicateTargetFrame = 1;
 
+  // Move-to-frame / swap-with prompt (the cel menu's "Move to Frame…" / "Swap with…")
+  showCelFramePrompt = false;
+  celFramePromptMode: 'move' | 'swap' = 'move';
+  celFramePromptTarget = 1;
+
+  // The cel last tapped / clicked (outlined; the transport bar's ⋯ and cel buttons act on its layer)
+  selectedCellLayerId = '';
+  selectedCellFrame = 0;
+  private _menuTarget: MenuTarget | null = null;
+
+  /** Touch: taps on keyframes add to / remove from the selection (Shift+click's job with a mouse). */
+  kfSelectMode = false;
+
+  /** Press-and-hold tooltip (touch / pen) for a button: its title, shown above it. */
+  holdTip: { text: string; x: number; y: number } | null = null;
+
+  /** The panel's height once the user dragged its top edge (null = the stylesheet's 200 px). */
+  panelHeight: number | null = null;
+
   // Tint presets
   beforeTintPresets: [number, number, number][] = [
     [1.0, 0.2, 0.2], // red
@@ -160,6 +232,15 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
 
   @ViewChild('timelineGrid') timelineGridRef!: ElementRef<HTMLDivElement>;
   @ViewChild('timelineLayers') timelineLayersRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('timelinePanel') timelinePanelRef!: ElementRef<HTMLDivElement>;
+
+  /** A floating panel / prompt / menu / hold tooltip is open: the host (illustration.component.scss) raises the
+   *  timeline above the zoom box, which otherwise sat on top of them (they live in the timeline's stacking context). */
+  @HostBinding('class.tl-floating-open') get floatingOpen(): boolean {
+    return this.showOnionSkinPanel || this.showSettingsPanel || this.showDuplicatePrompt || this.showCelFramePrompt
+      || this.showKfFramePrompt || this.showKfBulkMovePrompt
+      || this.contextMenuVisible || this.showEasingMenu || this.showTrackMenu || !!this.holdTip;
+  }
 
   /** All 3D mesh keyframe tracks — one entry per mesh in the scene (camera row has isCamera: true). */
   @Input() mesh3dAllTracks: { meshId: string; name: string; tracks: any; isCamera?: boolean }[] = [];
@@ -276,6 +357,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
   showTrackMenu = false;
   trackMenuX = 0;
   trackMenuY = 0;
+  trackMenuFlipUp = false;
   trackMenuMeshId = '';
   trackMenuTrackKey = '';
   trackMenuIsCamera = false;
@@ -329,9 +411,17 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
   onKfDiamondContextMenu(event: MouseEvent, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
     event.preventDefault();
     event.stopPropagation();
-    this.contextMenuX = event.clientX;
-    this.contextMenuY = event.clientY;
-    this.contextMenuFlipUp = event.clientY > window.innerHeight / 2;
+    this._openKfMenuAt(event.clientX, event.clientY, meshId, trackKey, frame, isCamera);
+  }
+
+  /** The keyframe easing menu (right-click, long-press, or ⋯ on a tapped keyframe). */
+  private _openKfMenuAt(x: number, y: number, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
+    this._cancelPendingGestures();
+    this._menuTarget = { kind: 'kf', meshId, trackKey, frame, isCamera };
+    this.contextMenuX = x;
+    this.contextMenuY = y;
+    this.contextMenuFlipUp = y > window.innerHeight / 2;
+    this.showTrackMenu = false;
     this.kfContextMeshId = meshId;
     this.kfContextTrackKey = trackKey;
     this.kfContextFrame = frame;
@@ -343,6 +433,7 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     this.kfContextCurrentEasing = kf?.easing ?? 'ease-in-out';
     this.showEasingMenu = true;
     this.contextMenuVisible = false; // easing menu replaces the cel context menu
+    this._clampMenusSoon();
   }
 
   setKfEasing(easing: KeyframeEasing): void {
@@ -438,14 +529,28 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
   onKfTrackLabelContextMenu(event: MouseEvent, meshId: string, trackKey: string, isCamera: boolean): void {
     event.preventDefault();
     event.stopPropagation();
-    this.trackMenuX = event.clientX;
-    this.trackMenuY = event.clientY;
+    this._openTrackMenuAt(event.clientX, event.clientY, meshId, trackKey, isCamera);
+  }
+
+  /** Touch / pen: long-press a track label = its right-click menu; the press also makes it the ⋯ target. */
+  onTrackLabelPointerDown(event: PointerEvent, meshId: string, trackKey: string, isCamera: boolean): void {
+    this._menuTarget = { kind: 'track', meshId, trackKey, isCamera };
+    this.startLongPress(event, (x, y) => this._openTrackMenuAt(x, y, meshId, trackKey, isCamera));
+  }
+
+  private _openTrackMenuAt(x: number, y: number, meshId: string, trackKey: string, isCamera: boolean): void {
+    this._cancelPendingGestures();
+    this._menuTarget = { kind: 'track', meshId, trackKey, isCamera };
+    this.trackMenuX = x;
+    this.trackMenuY = y;
+    this.trackMenuFlipUp = y > window.innerHeight / 2;
     this.trackMenuMeshId = meshId;
     this.trackMenuTrackKey = trackKey;
     this.trackMenuIsCamera = isCamera;
     this.showTrackMenu = true;
     this.showEasingMenu = false;
     this.contextMenuVisible = false;
+    this._clampMenusSoon();
   }
 
   clearTrackKeyframes(): void {
@@ -533,11 +638,13 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
 
   cancelKfBulkMove(): void { this.showKfBulkMovePrompt = false; }
 
-  onKfDiamondMouseDown(event: MouseEvent, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
-    if (event.button !== 0) return;
+  /** Keyframe press: Shift (or the Select toggle) adds / removes it from the selection; otherwise a drag moves it
+   *  (Alt = copy), a tap makes it the ⋯ target, and a long-press (touch / pen) opens its easing menu. */
+  onKfDiamondPointerDown(event: PointerEvent, meshId: string, trackKey: string, frame: number, isCamera: boolean): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.stopPropagation();
 
-    if (event.shiftKey) {
+    if (event.shiftKey || this.kfSelectMode) {
       const key = this.kfKey(meshId, trackKey, frame);
       if (this.selectedKfKeys.has(key)) {
         this.selectedKfKeys.delete(key);
@@ -547,6 +654,8 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       return;
     }
 
+    this.startLongPress(event, (x, y) => this._openKfMenuAt(x, y, meshId, trackKey, frame, isCamera));
+
     this.kfDragging = false;
     this.kfDragMeshId = meshId;
     this.kfDragTrackKey = trackKey;
@@ -554,55 +663,77 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     this.kfDragGhostFrame = frame;
     this.kfDragIsCamera = isCamera;
     this.kfDragIsCopy = event.altKey;
+    const x0 = event.clientX;
 
-    const onMove = (e: MouseEvent) => {
-      if (!this.kfDragging && Math.abs(e.clientX - event.clientX) > 4) {
-        this.kfDragging = true;
-      }
-      if (this.kfDragging) {
-        const dx = e.clientX - event.clientX;
-        this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
-        this.kfDragIsCopy = e.altKey;
-        this.cdr.detectChanges();   // outside the zone (_listenDrag): re-render this view only
-      }
-    };
-
-    const onUp = () => {
-      if (this.kfDragging && this.kfDragGhostFrame !== this.kfDragFromFrame) {
-        const sm = this.shapeManager;
-        const entry = this.mesh3dAllTracks.find(en => en.meshId === meshId);
-        const track: any[] = entry?.tracks?.[trackKey] ?? [];
-        const kf = track.find((k: any) => k.frame === frame);
-        if (kf && sm) {
-          const targetFrame = this.kfDragGhostFrame;
-          if (isCamera) {
-            sm.setCameraKeyframe3D(camKey(trackKey), targetFrame, kf.value, kf.easing);
-            if (!this.kfDragIsCopy) sm.removeCameraKeyframe3D(camKey(trackKey), frame);
-          } else {
-            sm.setMeshKeyframe3D(meshId, trackKey, targetFrame, kf.value, kf.easing);
-            if (!this.kfDragIsCopy) sm.removeMeshKeyframe3D(meshId, trackKey, frame);
-          }
-          this.keyframesChanged.emit();
-        }
-      }
+    const reset = () => {
       this.kfDragging = false;
       this.kfDragMeshId = '';
-      this.cdr.markForCheck();
     };
 
-    this._listenDrag(onMove, onUp);
+    this._beginPointerDrag(event, {
+      move: (e) => {
+        if (!this.kfDragging && Math.abs(e.clientX - x0) > DRAG_THRESHOLD_PX) {
+          this.kfDragging = true;
+          this._cancelLongPress();
+        }
+        if (this.kfDragging) {
+          const dx = e.clientX - x0;
+          this.kfDragGhostFrame = Math.max(1, Math.min(this.frameCount, frame + Math.round(dx / this.frameWidth)));
+          this.kfDragIsCopy = e.altKey;
+          this.cdr.detectChanges();   // outside the zone (_beginPointerDrag): re-render this view only
+        }
+      },
+      up: () => {
+        if (this.kfDragging && this.kfDragGhostFrame !== this.kfDragFromFrame) {
+          const sm = this.shapeManager;
+          const entry = this.mesh3dAllTracks.find(en => en.meshId === meshId);
+          const track: any[] = entry?.tracks?.[trackKey] ?? [];
+          const kf = track.find((k: any) => k.frame === frame);
+          if (kf && sm) {
+            const targetFrame = this.kfDragGhostFrame;
+            if (isCamera) {
+              sm.setCameraKeyframe3D(camKey(trackKey), targetFrame, kf.value, kf.easing);
+              if (!this.kfDragIsCopy) sm.removeCameraKeyframe3D(camKey(trackKey), frame);
+            } else {
+              sm.setMeshKeyframe3D(meshId, trackKey, targetFrame, kf.value, kf.easing);
+              if (!this.kfDragIsCopy) sm.removeMeshKeyframe3D(meshId, trackKey, frame);
+            }
+            this.keyframesChanged.emit();
+          }
+        } else if (!this.kfDragging) {
+          this._menuTarget = { kind: 'kf', meshId, trackKey, frame, isCamera };   // a tap: ⋯ opens its menu
+        }
+        reset();
+      },
+      cancel: reset,
+    });
   }
 
   closeEasingMenu(): void {
     this.showEasingMenu = false;
   }
 
-  /** Sync vertical scroll from the grid to the layers column */
+  // ── Label column <-> grid scroll (both ways: a finger can scroll either) ──
+
+  /** The grid scrolled: the label column follows. */
   onGridVerticalScroll(): void {
-    if (this.timelineLayersRef?.nativeElement && this.timelineGridRef?.nativeElement) {
-      this.timelineLayersRef.nativeElement.scrollTop = this.timelineGridRef.nativeElement.scrollTop;
-    }
+    const grid = this.timelineGridRef?.nativeElement;
+    const labels = this.timelineLayersRef?.nativeElement;
+    if (!grid || !labels) return;
+    // The grid's horizontal scrollbar shortens its viewport: pad the labels by as much so both reach the same end
+    const pad = Math.max(0, grid.offsetHeight - grid.clientHeight);
+    if (pad !== this._labelsPad) { this._labelsPad = pad; labels.style.paddingBottom = pad + 'px'; }
+    if (Math.abs(labels.scrollTop - grid.scrollTop) >= 1) labels.scrollTop = grid.scrollTop;
   }
+
+  /** The label column scrolled (a touch swipe on the names): the grid follows. */
+  onLayersScroll(): void {
+    const grid = this.timelineGridRef?.nativeElement;
+    const labels = this.timelineLayersRef?.nativeElement;
+    if (!grid || !labels) return;
+    if (Math.abs(labels.scrollTop - grid.scrollTop) >= 1) grid.scrollTop = labels.scrollTop;
+  }
+  private _labelsPad = -1;
 
   /** Forward mouse wheel on layers column to the grid so they scroll together */
   onLayersWheel(event: WheelEvent): void {
@@ -619,22 +750,166 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     private editorState: EditorStateService,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone,
+    private hostRef: ElementRef<HTMLElement>,
   ) {}
 
-  /** M4 (zone audit): a drag's document mousemove / mouseup listeners. The moves run OUTSIDE the zone — they update
-   *  this OnPush view with a local detectChanges (or through the service subjects, which refresh it the same way) —
-   *  and the mouseup enters it once, so the drop's change detection covers the whole app. */
-  private _listenDrag(onMove: (e: MouseEvent) => void, onUp: (e: MouseEvent) => void): void {
-    const up = (e: MouseEvent) => this.ngZone.run(() => onUp(e));
-    const move = (e: MouseEvent) => onMove(e);
-    this.ngZone.runOutsideAngular(() => {
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', function once(e: MouseEvent) {
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', once);
-        up(e);
+  // ── Pointer drags (mouse, touch, pen) ──────────────────────
+
+  private _drag: { id: number; cancel: () => void; cleanup: () => void } | null = null;
+  /** A touch drag owns the finger: the grid's touchmove listener cancels the native scroll while this is set. */
+  private _touchDragLock = false;
+
+  /** A drag from this pointerdown: pointer capture on the pressed element, then document pointermove / pointerup /
+   *  pointercancel for that pointer. The moves run OUTSIDE the zone (zone audit M4) — they update this OnPush view
+   *  with a local detectChanges (or through the service subjects, which refresh it the same way) — and the up /
+   *  cancel enters it once, so the drop's change detection covers the whole app. pointercancel (the browser took the
+   *  touch, e.g. as a scroll) runs `cancel` instead of `up`: nothing is dropped. */
+  private _beginPointerDrag(down: PointerEvent, h: { move: (e: PointerEvent) => void; up: (e: PointerEvent) => void; cancel: () => void }): void {
+    this._drag?.cancel();
+    const id = down.pointerId;
+    const el = down.currentTarget as Element | null;
+    try { el?.setPointerCapture?.(id); } catch { /* the pointer is gone already / a synthetic event */ }
+    const move = (e: PointerEvent) => { if (e.pointerId === id) h.move(e); };
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== id) return;
+      cleanup();
+      this.ngZone.run(() => {
+        if (e.type === 'pointercancel') h.cancel(); else h.up(e);
+        this.cdr.markForCheck();
       });
+    };
+    const cleanup = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      document.removeEventListener('pointercancel', end);
+      if (this._drag === rec) this._drag = null;
+    };
+    const rec = {
+      id,
+      cleanup,
+      cancel: () => { cleanup(); h.cancel(); this.cdr.markForCheck(); },
+    };
+    this._drag = rec;
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', end);
+      document.addEventListener('pointercancel', end);
     });
+  }
+
+  /** A menu / pinch takes over: drop any drag in progress (nothing is applied) and any pending long-press. */
+  private _cancelPendingGestures(): void {
+    this._drag?.cancel();
+    this._cancelLongPress();
+  }
+
+  // ── Long-press (touch / pen) = right-click ─────────────────
+
+  private _lp: { id: number; timer: ReturnType<typeof setTimeout>; cleanup: () => void } | null = null;
+  /** A long-press / hold-tooltip fired: the click that may follow the lift must not act (or close the menu it
+   *  opened). Cleared by the next press. */
+  private _swallowNextClick = false;
+
+  /** Touch / pen: a press held still for LONG_PRESS_MS (moving < LONG_PRESS_SLOP_PX) runs `open` at the press point —
+   *  the same menu the right-click opens. A mouse never long-presses (it has the right button). */
+  startLongPress(event: PointerEvent, open: (x: number, y: number) => void): void {
+    if (event.pointerType === 'mouse') return;
+    this._cancelLongPress();
+    const id = event.pointerId;
+    const x = event.clientX;
+    const y = event.clientY;
+    const move = (e: PointerEvent) => {
+      if (e.pointerId === id && Math.hypot(e.clientX - x, e.clientY - y) > LONG_PRESS_SLOP_PX) this._cancelLongPress();
+    };
+    const end = (e: PointerEvent) => { if (e.pointerId === id) this._cancelLongPress(); };
+    const cleanup = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      document.removeEventListener('pointercancel', end);
+    };
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', end);
+      document.addEventListener('pointercancel', end);
+      const timer = setTimeout(() => {
+        cleanup();
+        this._lp = null;
+        this.ngZone.run(() => {
+          this._drag?.cancel();
+          this._swallowNextClick = true;
+          open(x, y);
+          this.cdr.markForCheck();
+        });
+      }, LONG_PRESS_MS);
+      this._lp = { id, timer, cleanup };
+    });
+  }
+
+  private _cancelLongPress(): void {
+    if (!this._lp) return;
+    clearTimeout(this._lp.timer);
+    this._lp.cleanup();
+    this._lp = null;
+  }
+
+  /** Capture-phase click on the panel: swallow the click a long-press may leave behind. */
+  private readonly _onPanelClickCapture = (e: MouseEvent): void => {
+    if (this._swallowNextClick) {
+      this._swallowNextClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  };
+
+  // ── Press-and-hold tooltip (touch / pen) for the timeline's buttons ──
+
+  private _tip: { id: number; timer: ReturnType<typeof setTimeout> | null; x: number; y: number } | null = null;
+  private _tipHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Capture-phase pointerdown on the panel (outside the zone): a held button shows its title. */
+  private readonly _onPanelPointerDownCapture = (e: PointerEvent): void => {
+    this._swallowNextClick = false;   // a new press: its own click counts
+    if (e.pointerType === 'mouse') return;
+    const btn = (e.target as Element | null)?.closest?.('button');
+    const panel = this.timelinePanelRef?.nativeElement;
+    if (!btn || !panel || !panel.contains(btn)) return;
+    const text = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+    if (!text) return;
+    this._clearTipTimer();
+    const timer = setTimeout(() => {
+      if (!this._tip) return;
+      this._tip.timer = null;
+      const r = btn.getBoundingClientRect();
+      // In the zone (once per hold): the host's raised class (floatingOpen) is the parent view's binding
+      this.ngZone.run(() => {
+        this.holdTip = { text, x: Math.max(4, Math.min(r.left, window.innerWidth - 244)), y: r.top - 4 };
+        this._swallowNextClick = true;
+        this.cdr.markForCheck();
+      });
+    }, LONG_PRESS_MS);
+    this._tip = { id: e.pointerId, timer, x: e.clientX, y: e.clientY };
+  };
+
+  private readonly _onDocPointerMoveForTip = (e: PointerEvent): void => {
+    const t = this._tip;
+    if (t?.timer && e.pointerId === t.id && Math.hypot(e.clientX - t.x, e.clientY - t.y) > LONG_PRESS_SLOP_PX) this._clearTipTimer();
+  };
+
+  private readonly _onDocPointerEndForTip = (e: PointerEvent): void => {
+    if (!this._tip || e.pointerId !== this._tip.id) return;
+    this._clearTipTimer();
+    if (this.holdTip) {
+      if (this._tipHideTimer) clearTimeout(this._tipHideTimer);
+      this._tipHideTimer = setTimeout(() => {
+        this._tipHideTimer = null;
+        this.ngZone.run(() => { this.holdTip = null; this.cdr.markForCheck(); });
+      }, HOLD_TIP_LINGER_MS);
+    }
+  };
+
+  private _clearTipTimer(): void {
+    if (this._tip?.timer) clearTimeout(this._tip.timer);
+    this._tip = null;
   }
 
   /** Subscriptions are live (BehaviorSubjects replay synchronously in ngOnInit — no view refresh needed then). */
@@ -666,11 +941,53 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       this.animService.playRangeEnd$.subscribe(e => { this.playRangeEnd = e; this._refresh(); }),
     );
     this._ready = true;
+    // The height the user dragged the timeline to last time on this device
+    try {
+      const saved = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY));
+      if (saved >= TIMELINE_MIN_H) this.setPanelHeight(saved);
+    } catch { /* storage off */ }
+  }
+
+  /** Listeners that must stay outside the zone (per scroll / touchmove / pointer event) or be non-passive / capture. */
+  private _viewListeners: Array<() => void> = [];
+
+  ngAfterViewInit(): void {
+    const grid = this.timelineGridRef?.nativeElement;
+    const labels = this.timelineLayersRef?.nativeElement;
+    const panel = this.timelinePanelRef?.nativeElement;
+    const on = <K extends keyof HTMLElementEventMap>(el: HTMLElement | Document | undefined, type: K,
+      fn: (e: HTMLElementEventMap[K]) => void, opts: AddEventListenerOptions) => {
+      if (!el) return;
+      el.addEventListener(type, fn as EventListener, opts);
+      this._viewListeners.push(() => el.removeEventListener(type, fn as EventListener, opts));
+    };
+    this.ngZone.runOutsideAngular(() => {
+      on(grid, 'scroll', () => this.onGridVerticalScroll(), { passive: true });
+      on(labels, 'scroll', () => this.onLayersScroll(), { passive: true });
+      on(grid, 'touchstart', (e) => this.onGridTouchStart(e), { passive: true });
+      on(grid, 'touchmove', (e) => this.onGridTouchMove(e), { passive: false });
+      on(grid, 'touchend', (e) => this.onGridTouchEnd(e), { passive: true });
+      on(grid, 'touchcancel', (e) => this.onGridTouchEnd(e), { passive: true });
+      on(panel, 'pointerdown', this._onPanelPointerDownCapture, { capture: true });
+      on(panel, 'click', this._onPanelClickCapture, { capture: true });
+      on(document, 'pointermove', this._onDocPointerMoveForTip, { passive: true });
+      on(document, 'pointerup', this._onDocPointerEndForTip, { passive: true });
+      on(document, 'pointercancel', this._onDocPointerEndForTip, { passive: true });
+    });
+    this.onGridVerticalScroll();
   }
 
   ngOnDestroy(): void {
     this._ready = false;
     document.removeEventListener('keydown', this._onDocKeyDownOutsideZone);
+    this._viewListeners.forEach(off => off());
+    this._viewListeners = [];
+    this._drag?.cleanup();
+    this._cancelLongPress();
+    this._clearTipTimer();
+    if (this._tipHideTimer) clearTimeout(this._tipHideTimer);
+    // The overlays above the timeline go back to their default offset (no timeline now)
+    this._editorHost()?.style.removeProperty('--fm-timeline-h');
     this.subs.forEach(s => s.unsubscribe());
     // No timeline on screen = nothing to pause it from (animation turned off, the editor left): don't leave the clock
     // running in the background.
@@ -796,40 +1113,59 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     this.animService.setCurrentFrame(frame);
   }
 
-  onFrameHeaderMouseDown(event: MouseEvent): void {
-    if (event.button !== 0) return;
+  /** The frame under a viewport x (the grid's columns, scroll included), clamped to 1..frameCount. */
+  frameAtClientX(clientX: number): number {
+    const grid = this.timelineGridRef?.nativeElement;
+    const left = grid ? grid.getBoundingClientRect().left - grid.scrollLeft : 0;
+    return Math.max(1, Math.min(this.frameCount, Math.floor((clientX - left) / this.frameWidth) + 1));
+  }
+
+  /** Scrub along the frame numbers. Mouse: relative to where the press started (as before). Touch / pen: the frame
+   *  under the finger, so the playhead stays under it. */
+  onFrameHeaderPointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     const startX = event.clientX;
     const startFrame = this.currentFrame;
-    const onMove = (e: MouseEvent) => {
-      const dx = e.clientX - startX;
-      const frameDelta = Math.round(dx / this.frameWidth);
-      const newFrame = Math.max(1, Math.min(this.frameCount, startFrame + frameDelta));
-      this.animService.setCurrentFrame(newFrame);
-    };
-    // The drop: the zone entry in _listenDrag runs the change detection for the scrubbed frame / range
-    this._listenDrag(onMove, () => {});
+    const underFinger = event.pointerType !== 'mouse';
+    this._beginPointerDrag(event, {
+      move: (e) => {
+        const newFrame = underFinger
+          ? this.frameAtClientX(e.clientX)
+          : Math.max(1, Math.min(this.frameCount, startFrame + Math.round((e.clientX - startX) / this.frameWidth)));
+        if (newFrame !== this.currentFrame) this.animService.setCurrentFrame(newFrame);
+      },
+      // The drop: the zone entry in _beginPointerDrag runs the change detection for the scrubbed frame
+      up: () => {},
+      cancel: () => {},
+    });
   }
 
-  onPlayRangeHandleMouseDown(event: MouseEvent, which: 'start' | 'end'): void {
+  onPlayRangeHandlePointerDown(event: PointerEvent, which: 'start' | 'end'): void {
     event.stopPropagation();
-    if (event.button !== 0) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     const startX = event.clientX;
     const startValue = which === 'start' ? this.playRangeStart : this.playRangeEnd;
-    const onMove = (e: MouseEvent) => {
-      const dx = e.clientX - startX;
-      const frameDelta = Math.round(dx / this.frameWidth);
-      const newValue = Math.max(1, Math.min(this.frameCount, startValue + frameDelta));
-      if (which === 'start') {
-        this.animService.setPlayRange(Math.min(newValue, this.playRangeEnd - 1), this.playRangeEnd);
-      } else {
-        this.animService.setPlayRange(this.playRangeStart, Math.max(newValue, this.playRangeStart + 1));
-      }
-    };
-    // The drop: the zone entry in _listenDrag runs the change detection for the scrubbed frame / range
-    this._listenDrag(onMove, () => {});
+    const orig: [number, number] = [this.playRangeStart, this.playRangeEnd];
+    this._beginPointerDrag(event, {
+      move: (e) => {
+        const dx = e.clientX - startX;
+        const frameDelta = Math.round(dx / this.frameWidth);
+        const newValue = Math.max(1, Math.min(this.frameCount, startValue + frameDelta));
+        if (which === 'start') {
+          this.animService.setPlayRange(Math.min(newValue, this.playRangeEnd - 1), this.playRangeEnd);
+        } else {
+          this.animService.setPlayRange(this.playRangeStart, Math.max(newValue, this.playRangeStart + 1));
+        }
+      },
+      up: () => {},
+      // The browser took the touch: back to the range it had
+      cancel: () => {
+        if (this.playRangeStart !== orig[0] || this.playRangeEnd !== orig[1]) this.animService.setPlayRange(orig[0], orig[1]);
+      },
+    });
   }
 
-  // ── Timeline zoom (ctrl + scroll) ─────────────────────────
+  // ── Timeline zoom (ctrl + scroll, or a two-finger pinch on the grid) ──
 
   onTimelineWheel(event: WheelEvent): void {
     if (event.ctrlKey) {
@@ -837,6 +1173,44 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       this.frameWidth = Math.max(this.minFrameWidth, Math.min(this.maxFrameWidth,
         this.frameWidth - Math.sign(event.deltaY) * 4));
     }
+  }
+
+  private _pinch: { d0: number; fw0: number } | null = null;
+
+  private static _touchDist(e: PinchTouchEvent): number {
+    const a = e.touches[0];
+    const b = e.touches[1];
+    return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+  }
+
+  /** (Grid touchstart, outside the zone.) A second finger starts a pinch: any press / drag the first one began is
+   *  dropped. */
+  onGridTouchStart(e: PinchTouchEvent): void {
+    if (e.touches.length < 2) return;
+    if (this._drag || this._lp) this.ngZone.run(() => { this._cancelPendingGestures(); this.cdr.markForCheck(); });
+    this._pinch = { d0: AnimationTimelineComponent._touchDist(e), fw0: this.frameWidth };
+  }
+
+  /** (Grid touchmove, non-passive, outside the zone.) A pinch sets the frame width, keeping the frame between the
+   *  fingers in place; a touch drag (cel / handle) keeps the browser from also scrolling the grid. */
+  onGridTouchMove(e: PinchTouchEvent): void {
+    if (this._pinch && e.touches.length >= 2) {
+      if (e.cancelable !== false) e.preventDefault?.();
+      const fw = pinchFrameWidth(this._pinch.fw0, this._pinch.d0, AnimationTimelineComponent._touchDist(e), this.minFrameWidth, this.maxFrameWidth);
+      if (fw === this.frameWidth) return;
+      const grid = this.timelineGridRef?.nativeElement;
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - (grid ? grid.getBoundingClientRect().left : 0);
+      const anchor = grid ? (grid.scrollLeft + midX) / this.frameWidth : 0;
+      this.frameWidth = fw;
+      this.cdr.detectChanges();
+      if (grid) grid.scrollLeft = Math.max(0, anchor * fw - midX);
+      return;
+    }
+    if (this._touchDragLock && e.cancelable !== false) e.preventDefault?.();
+  }
+
+  onGridTouchEnd(e: PinchTouchEvent): void {
+    if (e.touches.length < 2) this._pinch = null;
   }
 
   // ── Cel interactions ──────────────────────────────────────
@@ -871,55 +1245,154 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     }
   }
 
+  /** A tap / click on a cel cell: jump there, and it becomes the selected cel (outlined; ⋯ and the cel buttons act on
+   *  its layer). */
+  onCellClick(layer: TimelineLayerInfo, frame: number): void {
+    this.onFrameClick(frame);
+    this.selectedCellLayerId = layer.id;
+    this.selectedCellFrame = frame;
+    this._menuTarget = { kind: 'cel', layerId: layer.id, frame };
+  }
+
+  /** A tap / click on a layer's name or static bar: ⋯ opens that layer's menu. */
+  onLayerTap(layer: TimelineLayerInfo): void {
+    this._menuTarget = { kind: 'layer', layerId: layer.id };
+  }
+
   // ── Context menu ──────────────────────────────────────────
 
   /** Right-click on a layer label (works for both static and animated layers) */
   onLayerLabelContextMenu(event: MouseEvent, layer: TimelineLayerInfo): void {
     event.preventDefault();
     event.stopPropagation();
-    this.contextMenuX = event.clientX;
-    this.contextMenuY = event.clientY;
-    this.contextMenuFlipUp = event.clientY > window.innerHeight / 2;
-    this.contextMenuLayerId = layer.id;
-    this.contextMenuFrame = this.currentFrame;
-    this.contextMenuCelId = '';
-    this.contextMenuLayerAnimated = layer.animated;
-    this.contextMenuVisible = true;
+    this._openLayerMenuAt(event.clientX, event.clientY, layer, layer.animated);
   }
 
   /** Right-click on a static (non-animated) layer's bar */
   onStaticBarContextMenu(event: MouseEvent, layer: TimelineLayerInfo): void {
     event.preventDefault();
     event.stopPropagation();
-    this.contextMenuX = event.clientX;
-    this.contextMenuY = event.clientY;
-    this.contextMenuFlipUp = event.clientY > window.innerHeight / 2;
-    this.contextMenuLayerId = layer.id;
-    this.contextMenuFrame = this.currentFrame;
-    this.contextMenuCelId = '';
-    this.contextMenuLayerAnimated = false;
-    this.contextMenuVisible = true;
+    this._openLayerMenuAt(event.clientX, event.clientY, layer, false);
+  }
+
+  /** Touch / pen: long-press a layer label = its right-click menu. */
+  onLayerLabelPointerDown(event: PointerEvent, layer: TimelineLayerInfo): void {
+    this.startLongPress(event, (x, y) => this._openLayerMenuAt(x, y, layer, layer.animated));
+  }
+
+  /** Touch / pen: long-press a static layer's bar = its right-click menu ("Make Animated"). */
+  onStaticBarPointerDown(event: PointerEvent, layer: TimelineLayerInfo): void {
+    this.startLongPress(event, (x, y) => this._openLayerMenuAt(x, y, layer, false));
   }
 
   /** Right-click on an animated layer's per-frame cell */
   onCellContextMenu(event: MouseEvent, layer: TimelineLayerInfo, frame: number): void {
     event.preventDefault();
     event.stopPropagation();
-    this.contextMenuX = event.clientX;
-    this.contextMenuY = event.clientY;
-    this.contextMenuFlipUp = event.clientY > window.innerHeight / 2;
+    this._openCelMenuAt(event.clientX, event.clientY, layer, frame);
+  }
+
+  private _openLayerMenuAt(x: number, y: number, layer: TimelineLayerInfo, animated: boolean): void {
+    this._cancelPendingGestures();
+    this._menuTarget = { kind: 'layer', layerId: layer.id };
+    this._placeContextMenu(x, y);
+    this.contextMenuLayerId = layer.id;
+    this.contextMenuFrame = this.currentFrame;
+    this.contextMenuCelId = '';
+    this.contextMenuLayerAnimated = animated;
+    this.contextMenuVisible = true;
+    this._clampMenusSoon();
+  }
+
+  private _openCelMenuAt(x: number, y: number, layer: TimelineLayerInfo, frame: number): void {
+    this._cancelPendingGestures();
+    this._menuTarget = { kind: 'cel', layerId: layer.id, frame };
+    this._placeContextMenu(x, y);
     this.contextMenuLayerId = layer.id;
     this.contextMenuFrame = frame;
     const cel = this.getCelAtFrame(layer, frame);
     this.contextMenuCelId = cel?.id ?? '';
     this.contextMenuLayerAnimated = layer.animated;
     this.contextMenuVisible = true;
+    this._clampMenusSoon();
+  }
+
+  private _placeContextMenu(x: number, y: number): void {
+    this.contextMenuX = x;
+    this.contextMenuY = y;
+    this.contextMenuFlipUp = y > window.innerHeight / 2;
+    this.showEasingMenu = false;
+    this.showTrackMenu = false;
+  }
+
+  /** The transport bar's ⋯: the menu a right-click / long-press opens, for the cel / keyframe / layer / track tapped
+   *  last (the current frame of the first animated layer when nothing was). */
+  openSelectionMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    const r = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect?.();
+    const x = r ? r.left : event.clientX;
+    const y = r ? r.top : event.clientY;
+    const t = this._resolveMenuTarget();
+    if (!t) return;
+    if (t.kind === 'kf') {
+      this._openKfMenuAt(x, y, t.meshId, t.trackKey, t.frame, t.isCamera);
+    } else if (t.kind === 'track') {
+      this._openTrackMenuAt(x, y, t.meshId, t.trackKey, t.isCamera);
+    } else {
+      const layer = this.layers.find(l => l.id === t.layerId)!;
+      if (t.kind === 'cel' && layer.animated) this._openCelMenuAt(x, y, layer, t.frame);
+      else this._openLayerMenuAt(x, y, layer, layer.animated);
+    }
+  }
+
+  /** The ⋯ target, if it still exists; else the first animated layer at the current frame; else the first layer. */
+  private _resolveMenuTarget(): MenuTarget | null {
+    const t = this._menuTarget;
+    if (t) {
+      if ((t.kind === 'cel' || t.kind === 'layer') && this.layers.some(l => l.id === t.layerId)) return t;
+      if (t.kind === 'kf' || t.kind === 'track') {
+        const entry = this.mesh3dAllTracks.find(e => e.meshId === t.meshId);
+        const track: Array<{ frame: number }> | undefined = entry?.tracks?.[t.trackKey];
+        if (entry && (t.kind === 'track' || track?.some(k => k.frame === t.frame))) return t;
+      }
+    }
+    const anim = this.layers.find(l => l.animated);
+    if (anim) return { kind: 'cel', layerId: anim.id, frame: this.currentFrame };
+    return this.layers[0] ? { kind: 'layer', layerId: this.layers[0].id } : null;
   }
 
   closeContextMenu(): void {
     this.contextMenuVisible = false;
     this.showEasingMenu = false;
     this.showTrackMenu = false;
+  }
+
+  /** Keep the open menus inside the viewport (x and y), measured once they have rendered. */
+  private _clampMenusSoon(): void {
+    if (typeof requestAnimationFrame !== 'function') return;
+    this.ngZone.runOutsideAngular(() => requestAnimationFrame(() => this.clampOpenMenus()));
+  }
+
+  clampOpenMenus(): void {
+    const host = this.hostRef?.nativeElement;
+    if (!host) return;
+    let changed = false;
+    for (const el of Array.from(host.querySelectorAll<HTMLElement>('.ctx-menu[data-menu]'))) {
+      const r = el.getBoundingClientRect();
+      const pos = clampMenuToViewport(r.left, r.top, r.width, r.height, window.innerWidth, window.innerHeight);
+      if (Math.abs(pos.left - r.left) < 0.5 && Math.abs(pos.top - r.top) < 0.5) continue;
+      if (el.dataset['menu'] === 'track') {
+        this.trackMenuX = pos.left;
+        this.trackMenuY = pos.top;
+        this.trackMenuFlipUp = false;
+      } else {
+        this.contextMenuX = pos.left;
+        this.contextMenuY = pos.top;
+        this.contextMenuFlipUp = false;
+      }
+      changed = true;
+    }
+    if (changed) this.cdr.detectChanges();
   }
 
   ctxNewCel(): void {
@@ -971,31 +1444,99 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     this.showDuplicatePrompt = false;
   }
 
+  /** The cel the open menu is for (its hold length shows in the menu). */
+  get contextCel(): CelInfo | null {
+    if (!this.contextMenuCelId) return null;
+    return this.layers.find(l => l.id === this.contextMenuLayerId)?.cels.find(c => c.id === this.contextMenuCelId) ?? null;
+  }
+
+  /** The menu's Hold − / +: one frame shorter / longer (never into the next drawing, never past the last frame). The
+   *  menu stays open so it can be tapped again. */
+  ctxHoldDelta(event: Event, delta: number): void {
+    event.stopPropagation();
+    const layer = this.layers.find(l => l.id === this.contextMenuLayerId);
+    const cel = this.contextCel;
+    if (!layer || !cel) return;
+    const next = layer.cels.filter(c => c.frame > cel.frame).sort((a, b) => a.frame - b.frame)[0];
+    const max = next ? next.frame - cel.frame : Math.max(1, this.frameCount - cel.frame + 1);
+    const dur = Math.max(1, Math.min(max, cel.duration + delta));
+    if (dur !== cel.duration) this.animService.setCelDuration(layer.id, cel.id, dur);
+  }
+
+  /** "Move to Frame…": a frame-number prompt (like Duplicate to Frame…), then moveCel. */
   ctxMoveCel(): void {
-    if (!this.contextMenuCelId) { this.closeContextMenu(); return; }
-    // Start a drag from context menu
-    this.draggingCelId = this.contextMenuCelId;
-    this.draggingLayerId = this.contextMenuLayerId;
-    this.draggingFromFrame = this.contextMenuFrame;
-    this.isDragging = true;
-    this.isDragSwap = false;
-    this.closeContextMenu();
+    this._openCelFramePrompt('move');
   }
 
+  /** "Swap with…": a frame-number prompt (the next drawing's frame by default), then swapCels with the cel there. */
   ctxSwapCel(): void {
+    this._openCelFramePrompt('swap');
+  }
+
+  private _openCelFramePrompt(mode: 'move' | 'swap'): void {
+    this._clearCelDrag();
     if (!this.contextMenuCelId) { this.closeContextMenu(); return; }
-    this.draggingCelId = this.contextMenuCelId;
-    this.draggingLayerId = this.contextMenuLayerId;
-    this.draggingFromFrame = this.contextMenuFrame;
-    this.isDragging = true;
-    this.isDragSwap = true;
+    const layer = this.layers.find(l => l.id === this.contextMenuLayerId);
+    const cel = this.contextCel;
+    let target = this.contextMenuFrame + 1;
+    if (mode === 'swap' && layer && cel) {
+      const others = layer.cels.filter(c => c.id !== cel.id).sort((a, b) => a.frame - b.frame);
+      const next = others.find(c => c.frame > cel.frame) ?? others[others.length - 1];
+      if (next) target = next.frame;
+    }
+    this.celFramePromptMode = mode;
+    this.celFramePromptTarget = Math.max(1, Math.min(this.frameCount, target));
+    this.showCelFramePrompt = true;
     this.closeContextMenu();
   }
 
-  // ── Cel drag (mousedown on cel) ───────────────────────────
+  /** Swap: the other cel at the prompt's frame (null = nothing to swap with there — the button is disabled). */
+  get celFramePromptSwapTarget(): CelInfo | null {
+    const layer = this.layers.find(l => l.id === this.contextMenuLayerId);
+    if (!layer) return null;
+    const c = this.getCelAtFrame(layer, Math.round(+this.celFramePromptTarget));
+    return c && c.id !== this.contextMenuCelId ? c : null;
+  }
 
-  onCelDragStart(event: MouseEvent, layer: TimelineLayerInfo, frame: number): void {
-    if (event.button !== 0) return;
+  confirmCelFrameAction(): void {
+    const layerId = this.contextMenuLayerId;
+    const celId = this.contextMenuCelId;
+    if (layerId && celId) {
+      if (this.celFramePromptMode === 'move') {
+        const target = Math.max(1, Math.min(this.frameCount, Math.round(+this.celFramePromptTarget)));
+        this.animService.moveCel(layerId, celId, target);
+      } else {
+        const other = this.celFramePromptSwapTarget;
+        if (other) this.animService.swapCels(layerId, celId, other.id);
+      }
+    }
+    this.showCelFramePrompt = false;
+  }
+
+  cancelCelFramePrompt(): void {
+    this.showCelFramePrompt = false;
+  }
+
+  /** A target-frame field's −/+ (touch: the on-screen keyboard can cover the field). */
+  stepFrame(value: number, delta: number): number {
+    return Math.max(1, Math.min(this.frameCount, Math.round(+value || 1) + delta));
+  }
+
+  private _clearCelDrag(): void {
+    this.isDragging = false;
+    this.isDragSwap = false;
+    this.draggingCelId = '';
+    this._touchDragLock = false;
+  }
+
+  // ── Cel drag (press on a cel) ─────────────────────────────
+
+  /** Press on a cel cell. Mouse / pen: a drag moves the drawing once it has moved 4 px (Alt = swap), as before.
+   *  Touch: the drag needs a CEL_TOUCH_DRAG_DELAY_MS press first (the cel lights up), so a quick swipe still scrolls
+   *  the grid. Touch / pen: a still LONG_PRESS_MS press opens the cel menu instead. */
+  onCelPointerDown(event: PointerEvent, layer: TimelineLayerInfo, frame: number): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    this.startLongPress(event, (x, y) => this._openCelMenuAt(x, y, layer, frame));
     const cel = this.getCelAtFrame(layer, frame);
     if (!cel || !layer.animated) return;
 
@@ -1004,47 +1545,77 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
     this.draggingFromFrame = frame;
     this.dragGhostFrame = frame;
     this.isDragSwap = event.altKey;
+    this.isDragging = false;
 
-    const onMove = (e: MouseEvent) => {
-      if (!this.isDragging && Math.abs(e.clientX - event.clientX) > 4) {
-        this.isDragging = true;
-      }
-      if (this.isDragging) {
-        const dx = e.clientX - event.clientX;
-        this.dragGhostFrame = Math.max(1, Math.min(this.frameCount, this.draggingFromFrame + Math.round(dx / this.frameWidth)));
-        this.isDragSwap = e.altKey;
-        this.cdr.detectChanges();   // outside the zone (_listenDrag): re-render this view only
-      }
+    const x0 = event.clientX;
+    const y0 = event.clientY;
+    const touch = event.pointerType === 'touch';
+    // Pen: immediate like the mouse; the touchmove lock keeps an Android stylus from panning the grid instead
+    this._touchDragLock = event.pointerType === 'pen';
+    let armed = !touch;
+    let armTimer: ReturnType<typeof setTimeout> | null = null;
+    if (touch) {
+      this.ngZone.runOutsideAngular(() => {
+        armTimer = setTimeout(() => {
+          armTimer = null;
+          armed = true;
+          this._touchDragLock = true;
+          this.isDragging = true;      // the cel lights up: it is picked up
+          this.cdr.detectChanges();
+        }, CEL_TOUCH_DRAG_DELAY_MS);
+      });
+    }
+    const finish = () => {
+      if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+      this._clearCelDrag();
     };
 
-    const onUp = (e: MouseEvent) => {
-      if (this.isDragging && this.dragGhostFrame !== this.draggingFromFrame) {
-        if (this.isDragSwap) {
-          // Swap with whatever cel is at target frame
-          const targetCel = this.getCelAtFrame(
-            this.layers.find(l => l.id === this.draggingLayerId)!,
-            this.dragGhostFrame
-          );
-          if (targetCel) {
-            this.animService.swapCels(this.draggingLayerId, this.draggingCelId, targetCel.id);
-          }
-        } else {
-          this.animService.moveCel(this.draggingLayerId, this.draggingCelId, this.dragGhostFrame);
+    this._beginPointerDrag(event, {
+      move: (e) => {
+        if (!armed) {
+          // A swipe before the hold: the browser scrolls the grid (a pointercancel follows); never arm this press
+          if (armTimer && Math.hypot(e.clientX - x0, e.clientY - y0) > LONG_PRESS_SLOP_PX) { clearTimeout(armTimer); armTimer = null; }
+          return;
         }
-      }
-      this.isDragging = false;
-      this.draggingCelId = '';
-      this.cdr.markForCheck();
-    };
-
-    this._listenDrag(onMove, onUp);
+        if (!this.isDragging && Math.abs(e.clientX - x0) > DRAG_THRESHOLD_PX) this.isDragging = true;
+        if (this.isDragging) {
+          const ghost = Math.max(1, Math.min(this.frameCount, this.draggingFromFrame + Math.round((e.clientX - x0) / this.frameWidth)));
+          if (ghost !== this.draggingFromFrame) {
+            this._cancelLongPress();
+            this.contextMenuVisible = false;   // the OS long-press menu event may have opened it
+          }
+          this.dragGhostFrame = ghost;
+          this.isDragSwap = e.altKey;
+          this.cdr.detectChanges();   // outside the zone (_beginPointerDrag): re-render this view only
+        }
+      },
+      up: () => {
+        if (this.isDragging && this.dragGhostFrame !== this.draggingFromFrame) {
+          if (this.isDragSwap) {
+            // Swap with whatever cel is at target frame
+            const targetCel = this.getCelAtFrame(
+              this.layers.find(l => l.id === this.draggingLayerId)!,
+              this.dragGhostFrame
+            );
+            if (targetCel) {
+              this.animService.swapCels(this.draggingLayerId, this.draggingCelId, targetCel.id);
+            }
+          } else {
+            this.animService.moveCel(this.draggingLayerId, this.draggingCelId, this.dragGhostFrame);
+          }
+        }
+        finish();
+      },
+      cancel: finish,
+    });
   }
 
   // ── Hold duration drag (right edge of cel block) ──────────
 
-  onDurationDragStart(event: MouseEvent, layer: TimelineLayerInfo, cel: CelInfo): void {
+  onDurationPointerDown(event: PointerEvent, layer: TimelineLayerInfo, cel: CelInfo): void {
     event.stopPropagation();
     event.preventDefault();
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     this.durationDragging = true;
     this.durationDragCelId = cel.id;
     this.durationDragLayerId = layer.id;
@@ -1057,31 +1628,106 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
       .sort((a, b) => a.frame - b.frame);
     const nextCelStart = sortedCels.length > 0 ? sortedCels[0].frame : Infinity;
     const maxDuration = nextCelStart - cel.frame; // can't overlap the next cel
+    let current = cel.duration;
 
-    const onMove = (e: MouseEvent) => {
-      const dx = e.clientX - this.durationDragStart;
-      const frameDelta = Math.round(dx / this.frameWidth);
-      const newDuration = Math.max(1, Math.min(this.durationDragOriginal + frameDelta, maxDuration));
-      this.animService.setCelDuration(this.durationDragLayerId, this.durationDragCelId, newDuration);
-    };
+    this._beginPointerDrag(event, {
+      move: (e) => {
+        const dx = e.clientX - this.durationDragStart;
+        const frameDelta = Math.round(dx / this.frameWidth);
+        const newDuration = Math.max(1, Math.min(this.durationDragOriginal + frameDelta, maxDuration));
+        if (newDuration === current) return;
+        current = newDuration;
+        this.animService.setCelDuration(this.durationDragLayerId, this.durationDragCelId, newDuration);
+      },
+      up: () => { this.durationDragging = false; },
+      // The browser took the touch: back to the length it had
+      cancel: () => {
+        this.durationDragging = false;
+        if (current !== this.durationDragOriginal) this.animService.setCelDuration(layer.id, cel.id, this.durationDragOriginal);
+      },
+    });
+  }
 
-    const onUp = () => {
-      this.durationDragging = false;
-      this.cdr.markForCheck();
-    };
+  // ── Cel buttons (touch has no F6 / Ctrl+D / Delete) ──────
 
-    this._listenDrag(onMove, onUp);
+  /** The layer the cel keys / buttons act on: the selected cel's (if animated), else the first animated layer. */
+  private _activeAnimLayer(): TimelineLayerInfo | undefined {
+    const sel = this.layers.find(l => l.id === this.selectedCellLayerId);
+    return sel?.animated ? sel : this.layers.find(l => l.animated);
   }
 
   /** Duplicate current cel to next frame and advance (Ctrl+D) */
   duplicateAndAdvance(): void {
-    const layer = this.layers.find(l => l.animated);
+    const layer = this._activeAnimLayer();
     if (!layer) return;
     const cel = this.getCelAtFrame(layer, this.currentFrame);
     if (!cel) return;
     const targetFrame = this.currentFrame + 1;
     this.animService.duplicateCel(layer.id, cel.id, targetFrame);
     this.animService.setCurrentFrame(targetFrame);
+    this._followSelection(layer, targetFrame);
+  }
+
+  /** Next frame + a new blank cel there (F6). */
+  newCelOnNextFrame(): void {
+    const layer = this._activeAnimLayer();
+    this.goToNextFrame();
+    this.animService.addCelAtCurrentFrame(layer?.id ?? '');
+    if (layer) this._followSelection(layer, this.animService.getCurrentFrame());
+  }
+
+  /** Delete the drawing on the current frame (Delete). */
+  deleteCurrentCel(): void {
+    const layer = this._activeAnimLayer();
+    if (!layer) return;
+    const cel = this.getCelAtFrame(layer, this.currentFrame);
+    if (cel) this.animService.deleteCel(layer.id, cel.id);
+  }
+
+  /** The selection outline moves with the frame a cel key / button just went to (on the selected layer only). */
+  private _followSelection(layer: TimelineLayerInfo, frame: number): void {
+    if (this.selectedCellLayerId !== layer.id) return;
+    this.selectedCellFrame = frame;
+    this._menuTarget = { kind: 'cel', layerId: layer.id, frame };
+  }
+
+  // ── Resizable height (drag the top edge) ───────────────────
+
+  private get _maxPanelHeight(): number {
+    return Math.max(TIMELINE_MIN_H, Math.round(window.innerHeight * 0.6));
+  }
+
+  onResizePointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const panel = this.timelinePanelRef?.nativeElement;
+    const h0 = panel ? panel.getBoundingClientRect().height : (this.panelHeight ?? 200);
+    const before = this.panelHeight;
+    const y0 = event.clientY;
+    this._beginPointerDrag(event, {
+      move: (e) => { this.setPanelHeight(h0 + (y0 - e.clientY)); this.cdr.detectChanges(); },
+      up: () => {
+        try { if (this.panelHeight != null) localStorage.setItem(TIMELINE_HEIGHT_KEY, String(this.panelHeight)); } catch { /* storage off */ }
+      },
+      cancel: () => { this.setPanelHeight(before); },
+    });
+  }
+
+  /** The panel's height (clamped; null = back to the stylesheet's), mirrored to --fm-timeline-h on the editor so the
+   *  overlays that sit above the timeline (zoom box, mode panels, right column) follow it. */
+  setPanelHeight(h: number | null): void {
+    this.panelHeight = h == null ? null : Math.round(Math.max(TIMELINE_MIN_H, Math.min(this._maxPanelHeight, h)));
+    const host = this._editorHost();
+    if (!host) return;
+    if (this.panelHeight == null) host.style.removeProperty('--fm-timeline-h');
+    else host.style.setProperty('--fm-timeline-h', (this.panelHeight + TIMELINE_BORDER_PX) + 'px');
+  }
+
+  /** Where --fm-timeline-h is declared (illustration.component.scss :host). */
+  private _editorHost(): HTMLElement | null {
+    const el = this.hostRef?.nativeElement;
+    return (el?.closest?.('app-illustration') as HTMLElement | null) ?? null;
   }
 
   ctxToggleLayerAnimated(): void {
@@ -1233,23 +1879,16 @@ export class AnimationTimelineComponent implements OnInit, OnDestroy, DoCheck {
         // Delete with a 3D selection in the 3D view is the editor's (routeDelete: the selected 3D items) — it must not
         // ALSO delete the current raster cel.
         if (this.editorState.scene3dPanelVisible && this.editorState.scene3dSelectedMeshId) break;
-        const layer = this.layers.find(l => l.animated);
-        if (layer) {
-          const cel = this.getCelAtFrame(layer, this.currentFrame);
-          if (cel) {
-            this.animService.deleteCel(layer.id, cel.id);
-          }
-        }
+        this.deleteCurrentCel();
         break;
       }
       case 'F5':
         event.preventDefault();
-        this.animService.addCelAtCurrentFrame(this.layers.find(l => l.animated)?.id ?? '');
+        this.animService.addCelAtCurrentFrame(this._activeAnimLayer()?.id ?? '');
         break;
       case 'F6':
         event.preventDefault();
-        this.goToNextFrame();
-        this.animService.addCelAtCurrentFrame(this.layers.find(l => l.animated)?.id ?? '');
+        this.newCelOnNextFrame();
         break;
       case 'F7':
         event.preventDefault();

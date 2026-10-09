@@ -2,7 +2,11 @@
      Animation Timeline — bottom panel
      ═══════════════════════════════════════════════════════════ -->
 
-<div class="timeline-panel" (click)="closeContextMenu(); closeEasingMenu(); closeTrackMenu()">
+<div class="timeline-panel" #timelinePanel [style.height.px]="panelHeight"
+     (click)="closeContextMenu(); closeEasingMenu(); closeTrackMenu()">
+
+  <!-- Drag the top edge to make the timeline taller / shorter (remembered on this device) -->
+  <div class="tl-resize-handle" aria-label="Resize the timeline" (pointerdown)="onResizePointerDown($event)"></div>
 
   <!-- ── Layer labels (left column) ──────────────────────── -->
   <div class="timeline-layers" #timelineLayers (wheel)="onLayersWheel($event)">
@@ -12,9 +16,11 @@
          [class.animated]="layer.animated"
          [class.static]="!layer.animated"
          (contextmenu)="onLayerLabelContextMenu($event, layer)"
+         (pointerdown)="onLayerLabelPointerDown($event, layer)"
+         (click)="onLayerTap(layer)"
          [title]="layer.animated
-           ? 'Animated: this layer has separate drawings per frame. Right-click for options.'
-           : 'Static: this layer shows the same drawing on every frame. Right-click to make animated.'">
+           ? 'Animated: this layer has separate drawings per frame. Right-click or long-press for options.'
+           : 'Static: this layer shows the same drawing on every frame. Right-click or long-press to make animated.'">
       <span class="layer-type-icon">{{ layer.animated ? 'A' : '–' }}</span>
       <span class="layer-name">{{ layer.name }}</span>
     </div>
@@ -28,8 +34,9 @@
       <ng-container *ngIf="!isMesh3dCollapsed(entry.meshId)">
         <div *ngFor="let def of getTrackDefsForEntry(entry); trackBy: trackByDefKey" class="tl-3d-track-label"
              [style.border-left-color]="def.color"
-             [title]="def.label + ' keyframe track — right-click to clear'"
-             (contextmenu)="onKfTrackLabelContextMenu($event, entry.meshId, def.key, !!entry.isCamera)">
+             [title]="def.label + ' keyframe track — right-click or long-press to clear'"
+             (contextmenu)="onKfTrackLabelContextMenu($event, entry.meshId, def.key, !!entry.isCamera)"
+             (pointerdown)="onTrackLabelPointerDown($event, entry.meshId, def.key, !!entry.isCamera)">
           {{ def.label }}
         </div>
       </ng-container>
@@ -41,6 +48,7 @@
         <span class="layer-name">Cameras</span>
         <button class="tl-cam-preview-btn" [class.active]="cameraPreviewOn"
                 (click)="previewToggled.emit(); $event.stopPropagation()"
+                aria-label="Preview camera cuts"
                 title="Preview render through camera cuts">▶</button>
       </div>
       <div *ngFor="let cam of cameraNodes; trackBy: trackById" class="tl-3d-track-label"
@@ -50,14 +58,13 @@
     </ng-container>
   </div>
 
-  <!-- ── Timeline grid (scrollable) ──────────────────────── -->
+  <!-- ── Timeline grid (scrollable; scroll / touch listeners are attached in ngAfterViewInit, outside the zone) ── -->
   <div class="timeline-grid-wrapper"
        #timelineGrid
-       (scroll)="onGridVerticalScroll()"
        (wheel)="onTimelineWheel($event)">
 
     <!-- Frame numbers header row -->
-    <div class="tl-frame-header" (mousedown)="onFrameHeaderMouseDown($event)">
+    <div class="tl-frame-header" (pointerdown)="onFrameHeaderPointerDown($event)">
       <div *ngFor="let f of frames; trackBy: trackByIndex"
            class="tl-frame-number"
            [class.current]="f === currentFrame"
@@ -70,11 +77,11 @@
       <!-- Play range drag handles -->
       <div class="range-handle range-handle-start"
            [style.left.px]="(playRangeStart - 1) * frameWidth"
-           (mousedown)="onPlayRangeHandleMouseDown($event, 'start')"
+           (pointerdown)="onPlayRangeHandlePointerDown($event, 'start')"
            title="Drag to set play range start"></div>
       <div class="range-handle range-handle-end"
            [style.left.px]="playRangeEnd * frameWidth - 6"
-           (mousedown)="onPlayRangeHandleMouseDown($event, 'end')"
+           (pointerdown)="onPlayRangeHandlePointerDown($event, 'end')"
            title="Drag to set play range end"></div>
     </div>
 
@@ -85,7 +92,9 @@
       <div *ngIf="!row.layer.animated" class="tl-static-bar"
            [style.width.px]="frameCount * frameWidth"
            (contextmenu)="onStaticBarContextMenu($event, row.layer)"
-           title="This layer shows the same image on every frame. Right-click to convert to animated.">
+           (pointerdown)="onStaticBarPointerDown($event, row.layer)"
+           (click)="onLayerTap(row.layer)"
+           title="This layer shows the same image on every frame. Right-click or long-press to convert to animated.">
       </div>
 
       <!-- Animated layer: per-frame cells -->
@@ -96,11 +105,12 @@
              [class.cel-start]="c.start"
              [class.cel-hold]="c.hold"
              [class.blank]="c.blank"
+             [class.tl-selected]="c.f === selectedCellFrame && row.layer.id === selectedCellLayerId"
              [style.width.px]="frameWidth"
-             (click)="onFrameClick(c.f)"
+             (click)="onCellClick(row.layer, c.f)"
              (dblclick)="onCellDoubleClick(row.layer, c.f)"
              (contextmenu)="onCellContextMenu($event, row.layer, c.f)"
-             (mousedown)="onCelDragStart($event, row.layer, c.f)"
+             (pointerdown)="onCelPointerDown($event, row.layer, c.f)"
              [class.drag-ghost]="isDragging && draggingLayerId === row.layer.id && dragGhostFrame === c.f"
              [class.drag-swap]="isDragging && isDragSwap && draggingLayerId === row.layer.id && dragGhostFrame === c.f"
              [title]="c.title">
@@ -112,7 +122,7 @@
           <!-- Duration drag handle at the last frame of each cel -->
           <span *ngIf="c.end"
                 class="duration-handle"
-                (mousedown)="onDurationDragStart($event, row.layer, c.cel!)"
+                (pointerdown)="onDurationPointerDown($event, row.layer, c.cel!)"
                 title="Drag to change how many frames this drawing is held for.">┃</span>
         </div>
       </ng-container>
@@ -138,13 +148,13 @@
                [class.current]="f === currentFrame"
                [style.width.px]="frameWidth"
                (click)="onFrameClick(f)"
-               [title]="t.keys.has(f) ? t.def.label + ' keyframe at frame ' + f + ' — right-click to change easing' : ''">
+               [title]="t.keys.has(f) ? t.def.label + ' keyframe at frame ' + f + ' — right-click or long-press to change easing' : ''">
             <span *ngIf="t.keys.has(f)"
                   class="kf-diamond"
                   [class.kf-drag-source]="kfDragging && kfDragMeshId === row.entry.meshId && kfDragTrackKey === t.def.key && kfDragFromFrame === f"
                   [class.kf-selected]="isKfSelected(row.entry.meshId, t.def.key, f)"
                   [style.color]="t.def.color"
-                  (mousedown)="onKfDiamondMouseDown($event, row.entry.meshId, t.def.key, f, !!row.entry.isCamera)"
+                  (pointerdown)="onKfDiamondPointerDown($event, row.entry.meshId, t.def.key, f, !!row.entry.isCamera)"
                   (contextmenu)="onKfDiamondContextMenu($event, row.entry.meshId, t.def.key, f, !!row.entry.isCamera)">&#x25C6;</span>
             <span *ngIf="kfDragging && kfDragMeshId === row.entry.meshId && kfDragTrackKey === t.def.key && kfDragGhostFrame === f && kfDragGhostFrame !== kfDragFromFrame"
                   class="kf-diamond kf-drag-ghost"
@@ -188,15 +198,40 @@
 
     <!-- Playback controls -->
     <div class="transport-group">
-      <button class="transport-btn" (click)="goToFirstFrame()" title="Jump to the first frame.">⏮</button>
-      <button class="transport-btn" (click)="goToPrevFrame()" title="Step back one frame. Keyboard: , (comma)">◀</button>
+      <button class="transport-btn" (click)="goToFirstFrame()" aria-label="First frame" title="Jump to the first frame.">⏮</button>
+      <button class="transport-btn" (click)="goToPrevFrame()" aria-label="Previous frame" title="Step back one frame. Keyboard: , (comma)">◀</button>
       <button class="transport-btn play-btn" (click)="togglePlayPause()"
+              [attr.aria-label]="isPlaying ? 'Pause' : 'Play'"
               [title]="isPlaying ? 'Pause the animation. Keyboard: Space' : 'Play the animation. Keyboard: Space'">
         {{ isPlaying ? '⏸' : '▶' }}
       </button>
-      <button class="transport-btn" (click)="goToNextFrame()" title="Step forward one frame. Keyboard: . (period)">▶</button>
-      <button class="transport-btn" (click)="goToLastFrame()" title="Jump to the last frame.">⏭</button>
-      <button class="transport-btn" (click)="stopPlayback()" title="Stop playback and return to frame 1.">⏹</button>
+      <button class="transport-btn" (click)="goToNextFrame()" aria-label="Next frame" title="Step forward one frame. Keyboard: . (period)">▶</button>
+      <button class="transport-btn" (click)="goToLastFrame()" aria-label="Last frame" title="Jump to the last frame.">⏭</button>
+      <button class="transport-btn" (click)="stopPlayback()" aria-label="Stop" title="Stop playback and return to frame 1.">⏹</button>
+    </div>
+
+    <!-- Touch: the F6 / Ctrl+D keys + the right-click menu for the selection (Delete Cel is in that menu) -->
+    <div class="transport-group cel-actions touch-only">
+      <button class="transport-btn icon-btn" (click)="newCelOnNextFrame()"
+              aria-label="New cel on the next frame" title="Step forward and add a new cel there. Keyboard: F6">+▸</button>
+      <button class="transport-btn icon-btn" (click)="duplicateAndAdvance()"
+              aria-label="Duplicate cel to the next frame" title="Copy this frame's drawing to the next frame and step there. Keyboard: Ctrl+D">⧉▸</button>
+      <button class="transport-btn icon-btn tl-more-btn" (click)="openSelectionMenu($event)"
+              aria-label="Options for the selection" title="Options for the selected cel or keyframe (same as right-click).">⋯</button>
+      <button *ngIf="mesh3dAllTracks.length > 0"
+              class="transport-btn kf-select-btn"
+              [class.active]="kfSelectMode"
+              [attr.aria-pressed]="kfSelectMode"
+              (click)="kfSelectMode = !kfSelectMode"
+              title="Taps on keyframes add them to the selection (like Shift+click).">Select</button>
+    </div>
+
+    <!-- Keyframe selection (was a bar over the frame numbers) -->
+    <div *ngIf="selectedKfKeys.size > 0" class="transport-group kf-bulk-group" (click)="$event.stopPropagation()">
+      <span class="kf-bulk-count">{{ selectedKfKeys.size }} kf{{ selectedKfKeys.size > 1 ? 's' : '' }}</span>
+      <button class="transport-btn kf-bulk-btn" (click)="openKfBulkMovePrompt()" title="Shift all selected keyframes by a frame offset">Move…</button>
+      <button class="transport-btn kf-bulk-btn kf-bulk-delete-btn" (click)="deleteSelectedKeyframes()" title="Delete all selected keyframes">Delete</button>
+      <button class="transport-btn" (click)="clearKfSelection()" aria-label="Clear the keyframe selection" title="Clear selection">✕</button>
     </div>
 
     <!-- Loop mode -->
@@ -205,23 +240,26 @@
         <button class="segment-btn" [class.active]="loopMode === 'none'"
                 (click)="onLoopModeChange('none')" title="Play once and stop at the last frame.">None</button>
         <button class="segment-btn" [class.active]="loopMode === 'loop'"
-                (click)="onLoopModeChange('loop')" title="Repeat the animation continuously.">⟲ Loop</button>
+                (click)="onLoopModeChange('loop')" aria-label="Loop" title="Repeat the animation continuously.">⟲<span class="seg-txt"> Loop</span></button>
         <button class="segment-btn" [class.active]="loopMode === 'ping-pong'"
-                (click)="onLoopModeChange('ping-pong')" title="Play forward, then backward, then forward again.">↔ Ping</button>
+                (click)="onLoopModeChange('ping-pong')" aria-label="Ping-pong" title="Play forward, then backward, then forward again.">↔<span class="seg-txt"> Ping</span></button>
       </div>
     </div>
 
     <!-- FPS -->
     <div class="transport-group fps-group">
       <span class="transport-label">FPS</span>
-      <input type="number" class="transport-input" min="1" max="120"
+      <button class="tl-step" (click)="onFpsChange(fps - 1)" aria-label="Lower FPS" title="Lower FPS. Keyboard: Alt+, (comma)">−</button>
+      <input type="number" class="transport-input" min="1" max="120" inputmode="numeric"
              [ngModel]="fps" (ngModelChange)="onFpsChange($event)"
+             aria-label="Frames per second"
              title="Frames per second. 8 = simple, 12 = standard anime, 24 = full animation, 30 = smooth.">
+      <button class="tl-step" (click)="onFpsChange(fps + 1)" aria-label="Higher FPS" title="Higher FPS. Keyboard: Alt+. (period)">+</button>
       <div class="fps-presets">
-        <button class="fps-btn" [class.active]="fps === 8" (click)="setFpsPreset(8)" title="8 fps — simple flipbook style.">8</button>
-        <button class="fps-btn" [class.active]="fps === 12" (click)="setFpsPreset(12)" title="12 fps — standard anime timing (on 2s).">12</button>
-        <button class="fps-btn" [class.active]="fps === 24" (click)="setFpsPreset(24)" title="24 fps — full film animation.">24</button>
-        <button class="fps-btn" [class.active]="fps === 30" (click)="setFpsPreset(30)" title="30 fps — smooth digital animation.">30</button>
+        <button class="fps-btn" [class.active]="fps === 8" (click)="setFpsPreset(8)" aria-label="8 FPS" title="8 fps — simple flipbook style.">8</button>
+        <button class="fps-btn" [class.active]="fps === 12" (click)="setFpsPreset(12)" aria-label="12 FPS" title="12 fps — standard anime timing (on 2s).">12</button>
+        <button class="fps-btn" [class.active]="fps === 24" (click)="setFpsPreset(24)" aria-label="24 FPS" title="24 fps — full film animation.">24</button>
+        <button class="fps-btn" [class.active]="fps === 30" (click)="setFpsPreset(30)" aria-label="30 FPS" title="30 fps — smooth digital animation.">30</button>
       </div>
     </div>
 
@@ -235,12 +273,16 @@
       <button class="transport-btn icon-btn"
               [class.active]="onionSkin.enabled"
               (click)="toggleOnionSkinPanel()"
+              aria-label="Onion skin"
               title="Show ghost images of adjacent frames. Previous frames appear in red, next frames in blue.">🧅</button>
       <button class="transport-btn icon-btn" (click)="toggleSettingsPanel()"
+              aria-label="Timeline settings"
               title="Timeline settings — frame count, play range.">⚙</button>
       <button class="transport-btn icon-btn" (click)="addFrames(12)"
+              aria-label="Add frames"
               title="Add more frames to the end of the timeline.">+</button>
       <button class="transport-btn icon-btn" (click)="openExportDialog()"
+              aria-label="Export animation"
               title="Export the animation as GIF, MP4, sprite sheet, or PNG sequence.">📤</button>
       <button *ngIf="mesh3dAllTracks.length > 0"
               class="transport-btn record-kf-btn"
@@ -249,6 +291,7 @@
       <button *ngIf="mesh3dAllTracks.length > 0"
               class="transport-btn icon-btn"
               (click)="allMeshesCollapsed ? expandAllMeshes() : collapseAllMeshes()"
+              [attr.aria-label]="allMeshesCollapsed ? 'Expand all 3D mesh tracks' : 'Collapse all 3D mesh tracks'"
               [title]="allMeshesCollapsed ? 'Expand all 3D mesh tracks' : 'Collapse all 3D mesh tracks'">
         {{ allMeshesCollapsed ? '▶▶' : '▼▼' }}
       </button>
@@ -259,7 +302,7 @@
   <div *ngIf="showOnionSkinPanel" class="floating-panel onion-panel">
     <div class="fp-header">
       <span>🧅 Onion Skin</span>
-      <button class="fp-close" (click)="showOnionSkinPanel = false">✕</button>
+      <button class="fp-close" aria-label="Close" (click)="showOnionSkinPanel = false">✕</button>
     </div>
     <div class="fp-body">
       <div class="check-row">
@@ -314,32 +357,38 @@
   <div *ngIf="showSettingsPanel" class="floating-panel settings-panel">
     <div class="fp-header">
       <span>⚙ Timeline Settings</span>
-      <button class="fp-close" (click)="showSettingsPanel = false">✕</button>
+      <button class="fp-close" aria-label="Close" (click)="showSettingsPanel = false">✕</button>
     </div>
     <div class="fp-body">
       <div class="setting-row">
         <span class="slider-label">Total Frames</span>
-        <input type="number" class="setting-input" min="1" max="9999"
+        <button class="tl-step" (click)="onFrameCountChange(frameCount - 1)" aria-label="Fewer frames">−</button>
+        <input type="number" class="setting-input" min="1" max="9999" inputmode="numeric"
                [ngModel]="frameCount" (ngModelChange)="onFrameCountChange($event)"
                title="Total number of frames in the animation.">
+        <button class="tl-step" (click)="onFrameCountChange(frameCount + 1)" aria-label="More frames">+</button>
       </div>
       <div class="setting-row">
         <span class="slider-label">Play Start</span>
-        <input type="number" class="setting-input" min="1" [max]="frameCount"
+        <button class="tl-step" (click)="onPlayRangeStartChange(playRangeStart - 1)" aria-label="Play start earlier">−</button>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric"
                [ngModel]="playRangeStart" (ngModelChange)="onPlayRangeStartChange($event)"
                title="Playback starts from this frame.">
+        <button class="tl-step" (click)="onPlayRangeStartChange(playRangeStart + 1)" aria-label="Play start later">+</button>
       </div>
       <div class="setting-row">
         <span class="slider-label">Play End</span>
-        <input type="number" class="setting-input" [min]="playRangeStart" [max]="frameCount"
+        <button class="tl-step" (click)="onPlayRangeEndChange(playRangeEnd - 1)" aria-label="Play end earlier">−</button>
+        <input type="number" class="setting-input" [min]="playRangeStart" [max]="frameCount" inputmode="numeric"
                [ngModel]="playRangeEnd" (ngModelChange)="onPlayRangeEndChange($event)"
                title="Playback ends at this frame.">
+        <button class="tl-step" (click)="onPlayRangeEndChange(playRangeEnd + 1)" aria-label="Play end later">+</button>
       </div>
     </div>
   </div>
 
   <!-- ── Context menu ────────────────────────────────────── -->
-  <div *ngIf="contextMenuVisible" class="ctx-menu"
+  <div *ngIf="contextMenuVisible" class="ctx-menu" data-menu="cel"
        [style.left.px]="contextMenuX"
        [style.top]="contextMenuFlipUp ? 'auto' : contextMenuY + 'px'"
        [style.bottom]="contextMenuFlipUp ? (windowHeight - contextMenuY) + 'px' : 'auto'">
@@ -366,6 +415,13 @@
              title="Key drawing — an important pose. Shown as ◆ in timeline.">◆ Set as Key Drawing</div>
         <div class="ctx-item" (click)="ctxSetCelType('inbetween')"
              title="Transitional drawing between keys. Shown as ○ in timeline.">○ Set as Inbetween</div>
+        <div class="ctx-item ctx-hold-row" (click)="$event.stopPropagation()"
+             title="How many frames this drawing is held for.">
+          <span>Hold</span>
+          <button class="ctx-step" (click)="ctxHoldDelta($event, -1)" aria-label="Hold one frame less">−</button>
+          <span class="ctx-hold-val">{{ contextCel?.duration }}</span>
+          <button class="ctx-step" (click)="ctxHoldDelta($event, 1)" aria-label="Hold one frame more">+</button>
+        </div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" (click)="ctxDuplicateCel()"
              title="Copy this drawing to another frame.">Duplicate to Frame…</div>
@@ -398,7 +454,7 @@
   </div>
 
   <!-- ── Keyframe easing picker ─────────────────────────── -->
-  <div *ngIf="showEasingMenu" class="ctx-menu"
+  <div *ngIf="showEasingMenu" class="ctx-menu" data-menu="kf"
        [style.left.px]="contextMenuX"
        [style.top]="contextMenuFlipUp ? 'auto' : contextMenuY + 'px'"
        [style.bottom]="contextMenuFlipUp ? (windowHeight - contextMenuY) + 'px' : 'auto'"
@@ -425,13 +481,15 @@
   <div *ngIf="showDuplicatePrompt" class="floating-panel duplicate-panel">
     <div class="fp-header">
       <span>Duplicate Cel</span>
-      <button class="fp-close" (click)="cancelDuplicate()">✕</button>
+      <button class="fp-close" aria-label="Close" (click)="cancelDuplicate()">✕</button>
     </div>
     <div class="fp-body">
       <div class="setting-row">
         <span class="slider-label">Target Frame</span>
-        <input type="number" class="setting-input" min="1" [max]="frameCount"
+        <button class="tl-step" (click)="duplicateTargetFrame = stepFrame(duplicateTargetFrame, -1)" aria-label="Earlier frame">−</button>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric"
                [(ngModel)]="duplicateTargetFrame">
+        <button class="tl-step" (click)="duplicateTargetFrame = stepFrame(duplicateTargetFrame, 1)" aria-label="Later frame">+</button>
       </div>
       <div style="display: flex; gap: 6px; margin-top: 8px;">
         <button class="transport-btn" style="flex: 1;" (click)="confirmDuplicate()">Duplicate</button>
@@ -440,18 +498,35 @@
     </div>
   </div>
 
-  <!-- ── Multi-keyframe bulk action bar ──────────────────── -->
-  <div *ngIf="selectedKfKeys.size > 0" class="kf-bulk-bar" (click)="$event.stopPropagation()">
-    <span class="kf-bulk-count">{{ selectedKfKeys.size }} kf{{ selectedKfKeys.size > 1 ? 's' : '' }} selected</span>
-    <button class="transport-btn" (click)="openKfBulkMovePrompt()" title="Shift all selected keyframes by a frame offset">Move…</button>
-    <button class="transport-btn kf-bulk-delete-btn" (click)="deleteSelectedKeyframes()" title="Delete all selected keyframes">Delete</button>
-    <button class="transport-btn" (click)="clearKfSelection()" title="Clear selection">✕</button>
+  <!-- ── Move / swap cel prompt dialog ──────────────────── -->
+  <div *ngIf="showCelFramePrompt" class="floating-panel duplicate-panel cel-frame-panel">
+    <div class="fp-header">
+      <span>{{ celFramePromptMode === 'move' ? 'Move Cel' : 'Swap Cel' }}</span>
+      <button class="fp-close" aria-label="Close" (click)="cancelCelFramePrompt()">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="setting-row">
+        <span class="slider-label">{{ celFramePromptMode === 'move' ? 'Target Frame' : 'With Frame' }}</span>
+        <button class="tl-step" (click)="celFramePromptTarget = stepFrame(celFramePromptTarget, -1)" aria-label="Earlier frame">−</button>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric"
+               [(ngModel)]="celFramePromptTarget">
+        <button class="tl-step" (click)="celFramePromptTarget = stepFrame(celFramePromptTarget, 1)" aria-label="Later frame">+</button>
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button class="transport-btn" style="flex: 1;" (click)="confirmCelFrameAction()"
+                [disabled]="celFramePromptMode === 'swap' && !celFramePromptSwapTarget">
+          {{ celFramePromptMode === 'move' ? 'Move' : 'Swap' }}
+        </button>
+        <button class="transport-btn" style="flex: 1;" (click)="cancelCelFramePrompt()">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Track clear menu ─────────────────────────────────── -->
-  <div *ngIf="showTrackMenu" class="ctx-menu"
+  <div *ngIf="showTrackMenu" class="ctx-menu" data-menu="track"
        [style.left.px]="trackMenuX"
-       [style.top.px]="trackMenuY"
+       [style.top]="trackMenuFlipUp ? 'auto' : trackMenuY + 'px'"
+       [style.bottom]="trackMenuFlipUp ? (windowHeight - trackMenuY) + 'px' : 'auto'"
        (click)="$event.stopPropagation()">
     <div class="ctx-item" style="opacity:.5; pointer-events:none; font-size:10px; padding:4px 14px;">
       {{ trackMenuTrackKey }} track
@@ -464,7 +539,7 @@
   <div *ngIf="showKfBulkMovePrompt" class="floating-panel duplicate-panel">
     <div class="fp-header">
       <span>Move {{ selectedKfKeys.size }} Keyframe{{ selectedKfKeys.size > 1 ? 's' : '' }}</span>
-      <button class="fp-close" (click)="cancelKfBulkMove()">✕</button>
+      <button class="fp-close" aria-label="Close" (click)="cancelKfBulkMove()">✕</button>
     </div>
     <div class="fp-body">
       <div style="font-size: 10px; color: #999; margin-bottom: 6px;">
@@ -472,7 +547,9 @@
       </div>
       <div class="setting-row">
         <span class="slider-label">Target Frame</span>
-        <input type="number" class="setting-input" min="1" [max]="frameCount" [(ngModel)]="kfBulkMoveTarget">
+        <button class="tl-step" (click)="kfBulkMoveTarget = stepFrame(kfBulkMoveTarget, -1)" aria-label="Earlier frame">−</button>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric" [(ngModel)]="kfBulkMoveTarget">
+        <button class="tl-step" (click)="kfBulkMoveTarget = stepFrame(kfBulkMoveTarget, 1)" aria-label="Later frame">+</button>
       </div>
       <div style="display: flex; gap: 6px; margin-top: 8px;">
         <button class="transport-btn" style="flex: 1;" (click)="confirmKfBulkMove()">Move</button>
@@ -485,13 +562,15 @@
   <div *ngIf="showKfFramePrompt" class="floating-panel duplicate-panel">
     <div class="fp-header">
       <span>{{ kfFramePromptMode === 'copy' ? 'Copy Keyframe to Frame' : 'Move Keyframe to Frame' }}</span>
-      <button class="fp-close" (click)="cancelKfFramePrompt()">✕</button>
+      <button class="fp-close" aria-label="Close" (click)="cancelKfFramePrompt()">✕</button>
     </div>
     <div class="fp-body">
       <div class="setting-row">
         <span class="slider-label">Target Frame</span>
-        <input type="number" class="setting-input" min="1" [max]="frameCount"
+        <button class="tl-step" (click)="kfFramePromptTarget = stepFrame(kfFramePromptTarget, -1)" aria-label="Earlier frame">−</button>
+        <input type="number" class="setting-input" min="1" [max]="frameCount" inputmode="numeric"
                [(ngModel)]="kfFramePromptTarget">
+        <button class="tl-step" (click)="kfFramePromptTarget = stepFrame(kfFramePromptTarget, 1)" aria-label="Later frame">+</button>
       </div>
       <div style="display: flex; gap: 6px; margin-top: 8px;">
         <button class="transport-btn" style="flex: 1;" (click)="confirmKfFrameAction()">
@@ -501,6 +580,10 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Press-and-hold tooltip (touch / pen): a button's title ── -->
+  <div *ngIf="holdTip" class="tl-hold-tip" role="tooltip"
+       [style.left.px]="holdTip.x" [style.top.px]="holdTip.y">{{ holdTip.text }}</div>
 
   <!-- ── Export dialog ───────────────────────────────────── -->
   <app-animation-export *ngIf="showExportDialog"

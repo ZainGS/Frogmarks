@@ -49,7 +49,7 @@ canvas {
     text-align: center;
 
     &.zoom-control--timeline-open {
-        bottom: 214px;
+        bottom: calc(var(--fm-timeline-h, 204px) + 10px);   /* follows the timeline's height (drag its top edge) */
     }
 }
 
@@ -523,7 +523,7 @@ canvas {
     position: absolute;
     top: 40px;   /* below top toolbar */
     right: 0;
-    bottom: 200px;    /* flush with animation timeline */
+    bottom: calc(var(--fm-timeline-h, 204px) - 4px);    /* flush with animation timeline (200 px by default) */
     width: 280px;
     z-index: 1;
     display: flex;
@@ -1857,6 +1857,10 @@ svg {
     right: 0;
     z-index: 500;
     border-top: 4px solid #3b6151;
+
+    /* An onion / settings panel or a prompt is open (AnimationTimelineComponent host class): above the zoom box (600),
+       which otherwise covered the panels' right half. */
+    &.tl-floating-open { z-index: 601; }
 }
 
 /* ── OPFS size chip (shown next to autosave indicator for local/no-cloud) ── */

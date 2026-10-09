@@ -54,6 +54,22 @@ $row-3d-bg: #161616;
   height: 200px;
   min-height: 120px;
   position: relative;
+  // Touch: pan the grid / labels, but a pinch here is the timeline's zoom (frame width), never the page's;
+  // no iOS long-press callout (long-press opens the timeline's own menus).
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+}
+
+/* Drag the top edge to resize (an invisible strip over the wrapper's green top border) */
+.tl-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;         // the 4 px border + 6 px above it (not over the frame numbers)
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 30;
 }
 
 /* ── Top area: layers + grid ─────────────────────────────────── */
@@ -150,6 +166,7 @@ $row-3d-bg: #161616;
   z-index: 3;
   background: $bg;
   cursor: col-resize;
+  touch-action: none;   // a finger scrubs here (the cells below still scroll)
 }
 
 .tl-frame-number {
@@ -183,6 +200,7 @@ $row-3d-bg: #161616;
   height: 100%;
   cursor: ew-resize;
   z-index: 10;
+  touch-action: none;
 
   &::after {
     content: '';
@@ -253,6 +271,9 @@ $row-3d-bg: #161616;
   &.blank {
     background: transparent;
   }
+
+  // The selected cel (last tapped / clicked): what ⋯ and the cel buttons act on
+  &.tl-selected { box-shadow: inset 0 0 0 1px $green-txt; }
 }
 
 .cel-marker {
@@ -285,8 +306,8 @@ $row-3d-bg: #161616;
 /* ── 3D Dope Sheet rows ───────────────────────────────────────── */
 
 .tl-3d-header-label {
-  height: 22px;
-  min-height: 22px;
+  height: 24px;       // = its grid row: 22 px cells + the row's 1 px top / bottom borders
+  min-height: 24px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -369,7 +390,9 @@ $row-3d-bg: #161616;
     font-size: 9px;
     line-height: 1;
     display: block;
+    position: relative;   // anchor for the touch hit area
     transition: transform 0.1s;
+    touch-action: none;   // a finger drags the keyframe
   }
 
   &:hover .kf-diamond { transform: scale(1.4); }
@@ -748,6 +771,7 @@ $row-3d-bg: #161616;
   color: rgba(255, 255, 255, 0.35);
   user-select: none;
   z-index: 2;
+  touch-action: none;   // a finger drags the hold length
 
   &:hover {
     color: #fff;
@@ -763,33 +787,25 @@ $row-3d-bg: #161616;
   outline: 1px solid currentColor;
 }
 
-.kf-bulk-bar {
-  position: absolute;
-  top: 0;
-  left: 140px;
-  right: 0;
-  height: 24px;
-  background: $green;
-  border-bottom: 2px solid $bevel-lt;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  z-index: 20;
-  pointer-events: all;
+.kf-bulk-group {
+  padding: 0 4px;
+  background: rgba(59, 97, 81, 0.35);
+  border: 1px solid $green-hi;
+}
 
-  // override the fixed 28px width from transport-btn
-  .transport-btn {
-    width: auto;
-    padding: 0 8px;
-    font-size: 11px;
-  }
+// Text buttons in the transport bar (override the fixed 28px width from transport-btn)
+.kf-bulk-btn,
+.kf-select-btn {
+  width: auto;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .kf-bulk-count {
   font-size: 10px;
   color: $green-txt;
-  margin-right: 4px;
+  margin-right: 2px;
+  white-space: nowrap;
 }
 
 .kf-bulk-delete-btn {
@@ -816,4 +832,150 @@ $row-3d-bg: #161616;
   left: 50%;
   transform: translateX(-50%);
   min-width: 200px;
+}
+
+/* ── −/+ steppers beside the number fields (touch only: the on-screen keyboard can cover a field) ── */
+
+.tl-step {
+  display: none;
+  background: $surface;
+  @include raised;
+  color: $text;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:active { @include sunken; }
+}
+
+/* ── Cel menu: Hold − n + (stays open between taps) ── */
+
+.ctx-hold-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+
+  &:hover { background: transparent; color: inherit; }
+}
+
+.ctx-step {
+  position: relative;
+  background: $surface;
+  @include raised;
+  color: $text;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover { background: $green; color: $green-txt; }
+  &:active { @include sunken; }
+}
+
+.ctx-hold-val {
+  min-width: 16px;
+  text-align: center;
+  font-family: monospace;
+}
+
+/* ── Press-and-hold tooltip (touch / pen) ── */
+
+.tl-hold-tip {
+  position: fixed;
+  z-index: 10000;
+  transform: translateY(-100%);
+  max-width: 240px;
+  padding: 3px 6px;
+  background: $bg;
+  @include raised;
+  color: $text;
+  font-size: 10px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+/* ── Touch (coarse pointer): bigger invisible hit areas, the same look; hover-only feedback always shown ── */
+
+// The touch paths for what a mouse / keyboard does directly (F6, Ctrl+D, right-click, Shift+click): touch screens only
+.touch-only { display: none !important; }
+
+@media (pointer: coarse) {
+  .tl-step { display: inline-flex; }
+  .touch-only { display: flex !important; }
+  // One row that scrolls sideways instead of wrapping (a wrapped bar took a whole layer row from the grid)
+  .transport-bar {
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+  .transport-group { flex-shrink: 0; }
+  .seg-txt { display: none; }   // ⟲ / ↔ (the buttons keep their aria-labels and titles)
+
+  // Hit areas: a transparent ::before around the small targets (pointer hits on it count as the element)
+  .tl-3d-cell .kf-diamond {
+    z-index: 1;   // its hit area reaches over the next track row too
+    &::before { content: ''; position: absolute; inset: -7px -9px; }
+  }
+  .duration-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+    right: -8px;
+  }
+  .range-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -9px;
+    right: -9px;
+  }
+  .tl-cut-marker::before {
+    content: '';
+    position: absolute;
+    inset: -5px -8px;
+  }
+  .tl-cam-preview-btn {
+    position: relative;
+    &::before { content: ''; position: absolute; inset: -6px -8px; }
+  }
+  .fps-btn {
+    position: relative;
+    &::before { content: ''; position: absolute; inset: -7px -1px; }
+  }
+  .ctx-step::before {
+    content: '';
+    position: absolute;
+    inset: -6px -4px;
+  }
+  .tl-resize-handle {
+    top: -14px;
+    height: 20px;
+  }
+
+  // No hover on touch: the hold handle and the range handles are shown as hovered
+  .duration-handle { color: rgba(255, 255, 255, 0.75); }
+  .range-handle::after { opacity: 1; }
+}
+
+/* ── Portrait tablet: a narrower label column, a tighter transport bar ── */
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .timeline-panel { grid-template-columns: 96px 1fr; }
+  .tl-layer-label,
+  .tl-3d-header-label { padding: 0 4px; }
+  .transport-bar { gap: 6px; padding: 4px 6px; }
 }
