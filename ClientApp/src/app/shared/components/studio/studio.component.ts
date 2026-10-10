@@ -355,10 +355,20 @@ export class StudioComponent implements OnInit, OnDestroy {
     this._slotMenuSub = slotMenu?.subscribe(({ id }) => this.ngZone.run(() => this.openCartDialog(id)));
 
     const shellCanvas = document.getElementById('shellCanvas') as HTMLCanvasElement;
+    let mounted = false;
     try {
       await this.ngZone.runOutsideAngular(() => this.sm.shell?.initializeScene(shellCanvas));
+      mounted = true;
     } finally {
-      if (this.returnCover) this._revealFromBlack();   // (also when the mount failed: never leave the screen black)
+      if (this.returnCover) {
+        // Back from a cart the Shell launched: its disc winds down from the launch's end state while the cover fades
+        // (Salsa shell.playReturnAnimation; an older build / reduced motion / no launched cart → the plain fade-in).
+        const shell = this.sm?.shell as unknown as { playReturnAnimation?: () => boolean } | undefined;
+        if (mounted && !this._destroyed && typeof shell?.playReturnAnimation === 'function') {
+          try { this.ngZone.runOutsideAngular(() => shell.playReturnAnimation!()); } catch (e) { console.warn('[Studio] return animation failed:', e); }
+        }
+        this._revealFromBlack();   // (also when the mount failed: never leave the screen black)
+      }
     }
     if (this._destroyed) return;
     this.ngZone.run(() => this._refreshKeys());
