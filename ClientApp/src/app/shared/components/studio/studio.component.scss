@@ -506,3 +506,11 @@
   .shell-dialog-close { min-width: 44px; }
   .shell-dialog-input { min-height: 44px; }
 }
+
+// Settings (2026-10-09): every button fills its row (Save stays beside the address field, which already fills it).
+.shell-settings {
+  .fm-pwa-btn { display: block; width: 100%; box-sizing: border-box; text-align: center; }
+  .shell-field-row .fm-pwa-btn { display: inline-block; width: auto; flex-shrink: 0; }
+  .shell-dialog-actions { justify-content: stretch; }
+  .shell-dialog-actions .shell-btn { width: 100%; box-sizing: border-box; text-align: center; }
+}

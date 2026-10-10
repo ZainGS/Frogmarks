@@ -49,7 +49,7 @@
     </div>
   </div>
 
-  <!-- Settings: the one home for the Shell's settings (theme, storage, install, updates, local GPU model) -->
+  <!-- Settings: storage, install, updates, local GPU model (the theme is in the Shell's top-right panel) -->
   <div *ngIf="showSettingsOverlay" class="shell-dialog shell-settings" (click)="$event.stopPropagation()"
        role="dialog" aria-modal="true" aria-labelledby="shell-settings-title"
        cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
@@ -57,18 +57,6 @@
       <h3 id="shell-settings-title">Settings</h3>
       <button class="shell-btn shell-btn-ghost shell-dialog-close" (click)="closeSettingsOverlay()" aria-label="Close Settings">✕</button>
     </div>
-
-    <!-- Theme (was the cluster's 🎨 panel; now remembered on this device) -->
-    <section class="fm-pwa-section" aria-labelledby="shell-set-theme">
-      <div class="fm-pwa-section-title" id="shell-set-theme">Home screen theme</div>
-      <div class="shell-theme-grid" role="group" aria-labelledby="shell-set-theme">
-        <button *ngFor="let t of themeOptions" type="button" class="shell-theme-swatch"
-                [class.is-active]="t.id === themeId" [attr.aria-pressed]="t.id === themeId"
-                [style.background]="t.bg" [style.color]="t.ink" (click)="pickTheme(t.id)">
-          <span class="shell-theme-dot" aria-hidden="true"></span>{{ t.label }}
-        </button>
-      </div>
-    </section>
 
     <!-- Storage (TIER-8): StoragePersistenceService -->
     <section class="fm-pwa-section" aria-labelledby="shell-set-storage">
@@ -112,7 +100,7 @@
     <!-- Local GPU model (LocalInferenceService: the address the AI features use; the dashboard's Local GPU Inference) -->
     <section class="fm-pwa-section" aria-labelledby="shell-set-model">
       <label class="fm-pwa-section-title" id="shell-set-model" for="shell-set-model-url">Local GPU model address</label>
-      <p class="fm-pwa-note">For AI features that run on your own GPU (for example Ollama). Leave it empty for the default, http://localhost:11434.</p>
+      <p class="fm-pwa-note">For local model features that run on your own GPU. Leave it empty for the default, http://localhost:11434.</p>
       <div class="shell-field-row">
         <input id="shell-set-model-url" class="shell-dialog-input" type="url" inputmode="url" autocomplete="off"
                placeholder="http://localhost:11434" [(ngModel)]="localModelUrl" (ngModelChange)="localModelStatus = ''"
